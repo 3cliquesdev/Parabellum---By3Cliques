@@ -262,7 +262,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
       </DropdownMenu>
 
       {/* Calendário Personalizado */}
-      <Popover open={calendarOpen} onOpenChange={handleCalendarOpenChange}>
+      <Popover open={calendarOpen} onOpenChange={handleCalendarOpenChange} modal={true}>
         <PopoverTrigger asChild>
           <Button
             variant={calendarOpen || activePreset === 'custom' ? "default" : "outline"}
