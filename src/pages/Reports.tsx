@@ -234,7 +234,7 @@ export default function Reports() {
       </div>
 
       <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid grid-cols-6 w-full max-w-4xl">
+        <TabsList className="grid grid-cols-7 w-full max-w-5xl">
           {reportCategories.map((category) => (
             <TabsTrigger key={category.id} value={category.id}>
               {category.name}
