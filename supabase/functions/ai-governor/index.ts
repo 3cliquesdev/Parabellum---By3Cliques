@@ -336,6 +336,9 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
     pipelineValue,
     pipelineCount: pipeline?.length ?? 0,
     conversionRate: (newDealsCount || 0) > 0 ? Math.round(((wonToday?.length ?? 0) / (newDealsCount || 1)) * 100) : 0,
+    newLeadsToday,
+    topNewSources,
+    topRepsMonth,
   };
 }
 
