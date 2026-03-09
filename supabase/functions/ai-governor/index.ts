@@ -540,8 +540,8 @@ async function sendEmailReport(
             ? `<img src="${logoUrl}" alt="${brandName}" style="max-height:40px;max-width:200px;margin-bottom:8px;" />`
             : `<div style="font-size:32px;margin-bottom:8px;">🤖</div>`
           }
-          <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;">IA Governante — Relatório ${dateStr}</h1>
-          <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">Relatório Diário CRM 3Cliques</p>
+          <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;">Report Diário CRM 3Cliques</h1>
+          <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">Relatório ${dateStr}</p>
         </td></tr>
 
         <!-- Greeting -->
@@ -675,7 +675,7 @@ async function sendEmailReport(
       body: JSON.stringify({
         from: `${fromName} <${fromEmail}>`,
         to: [adminEmail],
-        subject: `IA Governante — Relatório ${dateStr} — Relatório Diário CRM 3Cliques`,
+        subject: `Report Diário CRM 3Cliques — Relatório ${dateStr}`,
         html: htmlContent,
       }),
     });
@@ -785,7 +785,7 @@ serve(async (req) => {
 
     const inboxSummary = `📞 *Atendimento do Dia:*\n💬 Conversas: ${metrics.totalConvs} | IA: ${metrics.closedByAI} | Escaladas: ${metrics.escalatedToHuman}\n⏱ Tempo médio: ${metrics.avgResolutionMin ?? '—'} min\n🤖 Eventos IA: ${metrics.totalAIEvents} | Msgs: ${metrics.totalMessages} (${metrics.aiMessages} IA)${metrics.criticalAnomalies?.length > 0 ? `\n🔴 Anomalias: ${metrics.criticalAnomalies.length} críticas` : ''}`;
 
-    const fullMessage = `*IA Governante — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}${teamSummary ? `\n\n👥 *Time Comercial:*\n${teamSummary}` : ''}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const fullMessage = `*Report Diário CRM 3Cliques — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}${teamSummary ? `\n\n👥 *Time Comercial:*\n${teamSummary}` : ''}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
