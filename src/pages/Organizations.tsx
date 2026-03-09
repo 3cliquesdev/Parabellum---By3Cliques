@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Building2, Plus, Users, TrendingUp, Pencil, Trash2 } from "lucide-react";
+import { Building2, Plus, Users, TrendingUp, Pencil, Trash2, Phone } from "lucide-react";
 import { useOrganizations, useDeleteOrganization } from "@/hooks/useOrganizations";
 import OrganizationDialog from "@/components/OrganizationDialog";
 import OrganizationContactsDialog from "@/components/OrganizationContactsDialog";
