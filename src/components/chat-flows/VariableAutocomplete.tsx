@@ -167,6 +167,21 @@ export function VariableAutocomplete({
         ref={textareaRef}
         value={value || ""}
         onChange={handleChange}
+        onFocus={(e) => {
+          const cursorPos = e.currentTarget.selectionStart || 0;
+          cursorPosRef.current = cursorPos;
+          syncAutocomplete(e.currentTarget.value, cursorPos);
+        }}
+        onClick={(e) => {
+          const cursorPos = e.currentTarget.selectionStart || 0;
+          cursorPosRef.current = cursorPos;
+          syncAutocomplete(e.currentTarget.value, cursorPos);
+        }}
+        onKeyUp={(e) => {
+          const cursorPos = e.currentTarget.selectionStart || 0;
+          cursorPosRef.current = cursorPos;
+          syncAutocomplete(e.currentTarget.value, cursorPos);
+        }}
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === "Escape" && open) {
