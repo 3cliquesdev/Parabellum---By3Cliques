@@ -231,153 +231,184 @@ async function sendEmailReport(
   }
 
   // Buscar branding interno (employee) e sender padrão
-  let branding: any = null;
   let sender: any = null;
   try {
-    const [brandingRes, senderRes] = await Promise.all([
-      supabase.from('email_branding').select('*').eq('is_default_employee', true).single(),
-      supabase.from('email_senders').select('*').eq('is_default', true).single(),
-    ]);
-    branding = brandingRes.data;
-    sender = senderRes.data;
+    const { data } = await supabase.from('email_senders').select('*').eq('is_default', true).single();
+    sender = data;
   } catch {}
 
-  const headerColor = branding?.header_color || '#1a1a2e';
-  const primaryColor = branding?.primary_color || '#6366f1';
-  const brandName = branding?.name || '3Cliques';
-  const footerText = branding?.footer_text || `${brandName} — Equipe Interna`;
-  const logoUrl = branding?.logo_url;
-  const footerLogoUrl = branding?.footer_logo_url;
-  const fromName = 'IA Governante - ' + (sender?.from_name || brandName);
+  const fromName = 'IA Governante';
   const fromEmail = sender?.from_email || 'contato@mail.3cliques.net';
 
   const aiRate = metrics.totalConvs > 0 ? Math.round((metrics.closedByAI / metrics.totalConvs) * 100) : 0;
-  const escalationRate = metrics.totalConvs > 0 ? Math.round((metrics.escalatedToHuman / metrics.totalConvs) * 100) : 0;
+  const escRate = metrics.totalConvs > 0 ? Math.round((metrics.escalatedToHuman / metrics.totalConvs) * 100) : 0;
+  const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const logoHtml = logoUrl
-    ? `<img src="${logoUrl}" alt="${brandName}" style="max-height:40px;max-width:200px;" />`
-    : `<h1 style="color:#ffffff;margin:0;font-size:24px;">IA Governante</h1>`;
+  // Formatar análise da IA em HTML limpo
+  const analysisHtml = aiAnalysis
+    .split('\n')
+    .map(line => {
+      if (line.startsWith('📊') || line.startsWith('✅') || line.startsWith('⚠️') || line.startsWith('💡') || line.startsWith('📞') || line.startsWith('💰') || line.startsWith('📈')) {
+        return `<p style="font-weight:700;font-size:15px;color:#1e293b;margin:16px 0 6px 0;">${line}</p>`;
+      }
+      if (line.startsWith('•') || line.startsWith('-')) {
+        return `<p style="color:#475569;font-size:14px;margin:2px 0 2px 12px;padding-left:8px;border-left:2px solid #e2e8f0;">${line.replace(/^[•\-]\s*/, '')}</p>`;
+      }
+      return line ? `<p style="color:#475569;font-size:14px;margin:4px 0;line-height:1.6;">${line}</p>` : '';
+    })
+    .join('');
 
-  const footerLogoHtml = footerLogoUrl
-    ? `<img src="${footerLogoUrl}" alt="${brandName}" style="max-height:30px;margin-bottom:10px;" /><br/>`
-    : '';
+  // Progress bar for goal
+  const goalProgressPct = Math.min(salesMetrics.goalProgress ?? 0, 100);
+  const goalColor = goalProgressPct >= 80 ? '#22c55e' : goalProgressPct >= 50 ? '#f59e0b' : '#ef4444';
+
+  const goalSection = salesMetrics.goalProgress !== null ? `
+        <!-- Goal Progress Bar -->
+        <tr><td style="padding:0 40px 8px;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:4px;">
+            <tr>
+              <td style="color:#64748b;font-size:13px;">Receita acumulada</td>
+              <td style="color:${goalColor};font-size:13px;font-weight:700;text-align:right;">${salesMetrics.goalProgress}% da meta</td>
+            </tr>
+          </table>
+          <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden;">
+            <div style="background:${goalColor};height:10px;border-radius:99px;width:${goalProgressPct}%;"></div>
+          </div>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;">
+            <tr>
+              <td style="color:#22c55e;font-size:14px;font-weight:700;">${fmtBRL(salesMetrics.revenueMonth)}</td>
+              <td style="color:#94a3b8;font-size:13px;text-align:right;">Meta: ${fmtBRL(salesMetrics.goalTarget)}</td>
+            </tr>
+          </table>
+        </td></tr>` : `
+        <!-- Revenue without goal -->
+        <tr><td style="padding:0 40px 8px;text-align:center;">
+          <div style="color:#22c55e;font-size:28px;font-weight:700;">${fmtBRL(salesMetrics.revenueMonth)}</div>
+          <div style="color:#64748b;font-size:13px;margin-top:4px;">${salesMetrics.dealsWonMonth} deals fechados | ${salesMetrics.conversionRate}% conversão</div>
+        </td></tr>`;
 
   const htmlContent = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:40px 0;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-        <!-- Header with branding -->
-        <tr><td style="background:linear-gradient(135deg,${headerColor} 0%,${headerColor}dd 100%);padding:32px 40px;text-align:center;">
-          ${logoHtml}
-          <p style="color:#a0aec0;margin:8px 0 0;font-size:14px;">Relatório Executivo — ${dateStr}</p>
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.06);">
+
+        <!-- Hero Header -->
+        <tr><td style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#334155 100%);padding:40px 40px 36px;text-align:center;">
+          <div style="width:56px;height:56px;background:rgba(99,102,241,0.15);border-radius:16px;display:inline-block;line-height:56px;font-size:28px;margin-bottom:12px;">🤖</div>
+          <h1 style="color:#ffffff;margin:0;font-size:26px;font-weight:800;letter-spacing:-0.5px;">IA Governante</h1>
+          <p style="color:#94a3b8;margin:8px 0 0;font-size:14px;font-weight:400;">Relatório Executivo — ${dateStr}</p>
         </td></tr>
 
         <!-- Greeting -->
-        <tr><td style="padding:32px 40px 16px;">
-          <p style="color:#1a1a2e;font-size:16px;margin:0;">Olá, <strong>${adminName}</strong>!</p>
+        <tr><td style="padding:28px 40px 20px;">
+          <p style="color:#1e293b;font-size:16px;margin:0;font-weight:500;">Olá, ${adminName}! 👋</p>
         </td></tr>
 
-        <!-- Atendimento Metrics -->
-        <tr><td style="padding:0 40px 24px;">
-          <h2 style="color:#1a1a2e;font-size:18px;margin:0 0 16px;">📞 Atendimento do Dia</h2>
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="background:#f0f4ff;border-radius:8px;padding:16px;text-align:center;width:25%;">
-                <div style="color:${primaryColor};font-size:28px;font-weight:bold;">${metrics.totalConvs}</div>
-                <div style="color:#64748b;font-size:11px;margin-top:4px;">Conversas</div>
-              </td>
-              <td width="8"></td>
-              <td style="background:#f0fdf4;border-radius:8px;padding:16px;text-align:center;width:25%;">
-                <div style="color:#22c55e;font-size:28px;font-weight:bold;">${metrics.closedByAI}</div>
-                <div style="color:#64748b;font-size:11px;margin-top:4px;">Resolvidas IA (${aiRate}%)</div>
-              </td>
-              <td width="8"></td>
-              <td style="background:#fff7ed;border-radius:8px;padding:16px;text-align:center;width:25%;">
-                <div style="color:#f97316;font-size:28px;font-weight:bold;">${metrics.escalatedToHuman}</div>
-                <div style="color:#64748b;font-size:11px;margin-top:4px;">Escaladas (${escalationRate}%)</div>
-              </td>
-              <td width="8"></td>
-              <td style="background:#faf5ff;border-radius:8px;padding:16px;text-align:center;width:25%;">
-                <div style="color:#a855f7;font-size:28px;font-weight:bold;">${metrics.totalAIEvents}</div>
-                <div style="color:#64748b;font-size:11px;margin-top:4px;">Eventos IA</div>
-              </td>
-            </tr>
-          </table>
-          ${metrics.avgResolutionMin ? `<p style="color:#64748b;font-size:13px;margin:12px 0 0;">⏱️ Tempo médio de resolução: <strong>${metrics.avgResolutionMin} min</strong></p>` : ''}
-          <p style="color:#64748b;font-size:13px;margin:4px 0 0;">💬 Mensagens: <strong>${metrics.totalMessages}</strong> (${metrics.aiMessages} da IA)</p>
+        <!-- Section: Atendimento -->
+        <tr><td style="padding:0 40px 8px;">
+          <p style="color:#6366f1;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">📞 Atendimento do Dia</p>
         </td></tr>
-
-        <!-- Sales Metrics -->
         <tr><td style="padding:0 40px 24px;">
-          <h2 style="color:#1a1a2e;font-size:18px;margin:0 0 16px;">💰 Vendas do Dia</h2>
-          <table width="100%" cellpadding="0" cellspacing="0">
+          <table width="100%" cellpadding="0" cellspacing="8">
             <tr>
-              <td style="background:#f0fdf4;border-radius:8px;padding:16px;text-align:center;width:33%;">
-                <div style="color:#22c55e;font-size:28px;font-weight:bold;">${salesMetrics.wonToday}</div>
-                <div style="color:#64748b;font-size:11px;margin-top:4px;">Ganhos</div>
-                <div style="color:#22c55e;font-size:13px;font-weight:bold;margin-top:4px;">${formatCurrency(salesMetrics.revenueToday)}</div>
+              <td style="background:#f8fafc;border-radius:12px;padding:16px;text-align:center;width:25%;border:1px solid #e2e8f0;">
+                <div style="color:#6366f1;font-size:32px;font-weight:800;line-height:1;">${metrics.totalConvs}</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Conversas</div>
               </td>
-              <td width="8"></td>
-              <td style="background:#fef2f2;border-radius:8px;padding:16px;text-align:center;width:33%;">
-                <div style="color:#ef4444;font-size:28px;font-weight:bold;">${salesMetrics.lostToday}</div>
-                <div style="color:#64748b;font-size:11px;margin-top:4px;">Perdidos</div>
+              <td style="background:#f8fafc;border-radius:12px;padding:16px;text-align:center;width:25%;border:1px solid #e2e8f0;">
+                <div style="color:#22c55e;font-size:32px;font-weight:800;line-height:1;">${aiRate}%</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Resolvido IA</div>
               </td>
-              <td width="8"></td>
-              <td style="background:#f0f4ff;border-radius:8px;padding:16px;text-align:center;width:33%;">
-                <div style="color:${primaryColor};font-size:28px;font-weight:bold;">${salesMetrics.newDeals}</div>
-                <div style="color:#64748b;font-size:11px;margin-top:4px;">Novos Deals</div>
+              <td style="background:#f8fafc;border-radius:12px;padding:16px;text-align:center;width:25%;border:1px solid #e2e8f0;">
+                <div style="color:#f97316;font-size:32px;font-weight:800;line-height:1;">${escRate}%</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Escalado</div>
               </td>
-            </tr>
-          </table>
-          ${salesMetrics.topLostReasons.length > 0 ? `<p style="color:#64748b;font-size:13px;margin:12px 0 0;">❌ Motivos de perda: ${salesMetrics.topLostReasons.join(', ')}</p>` : ''}
-        </td></tr>
-
-        <!-- Monthly Performance -->
-        <tr><td style="padding:0 40px 24px;">
-          <h2 style="color:#1a1a2e;font-size:18px;margin:0 0 16px;">📈 Performance do Mês</h2>
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="background:#f0fdf4;border-radius:8px;padding:16px;text-align:center;width:33%;">
-                <div style="color:#22c55e;font-size:22px;font-weight:bold;">${formatCurrency(salesMetrics.revenueMonth)}</div>
-                <div style="color:#64748b;font-size:11px;margin-top:4px;">Receita Mês (${salesMetrics.dealsWonMonth} deals)</div>
-              </td>
-              <td width="8"></td>
-              <td style="background:#f0f4ff;border-radius:8px;padding:16px;text-align:center;width:33%;">
-                <div style="color:${primaryColor};font-size:22px;font-weight:bold;">${salesMetrics.conversionRate}%</div>
-                <div style="color:#64748b;font-size:11px;margin-top:4px;">Conversão</div>
-              </td>
-              <td width="8"></td>
-              <td style="background:${salesMetrics.goalProgress !== null ? (salesMetrics.goalProgress >= 80 ? '#f0fdf4' : salesMetrics.goalProgress >= 50 ? '#fffbeb' : '#fef2f2') : '#f8fafc'};border-radius:8px;padding:16px;text-align:center;width:33%;">
-                <div style="color:${salesMetrics.goalProgress !== null ? (salesMetrics.goalProgress >= 80 ? '#22c55e' : salesMetrics.goalProgress >= 50 ? '#f59e0b' : '#ef4444') : '#94a3b8'};font-size:22px;font-weight:bold;">${salesMetrics.goalProgress !== null ? `${salesMetrics.goalProgress}%` : '—'}</div>
-                <div style="color:#64748b;font-size:11px;margin-top:4px;">Meta${salesMetrics.goalTarget > 0 ? ` (${formatCurrency(salesMetrics.goalTarget)})` : ''}</div>
+              <td style="background:#f8fafc;border-radius:12px;padding:16px;text-align:center;width:25%;border:1px solid #e2e8f0;">
+                <div style="color:#8b5cf6;font-size:32px;font-weight:800;line-height:1;">${metrics.avgResolutionMin ?? '—'}</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">Min Resolução</div>
               </td>
             </tr>
           </table>
         </td></tr>
 
-        <!-- Pipeline -->
-        <tr><td style="padding:0 40px 24px;">
-          <div style="background:#f8fafc;border-radius:8px;padding:16px;">
-            <p style="color:#1a1a2e;font-size:14px;margin:0;">📊 <strong>Pipeline:</strong> ${salesMetrics.pipelineCount} deals abertos — ${formatCurrency(salesMetrics.pipelineValue)}</p>
-          </div>
+        <!-- Divider -->
+        <tr><td style="padding:0 40px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+
+        <!-- Section: Vendas do Dia -->
+        <tr><td style="padding:20px 40px 8px;">
+          <p style="color:#22c55e;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">💰 Vendas do Dia</p>
         </td></tr>
+        <tr><td style="padding:0 40px 24px;">
+          <table width="100%" cellpadding="0" cellspacing="8">
+            <tr>
+              <td style="background:#f0fdf4;border-radius:12px;padding:16px;text-align:center;width:33%;border:1px solid #bbf7d0;">
+                <div style="color:#16a34a;font-size:32px;font-weight:800;line-height:1;">${salesMetrics.wonToday}</div>
+                <div style="color:#16a34a;font-size:14px;font-weight:700;margin-top:4px;">${fmtBRL(salesMetrics.revenueToday)}</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:4px;font-weight:500;text-transform:uppercase;">Fechamentos</div>
+              </td>
+              <td style="background:#fef2f2;border-radius:12px;padding:16px;text-align:center;width:33%;border:1px solid #fecaca;">
+                <div style="color:#dc2626;font-size:32px;font-weight:800;line-height:1;">${salesMetrics.lostToday}</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:8px;font-weight:500;text-transform:uppercase;">Perdidos</div>
+                ${salesMetrics.topLostReasons.length > 0 ? `<div style="color:#dc2626;font-size:11px;margin-top:4px;font-style:italic;">${salesMetrics.topLostReasons[0]}</div>` : ''}
+              </td>
+              <td style="background:#eff6ff;border-radius:12px;padding:16px;text-align:center;width:33%;border:1px solid #bfdbfe;">
+                <div style="color:#2563eb;font-size:32px;font-weight:800;line-height:1;">${salesMetrics.newDeals}</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:8px;font-weight:500;text-transform:uppercase;">Novos Deals</div>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Divider -->
+        <tr><td style="padding:0 40px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
+
+        <!-- Section: Performance do Mês -->
+        <tr><td style="padding:20px 40px 8px;">
+          <p style="color:#f59e0b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">📈 Performance do Mês</p>
+        </td></tr>
+        ${goalSection}
+
+        <!-- Monthly mini-cards -->
+        <tr><td style="padding:12px 40px 24px;">
+          <table width="100%" cellpadding="0" cellspacing="8">
+            <tr>
+              <td style="background:#f8fafc;border-radius:12px;padding:14px;text-align:center;width:33%;border:1px solid #e2e8f0;">
+                <div style="color:#1e293b;font-size:24px;font-weight:800;">${salesMetrics.dealsWonMonth}</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:4px;font-weight:500;text-transform:uppercase;">Deals won/mês</div>
+              </td>
+              <td style="background:#f8fafc;border-radius:12px;padding:14px;text-align:center;width:33%;border:1px solid #e2e8f0;">
+                <div style="color:#1e293b;font-size:24px;font-weight:800;">${salesMetrics.conversionRate}%</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:4px;font-weight:500;text-transform:uppercase;">Conversão</div>
+              </td>
+              <td style="background:#f8fafc;border-radius:12px;padding:14px;text-align:center;width:33%;border:1px solid #e2e8f0;">
+                <div style="color:#1e293b;font-size:24px;font-weight:800;">${salesMetrics.pipelineCount}</div>
+                <div style="color:#94a3b8;font-size:11px;margin-top:4px;font-weight:500;text-transform:uppercase;">Em pipeline</div>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Divider -->
+        <tr><td style="padding:0 40px;"><div style="border-top:1px solid #e2e8f0;"></div></td></tr>
 
         <!-- AI Analysis -->
-        <tr><td style="padding:0 40px 32px;">
-          <div style="background:#f8fafc;border-radius:8px;border-left:4px solid ${primaryColor};padding:20px 24px;">
-            <h3 style="color:#1a1a2e;font-size:16px;margin:0 0 12px;">🧠 Análise da IA</h3>
-            <div style="color:#334155;font-size:14px;line-height:1.7;white-space:pre-line;">${aiAnalysis.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\*(.*?)\*/g, '<strong>$1</strong>')}</div>
+        <tr><td style="padding:20px 40px 8px;">
+          <p style="color:#8b5cf6;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0;">🧠 Análise da IA</p>
+        </td></tr>
+        <tr><td style="padding:8px 40px 32px;">
+          <div style="background:#faf5ff;border-radius:12px;border:1px solid #e9d5ff;padding:24px;">
+            ${analysisHtml}
           </div>
         </td></tr>
 
-        <!-- Footer with branding -->
-        <tr><td style="background:${headerColor};padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
-          ${footerLogoHtml}
-          <p style="color:#94a3b8;font-size:12px;margin:0;">${footerText}</p>
+        <!-- Footer -->
+        <tr><td style="background:#f8fafc;padding:24px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+          <p style="color:#94a3b8;font-size:12px;margin:0;">Parabellum by 3Cliques • Gerado automaticamente</p>
         </td></tr>
+
       </table>
     </td></tr>
   </table>
@@ -391,7 +422,7 @@ async function sendEmailReport(
       body: JSON.stringify({
         from: `${fromName} <${fromEmail}>`,
         to: [adminEmail],
-        subject: `Relatório IA Governante — ${dateStr}`,
+        subject: `IA Governante — ${dateStr} | ${salesMetrics.wonToday} fechamentos · ${fmtBRL(salesMetrics.revenueToday)}`,
         html: htmlContent,
       }),
     });
