@@ -283,13 +283,17 @@ TOP PARCEIROS: ${(salesMetrics.topPartners ?? []).map((p: any) => `${p.name}: ${
 TIME COMERCIAL: ${(salesMetrics.topReps ?? []).length > 0 ? (salesMetrics.topReps ?? []).map((r: any) => `${r.name}: ${r.deals} deals`).join(', ') : 'Sem fechamentos hoje'}
 ALERTAS: ${(salesMetrics.alerts ?? []).join(' | ') || 'Nenhum'}
 
-FORMATO OBRIGATÓRIO - use EXATAMENTE estas seções, uma por linha, sem bullet points nem listas:
-[DESTAQUES] Uma frase com os pontos positivos do dia.
-[ATENCAO] Uma frase com pontos de atenção ou riscos.
-[SUGESTOES] Uma frase com sugestões práticas de melhoria.
-[MOTIVACIONAL] Uma frase motivacional curta.
+FORMATO OBRIGATÓRIO (siga À RISCA, sem exceções):
+- NÃO use markdown (**, *, -, •, bullets, listas). Use APENAS texto corrido.
+- Cada linha DEVE começar com a tag entre colchetes: [DESTAQUES], [ATENCAO], [SUGESTOES] ou [MOTIVACIONAL].
+- Use exatamente 4 linhas, uma para cada tag. NO MÁXIMO 2 frases por linha.
+- Exemplo:
+[DESTAQUES] O dia teve 10 conversas com taxa de resolução IA de 30%, demonstrando boa automação.
+[ATENCAO] O tempo médio de resolução subiu para 15 min, acima do ideal de 10 min.
+[SUGESTOES] Revisar artigos da base de conhecimento sobre os temas mais escalados para reduzir handoffs.
+[MOTIVACIONAL] Cada conversa resolvida pela IA é tempo ganho para o time focar no que importa.
 
-Cada seção deve ter NO MÁXIMO 2 frases. Seja direto, prático e use dados reais.`;
+Seja direto, prático e use dados reais do dia.`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -733,7 +737,9 @@ serve(async (req) => {
       ? (salesMetrics.topReps ?? []).map((r: any, i: number) => `${i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'} ${r.name}: ${r.deals} deals`).join('\n')
       : '';
 
-    const fullMessage = `*IA Governante — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}${teamSummary ? `\n\n👥 *Time Comercial:*\n${teamSummary}` : ''}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const inboxSummary = `📞 *Atendimento do Dia:*\n💬 Conversas: ${metrics.totalConvs} | IA: ${metrics.closedByAI} | Escaladas: ${metrics.escalatedToHuman}\n⏱ Tempo médio: ${metrics.avgResolutionMin ?? '—'} min\n🤖 Eventos IA: ${metrics.totalAIEvents} | Msgs: ${metrics.totalMessages} (${metrics.aiMessages} IA)${metrics.criticalAnomalies?.length > 0 ? `\n🔴 Anomalias: ${metrics.criticalAnomalies.length} críticas` : ''}`;
+
+    const fullMessage = `*IA Governante — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}${teamSummary ? `\n\n👥 *Time Comercial:*\n${teamSummary}` : ''}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],

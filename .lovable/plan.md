@@ -1,39 +1,31 @@
 
+# Plano: Mensagens Configuráveis de Fora do Horário ✅
 
-# Fix: Incluir seção de Inbox/IA no relatório WhatsApp + corrigir formato da análise IA
+## Status: IMPLEMENTADO (com ajustes finos aplicados)
 
-## Problema
+## Resumo
 
-1. **WhatsApp sem métricas de Inbox**: A mensagem WhatsApp (linha 736) mostra apenas `aiAnalysis` + canais de venda + time comercial. Os KPIs brutos do inbox (conversas, resolvidas pela IA, escaladas, tempo médio, mensagens) só aparecem no HTML do email.
+As mensagens automáticas enviadas fora do horário comercial (handoff e redistribuição) agora são editáveis via UI na página de SLA Settings. Templates armazenados na tabela `business_messages_config` com fallback para mensagens padrão.
 
-2. **Formato da análise IA quebrado**: O prompt pede tags `[DESTAQUES]`, `[ATENCAO]`, `[SUGESTOES]`, `[MOTIVACIONAL]` mas a IA retorna markdown com `**`, `-`, bullets. O parser `formatAnalysisHtml` não encontra as tags e renderiza texto sem estilo.
+## Ajustes Finos Aplicados
 
-## Solução
+- ✅ Trigger `updated_at` reutilizando `public.update_updated_at_column()`
+- ✅ Validação: botão salvar desabilitado se template vazio
+- ✅ Warning visual se placeholders `{schedule}` / `{next_open}` removidos
+- ✅ Botão "Restaurar Padrão" para resetar mensagens
 
-### Alteração 1: Adicionar seção de Inbox no WhatsApp (linha ~736)
+## Arquivos Alterados
 
-Antes do `channelsSummary`, inserir:
+| Arquivo | Mudança |
+|---------|---------|
+| SQL Migrations | Tabela `business_messages_config` + seeds + RLS + trigger updated_at |
+| `src/hooks/useBusinessMessages.ts` | Hook (query + mutation) |
+| `src/pages/SLASettings.tsx` | Seção "Mensagens de Fora do Horário" com validação + restaurar padrão |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Busca template `after_hours_handoff` com fallback |
+| `supabase/functions/redistribute-after-hours/index.ts` | Busca template `business_hours_reopened` com fallback |
 
-```
-📞 *Atendimento do Dia:*
-💬 Conversas: ${metrics.totalConvs} | IA: ${metrics.closedByAI} | Escaladas: ${metrics.escalatedToHuman}
-⏱ Tempo médio: ${metrics.avgResolutionMin ?? '—'} min
-🤖 Eventos IA: ${metrics.totalAIEvents} | Msgs: ${metrics.totalMessages} (${metrics.aiMessages} IA)
-${metrics.criticalAnomalies?.length > 0 ? '🔴 Anomalias: ' + metrics.criticalAnomalies.length + ' críticas' : ''}
-```
+## Garantias
 
-### Alteração 2: Reforçar prompt da IA (linhas 272-292)
-
-Adicionar instrução mais explícita:
-- "NÃO use markdown (**, -, bullets). Use APENAS texto corrido."
-- "Cada linha DEVE começar com a tag entre colchetes: [DESTAQUES], [ATENCAO], [SUGESTOES], [MOTIVACIONAL]"
-- "Exemplo: [DESTAQUES] O dia teve 10 conversas com taxa de resolução IA de 30%."
-
-### Arquivo afetado
-- `supabase/functions/ai-governor/index.ts`
-
-### Impacto
-- WhatsApp passa a mostrar KPIs de inbox dedicados (upgrade puro)
-- Email terá as seções coloridas corretas (fix de formatação)
-- Nenhuma mudança em tabelas ou outros arquivos
-
+- Fallback hardcoded se tabela vazia ou inacessível
+- Kill Switch, Shadow Mode, Fluxos: não afetados
+- RLS: leitura authenticated, escrita managers/admins
