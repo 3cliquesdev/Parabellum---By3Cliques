@@ -1192,12 +1192,10 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           conversation_id: conversationId,
           content: flowResult.response,
           sender_type: 'user',
-          is_ai_generated: true, // Marcar como automático para UI mostrar "Assistente Virtual"
+          is_ai_generated: true,
           channel: 'whatsapp'
         }).select('id').single();
 
-        // Enviar para WhatsApp com skip_db_save (já salvamos acima)
-        // 🆕 CORREÇÃO: Extrair número limpo do phoneForDatabase (já vem do webhook correto)
         if (savedFlowMsg?.id) {
           const targetNumber = phoneForDatabase
             .replace('@s.whatsapp.net', '')
@@ -1212,13 +1210,162 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           await supabase.functions.invoke('send-meta-whatsapp', {
             body: {
               instance_id: instance.id,
-              phone_number: targetNumber, // 🆕 Número limpo extraído do webhook
+              phone_number: targetNumber,
               message: flowResult.response,
               conversation_id: conversationId,
-              skip_db_save: true // 🆕 CRÍTICO: Evita duplicação
+              skip_db_save: true
             }
           });
           console.log('[handle-whatsapp-event] ✅ Resposta do fluxo enviada via WhatsApp');
+        }
+      }
+
+      // ============================================================
+      // 🆕 CASO 2: Fluxo ativou AIResponseNode → Chamar IA COM flow_context
+      // Alinhado com meta-whatsapp-webhook para evitar alucinações
+      // ============================================================
+      if (!flowHandled && !flowError && flowResult && flowResult.useAI && flowResult.aiNodeActive) {
+        console.log('[handle-whatsapp-event] 🤖 AIResponseNode ativo - chamando IA COM flow_context');
+        flowHandled = true;
+
+        try {
+          // Construir flow_context idêntico ao meta-whatsapp-webhook
+          const flowContext = flowResult.flow_context || {
+            flow_id: flowResult.flowId || flowResult.masterFlowId,
+            node_id: flowResult.nodeId,
+            node_type: 'ai_response',
+            allowed_sources: flowResult.allowedSources || ['kb'],
+            response_format: 'text_only',
+            personaId: flowResult.personaId || null,
+            kbCategories: flowResult.kbCategories || null,
+            contextPrompt: flowResult.contextPrompt || null,
+            fallbackMessage: flowResult.fallbackMessage || null,
+            objective: flowResult.objective || null,
+            maxSentences: flowResult.maxSentences ?? 3,
+            forbidQuestions: flowResult.forbidQuestions ?? true,
+            forbidOptions: flowResult.forbidOptions ?? true,
+            forbidFinancial: flowResult.forbidFinancial ?? false,
+            forbidCommercial: flowResult.forbidCommercial ?? false,
+            collectedData: flowResult.collectedData || null,
+          };
+
+          console.log('[handle-whatsapp-event] 📋 flow_context:', JSON.stringify({
+            flow_id: flowContext.flow_id,
+            node_id: flowContext.node_id,
+            forbidFinancial: flowContext.forbidFinancial,
+            forbidCommercial: flowContext.forbidCommercial,
+          }));
+
+          const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-autopilot-chat', {
+            body: {
+              conversationId: conversationId,
+              customerMessage: messageText,
+              customer_context: isKnownCustomer ? {
+                name: contactName,
+                email: existingContact?.email,
+                isVerified: true
+              } : null,
+              flow_context: flowContext,
+            },
+          });
+
+          if (aiError) {
+            console.error('[handle-whatsapp-event] ❌ AI error (flow context):', aiError);
+          } else if (aiResponse) {
+            console.log('[handle-whatsapp-event] 📋 AI response (flow context):', JSON.stringify({
+              status: aiResponse.status,
+              contractViolation: aiResponse.contractViolation,
+              flowExit: aiResponse.flowExit,
+              financialBlocked: aiResponse.financialBlocked,
+              commercialBlocked: aiResponse.commercialBlocked,
+              hasFlowContext: aiResponse.hasFlowContext,
+            }));
+
+            // 🆕 INTERCEPTAR: contractViolation, flowExit, financialBlocked, commercialBlocked, flow_advance_needed
+            const needsFlowAdvance = aiResponse.contractViolation || 
+                                     aiResponse.flowExit || 
+                                     aiResponse.financialBlocked || 
+                                     aiResponse.commercialBlocked ||
+                                     aiResponse.status === 'flow_advance_needed';
+
+            if (needsFlowAdvance) {
+              const exitType = aiResponse.financialBlocked ? 'forceFinancialExit' : 
+                               aiResponse.commercialBlocked ? 'forceCommercialExit' : 'forceAIExit';
+              console.log(`[handle-whatsapp-event] 🔄 Re-invocando process-chat-flow com ${exitType}`);
+
+              try {
+                const { data: exitFlowResult, error: exitFlowError } = await supabase.functions.invoke('process-chat-flow', {
+                  body: {
+                    conversationId: conversationId,
+                    userMessage: messageText,
+                    ...(aiResponse.financialBlocked ? { forceFinancialExit: true } : {}),
+                    ...(aiResponse.commercialBlocked ? { forceCommercialExit: true } : {}),
+                    ...(!aiResponse.financialBlocked && !aiResponse.commercialBlocked ? { forceAIExit: true } : {}),
+                  }
+                });
+
+                if (!exitFlowError && exitFlowResult) {
+                  console.log('[handle-whatsapp-event] ✅ Flow re-invoked:', JSON.stringify({
+                    transfer: exitFlowResult.transfer,
+                    hasResponse: !!exitFlowResult.response,
+                    nodeType: exitFlowResult.nodeType,
+                    departmentId: exitFlowResult.departmentId,
+                  }));
+
+                  // Enviar mensagem do próximo nó do fluxo
+                  const flowMessage = exitFlowResult.response || exitFlowResult.message;
+                  if (flowMessage) {
+                    const targetNumber = phoneForDatabase
+                      .replace('@s.whatsapp.net', '')
+                      .replace('@c.us', '')
+                      .replace(/\D/g, '');
+
+                    await supabase.from('messages').insert({
+                      conversation_id: conversationId,
+                      content: flowMessage,
+                      sender_type: 'system',
+                      message_type: 'text',
+                      is_ai_generated: true,
+                      channel: 'whatsapp'
+                    });
+
+                    await supabase.functions.invoke('send-meta-whatsapp', {
+                      body: {
+                        instance_id: instance.id,
+                        phone_number: targetNumber,
+                        message: flowMessage,
+                        conversation_id: conversationId,
+                        skip_db_save: true,
+                      }
+                    });
+                    console.log('[handle-whatsapp-event] ✅ Flow next-node message sent');
+                  }
+
+                  // Se transfer, aplicar
+                  const transferDept = exitFlowResult.departmentId || exitFlowResult.department;
+                  if ((exitFlowResult.transfer === true || exitFlowResult.action === 'transfer') && transferDept) {
+                    await supabase
+                      .from('conversations')
+                      .update({
+                        ai_mode: 'waiting_human',
+                        department: transferDept,
+                        assigned_to: null,
+                      })
+                      .eq('id', conversationId);
+                    console.log('[handle-whatsapp-event] 🔄 Transfer applied from flow exit → dept:', transferDept);
+                  }
+                } else {
+                  console.error('[handle-whatsapp-event] ❌ Flow re-invoke failed:', exitFlowError);
+                }
+              } catch (flowExitErr) {
+                console.error('[handle-whatsapp-event] ❌ Error re-invoking process-chat-flow:', flowExitErr);
+              }
+            } else {
+              console.log('[handle-whatsapp-event] ✅ AI response OK (flow context) - no violations');
+            }
+          }
+        } catch (aiFlowErr) {
+          console.error('[handle-whatsapp-event] ❌ Error calling AI with flow_context:', aiFlowErr);
         }
       }
     } catch (flowError) {
@@ -1238,7 +1385,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     }
     
     try {
-      // 🚨 FASE 3: INVOCAR AI E INTERCEPTAR FALLBACK
+      // 🚨 FASE 3: INVOCAR AI (sem flow context - caminho legado)
       const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-autopilot-chat', {
         body: {
           conversationId: conversationId,
