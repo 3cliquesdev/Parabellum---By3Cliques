@@ -4127,20 +4127,9 @@ Responda APENAS: skip ou search`
     // 🎯 SISTEMA ANTI-ALUCINAÇÃO - VERIFICAÇÃO DE CONFIANÇA
     // ============================================================
     
-    // 🆕 Buscar configuração do modo RAG estrito
-    let isStrictRAGMode = false;
-    try {
-      const { data: strictModeConfig } = await supabaseClient
-        .from('system_configurations')
-        .select('value')
-        .eq('key', 'ai_strict_rag_mode')
-        .maybeSingle();
-      
-      isStrictRAGMode = strictModeConfig?.value === 'true';
-      console.log('[ai-autopilot-chat] 🎯 Modo RAG Estrito:', isStrictRAGMode ? 'ATIVADO' : 'desativado');
-    } catch (configError) {
-      console.warn('[ai-autopilot-chat] ⚠️ Erro ao buscar config strict mode:', configError);
-    }
+    // 🆕 Usar RAGConfig já carregado (query única no início do handler)
+    const isStrictRAGMode = ragConfig.strictMode;
+    console.log('[ai-autopilot-chat] 🎯 Modo RAG Estrito:', isStrictRAGMode ? 'ATIVADO' : 'desativado');
     
     // ============================================================
     // 🆕 MODO RAG ESTRITO - Processamento exclusivo com GPT-4o
