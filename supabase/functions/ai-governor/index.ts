@@ -1011,9 +1011,31 @@ serve(async (req) => {
       ? `📥 *NOVOS LEADS HOJE (pipeline)*\n${(salesMetrics.topNewSources ?? []).join('\n')}\nTotal: ${salesMetrics.newLeadsToday} leads entraram`
       : `📥 *NOVOS LEADS HOJE*\nNenhum lead novo capturado`;
 
-    const inboxSummary = `📞 *Atendimento do Dia:*\n💬 Conversas: ${metrics.totalConvs} | IA: ${metrics.closedByAI} | Escaladas: ${metrics.escalatedToHuman}\n⏱ Tempo médio: ${metrics.avgResolutionMin ?? '—'} min\n🤖 Eventos IA: ${metrics.totalAIEvents} | Msgs: ${metrics.totalMessages} (${metrics.aiMessages} IA)${metrics.criticalAnomalies?.length > 0 ? `\n🔴 Anomalias: ${metrics.criticalAnomalies.length} críticas` : ''}`;
+    // ═══ HOJE — Atendimento ═══
+    const inboxSummary = `📞 *HOJE — Atendimento*\nConversas: ${metrics.totalConvs} | IA resolveu: ${metrics.closedByAI} | Escaladas: ${metrics.escalatedToHuman}\nTempo medio: ${metrics.avgResolutionMin ?? '—'} min\nEventos IA: ${metrics.totalAIEvents} | Msgs: ${metrics.totalMessages} (${metrics.aiMessages} da IA)${metrics.criticalAnomalies?.length > 0 ? `\nAnomalias: ${metrics.criticalAnomalies.length} criticas` : ''}`;
 
-    const fullMessage = `*Report Diário CRM 3Cliques — Relatório ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${aiAnalysis}\n${channelsSummary ? `\n📊 *Canais de Venda:*\n${channelsSummary}` : ''}\n\n${pipelineSection}\n\n${teamSection}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    // ═══ HOJE — Vendas ═══
+    const salesSummary = `💰 *HOJE — Vendas*\nFechamentos: ${salesMetrics.wonToday} | Receita: ${fmtK(salesMetrics.revenueToday)}\nPerdidos: ${salesMetrics.lostToday} | Novos deals: ${salesMetrics.newDeals}`;
+
+    // ═══ HOJE — Pipeline ═══
+    const pipelineSummaryToday = salesMetrics.newLeadsToday > 0
+      ? `📥 *HOJE — Pipeline*\n${(salesMetrics.topNewSources ?? []).join('\n')}\nTotal: ${salesMetrics.newLeadsToday} leads entraram`
+      : `📥 *HOJE — Pipeline*\nNenhum lead novo capturado`;
+
+    // ═══ MÊS — Acumulado ═══
+    const monthSummary = `📊 *MES — Acumulado*\nReceita: ${fmtK(salesMetrics.revenueMonth)}${salesMetrics.goalProgress !== null ? ` | Meta: ${salesMetrics.goalProgress}%` : ''}\nDeals won: ${salesMetrics.dealsWonMonth}${salesMetrics.momGrowth !== null ? ` | MoM: ${salesMetrics.momGrowth > 0 ? '+' : ''}${salesMetrics.momGrowth}%` : ''}`;
+
+    // ═══ MÊS — Time Comercial ═══
+    const teamMonthSummary = (salesMetrics.topRepsMonth ?? []).length > 0
+      ? `👥 *MES — Time Comercial*\n` +
+        (salesMetrics.topRepsMonth ?? []).slice(0, 5).map((r: any, i: number) =>
+          `${i + 1}. ${r.name}: ${r.deals} deals | ${fmtK(r.revenue)}`
+        ).join('\n')
+      : `👥 *MES — Time Comercial*\nNenhum fechamento no mes ainda`;
+
+    const channelsSummarySection = channelsSummary ? `\n📊 *Canais de Venda (Hoje):*\n${channelsSummary}` : '';
+
+    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${salesSummary}\n\n${pipelineSummaryToday}\n${channelsSummarySection}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],
