@@ -687,7 +687,7 @@ async function sendEmailReport(
               <td style="padding:8px 12px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;text-align:right;">Receita</td>
             </tr>
             ${(salesMetrics.topReps ?? []).map((r: any, i: number) => {
-              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+              const medal = `${i + 1}`;
               const bg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
               return `<tr style="background:${bg};">
                 <td style="padding:10px 12px;font-size:14px;">${medal}</td>
