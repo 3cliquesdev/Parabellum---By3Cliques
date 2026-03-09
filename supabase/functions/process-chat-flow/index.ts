@@ -2915,7 +2915,34 @@ serve(async (req) => {
 
       // Se chegou a transfer após auto-avanço de messages, executar transferência
       if (nextNode.type === 'transfer') {
-        console.log(`[process-chat-flow] 🔄 Transfer node after message chain: ${nextNode.id}`);
+        console.log(`[process-chat-flow] 🔄 Transfer node after message chain: ${nextNode.id} target_flow=${nextNode.data?.target_flow_id || 'none'}`);
+
+        // 🆕 FLOW-TO-FLOW TRANSFER (after message chain)
+        if (nextNode.data?.target_flow_id) {
+          // Enviar mensagens acumuladas primeiro
+          const preMsgs = [...extraMessages].filter(Boolean).join('\n\n');
+          if (preMsgs) {
+            try {
+              await supabaseClient.from('messages').insert({
+                conversation_id: conversationId, content: preMsgs,
+                sender_type: 'system', is_ai_generated: true, is_internal: false, status: 'sent', channel: 'web_chat',
+              });
+            } catch (e) { console.error('[process-chat-flow] ⚠️ Failed to send pre-transfer messages:', e); }
+          }
+          await supabaseClient.from('chat_flow_states').update({
+            collected_data: collectedData, current_node_id: nextNode.id,
+            status: 'transferred', completed_at: new Date().toISOString(),
+          }).eq('id', activeState.id);
+          try {
+            const targetResp = await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
+              { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+                body: JSON.stringify({ conversationId, flowId: nextNode.data.target_flow_id, manualTrigger: true, bypassActiveCheck: true }) }
+            );
+            const targetResult = await targetResp.json();
+            return new Response(JSON.stringify(targetResult), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          } catch (ftfErr) { console.error('[process-chat-flow] ❌ Flow-to-flow transfer (msg chain) failed:', ftfErr); }
+        }
 
         // Acumular mensagem do transfer node junto com mensagens intermediárias
         const transferMsg = replaceVariables(nextNode.data?.message || "Transferindo...", variablesContext);

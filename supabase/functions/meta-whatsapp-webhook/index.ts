@@ -1698,6 +1698,52 @@ serve(async (req) => {
                           continue;
                         }
 
+                        // 🆕 INTENT EXIT: IA detectou [INTENT:X] e quer redirecionar para sub-flow
+                        if (autopilotData?.intentExit && autopilotData?.intentType && autopilotData?.hasFlowContext && !flowExitHandledByConversation.has(conversation.id)) {
+                          flowExitHandledByConversation.add(conversation.id);
+                          console.log("[meta-whatsapp-webhook] 🎯 intentExit detectado → re-invocando process-chat-flow com intentData", {
+                            intentType: autopilotData.intentType,
+                          });
+                          try {
+                            const intentFlowResponse = await fetch(
+                              `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
+                              {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+                                body: JSON.stringify({
+                                  conversationId: conversation.id,
+                                  userMessage: messageContent,
+                                  forceAIExit: true,
+                                  intentData: { ai_exit_intent: autopilotData.intentType },
+                                }),
+                              }
+                            );
+                            if (intentFlowResponse.ok) {
+                              const intentResult = await intentFlowResponse.json();
+                              console.log("[meta-whatsapp-webhook] ✅ Intent flow result:", JSON.stringify({ transfer: intentResult.transfer, hasResponse: !!intentResult.response, flowId: intentResult.flowId }));
+                              const intentMsg = (intentResult.response || intentResult.message)
+                                ? (intentResult.response || intentResult.message) + formatOptionsAsText(intentResult.options)
+                                : null;
+                              if (intentMsg) {
+                                await supabase.functions.invoke("send-meta-whatsapp", {
+                                  body: { instance_id: instance.id, phone_number: fromNumber, message: intentMsg, conversation_id: conversation.id, skip_db_save: false, is_bot_message: true },
+                                });
+                                console.log("[meta-whatsapp-webhook] ✅ Intent flow message sent");
+                              }
+                              if (intentResult.transfer) {
+                                const intentDept = intentResult.departmentId || intentResult.department;
+                                if (intentDept) {
+                                  await supabase.from("conversations").update({ department: intentDept, ai_mode: "waiting_human", assigned_to: null }).eq("id", conversation.id);
+                                  console.log("[meta-whatsapp-webhook] ✅ Intent transfer → dept:", intentDept);
+                                }
+                              }
+                            }
+                          } catch (intentErr) {
+                            console.error("[meta-whatsapp-webhook] ❌ Intent flow error:", intentErr);
+                          }
+                          continue;
+                        }
+
                         // 🆕 FLOW ADVANCE: IA quer sair do nó (strict RAG ou confidence handoff)
                         // Re-invocar process-chat-flow para avançar ao próximo nó do fluxo
                         if (autopilotData?.status === 'flow_advance_needed' && autopilotData?.hasFlowContext) {

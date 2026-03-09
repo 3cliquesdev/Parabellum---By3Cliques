@@ -8427,6 +8427,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       status: 'success',
       message: assistantMessage,
       from_cache: false,
+      // 🆕 INTENT EXIT: Sinalizar intent detectado para o webhook
+      ...(detectedIntentTag ? { intentExit: true, intentType: detectedIntentTag, hasFlowContext: !!flow_context, flow_context: flow_context ? { flow_id: flow_context.flow_id, node_id: flow_context.node_id } : undefined } : {}),
       persona_used: {
         id: persona.id,
         name: persona.name
