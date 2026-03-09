@@ -183,11 +183,21 @@ async function collectDayMetrics(supabase: any, since: string, until: string) {
     .map(([k, v]) => `${k} (${v}x)`);
 
   // ═══ Tags de conversas do dia ═══
-  const { data: convTagsData } = await supabase
-    .from('conversation_tags')
-    .select('tag_id, tags(name, color), conversation_id')
-    .gte('created_at', since)
-    .lt('created_at', until);
+  // Buscar tags de conversas criadas no período (não pela data de criação da tag)
+  const convIdsForTags = convs?.map((c: any) => c.id) ?? [];
+  let convTagsData: any[] = [];
+  if (convIdsForTags.length > 0) {
+    // Buscar em batches para evitar limite
+    const tagBatchSize = 200;
+    for (let i = 0; i < convIdsForTags.length; i += tagBatchSize) {
+      const batch = convIdsForTags.slice(i, i + tagBatchSize);
+      const { data: batchTags } = await supabase
+        .from('conversation_tags')
+        .select('tag_id, tags(name, color), conversation_id')
+        .in('conversation_id', batch);
+      if (batchTags) convTagsData.push(...batchTags);
+    }
+  }
 
   const tagCountMap: Record<string, { name: string; count: number }> = {};
   convTagsData?.forEach((ct: any) => {
