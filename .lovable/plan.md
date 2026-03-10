@@ -1,24 +1,26 @@
 
-# Ajustar tag e mensagem de inatividade no auto-close ✅
+# Dar autonomia à IA no Master Flow de Produção ✅
 
 ## Status: IMPLEMENTADO
 
 ## Resumo
 
-Encerramento por inatividade agora usa tag **9.98 Falta de Interação** e mensagem dinâmica com horário de atendimento.
+O nó `ia_entrada` do Master Flow foi atualizado para dar autonomia à IA.
 
-## Alterações
+## Alterações aplicadas
 
-| Local | Mudança |
-|-------|---------|
-| `auto-close-conversations/index.ts` | Import `getBusinessHoursInfo`, constante `FALTA_INTERACAO_TAG_ID`, mensagem dinâmica `buildInactivityCloseMessage()` |
-| Etapa 2 (dept inatividade) | Tag 9.04 → 9.98, mensagem com horário |
-| Etapa 3 (AI inatividade) | Tag 9.04 → 9.98, mensagem unificada com horário |
-| Etapa 3b (sem dept) | Tag 9.04 → 9.98, mensagem unificada com horário |
-| Etapa 1 (WhatsApp expired) | Mantém tag 9.04 (cenário diferente: janela expirada) |
+| Parâmetro | Antes | Depois |
+|---|---|---|
+| `forbid_questions` | `true` | `false` |
+| `exit_keywords` | 13 (incluía "menu", "opcoes", "pessoa") | 9 (apenas intenções humanas explícitas) |
+| `max_sentences` | `4` | `5` |
+| `context_prompt` | "não inventar" | "RESOLVER antes de transferir, fazer perguntas, 2-3 tentativas" |
+| `objective` | sem menção a perguntas | inclui "FAÇA PERGUNTAS ESCLARECEDORAS" |
 
-## Garantias
+## Travas mantidas
 
-- `DESISTENCIA_TAG_ID` mantido no código para uso futuro
-- Horário buscado uma vez no início via `getBusinessHoursInfo`
-- Fallback em `buildScheduleSummary` se sem config: "Sem horário configurado"
+- `forbid_options: true` — IA não cria menus falsos
+- `forbid_financial: true` — IA não resolve financeiro
+- `forbid_commercial: true` — IA não faz vendas
+- `fallback_message` — rede de segurança
+- `flow_advance_needed` — funciona para casos extremos
