@@ -1,34 +1,22 @@
 
+# Auditoria IA e Chat Flow — Correções Aplicadas (10/03/2026)
 
-# Adicionar tag configurável para encerramento por inatividade da IA
+## Correções Implementadas
 
-## Resumo
+### ✅ Fix 1: Prefixo cautious sem markdown
+- `generateResponsePrefix('cautious')` agora retorna texto plano sem `**`
+- Elimina contract violations auto-infligidas pelo próprio sistema
 
-Atualmente só o encerramento humano tem tag configurável (`human_auto_close_tag_id`). O encerramento por inatividade da IA usa sempre a tag hardcoded "9.98 Falta de Interação". O objetivo é:
+### ✅ Fix 2: Dispatch-conversations aceita copilot
+- Separou check de `assigned_to` do check de `ai_mode`
+- Agora aceita `waiting_human` E `copilot` para dispatch
+- Causa raiz: condição `ai_mode !== 'waiting_human'` rejeitava copilot
 
-1. Adicionar `ai_auto_close_tag_id` ao banco e UI — permitir escolher qual tag aplicar quando a IA encerra por inatividade do cliente
-2. Melhorar os textos para ser mais claro: "cliente não respondeu ao atendimento humano" / "cliente não respondeu à IA (desinteresse)"
-3. Ambos os tipos de encerramento terão seu próprio seletor de tag
+### ✅ Fix 3: Conversas stuck corrigidas via SQL
+- Flow states presos em `ia_entrada` cancelados
+- Dispatch jobs `already_assigned` reabertos como `pending`
+- Novos dispatch jobs criados para conversas sem fila
 
-## Alterações
-
-### 1. Migração SQL
-Adicionar coluna `ai_auto_close_tag_id UUID NULL REFERENCES tags(id)` na tabela `departments`.
-
-### 2. Hooks e tipo Department
-Adicionar `ai_auto_close_tag_id` em `useDepartments.tsx`, `useCreateDepartment.tsx`, `useUpdateDepartment.tsx`.
-
-### 3. UI — DepartmentDialog.tsx
-- Adicionar state `aiAutoCloseTagId` e seletor de tag dentro do bloco `aiAutoCloseEnabled`
-- Melhorar textos descritivos:
-  - IA: "Cliente não respondeu à IA — possível desinteresse na conversa"
-  - Humano: "Cliente não respondeu ao atendimento humano"
-- Salvar `ai_auto_close_tag_id` no submit
-
-### 4. Edge function — auto-close-conversations
-- No Stage 3 (AI inactivity por departamento), usar `dept.ai_auto_close_tag_id` se configurado, senão fallback para `FALTA_INTERACAO_TAG_ID`
-- Incluir `ai_auto_close_tag_id` no select dos departamentos
-
-### 5. Cards em Departments.tsx
-Mostrar badge da tag configurada para IA (se aplicável).
-
+### ⚠️ BUG 3 (operacional): Customer Success sem agentes
+- Não é bug de código — departamento sem agentes online
+- Requer ação administrativa

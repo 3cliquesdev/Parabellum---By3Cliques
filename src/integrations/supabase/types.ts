@@ -3158,6 +3158,7 @@ export type Database = {
       departments: {
         Row: {
           ai_auto_close_minutes: number | null
+          ai_auto_close_tag_id: string | null
           auto_close_enabled: boolean | null
           auto_close_minutes: number | null
           color: string | null
@@ -3175,6 +3176,7 @@ export type Database = {
         }
         Insert: {
           ai_auto_close_minutes?: number | null
+          ai_auto_close_tag_id?: string | null
           auto_close_enabled?: boolean | null
           auto_close_minutes?: number | null
           color?: string | null
@@ -3192,6 +3194,7 @@ export type Database = {
         }
         Update: {
           ai_auto_close_minutes?: number | null
+          ai_auto_close_tag_id?: string | null
           auto_close_enabled?: boolean | null
           auto_close_minutes?: number | null
           color?: string | null
@@ -3208,6 +3211,13 @@ export type Database = {
           whatsapp_number?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "departments_ai_auto_close_tag_id_fkey"
+            columns: ["ai_auto_close_tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "departments_human_auto_close_tag_id_fkey"
             columns: ["human_auto_close_tag_id"]

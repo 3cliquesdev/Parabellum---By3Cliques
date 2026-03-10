@@ -1,0 +1,1 @@
+ALTER TABLE public.departments ADD COLUMN ai_auto_close_tag_id UUID NULL REFERENCES public.tags(id);
