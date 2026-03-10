@@ -2195,7 +2195,7 @@ serve(async (req) => {
                 await supabaseClient.from('messages').insert({
                   conversation_id: conversationId,
                   content: String(fallbackMsg),
-                  sender_type: 'system',
+                  sender_type: 'user',
                   is_ai_generated: true,
                   is_internal: false,
                   status: 'sent',
