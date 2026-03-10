@@ -1210,9 +1210,15 @@ function validateResponseRestrictions(
   forbidQuestions: boolean, 
   forbidOptions: boolean
 ): { valid: boolean; violation?: string } {
-  // Verificar perguntas (qualquer ? no texto)
-  if (forbidQuestions && response.includes('?')) {
-    return { valid: false, violation: 'question_detected' };
+  // Verificar perguntas — só bloqueia se uma FRASE termina com ?
+  // Evita falso positivo com ? dentro de parênteses ou observações
+  if (forbidQuestions) {
+    const hasRealQuestion = response
+      .split(/(?<=[.!])\s+/)
+      .some(sentence => sentence.trim().endsWith('?'));
+    if (hasRealQuestion) {
+      return { valid: false, violation: 'question_detected' };
+    }
   }
   
   // Verificar opções (padrões comuns de múltipla escolha)
