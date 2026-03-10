@@ -96,6 +96,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
         auto_close_minutes: autoCloseMinutesValue,
         send_rating_on_close: sendRatingOnClose,
         ai_auto_close_minutes: aiAutoCloseMinutesValue,
+        ai_auto_close_tag_id: aiAutoCloseEnabled && aiAutoCloseTagId ? aiAutoCloseTagId : null,
         human_auto_close_minutes: humanAutoCloseMinutesValue,
         human_auto_close_tag_id: humanAutoCloseEnabled && humanAutoCloseTagId ? humanAutoCloseTagId : null,
       });
@@ -109,6 +110,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
         auto_close_minutes: autoCloseMinutesValue,
         send_rating_on_close: sendRatingOnClose,
         ai_auto_close_minutes: aiAutoCloseMinutesValue,
+        ai_auto_close_tag_id: aiAutoCloseEnabled && aiAutoCloseTagId ? aiAutoCloseTagId : null,
         human_auto_close_minutes: humanAutoCloseMinutesValue,
         human_auto_close_tag_id: humanAutoCloseEnabled && humanAutoCloseTagId ? humanAutoCloseTagId : null,
       });
