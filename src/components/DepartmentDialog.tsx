@@ -247,7 +247,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
                 <div className="space-y-0.5">
                   <Label htmlFor="aiAutoCloseEnabled">Encerrar conversas com IA por inatividade</Label>
                   <p className="text-xs text-muted-foreground">
-                    Fecha conversas no modo autopilot quando o cliente não responde à IA
+                    Cliente não respondeu à IA — possível desinteresse na conversa
                   </p>
                 </div>
                 <Switch
@@ -258,20 +258,47 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
               </div>
 
               {aiAutoCloseEnabled && (
-                <div className="space-y-2">
-                  <Label htmlFor="aiAutoCloseMinutes">Tempo de inatividade da IA (minutos)</Label>
-                  <Input
-                    id="aiAutoCloseMinutes"
-                    type="number"
-                    min={1}
-                    max={1440}
-                    placeholder="Ex: 5"
-                    value={aiAutoCloseMinutes}
-                    onChange={(e) => setAiAutoCloseMinutes(e.target.value ? Number(e.target.value) : "")}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Mínimo 1 minuto. Encerra quando o cliente não responde à IA neste período.
-                  </p>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="aiAutoCloseMinutes">Tempo de inatividade da IA (minutos)</Label>
+                    <Input
+                      id="aiAutoCloseMinutes"
+                      type="number"
+                      min={1}
+                      max={1440}
+                      placeholder="Ex: 5"
+                      value={aiAutoCloseMinutes}
+                      onChange={(e) => setAiAutoCloseMinutes(e.target.value ? Number(e.target.value) : "")}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Mínimo 1 minuto. Encerra quando o cliente não responde à IA neste período.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="aiAutoCloseTagId">Tag ao encerrar (IA)</Label>
+                    <Select value={aiAutoCloseTagId} onValueChange={setAiAutoCloseTagId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma tag (opcional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tags?.map((tag) => (
+                          <SelectItem key={tag.id} value={tag.id}>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="w-3 h-3 rounded-full inline-block"
+                                style={{ backgroundColor: tag.color || "#6B7280" }}
+                              />
+                              {tag.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Tag aplicada quando o cliente não responde à IA (desinteresse). Se não selecionada, usa a tag padrão.
+                    </p>
+                  </div>
                 </div>
               )}
 
