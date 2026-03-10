@@ -281,18 +281,19 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
   return result;
 }
 
-// Mini-hook para carregar IDs de conversas com uma tag específica
-function useTagConversationIds(tagId?: string): Set<string> | undefined {
+// Mini-hook para carregar IDs de conversas com tags específicas (suporta múltiplas)
+function useTagConversationIds(tags?: string[]): Set<string> | undefined {
+  const tagKey = tags && tags.length > 0 ? [...tags].sort().join(',') : '';
   const { data } = useQuery({
-    queryKey: ['tag-conversation-ids', tagId],
+    queryKey: ['tag-conversation-ids', tagKey],
     queryFn: async () => {
       const { data } = await supabase
         .from('conversation_tags')
         .select('conversation_id')
-        .eq('tag_id', tagId!);
+        .in('tag_id', tags!);
       return new Set(data?.map(t => t.conversation_id) || []);
     },
-    enabled: !!tagId,
+    enabled: !!tags && tags.length > 0,
     staleTime: 30000,
   });
   return data;
