@@ -3305,6 +3305,7 @@ serve(async (req) => {
           
           // 🆕 Se skipEarlyReturn = true, NÃO retornar early → deixar IA processar o original_intent
           if (skipEarlyReturn) {
+            emailWasVerifiedInThisRequest = true; // 🆕 Marcar que email foi verificado nesta request
             console.log('[ai-autopilot-chat] 🔄 skipEarlyReturn=true - IA vai processar a mensagem original após confirmação de email');
             // autoResponse já foi enviada via WhatsApp acima como confirmação
             // customerMessage foi substituído pelo original_intent
