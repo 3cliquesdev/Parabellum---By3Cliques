@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Edit, Trash2, Loader2, Clock, MessageSquare, Timer, Tag, UserCheck } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, Clock, MessageSquare, Timer, Tag, UserCheck, AlertTriangle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDepartments, type Department } from "@/hooks/useDepartments";
 import { useDeleteDepartment } from "@/hooks/useDeleteDepartment";
