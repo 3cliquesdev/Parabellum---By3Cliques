@@ -3020,7 +3020,8 @@ serve(async (req) => {
       }
 
       // Fix 2: Status semântico correto
-      const nextStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition' || nextNode.type === 'verify_customer_otp'
+      // 🔧 FIX 2: condition_v2 reconhecido como waiting_input
+      const nextStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition' || nextNode.type === 'condition_v2' || nextNode.type === 'verify_customer_otp'
         ? 'waiting_input' : 'active';
 
       await supabaseClient
