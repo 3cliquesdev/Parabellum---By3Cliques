@@ -62,11 +62,12 @@ interface FetchOptions {
   role?: string | null;
   departmentIds?: string[] | null;
   scope?: InboxScope;
+  aiMode?: string;
 }
 
 // Função para buscar dados do inbox com filtros de role
 async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem[]> {
-  const { cursor, userId, role, departmentIds, scope = 'active' } = options;
+  const { cursor, userId, role, departmentIds, scope = 'active', aiMode } = options;
 
   let query = supabase
     .from("inbox_view")
@@ -77,6 +78,17 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
     query = query.eq("status", "closed");
   } else {
     query = query.neq("status", "closed");
+  }
+
+  // ✅ Aplicar filtro de AI mode no nível do banco para archived (evita perder dados no limit)
+  if (scope === 'archived' && aiMode) {
+    if (aiMode === 'ai_only') {
+      query = query.eq("ai_mode", "autopilot");
+    } else if (aiMode === 'ai_all') {
+      query = query.in("ai_mode", ["autopilot", "copilot", "waiting_human"]);
+    } else {
+      query = query.eq("ai_mode", aiMode);
+    }
   }
 
   const isArchivedScope = scope === 'archived';
@@ -299,14 +311,15 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
     role,
     departmentIds,
     scope,
-  }), [user?.id, role, departmentIds, scope]);
+    aiMode: scope === 'archived' ? filters?.aiMode : undefined,
+  }), [user?.id, role, departmentIds, scope, filters?.aiMode]);
 
   const fetchOptionsRef = useRef(fetchOptions);
   fetchOptionsRef.current = fetchOptions;
 
   // ✅ queryKey SEM filtersKey — scope é o único discriminador de dataset
   const query = useQuery({
-    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope],
+    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope, scope === 'archived' ? filters?.aiMode : undefined],
     queryFn: async () => {
       const data = await fetchInboxData(fetchOptions);
       
