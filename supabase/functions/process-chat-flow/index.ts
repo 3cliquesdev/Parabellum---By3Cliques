@@ -2061,8 +2061,12 @@ serve(async (req) => {
         const forbidCommercial: boolean = currentNode.data?.forbid_commercial ?? false;
 
         // 🔒 TRAVA FINANCEIRA: Detectar intenção financeira como exit do nó AI
-        const financialIntentPattern = /saque|sacar|reembolso|estorno|(?<!\bendereco\s+de\s*)(?<!\bendere[çc]o\s+de\s*)(?<!\blocal\s+de\s*)devolu[çc][ãa]o|(?<!\bendereco\s+de\s*)(?<!\bendere[çc]o\s+de\s*)(?<!\blocal\s+de\s*)devolver|cancelar.*assinatura|meu dinheiro|(sacar|tirar|retirar|ver|consultar|meu)\s*saldo|(fazer|realizar|efetuar|cancelar|estornar)\s*pagamento|(cancelar|contestar|cobran[çc]a\s*indevida)|retirar|retirada|caixa|carteira|pix|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|ressarcimento/i;
-        const financialIntentMatch = (forceFinancialExit && forbidFinancial) || (forbidFinancial && msgLower.length > 0 && financialIntentPattern.test(userMessage || ''));
+        // 🔧 FIX 6: Regex simplificada sem lookbehind complexo
+        const financialPositive = /saque|sacar|reembolso|estorno|cancelar.*assinatura|meu dinheiro|ressarcimento|pix|saldo|retirar|retirada|devolv[eê]r?|devolu[çc][ãa]o|caixa|carteira|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|(fazer|realizar|efetuar|cancelar|estornar)\s*pagamento|(cancelar|contestar|cobran[çc]a\s*indevida)/i;
+        const financialContext = /endere[çc]o\s+de|local\s+de\s+entrega|forma\s+de\s+pagamento/i;
+        const financialIntentMatch =
+          (forceFinancialExit && forbidFinancial) ||
+          (forbidFinancial && msgLower.length > 0 && financialPositive.test(userMessage || '') && !financialContext.test(userMessage || ''));
         if (forceFinancialExit) {
           console.log('[process-chat-flow] 🔒 forceFinancialExit=true recebido do webhook, forçando exit do nó AI');
         }
