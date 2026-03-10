@@ -673,6 +673,17 @@ const FALLBACK_PHRASES = [
   'num sei',
   'n sei',
   'nao sei',
+  // 🆕 FIX LOOP ia_entrada: Frases de redirecionamento que a IA gera como fallback
+  'direcionar para',
+  'encontrar o especialista',
+  'menu de atendimento',
+  'vou te direcionar',
+  'vou te encaminhar',
+  'encaminhar para o setor',
+  'transferir para o setor',
+  'redirecionar para',
+  'encaminhar você',
+  'direcionar você',
 ];
 
 // 🔐 BARREIRA FINANCEIRA - Palavras que identificam contexto FINANCEIRO (sem OTP obrigatório)
@@ -4718,6 +4729,41 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       customerMessage: customerMessage.substring(0, 60)
     });
     
+    // ============================================================
+    // 🆕 GUARD: 0 artigos + 0% confiança + flow_context → avançar fluxo IMEDIATAMENTE
+    // Não há motivo para chamar o modelo se não tem nenhum artigo para fundamentar
+    // ============================================================
+    if (flow_context && confidenceResult.score === 0 && knowledgeArticles.length === 0 && !shouldSkipHandoff) {
+      console.log('[ai-autopilot-chat] 🚨 ZERO CONFIDENCE + ZERO ARTICLES + flow_context → flow_advance_needed IMEDIATO', {
+        score: confidenceResult.score,
+        articles: knowledgeArticles.length,
+        flow_id: flow_context.flow_id,
+        node_id: flow_context.node_id
+      });
+      
+      // Log de qualidade
+      await supabaseClient.from('ai_quality_logs').insert({
+        conversation_id: conversationId,
+        contact_id: contact.id,
+        customer_message: customerMessage,
+        action_taken: 'flow_advance',
+        handoff_reason: 'zero_confidence_zero_articles',
+        confidence_score: 0,
+        articles_count: 0
+      });
+      
+      return new Response(JSON.stringify({
+        status: 'flow_advance_needed',
+        reason: 'zero_confidence_zero_articles',
+        hasFlowContext: true,
+        score: 0,
+        articles: 0
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+
     // 🆕 MUDANÇA CRÍTICA: Só fazer handoff se cliente PEDIR EXPLICITAMENTE
     // OU se action é 'handoff' E cliente pediu humano
     // REMOVIDO: handoff automático por baixa confiança
@@ -7788,6 +7834,55 @@ Conversa: ${conversationId}`;
     let isFallbackResponse = FALLBACK_PHRASES.some(phrase => 
       assistantMessage.toLowerCase().includes(phrase)
     );
+
+    // 🆕 FIX LOOP: Detectar fallback configurado no nó comparando com fallbackMessage
+    if (!isFallbackResponse && flow_context?.fallbackMessage) {
+      const fallbackPrefix = flow_context.fallbackMessage.substring(0, 30).toLowerCase();
+      if (fallbackPrefix.length > 5 && assistantMessage.toLowerCase().includes(fallbackPrefix)) {
+        console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO via fallbackMessage do nó:', fallbackPrefix);
+        isFallbackResponse = true;
+      }
+    }
+
+    // 🆕 FIX LOOP: Anti-loop counter - máximo 2 fallbacks consecutivos no mesmo nó AI
+    if (!isFallbackResponse && flow_context) {
+      const existingMetadata = conversation.customer_metadata || {};
+      const aiNodeFallbackCount = existingMetadata.ai_node_fallback_count || 0;
+      const aiNodeId = existingMetadata.ai_node_current_id || null;
+      
+      // Se mudou de nó, resetar contador
+      if (aiNodeId !== flow_context.node_id) {
+        // Novo nó, resetar
+      } else if (aiNodeFallbackCount >= 2) {
+        console.log('[ai-autopilot-chat] 🚨 ANTI-LOOP: Máximo de 2 fallbacks atingido no nó AI → forçando flow_advance_needed', {
+          node_id: flow_context.node_id,
+          fallback_count: aiNodeFallbackCount
+        });
+        isFallbackResponse = true;
+      }
+    }
+
+    // 🆕 FIX LOOP: Atualizar contador de fallbacks no customer_metadata
+    if (flow_context) {
+      const existingMetadata = conversation.customer_metadata || {};
+      const aiNodeId = existingMetadata.ai_node_current_id || null;
+      let newCount = 0;
+      
+      if (isFallbackResponse) {
+        newCount = (aiNodeId === flow_context.node_id) ? ((existingMetadata.ai_node_fallback_count || 0) + 1) : 1;
+      }
+      // Sempre atualizar o nó atual e o contador
+      await supabaseClient
+        .from('conversations')
+        .update({
+          customer_metadata: {
+            ...existingMetadata,
+            ai_node_current_id: flow_context.node_id,
+            ai_node_fallback_count: isFallbackResponse ? newCount : 0
+          }
+        })
+        .eq('id', conversationId);
+    }
 
     if (isFallbackResponse) {
       console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO');
