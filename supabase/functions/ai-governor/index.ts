@@ -1263,7 +1263,7 @@ serve(async (req) => {
 
     // ═══ HOJE — Atendimento (detalhado) ═══
     const inboxSummary = [
-      `📞 *HOJE — Atendimento* ${periodStr}`,
+      `📞 *${dateStr} — Atendimento* ${periodStr}`,
       `Conversas: ${metrics.totalConvs} (${channelBreakdownWa})`,
       `Abertas agora: ${metrics.openTotal} | Fechadas: ${metrics.closedTotal} | Fila humana: ${metrics.waitingHumanConvs}`,
       `IA autopilot: resolveu ${metrics.closedAutopilot}, ativas ${metrics.openAutopilot}`,
