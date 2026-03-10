@@ -3163,6 +3163,7 @@ export type Database = {
           color: string | null
           created_at: string
           description: string | null
+          human_auto_close_minutes: number | null
           id: string
           is_active: boolean
           name: string
@@ -3178,6 +3179,7 @@ export type Database = {
           color?: string | null
           created_at?: string
           description?: string | null
+          human_auto_close_minutes?: number | null
           id?: string
           is_active?: boolean
           name: string
@@ -3193,6 +3195,7 @@ export type Database = {
           color?: string | null
           created_at?: string
           description?: string | null
+          human_auto_close_minutes?: number | null
           id?: string
           is_active?: boolean
           name?: string

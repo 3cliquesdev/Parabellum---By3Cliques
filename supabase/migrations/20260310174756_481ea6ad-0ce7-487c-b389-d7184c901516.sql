@@ -1,0 +1,1 @@
+ALTER TABLE public.departments ADD COLUMN human_auto_close_minutes INTEGER NULL;
