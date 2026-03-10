@@ -144,9 +144,14 @@ export default function ConversationList({
         {isLoading ? (
           <ConversationListSkeleton count={8} />
         ) : conversations.length === 0 ? (
-          <div className="p-6 text-center text-muted-foreground space-y-1">
+          <div className="p-6 text-center text-muted-foreground space-y-2">
             <p className="font-medium">Nenhuma conversa encontrada</p>
-            <p className="text-sm opacity-70">Tente ajustar ou remover alguns filtros</p>
+            <p className="text-sm opacity-70">
+              A combinação de filtros selecionada não retornou resultados.
+            </p>
+            <p className="text-xs opacity-50">
+              Tente ampliar o período de datas ou remover alguns filtros.
+            </p>
           </div>
         ) : (
           <List
