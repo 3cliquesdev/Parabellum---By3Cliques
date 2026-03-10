@@ -49,7 +49,7 @@ export interface InboxFilters {
   hasAttachments?: boolean;
   aiMode?: 'autopilot' | 'copilot' | 'disabled' | 'waiting_human' | 'ai_all' | 'ai_only';
   department?: string;
-  tagId?: string;
+  tags?: string[];
 }
 
 export type InboxScope = 'active' | 'archived';
