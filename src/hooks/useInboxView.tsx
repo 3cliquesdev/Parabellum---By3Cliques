@@ -92,6 +92,20 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
     }
   }
 
+  // ✅ Aplicar filtro de dateRange no nível do banco para archived
+  if (scope === 'archived' && dateRange) {
+    if (dateRange.from) {
+      const startOfDay = new Date(dateRange.from);
+      startOfDay.setHours(0, 0, 0, 0);
+      query = query.gte("last_message_at", startOfDay.toISOString());
+    }
+    if (dateRange.to) {
+      const endOfDay = new Date(dateRange.to);
+      endOfDay.setHours(23, 59, 59, 999);
+      query = query.lte("last_message_at", endOfDay.toISOString());
+    }
+  }
+
   const isArchivedScope = scope === 'archived';
   query = query
     .order("updated_at", { ascending: !isArchivedScope })
