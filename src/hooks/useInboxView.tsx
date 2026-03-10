@@ -63,11 +63,12 @@ interface FetchOptions {
   departmentIds?: string[] | null;
   scope?: InboxScope;
   aiMode?: string;
+  dateRange?: DateRange;
 }
 
 // Função para buscar dados do inbox com filtros de role
 async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem[]> {
-  const { cursor, userId, role, departmentIds, scope = 'active', aiMode } = options;
+  const { cursor, userId, role, departmentIds, scope = 'active', aiMode, dateRange } = options;
 
   let query = supabase
     .from("inbox_view")
@@ -88,6 +89,20 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
       query = query.in("ai_mode", ["autopilot", "copilot", "waiting_human"]);
     } else {
       query = query.eq("ai_mode", aiMode);
+    }
+  }
+
+  // ✅ Aplicar filtro de dateRange no nível do banco para archived
+  if (scope === 'archived' && dateRange) {
+    if (dateRange.from) {
+      const startOfDay = new Date(dateRange.from);
+      startOfDay.setHours(0, 0, 0, 0);
+      query = query.gte("last_message_at", startOfDay.toISOString());
+    }
+    if (dateRange.to) {
+      const endOfDay = new Date(dateRange.to);
+      endOfDay.setHours(23, 59, 59, 999);
+      query = query.lte("last_message_at", endOfDay.toISOString());
     }
   }
 
@@ -312,14 +327,15 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
     departmentIds,
     scope,
     aiMode: scope === 'archived' ? filters?.aiMode : undefined,
-  }), [user?.id, role, departmentIds, scope, filters?.aiMode]);
+    dateRange: scope === 'archived' ? filters?.dateRange : undefined,
+  }), [user?.id, role, departmentIds, scope, filters?.aiMode, filters?.dateRange]);
 
   const fetchOptionsRef = useRef(fetchOptions);
   fetchOptionsRef.current = fetchOptions;
 
   // ✅ queryKey SEM filtersKey — scope é o único discriminador de dataset
   const query = useQuery({
-    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope, scope === 'archived' ? filters?.aiMode : undefined],
+    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope, scope === 'archived' ? filters?.aiMode : undefined, scope === 'archived' ? filters?.dateRange?.from?.toISOString() : undefined, scope === 'archived' ? filters?.dateRange?.to?.toISOString() : undefined],
     queryFn: async () => {
       const data = await fetchInboxData(fetchOptions);
       

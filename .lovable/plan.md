@@ -1,28 +1,22 @@
 
+# Auditoria IA e Chat Flow — Correções Aplicadas (10/03/2026)
 
-# Fix: Filtro de Data nas Encerradas não retorna resultados
+## Correções Implementadas
 
-## Problema
+### ✅ Fix 1: Prefixo cautious sem markdown
+- `generateResponsePrefix('cautious')` agora retorna texto plano sem `**`
+- Elimina contract violations auto-infligidas pelo próprio sistema
 
-Mesmo problema do filtro "Somente IA": o filtro de **dateRange** é aplicado **client-side** sobre os 1000 registros mais recentes. Se a data selecionada (ex: 10/03/2026) não cai dentro dessas 1000 conversas, o resultado é zero.
+### ✅ Fix 2: Dispatch-conversations aceita copilot
+- Separou check de `assigned_to` do check de `ai_mode`
+- Agora aceita `waiting_human` E `copilot` para dispatch
+- Causa raiz: condição `ai_mode !== 'waiting_human'` rejeitava copilot
 
-## Correção
+### ✅ Fix 3: Conversas stuck corrigidas via SQL
+- Flow states presos em `ia_entrada` cancelados
+- Dispatch jobs `already_assigned` reabertos como `pending`
+- Novos dispatch jobs criados para conversas sem fila
 
-Passar o `dateRange` para a função `fetchInboxData` e aplicar `.gte()` / `.lte()` na query do banco **antes** do `.limit()`, apenas para o scope `archived`.
-
-### Alterações em `src/hooks/useInboxView.tsx`:
-
-1. **`FetchOptions`** (linha 59-66): Adicionar campo `dateRange?: DateRange`.
-
-2. **`fetchInboxData`** (linhas 68-123): Quando `scope === 'archived'` e `dateRange` estiver definido, aplicar filtro no campo `last_message_at`:
-   - `dateRange.from` → `.gte("last_message_at", startOfDay)`
-   - `dateRange.to` → `.lte("last_message_at", endOfDay)`
-
-3. **`fetchOptions` memo** (linha 309-315): Incluir `filters?.dateRange` quando `scope === 'archived'`.
-
-4. **`queryKey`** (linha 322): Adicionar as datas (formatadas) à key para disparar refetch ao mudar período.
-
-## Resultado
-
-Filtro de período nas encerradas trará até 1000 conversas **daquele período específico**, em vez de filtrar client-side sobre um recorte que pode não conter a data selecionada.
-
+### ⚠️ BUG 3 (operacional): Customer Success sem agentes
+- Não é bug de código — departamento sem agentes online
+- Requer ação administrativa
