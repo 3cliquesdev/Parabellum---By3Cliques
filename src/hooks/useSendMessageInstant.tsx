@@ -315,6 +315,28 @@ export function useSendMessageInstant() {
             .then(({ error }) => {
               if (error) console.error('[SendInstant] Failed to update last_message_at:', error);
             });
+
+          // 🆕 AUTO-ASSIGN: Se agente enviou mensagem sem clicar "Assumir",
+          // auto-atribuir a conversa via RPC segura (SECURITY DEFINER)
+          supabase
+            .rpc('auto_assign_on_send', { p_conversation_id: conversationId })
+            .then(({ data, error }) => {
+              if (error) {
+                console.error('[SendInstant] auto_assign_on_send error:', error);
+                return;
+              }
+              const result = data as { assigned: boolean; assigned_to?: string; previous_ai_mode?: string } | null;
+              if (result?.assigned) {
+                console.log('[SendInstant] ✅ Auto-assigned conversa:', {
+                  conversationId: conversationId.slice(0, 8),
+                  previous_ai_mode: result.previous_ai_mode,
+                });
+                // Atualizar caches para refletir mudança
+                queryClient.invalidateQueries({ queryKey: ["conversations"] });
+                queryClient.invalidateQueries({ queryKey: ["ai-mode", conversationId] });
+                queryClient.invalidateQueries({ queryKey: ["inbox-view"] });
+              }
+            });
         }
 
         // Se WhatsApp falhou, mostrar toast
