@@ -49,7 +49,7 @@ export interface InboxFilters {
   hasAttachments?: boolean;
   aiMode?: 'autopilot' | 'copilot' | 'disabled' | 'waiting_human' | 'ai_all' | 'ai_only';
   department?: string;
-  tagId?: string;
+  tags?: string[];
 }
 
 export type InboxScope = 'active' | 'archived';
@@ -261,7 +261,7 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
   }
 
   // Tag filter (usando Set pré-carregado)
-  if (filters.tagId && tagIdsSet) {
+  if (filters.tags && filters.tags.length > 0 && tagIdsSet) {
     result = result.filter(item => tagIdsSet.has(item.conversation_id));
   }
 
@@ -281,18 +281,19 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
   return result;
 }
 
-// Mini-hook para carregar IDs de conversas com uma tag específica
-function useTagConversationIds(tagId?: string): Set<string> | undefined {
+// Mini-hook para carregar IDs de conversas com tags específicas (suporta múltiplas)
+function useTagConversationIds(tags?: string[]): Set<string> | undefined {
+  const tagKey = tags && tags.length > 0 ? [...tags].sort().join(',') : '';
   const { data } = useQuery({
-    queryKey: ['tag-conversation-ids', tagId],
+    queryKey: ['tag-conversation-ids', tagKey],
     queryFn: async () => {
       const { data } = await supabase
         .from('conversation_tags')
         .select('conversation_id')
-        .eq('tag_id', tagId!);
+        .in('tag_id', tags!);
       return new Set(data?.map(t => t.conversation_id) || []);
     },
-    enabled: !!tagId,
+    enabled: !!tags && tags.length > 0,
     staleTime: 30000,
   });
   return data;
@@ -395,7 +396,7 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
   });
 
   // ✅ Tag lookup separado (async -> próprio hook/query)
-  const tagIdsSet = useTagConversationIds(filters?.tagId);
+  const tagIdsSet = useTagConversationIds(filters?.tags);
 
   // ✅ Filtragem instantânea via useMemo (0ms, sem rede)
   const filteredData = useMemo(
