@@ -465,9 +465,7 @@ Deno.serve(async (req) => {
               continue;
             }
 
-            const AI_CLOSE_MESSAGE = `Não recebi sua resposta nos últimos minutos, então estou encerrando este atendimento para liberar o canal. 😊
-
-Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
+            const AI_CLOSE_MESSAGE = INACTIVITY_CLOSE_MESSAGE;
 
             // Inserir mensagem de encerramento
             await supabase.from('messages').insert({
@@ -476,10 +474,10 @@ Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
               sender_type: 'user',
             });
 
-            // Tag "Desistência"
+            // Tag "9.98 Falta de Interação"
             await supabase.from('conversation_tags').upsert({
               conversation_id: conv.id,
-              tag_id: DESISTENCIA_TAG_ID,
+              tag_id: FALTA_INTERACAO_TAG_ID,
             }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
 
             // Enviar via WhatsApp se necessário (sem CSAT - não há departamento)
