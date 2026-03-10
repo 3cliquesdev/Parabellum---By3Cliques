@@ -137,10 +137,16 @@ serve(async (req) => {
 
     if (routingError) {
       console.error('[auto-handoff] Error in routing:', routingError);
-      // Fallback: mudar para waiting_human sem atribuir agente
+      // Fallback: mudar para waiting_human sem atribuir agente + garantir departamento
+      const FALLBACK_DEPT_SUPORTE = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      const fallbackUpdate: Record<string, unknown> = { ai_mode: 'waiting_human' };
+      if (!conversation.department) {
+        fallbackUpdate.department = FALLBACK_DEPT_SUPORTE;
+        console.log('[auto-handoff] ⚠️ No department — applying Suporte fallback');
+      }
       await supabaseClient
         .from('conversations')
-        .update({ ai_mode: 'waiting_human' })
+        .update(fallbackUpdate)
         .eq('id', conversationId);
       console.log('[auto-handoff] ✅ Conversa marcada como waiting_human (fallback)');
     } else {

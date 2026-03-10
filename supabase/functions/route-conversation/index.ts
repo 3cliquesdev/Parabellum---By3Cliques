@@ -272,6 +272,25 @@ serve(async (req) => {
       }
     }
 
+    // 🆕 FALLBACK: Se após todas as tentativas de resolução ainda não tem departamento, usar Suporte
+    if (!resolvedDepartmentId) {
+      const FALLBACK_DEPT_SUPORTE = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      console.log(`[route-conversation] ⚠️ No department resolved — applying Suporte fallback`);
+      
+      const { error: fallbackUpdateError } = await supabase
+        .from('conversations')
+        .update({ department: FALLBACK_DEPT_SUPORTE })
+        .eq('id', conversationId);
+      
+      if (!fallbackUpdateError) {
+        resolvedDepartmentId = FALLBACK_DEPT_SUPORTE;
+        resolvedDepartmentName = 'Suporte';
+        console.log(`[route-conversation] ✅ Fallback applied: department = Suporte`);
+      } else {
+        console.error(`[route-conversation] ❌ Failed to apply fallback:`, fallbackUpdateError.message);
+      }
+    }
+
     // REMOVIDO: STICKY AGENT (Consultor da Carteira)
     // Consultores NÃO recebem conversas automaticamente - apenas via transferência manual
     if (contact?.consultant_id) {
