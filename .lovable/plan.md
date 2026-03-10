@@ -1,30 +1,28 @@
 
+# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-# FIX 3 complementar — Linha 1804-1821
+## Arquivo: `supabase/functions/process-chat-flow/index.ts`
 
-A linha 1804 é o auto-traverse do OTP "max attempts reached" (código incorreto). Tem 3 pontos que precisam de `condition_v2`:
+### FIX 1 ✅ — Proteção contra loop flow-to-flow
+- Linhas ~2701 e ~2921: Guard `target_flow_id === activeState.flow_id` antes de fetch recursivo
+- Cancela estado e retorna `flow_to_flow_loop_detected`
 
-## Alterações em `supabase/functions/process-chat-flow/index.ts`
+### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
+- 4 locais: status agora inclui `node.type === 'condition_v2'`
+- Também corrigido o `if (startNode.type === 'condition')` para incluir `condition_v2`
 
-### 1. Linha 1805 — while loop
-```
-['condition', 'input', 'start']  →  ['condition', 'condition_v2', 'input', 'start']
-```
+### FIX 3 ✅ — Auto-traverse cobre condition_v2
+- 3 while loops (OTP, fetch_order, validate_customer) agora incluem `'condition_v2'`
+- `if` interno também cobre `condition_v2`
 
-### 2. Linha 1806 — if interno
-```
-if (resolvedNode.type === 'condition')  →  if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2')
-```
+### FIX 4 ✅ — Transfer node atualiza conversations.department
+- 2 locais de transfer (direto e msg chain): atualiza `ai_mode`, `assigned_to`, `department`
+- Warn log quando `department_id` está vazio
 
-### 3. Linha 1809 — break check
-```
-!['condition', 'input', 'start']  →  !['condition', 'condition_v2', 'input', 'start']
-```
+### FIX 5 ✅ — startMessage com replaceVariables
+- Carrega conversation + contact no escopo do trigger-matched flow
+- Usa `buildVariablesContext` + `replaceVariables` para substituir variáveis
 
-### 4. Linha 1820 — nextStatus
-```
-resolvedNode.type === 'condition'  →  (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2')
-```
-
-Nenhuma outra alteração necessária. Os demais 5 fixes estão confirmados corretos.
-
+### FIX 6 ✅ — financialIntentPattern simplificado
+- Regex com lookbehind complexo substituída por dois patterns: `financialPositive` + `financialContext`
+- Elimina risco de incompatibilidade de runtime
