@@ -1323,7 +1323,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
                     await supabase.from('messages').insert({
                       conversation_id: conversationId,
                       content: flowMessage,
-                      sender_type: 'system',
+                      sender_type: 'user',
                       message_type: 'text',
                       is_ai_generated: true,
                       channel: 'whatsapp'

@@ -2195,7 +2195,7 @@ serve(async (req) => {
                 await supabaseClient.from('messages').insert({
                   conversation_id: conversationId,
                   content: String(fallbackMsg),
-                  sender_type: 'system',
+                  sender_type: 'user',
                   is_ai_generated: true,
                   is_internal: false,
                   status: 'sent',
@@ -2925,7 +2925,7 @@ serve(async (req) => {
             try {
               await supabaseClient.from('messages').insert({
                 conversation_id: conversationId, content: preMsgs,
-                sender_type: 'system', is_ai_generated: true, is_internal: false, status: 'sent', channel: 'web_chat',
+                sender_type: 'user', is_ai_generated: true, is_internal: false, status: 'sent', channel: 'web_chat',
               });
             } catch (e) { console.error('[process-chat-flow] ⚠️ Failed to send pre-transfer messages:', e); }
           }
