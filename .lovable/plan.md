@@ -4,25 +4,29 @@
 ## Arquivo: `supabase/functions/process-chat-flow/index.ts`
 
 ### FIX 1 ✅ — Proteção contra loop flow-to-flow
-- Linhas ~2701 e ~2921: Guard `target_flow_id === activeState.flow_id` antes de fetch recursivo
-- Cancela estado e retorna `flow_to_flow_loop_detected`
-
 ### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
-- 4 locais: status agora inclui `node.type === 'condition_v2'`
-- Também corrigido o `if (startNode.type === 'condition')` para incluir `condition_v2`
-
 ### FIX 3 ✅ — Auto-traverse cobre condition_v2
-- 3 while loops (OTP, fetch_order, validate_customer) agora incluem `'condition_v2'`
-- `if` interno também cobre `condition_v2`
-
 ### FIX 4 ✅ — Transfer node atualiza conversations.department
-- 2 locais de transfer (direto e msg chain): atualiza `ai_mode`, `assigned_to`, `department`
-- Warn log quando `department_id` está vazio
-
 ### FIX 5 ✅ — startMessage com replaceVariables
-- Carrega conversation + contact no escopo do trigger-matched flow
-- Usa `buildVariablesContext` + `replaceVariables` para substituir variáveis
-
 ### FIX 6 ✅ — financialIntentPattern simplificado
-- Regex com lookbehind complexo substituída por dois patterns: `financialPositive` + `financialContext`
-- Elimina risco de incompatibilidade de runtime
+
+---
+
+# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
+
+## Problema
+Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
+
+## Correções aplicadas
+
+### 7a — Fallback edge default (process-chat-flow ~L2273)
+Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
+
+### 7b — Guard final sem nó (process-chat-flow ~L2336)
+Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
+
+### 7c — Safety net IA falha (process-buffered-messages ~L383)
+Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
+
+### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
+Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
