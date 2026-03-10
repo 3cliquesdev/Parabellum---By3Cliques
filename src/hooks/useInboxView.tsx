@@ -155,6 +155,11 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
   }
 
   const { data, error } = await query;
+
+  if (scope === 'archived') {
+    console.log(`[InboxView] archived query | aiMode=${aiMode ?? 'none'} | dateRange=${dateRange?.from?.toISOString().slice(0,10) ?? '-'}→${dateRange?.to?.toISOString().slice(0,10) ?? '-'} | channels=${channels?.join(',') ?? 'all'} | dept=${department ?? 'all'} | assignedTo=${assignedTo ?? 'all'} | results=${data?.length ?? 0}`);
+  }
+
   if (error) throw error;
   return (data || []) as InboxViewItem[];
 }
