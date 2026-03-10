@@ -190,7 +190,11 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
 
   // AI mode filter
   if (filters.aiMode) {
-    result = result.filter(item => item.ai_mode === filters.aiMode);
+    if (filters.aiMode === 'ai_all') {
+      result = result.filter(item => ['autopilot', 'copilot', 'waiting_human'].includes(item.ai_mode));
+    } else {
+      result = result.filter(item => item.ai_mode === filters.aiMode);
+    }
   }
 
   // Department filter
