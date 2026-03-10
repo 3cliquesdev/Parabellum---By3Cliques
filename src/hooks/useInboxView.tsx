@@ -87,7 +87,7 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
   // ✅ Aplicar filtro de AI mode no nível do banco para archived (evita perder dados no limit)
   if (scope === 'archived' && aiMode) {
     if (aiMode === 'ai_only') {
-      query = query.eq("ai_mode", "autopilot");
+      query = query.eq("ai_mode", "autopilot").is("assigned_to", null);
     } else if (aiMode === 'ai_all') {
       query = query.in("ai_mode", ["autopilot", "copilot", "waiting_human"]);
     } else {
@@ -155,6 +155,11 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
   }
 
   const { data, error } = await query;
+
+  if (scope === 'archived') {
+    console.log(`[InboxView] archived query | aiMode=${aiMode ?? 'none'} | dateRange=${dateRange?.from?.toISOString().slice(0,10) ?? '-'}→${dateRange?.to?.toISOString().slice(0,10) ?? '-'} | channels=${channels?.join(',') ?? 'all'} | dept=${department ?? 'all'} | assignedTo=${assignedTo ?? 'all'} | results=${data?.length ?? 0}`);
+  }
+
   if (error) throw error;
   return (data || []) as InboxViewItem[];
 }

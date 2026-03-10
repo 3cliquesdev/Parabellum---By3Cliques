@@ -144,8 +144,9 @@ export default function ConversationList({
         {isLoading ? (
           <ConversationListSkeleton count={8} />
         ) : conversations.length === 0 ? (
-          <div className="p-4 text-center text-muted-foreground">
-            Nenhuma conversa ainda
+          <div className="p-6 text-center text-muted-foreground space-y-1">
+            <p className="font-medium">Nenhuma conversa encontrada</p>
+            <p className="text-sm opacity-70">Tente ajustar ou remover alguns filtros</p>
           </div>
         ) : (
           <List

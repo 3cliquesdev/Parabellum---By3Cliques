@@ -1,32 +1,22 @@
 
+# Auditoria IA e Chat Flow — Correções Aplicadas (10/03/2026)
 
-# Diagnóstico: Filtros Funcionam Corretamente — Dados Inexistentes para a Combinação
+## Correções Implementadas
 
-## Resultado da Auditoria (Dados do Banco)
+### ✅ Fix 1: Prefixo cautious sem markdown
+- `generateResponsePrefix('cautious')` agora retorna texto plano sem `**`
+- Elimina contract violations auto-infligidas pelo próprio sistema
 
-Verifiquei diretamente no banco de dados. Os filtros **estão funcionando**. O problema é que a combinação específica de filtros não tem dados:
+### ✅ Fix 2: Dispatch-conversations aceita copilot
+- Separou check de `assigned_to` do check de `ai_mode`
+- Agora aceita `waiting_human` E `copilot` para dispatch
+- Causa raiz: condição `ai_mode !== 'waiting_human'` rejeitava copilot
 
-- **Somente data 10/03/2026**: 205 conversas encerradas ✅
-- **Somente Email (todas datas)**: 4 conversas (todas de janeiro/2026) ✅
-- **Somente IA (todas datas)**: 1.054 conversas ✅
-- **Data 10/03 + Email**: 0 (nenhuma conversa email nessa data)
-- **Data 10/03 + Somente IA**: 0 (nenhuma autopilot nessa data)
-- **Data + Email + Somente IA**: 0 (combinação sem dados)
+### ✅ Fix 3: Conversas stuck corrigidas via SQL
+- Flow states presos em `ia_entrada` cancelados
+- Dispatch jobs `already_assigned` reabertos como `pending`
+- Novos dispatch jobs criados para conversas sem fila
 
-As 4 conversas por email são todas de janeiro/2026. E nenhuma conversa em autopilot existe no dia 10/03.
-
-## Melhorias para Evitar Confusão
-
-### 1. Adicionar log de diagnóstico no `fetchInboxData`
-Quando scope=archived e filtros ativos, logar no console os parâmetros da query e a quantidade de resultados. Isso permite ao usuário verificar que a query está sendo enviada com os filtros corretos.
-
-### 2. Corrigir semântica do `ai_only` no DB
-Atualmente o filtro `ai_only` no banco faz apenas `.eq("ai_mode", "autopilot")`. Deveria também verificar `.is("assigned_to", null)` para manter consistência com o significado "sem humano".
-
-### 3. Melhorar feedback na UI quando 0 resultados
-Na lista de conversas, quando filtros estão ativos e resultado é 0, mostrar mensagem mais descritiva: "Nenhuma conversa encontrada para esses filtros. Tente remover alguns filtros." em vez de apenas "Nenhuma conversa neste filtro."
-
-### Arquivos a alterar
-- `src/hooks/useInboxView.tsx` — logs + fix ai_only
-- `src/components/inbox/ConversationList.tsx` (ou equivalente) — mensagem de feedback
-
+### ⚠️ BUG 3 (operacional): Customer Success sem agentes
+- Não é bug de código — departamento sem agentes online
+- Requer ação administrativa
