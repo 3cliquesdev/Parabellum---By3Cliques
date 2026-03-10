@@ -577,10 +577,11 @@ Deno.serve(async (req) => {
                 sender_type: 'user',
               });
 
-              // Tag "9.98 Falta de Interação"
+              // Tag configurada pelo departamento ou fallback padrão
+              const tagId = dept.human_auto_close_tag_id || FALTA_INTERACAO_TAG_ID;
               await supabase.from('conversation_tags').upsert({
                 conversation_id: conv.id,
-                tag_id: FALTA_INTERACAO_TAG_ID,
+                tag_id: tagId,
               }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
 
               // CSAT se configurado
