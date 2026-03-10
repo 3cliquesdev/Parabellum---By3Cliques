@@ -2998,6 +2998,16 @@ serve(async (req) => {
           })
           .eq('id', activeState.id);
 
+        // 🔧 FIX 4: Transfer node (msg chain) atualiza conversations.department
+        const chainTransferDeptId = nextNode.data?.department_id || null;
+        const chainTransferAiMode = nextNode.data?.ai_mode || 'waiting_human';
+        const chainConvUpdate: any = { ai_mode: chainTransferAiMode, assigned_to: null };
+        if (chainTransferDeptId) chainConvUpdate.department = chainTransferDeptId;
+        await supabaseClient.from('conversations').update(chainConvUpdate).eq('id', conversationId);
+        if (!chainTransferDeptId) {
+          console.warn('[process-chat-flow] ⚠️ Transfer node (msg chain) sem department_id');
+        }
+
         return new Response(JSON.stringify({
           useAI: false,
           response: allTransferMessages,
