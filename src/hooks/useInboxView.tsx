@@ -67,7 +67,7 @@ interface FetchOptions {
 
 // Função para buscar dados do inbox com filtros de role
 async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem[]> {
-  const { cursor, userId, role, departmentIds, scope = 'active' } = options;
+  const { cursor, userId, role, departmentIds, scope = 'active', aiMode } = options;
 
   let query = supabase
     .from("inbox_view")
