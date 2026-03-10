@@ -401,6 +401,12 @@ async function callPipeline(
         await handleFlowReInvoke(supabase, conversationId, concatenatedMessage, instanceId, fromNumber, { forceAIExit: true });
       }
 
+      // 🆕 Handle contractViolation / flowExit (IA fabricou transferência ou escape)
+      if ((autopilotData.contractViolation || autopilotData.flowExit) && autopilotData.hasFlowContext && autopilotData.status !== "flow_advance_needed") {
+        console.log("[process-buffered-messages] 🔄 contractViolation/flowExit → re-invocando process-chat-flow com forceAIExit");
+        await handleFlowReInvoke(supabase, conversationId, concatenatedMessage, instanceId, fromNumber, { forceAIExit: true });
+      }
+
       // Handle financial/commercial blocked
       if ((autopilotData.financialBlocked || autopilotData.commercialBlocked) && autopilotData.hasFlowContext) {
         const exitType = autopilotData.financialBlocked ? "forceFinancialExit" : "forceCommercialExit";
