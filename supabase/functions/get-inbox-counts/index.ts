@@ -202,7 +202,8 @@ Deno.serve(async (req: Request) => {
         .neq("ai_mode", "autopilot"),
       applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
         .neq("status", "closed")
-        .is("assigned_to", null),
+        .is("assigned_to", null)
+        .neq("ai_mode", "autopilot"),
     ]);
 
     const totalActive = totalActiveRes.count ?? 0;
