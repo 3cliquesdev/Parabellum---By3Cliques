@@ -512,10 +512,130 @@ Deno.serve(async (req) => {
     console.log(`[Auto-Close] ✅ Stage 3b complete - no-dept AI closed ${noDeptClosedCount} conversations`);
 
     // ============================
-    // ETAPA 4: Flow inactivity timeout check
+    // ETAPA 4: Human inactivity auto-close (human_auto_close_minutes por departamento)
+    // ============================
+    console.log('[Auto-Close] Starting human inactivity check (Stage 4 - Human)...');
+
+    let humanClosedCount = 0;
+
+    try {
+      const { data: humanDepts, error: humanDeptError } = await supabase
+        .from('departments')
+        .select('id, name, human_auto_close_minutes, send_rating_on_close')
+        .not('human_auto_close_minutes', 'is', null);
+
+      if (humanDeptError) {
+        console.error('[Auto-Close] Error fetching human auto-close departments:', humanDeptError);
+      } else if (humanDepts && humanDepts.length > 0) {
+        console.log(`[Auto-Close] Found ${humanDepts.length} departments with human auto-close configured`);
+
+        for (const dept of humanDepts) {
+          const humanThreshold = new Date(Date.now() - dept.human_auto_close_minutes! * 60 * 1000).toISOString();
+          console.log(`[Auto-Close] Human check for "${dept.name}" - threshold: ${dept.human_auto_close_minutes} min`);
+
+          // Buscar conversas abertas NÃO autopilot (humanas: copilot, disabled, waiting_human)
+          const { data: humanConvos, error: humanConvError } = await supabase
+            .from('conversations')
+            .select('id, contact_id, last_message_at, ai_mode, channel, department, whatsapp_instance_id, whatsapp_meta_instance_id, whatsapp_provider')
+            .eq('status', 'open')
+            .eq('department', dept.id)
+            .neq('ai_mode', 'autopilot')
+            .lt('last_message_at', humanThreshold);
+
+          if (humanConvError) {
+            console.error(`[Auto-Close] Error fetching human conversations for ${dept.name}:`, humanConvError);
+            continue;
+          }
+
+          if (!humanConvos || humanConvos.length === 0) {
+            console.log(`[Auto-Close] No human inactive conversations in "${dept.name}"`);
+            continue;
+          }
+
+          for (const conv of humanConvos as ConversationToClose[]) {
+            if (closedIds.includes(conv.id)) continue;
+
+            try {
+              // Verificar última mensagem - só fechar se agente humano respondeu e cliente não
+              const { data: lastMsg } = await supabase
+                .from('messages')
+                .select('sender_type')
+                .eq('conversation_id', conv.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+              if (!lastMsg || lastMsg.sender_type === 'contact') {
+                console.log(`[Auto-Close] Human skip ${conv.id} - last msg from contact`);
+                continue;
+              }
+
+              // Inserir mensagem de encerramento
+              await supabase.from('messages').insert({
+                conversation_id: conv.id,
+                content: INACTIVITY_CLOSE_MESSAGE,
+                sender_type: 'user',
+              });
+
+              // Tag "9.98 Falta de Interação"
+              await supabase.from('conversation_tags').upsert({
+                conversation_id: conv.id,
+                tag_id: FALTA_INTERACAO_TAG_ID,
+              }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+
+              // CSAT se configurado
+              if (dept.send_rating_on_close) {
+                await supabase.from('messages').insert({
+                  conversation_id: conv.id,
+                  content: CSAT_MESSAGE,
+                  sender_type: 'user',
+                });
+
+                if (conv.channel === 'whatsapp') {
+                  await sendWhatsAppMessages(supabase, conv, INACTIVITY_CLOSE_MESSAGE, CSAT_MESSAGE);
+                }
+              } else if (conv.channel === 'whatsapp') {
+                await sendWhatsAppMessages(supabase, conv, INACTIVITY_CLOSE_MESSAGE, null);
+              }
+
+              // Fechar conversa
+              const closeData: Record<string, unknown> = {
+                status: 'closed',
+                auto_closed: true,
+                closed_at: new Date().toISOString(),
+                closed_reason: 'human_inactivity',
+                ai_mode: 'disabled',
+              };
+
+              if (dept.send_rating_on_close) {
+                closeData.awaiting_rating = true;
+                closeData.rating_sent_at = new Date().toISOString();
+              }
+
+              await supabase.from('conversations').update(closeData).eq('id', conv.id);
+
+              humanClosedCount++;
+              closedIds.push(conv.id);
+              console.log(`[Auto-Close] ✅ Human closed conversation ${conv.id} (${dept.name}) - human_inactivity`);
+            } catch (err) {
+              console.error(`[Auto-Close] Error human-closing ${conv.id}:`, err);
+            }
+          }
+        }
+      } else {
+        console.log('[Auto-Close] No departments with human auto-close configured');
+      }
+    } catch (err) {
+      console.error('[Auto-Close] Error in human inactivity step:', err);
+    }
+
+    console.log(`[Auto-Close] ✅ Stage 4 (Human) complete - closed ${humanClosedCount} conversations`);
+
+    // ============================
+    // ETAPA 5: Flow inactivity timeout check
     // Verifica flow states parados em nós de inatividade que excederam o timeout
     // ============================
-    console.log('[Auto-Close] Starting flow inactivity timeout check (Stage 4)...');
+    console.log('[Auto-Close] Starting flow inactivity timeout check (Stage 5)...');
     let flowInactivityCount = 0;
 
     try {
