@@ -40,6 +40,9 @@ interface DepartmentConfig {
   send_rating_on_close: boolean;
   ai_auto_close_minutes: number | null;
   human_auto_close_minutes: number | null;
+  slow_response_alert_enabled: boolean;
+  slow_response_alert_minutes: number | null;
+  slow_response_alert_tag_id: string | null;
 }
 
 interface ConversationToClose {
