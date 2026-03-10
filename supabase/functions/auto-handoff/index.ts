@@ -33,7 +33,7 @@ serve(async (req) => {
     // Buscar conversa atual
     const { data: conversation, error: convError } = await supabaseClient
       .from('conversations')
-      .select('ai_mode, contact_id, assigned_to')
+      .select('ai_mode, contact_id, assigned_to, department')
       .eq('id', conversationId)
       .single();
 
