@@ -64,11 +64,14 @@ interface FetchOptions {
   scope?: InboxScope;
   aiMode?: string;
   dateRange?: DateRange;
+  channels?: string[];
+  department?: string;
+  assignedTo?: string;
 }
 
 // Função para buscar dados do inbox com filtros de role
 async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem[]> {
-  const { cursor, userId, role, departmentIds, scope = 'active', aiMode, dateRange } = options;
+  const { cursor, userId, role, departmentIds, scope = 'active', aiMode, dateRange, channels, department, assignedTo } = options;
 
   let query = supabase
     .from("inbox_view")
@@ -103,6 +106,25 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
       const endOfDay = new Date(dateRange.to);
       endOfDay.setHours(23, 59, 59, 999);
       query = query.lte("last_message_at", endOfDay.toISOString());
+    }
+  }
+
+  // ✅ Aplicar filtro de channels no nível do banco para archived
+  if (scope === 'archived' && channels && channels.length > 0) {
+    query = query.overlaps("channels", channels);
+  }
+
+  // ✅ Aplicar filtro de department no nível do banco para archived
+  if (scope === 'archived' && department) {
+    query = query.eq("department", department);
+  }
+
+  // ✅ Aplicar filtro de assignedTo no nível do banco para archived
+  if (scope === 'archived' && assignedTo) {
+    if (assignedTo === 'unassigned') {
+      query = query.is("assigned_to", null);
+    } else {
+      query = query.eq("assigned_to", assignedTo);
     }
   }
 
@@ -145,22 +167,24 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
   
   const hasActiveSearch = filters.search && filters.search.trim().length > 0;
 
-  // Date range filter
-  if (filters.dateRange?.from) {
-    result = result.filter(item => 
-      new Date(item.last_message_at) >= filters.dateRange!.from!
-    );
-  }
-  if (filters.dateRange?.to) {
-    const endOfDay = new Date(filters.dateRange.to);
-    endOfDay.setHours(23, 59, 59, 999);
-    result = result.filter(item => 
-      new Date(item.last_message_at) <= endOfDay
-    );
+  // Date range filter — skip for archived (already filtered at DB level)
+  if (scope !== 'archived') {
+    if (filters.dateRange?.from) {
+      result = result.filter(item => 
+        new Date(item.last_message_at) >= filters.dateRange!.from!
+      );
+    }
+    if (filters.dateRange?.to) {
+      const endOfDay = new Date(filters.dateRange.to);
+      endOfDay.setHours(23, 59, 59, 999);
+      result = result.filter(item => 
+        new Date(item.last_message_at) <= endOfDay
+      );
+    }
   }
 
-  // Channel filter
-  if (filters.channels.length > 0) {
+  // Channel filter — skip for archived (already filtered at DB level)
+  if (scope !== 'archived' && filters.channels.length > 0) {
     result = result.filter(item => 
       item.channels?.some(ch => filters.channels.includes(ch))
     );
@@ -173,8 +197,8 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
     result = result.filter(item => item.status !== 'closed');
   }
 
-  // Assigned to filter
-  if (filters.assignedTo) {
+  // Assigned to filter — skip for archived (already filtered at DB level)
+  if (scope !== 'archived' && filters.assignedTo) {
     if (filters.assignedTo === "unassigned") {
       result = result.filter(item => !item.assigned_to);
     } else {
@@ -215,25 +239,19 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
     result = result.filter(item => item.has_attachments);
   }
 
-  // AI mode filter
-  if (filters.aiMode) {
+  // AI mode filter — skip for archived (already filtered at DB level)
+  if (scope !== 'archived' && filters.aiMode) {
     if (filters.aiMode === 'ai_all') {
       result = result.filter(item => ['autopilot', 'copilot', 'waiting_human'].includes(item.ai_mode));
     } else if (filters.aiMode === 'ai_only') {
-      if (scope === 'archived') {
-        // Para encerradas: mostrar conversas resolvidas pela IA (podem ter assigned_to)
-        result = result.filter(item => item.ai_mode === 'autopilot');
-      } else {
-        // Para ativas: sem humano atribuído
-        result = result.filter(item => item.ai_mode === 'autopilot' && !item.assigned_to);
-      }
+      result = result.filter(item => item.ai_mode === 'autopilot' && !item.assigned_to);
     } else {
       result = result.filter(item => item.ai_mode === filters.aiMode);
     }
   }
 
-  // Department filter
-  if (filters.department) {
+  // Department filter — skip for archived (already filtered at DB level)
+  if (scope !== 'archived' && filters.department) {
     result = result.filter(item => item.department === filters.department);
   }
 
@@ -321,21 +339,38 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
   deptKeyRef.current = deptKey;
 
   // Memoizar opções de fetch
+  const archivedFilters = scope === 'archived' ? {
+    aiMode: filters?.aiMode,
+    dateRange: filters?.dateRange,
+    channels: filters?.channels,
+    department: filters?.department,
+    assignedTo: filters?.assignedTo,
+  } : {};
+
   const fetchOptions = useMemo(() => ({
     userId: user?.id,
     role,
     departmentIds,
     scope,
-    aiMode: scope === 'archived' ? filters?.aiMode : undefined,
-    dateRange: scope === 'archived' ? filters?.dateRange : undefined,
-  }), [user?.id, role, departmentIds, scope, filters?.aiMode, filters?.dateRange]);
+    ...archivedFilters,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [user?.id, role, departmentIds, scope, filters?.aiMode, filters?.dateRange, filters?.channels?.join(','), filters?.department, filters?.assignedTo]);
 
   const fetchOptionsRef = useRef(fetchOptions);
   fetchOptionsRef.current = fetchOptions;
 
-  // ✅ queryKey SEM filtersKey — scope é o único discriminador de dataset
+  // ✅ queryKey inclui todos os filtros aplicados no banco para archived
   const query = useQuery({
-    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope, scope === 'archived' ? filters?.aiMode : undefined, scope === 'archived' ? filters?.dateRange?.from?.toISOString() : undefined, scope === 'archived' ? filters?.dateRange?.to?.toISOString() : undefined],
+    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope,
+      ...(scope === 'archived' ? [
+        filters?.aiMode,
+        filters?.dateRange?.from?.toISOString(),
+        filters?.dateRange?.to?.toISOString(),
+        filters?.channels?.join(','),
+        filters?.department,
+        filters?.assignedTo,
+      ] : []),
+    ],
     queryFn: async () => {
       const data = await fetchInboxData(fetchOptions);
       
