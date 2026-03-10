@@ -2552,11 +2552,12 @@ serve(async (req) => {
 
         // Auto-traverse to next node
         let afterValidateNode = findNextNode(flowDef, nextNode);
-        while (afterValidateNode && ['condition', 'input', 'start'].includes(afterValidateNode.type)) {
-          if (afterValidateNode.type === 'condition') {
+        // 🔧 FIX 3: Auto-traverse cobre condition_v2
+        while (afterValidateNode && ['condition', 'condition_v2', 'input', 'start'].includes(afterValidateNode.type)) {
+          if (afterValidateNode.type === 'condition' || afterValidateNode.type === 'condition_v2') {
             const condPath = evaluateConditionPath(afterValidateNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
             const resolved = findNextNode(flowDef, afterValidateNode, condPath);
-            if (!resolved || !['condition', 'input', 'start'].includes(resolved.type)) {
+            if (!resolved || !['condition', 'condition_v2', 'input', 'start'].includes(resolved.type)) {
               afterValidateNode = resolved;
               break;
             }
@@ -2568,7 +2569,7 @@ serve(async (req) => {
 
         if (afterValidateNode) {
           nextNode = afterValidateNode;
-          const vcStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition'
+          const vcStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition' || nextNode.type === 'condition_v2'
             ? 'waiting_input' : 'active';
           await supabaseClient
             .from('chat_flow_states')
