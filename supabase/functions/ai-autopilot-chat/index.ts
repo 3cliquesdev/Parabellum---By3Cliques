@@ -8046,8 +8046,35 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       if (!restrictionCheck.valid) {
         console.warn('[ai-autopilot-chat] ⚠️ VIOLAÇÃO DE RESTRIÇÃO (pré-save):', restrictionCheck.violation);
         const fallbackMessage = flow_context.fallbackMessage || 'No momento não tenho essa informação.';
-        assistantMessage = fallbackMessage;
-        console.log('[ai-autopilot-chat] ✅ Resposta substituída por fallback ANTES de salvar');
+        
+        // 🆕 FIX: Com flow_context ativo, violação de restrição → avançar o fluxo
+        // Sem isso, a IA substitui pelo fallback, mas o fluxo não avança → loop infinito
+        // Padrão: se a IA tentou perguntar (forbid_questions) ou deu menu (forbid_options),
+        // ela já sinalizou que não consegue responder → o processo-chat-flow deve avançar ao próximo nó
+        console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇÃO + flow_context → retornando flow_advance_needed');
+        
+        await supabaseClient.from('ai_quality_logs').insert({
+          conversation_id: conversationId,
+          contact_id: contact.id,
+          customer_message: customerMessage,
+          ai_response: fallbackMessage,
+          action_taken: 'flow_advance',
+          handoff_reason: `restriction_violation_${restrictionCheck.violation}`,
+          confidence_score: 0,
+          articles_count: knowledgeArticles.length
+        }).catch((e: any) => console.error('[ai-autopilot-chat] ⚠️ Falha ao logar restriction_violation:', e));
+        
+        return new Response(JSON.stringify({
+          status: 'flow_advance_needed',
+          reason: 'restriction_violation',
+          violationType: restrictionCheck.violation,
+          hasFlowContext: true,
+          fallback_message: fallbackMessage,
+          flow_context: {
+            flow_id: flow_context.flow_id,
+            node_id: flow_context.node_id
+          }
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       } else if (forbidFinancial) {
         const financialResolutionPattern = /(j[áa] processei|foi estornado|solicitei reembolso|vou reembolsar|pode sacar|liberei o saque|reembolso aprovado|estorno realizado|cancelamento confirmado|pagamento devolvido|já estornei|processando.*reembolso|aprovei.*devolu[çc][ãa]o|cancelar.*assinatura|sacar.*saldo|saque.*(realizado|solicitado)|op[çc][ãa]o.*(saque|reembolso|estorno)|para\s+prosseguir\s+com\s+o\s+(saque|reembolso|estorno)|confirmar.*dados.*(saque|reembolso|estorno)|devolver.*dinheiro)/i;
         if (financialResolutionPattern.test(assistantMessage)) {
