@@ -1593,11 +1593,12 @@ serve(async (req) => {
             if (nextAfterOtp) {
               // Auto-traverse conditions
               let resolvedNode = nextAfterOtp;
-              while (resolvedNode && ['condition', 'input', 'start'].includes(resolvedNode.type)) {
-                if (resolvedNode.type === 'condition') {
+               // 🔧 FIX 3: Auto-traverse cobre condition_v2
+              while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
+                if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
                   const condPath = evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
                   const afterCond = findNextNode(flowDef, resolvedNode, condPath);
-                  if (!afterCond || !['condition', 'input', 'start'].includes(afterCond.type)) {
+                  if (!afterCond || !['condition', 'condition_v2', 'input', 'start'].includes(afterCond.type)) {
                     resolvedNode = afterCond;
                     break;
                   }
@@ -1608,7 +1609,7 @@ serve(async (req) => {
               }
 
               if (resolvedNode) {
-                const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'verify_customer_otp'
+                const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2' || resolvedNode.type === 'verify_customer_otp'
                   ? 'waiting_input' : 'active';
                 await supabaseClient.from('chat_flow_states').update({
                   collected_data: collectedData,
@@ -2061,8 +2062,12 @@ serve(async (req) => {
         const forbidCommercial: boolean = currentNode.data?.forbid_commercial ?? false;
 
         // 🔒 TRAVA FINANCEIRA: Detectar intenção financeira como exit do nó AI
-        const financialIntentPattern = /saque|sacar|reembolso|estorno|(?<!\bendereco\s+de\s*)(?<!\bendere[çc]o\s+de\s*)(?<!\blocal\s+de\s*)devolu[çc][ãa]o|(?<!\bendereco\s+de\s*)(?<!\bendere[çc]o\s+de\s*)(?<!\blocal\s+de\s*)devolver|cancelar.*assinatura|meu dinheiro|(sacar|tirar|retirar|ver|consultar|meu)\s*saldo|(fazer|realizar|efetuar|cancelar|estornar)\s*pagamento|(cancelar|contestar|cobran[çc]a\s*indevida)|retirar|retirada|caixa|carteira|pix|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|ressarcimento/i;
-        const financialIntentMatch = (forceFinancialExit && forbidFinancial) || (forbidFinancial && msgLower.length > 0 && financialIntentPattern.test(userMessage || ''));
+        // 🔧 FIX 6: Regex simplificada sem lookbehind complexo
+        const financialPositive = /saque|sacar|reembolso|estorno|cancelar.*assinatura|meu dinheiro|ressarcimento|pix|saldo|retirar|retirada|devolv[eê]r?|devolu[çc][ãa]o|caixa|carteira|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|(fazer|realizar|efetuar|cancelar|estornar)\s*pagamento|(cancelar|contestar|cobran[çc]a\s*indevida)/i;
+        const financialContext = /endere[çc]o\s+de|local\s+de\s+entrega|forma\s+de\s+pagamento/i;
+        const financialIntentMatch =
+          (forceFinancialExit && forbidFinancial) ||
+          (forbidFinancial && msgLower.length > 0 && financialPositive.test(userMessage || '') && !financialContext.test(userMessage || ''));
         if (forceFinancialExit) {
           console.log('[process-chat-flow] 🔒 forceFinancialExit=true recebido do webhook, forçando exit do nó AI');
         }
@@ -2410,11 +2415,12 @@ serve(async (req) => {
         let afterFetchNode = findNextNode(flowDef, nextNode);
         
         // Loop de auto-traverse: atravessar condition, input, start até conteúdo
-        while (afterFetchNode && ['condition', 'input', 'start'].includes(afterFetchNode.type)) {
-          if (afterFetchNode.type === 'condition') {
+        // 🔧 FIX 3: Auto-traverse cobre condition_v2
+        while (afterFetchNode && ['condition', 'condition_v2', 'input', 'start'].includes(afterFetchNode.type)) {
+          if (afterFetchNode.type === 'condition' || afterFetchNode.type === 'condition_v2') {
             const condPath = evaluateConditionPath(afterFetchNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
             const resolved = findNextNode(flowDef, afterFetchNode, condPath);
-            if (!resolved || !['condition', 'input', 'start'].includes(resolved.type)) {
+            if (!resolved || !['condition', 'condition_v2', 'input', 'start'].includes(resolved.type)) {
               afterFetchNode = resolved;
               break;
             }
@@ -2427,7 +2433,7 @@ serve(async (req) => {
         
         if (afterFetchNode) {
           nextNode = afterFetchNode;
-          const fetchStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition'
+          const fetchStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition' || nextNode.type === 'condition_v2'
             ? 'waiting_input' : 'active';
           await supabaseClient
             .from('chat_flow_states')
@@ -2546,11 +2552,12 @@ serve(async (req) => {
 
         // Auto-traverse to next node
         let afterValidateNode = findNextNode(flowDef, nextNode);
-        while (afterValidateNode && ['condition', 'input', 'start'].includes(afterValidateNode.type)) {
-          if (afterValidateNode.type === 'condition') {
+        // 🔧 FIX 3: Auto-traverse cobre condition_v2
+        while (afterValidateNode && ['condition', 'condition_v2', 'input', 'start'].includes(afterValidateNode.type)) {
+          if (afterValidateNode.type === 'condition' || afterValidateNode.type === 'condition_v2') {
             const condPath = evaluateConditionPath(afterValidateNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
             const resolved = findNextNode(flowDef, afterValidateNode, condPath);
-            if (!resolved || !['condition', 'input', 'start'].includes(resolved.type)) {
+            if (!resolved || !['condition', 'condition_v2', 'input', 'start'].includes(resolved.type)) {
               afterValidateNode = resolved;
               break;
             }
@@ -2562,7 +2569,7 @@ serve(async (req) => {
 
         if (afterValidateNode) {
           nextNode = afterValidateNode;
-          const vcStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition'
+          const vcStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition' || nextNode.type === 'condition_v2'
             ? 'waiting_input' : 'active';
           await supabaseClient
             .from('chat_flow_states')
@@ -2699,6 +2706,17 @@ serve(async (req) => {
         
         // 🆕 FLOW-TO-FLOW TRANSFER: Se target_flow_id, iniciar sub-flow
         if (nextNode.data?.target_flow_id) {
+          // 🔧 FIX 1: Proteção contra loop flow-to-flow
+          if (nextNode.data.target_flow_id === activeState.flow_id) {
+            console.error('[process-chat-flow] ⚠️ LOOP DETECTADO: flow-to-flow aponta para o mesmo fluxo. Cancelando.');
+            await supabaseClient.from('chat_flow_states').update({
+              status: 'cancelled', completed_at: new Date().toISOString()
+            }).eq('id', activeState.id);
+            return new Response(JSON.stringify({
+              useAI: false, transfer: false, error: 'flow_to_flow_loop_detected'
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+
           await supabaseClient.from('chat_flow_states').update({
             collected_data: collectedData, current_node_id: nextNode.id,
             status: 'transferred', completed_at: new Date().toISOString(),
@@ -2730,6 +2748,16 @@ serve(async (req) => {
             status: 'transferred',
           })
           .eq('id', activeState.id);
+
+        // 🔧 FIX 4: Transfer node atualiza conversations.department
+        const transferDeptId = nextNode.data?.department_id || null;
+        const transferAiMode = nextNode.data?.ai_mode || 'waiting_human';
+        const convUpdatePayload: any = { ai_mode: transferAiMode, assigned_to: null };
+        if (transferDeptId) convUpdatePayload.department = transferDeptId;
+        await supabaseClient.from('conversations').update(convUpdatePayload).eq('id', conversationId);
+        if (!transferDeptId) {
+          console.warn('[process-chat-flow] ⚠️ Transfer node sem department_id — conversa ficará sem dept atribuído');
+        }
 
         return new Response(
           JSON.stringify({
@@ -2919,6 +2947,17 @@ serve(async (req) => {
 
         // 🆕 FLOW-TO-FLOW TRANSFER (after message chain)
         if (nextNode.data?.target_flow_id) {
+          // 🔧 FIX 1: Proteção contra loop flow-to-flow (2o local)
+          if (nextNode.data.target_flow_id === activeState.flow_id) {
+            console.error('[process-chat-flow] ⚠️ LOOP DETECTADO (msg chain): flow-to-flow aponta para o mesmo fluxo. Cancelando.');
+            await supabaseClient.from('chat_flow_states').update({
+              status: 'cancelled', completed_at: new Date().toISOString()
+            }).eq('id', activeState.id);
+            return new Response(JSON.stringify({
+              useAI: false, transfer: false, error: 'flow_to_flow_loop_detected'
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+
           // Enviar mensagens acumuladas primeiro
           const preMsgs = [...extraMessages].filter(Boolean).join('\n\n');
           if (preMsgs) {
@@ -2959,6 +2998,16 @@ serve(async (req) => {
           })
           .eq('id', activeState.id);
 
+        // 🔧 FIX 4: Transfer node (msg chain) atualiza conversations.department
+        const chainTransferDeptId = nextNode.data?.department_id || null;
+        const chainTransferAiMode = nextNode.data?.ai_mode || 'waiting_human';
+        const chainConvUpdate: any = { ai_mode: chainTransferAiMode, assigned_to: null };
+        if (chainTransferDeptId) chainConvUpdate.department = chainTransferDeptId;
+        await supabaseClient.from('conversations').update(chainConvUpdate).eq('id', conversationId);
+        if (!chainTransferDeptId) {
+          console.warn('[process-chat-flow] ⚠️ Transfer node (msg chain) sem department_id');
+        }
+
         return new Response(JSON.stringify({
           useAI: false,
           response: allTransferMessages,
@@ -2971,7 +3020,8 @@ serve(async (req) => {
       }
 
       // Fix 2: Status semântico correto
-      const nextStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition' || nextNode.type === 'verify_customer_otp'
+      // 🔧 FIX 2: condition_v2 reconhecido como waiting_input
+      const nextStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition' || nextNode.type === 'condition_v2' || nextNode.type === 'verify_customer_otp'
         ? 'waiting_input' : 'active';
 
       await supabaseClient
@@ -3401,7 +3451,8 @@ serve(async (req) => {
             .update({ 
               current_node_id: node.id, 
               collected_data: collectedData,
-              status: node.type === 'condition' ? 'waiting_input' : 'active',
+              // 🔧 FIX 2: condition_v2 reconhecido como waiting_input
+              status: (node.type === 'condition' || node.type === 'condition_v2') ? 'waiting_input' : 'active',
             })
             .eq('id', existingState.id);
         } else {
@@ -3413,7 +3464,8 @@ serve(async (req) => {
               current_node_id: node.id,
               collected_data: collectedData,
               // 🆕 condition (multi-regra parada) → waiting_input
-              status: node.type === 'condition' ? 'waiting_input' : 'active',
+              // 🔧 FIX 2: condition_v2 reconhecido como waiting_input
+              status: (node.type === 'condition' || node.type === 'condition_v2') ? 'waiting_input' : 'active',
             })
             .select('id')
             .single();
@@ -3635,7 +3687,8 @@ serve(async (req) => {
         current_node_id: startNode.id,
         collected_data: {},
         // 🆕 condition (multi-regra parada) → waiting_input
-        status: startNode.type === 'condition' ? 'waiting_input' : 'active',
+        // 🔧 FIX 2: condition_v2 reconhecido como waiting_input
+        status: (startNode.type === 'condition' || startNode.type === 'condition_v2') ? 'waiting_input' : 'active',
       })
       .select()
       .single();
@@ -3651,7 +3704,7 @@ serve(async (req) => {
     console.log('[process-chat-flow] Flow started:', newState.id);
     
     // 🆕 Condição multi-regra aguardando input
-    if (startNode.type === 'condition') {
+    if (startNode.type === 'condition' || startNode.type === 'condition_v2') {
       console.log('[process-chat-flow] 🛑 New flow stopped at condition node — waiting for user message');
       return new Response(
         JSON.stringify({
@@ -3694,7 +3747,20 @@ serve(async (req) => {
       );
     }
 
-    const startMessage = startNode.data?.message || "";
+    // 🔧 FIX 5: startMessage com replaceVariables no novo fluxo
+    const { data: trigConv } = await supabaseClient
+      .from('conversations')
+      .select('id, contact_id, channel, status, priority, protocol_number, created_at')
+      .eq('id', conversationId).maybeSingle();
+    let trigContactData: any = null;
+    if (trigConv?.contact_id) {
+      const { data: ct } = await supabaseClient
+        .from('contacts').select('*').eq('id', trigConv.contact_id).maybeSingle();
+      trigContactData = ct;
+      enrichContactIsCustomer(trigContactData);
+    }
+    const trigVarCtx = await buildVariablesContext({}, trigContactData, trigConv, supabaseClient);
+    const startMessage = replaceVariables(startNode.data?.message || "", trigVarCtx);
     const options = startNode.type === 'ask_options' 
       ? (startNode.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value }))
       : null;
