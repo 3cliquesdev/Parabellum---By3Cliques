@@ -335,7 +335,7 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
 
   // ✅ queryKey SEM filtersKey — scope é o único discriminador de dataset
   const query = useQuery({
-    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope, scope === 'archived' ? filters?.aiMode : undefined],
+    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope, scope === 'archived' ? filters?.aiMode : undefined, scope === 'archived' ? filters?.dateRange?.from?.toISOString() : undefined, scope === 'archived' ? filters?.dateRange?.to?.toISOString() : undefined],
     queryFn: async () => {
       const data = await fetchInboxData(fetchOptions);
       
