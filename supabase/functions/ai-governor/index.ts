@@ -1288,7 +1288,7 @@ serve(async (req) => {
     ].filter(Boolean).join('\n');
 
     // ═══ HOJE — Recorrências ═══
-    const recurrenceSummary = `🔄 *HOJE — Recorrências*\nRenovações: ${salesMetrics.recurrenceCount} (${fmtK(salesMetrics.recurrenceRevenue)})`;
+    const recurrenceSummary = `🔄 *${dateStr} — Recorrências*\nRenovações: ${salesMetrics.recurrenceCount} (${fmtK(salesMetrics.recurrenceRevenue)})`;
 
     // ═══ Resumo Geral ═══
     const salesResume = `📊 *Resumo:* ${salesMetrics.wonToday} fechamentos | ${fmtK(salesMetrics.revenueToday)}\nPerdidos: ${salesMetrics.lostToday} | Novos deals: ${salesMetrics.newDeals}`;
