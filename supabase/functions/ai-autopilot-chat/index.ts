@@ -6391,7 +6391,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     // 🎯 PREFIXO DE RESPOSTA CAUTELOSA (confiança média)
     if (confidenceResult.action === 'cautious' && !toolCalls.length) {
       const cautiousPrefix = generateResponsePrefix('cautious');
-      if (cautiousPrefix && !assistantMessage.startsWith('**Baseado')) {
+      if (cautiousPrefix && !assistantMessage.startsWith('Baseado nas informações')) {
         assistantMessage = cautiousPrefix + assistantMessage;
         console.log('[ai-autopilot-chat] ⚠️ Prefixo cauteloso adicionado à resposta');
       }
