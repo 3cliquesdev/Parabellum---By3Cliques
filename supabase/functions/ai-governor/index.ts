@@ -1279,7 +1279,7 @@ serve(async (req) => {
       ? `  Top afiliados: ${(salesMetrics.topNewAffiliates ?? []).map((a: any) => `${a.name} ${a.deals} deals`).join(', ')}`
       : '';
     const newSalesSummary = [
-      `💰 *HOJE — Vendas Novas*`,
+      `💰 *${dateStr} — Vendas Novas*`,
       `Novas: ${salesMetrics.newSalesCount} (${fmtK(salesMetrics.newSalesRevenue)})`,
       `  Organico: ${salesMetrics.newSalesOrganicCount} (${fmtK(salesMetrics.newSalesOrganicRevenue)})`,
       `  Afiliados: ${salesMetrics.newSalesAffiliateCount} (${fmtK(salesMetrics.newSalesAffiliateRevenue)})`,
