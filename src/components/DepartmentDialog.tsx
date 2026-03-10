@@ -100,6 +100,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
         auto_close_minutes: autoCloseMinutesValue,
         send_rating_on_close: sendRatingOnClose,
         ai_auto_close_minutes: aiAutoCloseMinutesValue,
+        human_auto_close_minutes: humanAutoCloseMinutesValue,
       });
     }
 
