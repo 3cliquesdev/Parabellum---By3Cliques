@@ -1263,14 +1263,14 @@ serve(async (req) => {
 
     // ═══ HOJE — Atendimento (detalhado) ═══
     const inboxSummary = [
-      `📞 *HOJE — Atendimento* ${periodStr}`,
+      `📞 *${dateStr} — Atendimento* ${periodStr}`,
       `Conversas: ${metrics.totalConvs} (${channelBreakdownWa})`,
       `Abertas agora: ${metrics.openTotal} | Fechadas: ${metrics.closedTotal} | Fila humana: ${metrics.waitingHumanConvs}`,
       `IA autopilot: resolveu ${metrics.closedAutopilot}, ativas ${metrics.openAutopilot}`,
       `Copilot: ${metrics.copilotConvs} | Desabilitado: ${metrics.disabledConvs}`,
       `Tempo medio: ${metrics.avgResolutionMin ?? '—'} min`,
       `Eventos IA: ${metrics.totalAIEvents} | Msgs: ${metrics.totalMessages} (${metrics.aiMessages} da IA)`,
-      metrics.csatAvg ? `CSAT hoje: ${metrics.csatAvg}/5 (${metrics.csatCount} avaliacoes)` : null,
+      metrics.csatAvg ? `CSAT: ${metrics.csatAvg}/5 (${metrics.csatCount} avaliacoes)` : null,
       metrics.criticalAnomalies?.length > 0 ? `Anomalias: ${metrics.criticalAnomalies.length} criticas` : null,
     ].filter(Boolean).join('\n');
 
@@ -1279,7 +1279,7 @@ serve(async (req) => {
       ? `  Top afiliados: ${(salesMetrics.topNewAffiliates ?? []).map((a: any) => `${a.name} ${a.deals} deals`).join(', ')}`
       : '';
     const newSalesSummary = [
-      `💰 *HOJE — Vendas Novas*`,
+      `💰 *${dateStr} — Vendas Novas*`,
       `Novas: ${salesMetrics.newSalesCount} (${fmtK(salesMetrics.newSalesRevenue)})`,
       `  Organico: ${salesMetrics.newSalesOrganicCount} (${fmtK(salesMetrics.newSalesOrganicRevenue)})`,
       `  Afiliados: ${salesMetrics.newSalesAffiliateCount} (${fmtK(salesMetrics.newSalesAffiliateRevenue)})`,
@@ -1288,19 +1288,19 @@ serve(async (req) => {
     ].filter(Boolean).join('\n');
 
     // ═══ HOJE — Recorrências ═══
-    const recurrenceSummary = `🔄 *HOJE — Recorrências*\nRenovações: ${salesMetrics.recurrenceCount} (${fmtK(salesMetrics.recurrenceRevenue)})`;
+    const recurrenceSummary = `🔄 *${dateStr} — Recorrências*\nRenovações: ${salesMetrics.recurrenceCount} (${fmtK(salesMetrics.recurrenceRevenue)})`;
 
     // ═══ Resumo Geral ═══
     const salesResume = `📊 *Resumo:* ${salesMetrics.wonToday} fechamentos | ${fmtK(salesMetrics.revenueToday)}\nPerdidos: ${salesMetrics.lostToday} | Novos deals: ${salesMetrics.newDeals}`;
 
     // ═══ HOJE — Pipeline ═══
     const pipelineSummaryToday = salesMetrics.newLeadsToday > 0
-      ? `📥 *HOJE — Pipeline*\n${(salesMetrics.topNewSources ?? []).join('\n')}\nTotal: ${salesMetrics.newLeadsToday} leads entraram`
-      : `📥 *HOJE — Pipeline*\nNenhum lead novo capturado`;
+      ? `📥 *${dateStr} — Pipeline*\n${(salesMetrics.topNewSources ?? []).join('\n')}\nTotal: ${salesMetrics.newLeadsToday} leads entraram`
+      : `📥 *${dateStr} — Pipeline*\nNenhum lead novo capturado`;
 
     // ═══ HOJE — Tags de Conversas ═══
     const tagsSummary = (metrics.topConversationTags ?? []).length > 0
-      ? `🏷️ *HOJE — Tags de Conversas*\n` +
+      ? `🏷️ *${dateStr} — Tags de Conversas*\n` +
         (metrics.topConversationTags ?? []).slice(0, 10).map((t: any, i: number) =>
           `${i + 1}. ${t.name} (${t.count}x)`
         ).join('\n')
@@ -1309,7 +1309,7 @@ serve(async (req) => {
     // ═══ HOJE — Tickets ═══
     const ticketsSummary = metrics.ticketsTodayTotal > 0
       ? [
-          `🎫 *HOJE — Tickets*`,
+          `🎫 *${dateStr} — Tickets*`,
           `Total: ${metrics.ticketsTodayTotal} | Urgentes: ${metrics.ticketsByPriority?.urgent ?? 0} | Abertos: ${metrics.ticketsOpen ?? 0}`,
           ...(metrics.ticketsTopSubjects ?? []).slice(0, 5).map((t: any) =>
             `  #${t.ticket_number} ${t.subject} (${t.priority})`
@@ -1328,7 +1328,7 @@ serve(async (req) => {
         ).join('\n')
       : `👥 *MES — Time Comercial*\nNenhum fechamento no mes ainda`;
 
-    const channelsSummarySection = channelsSummary ? `\n📊 *Canais de Venda (Hoje):*\n${channelsSummary}` : '';
+    const channelsSummarySection = channelsSummary ? `\n📊 *Canais de Venda (${dateStr}):*\n${channelsSummary}` : '';
 
     const optionalSections = [tagsSummary, ticketsSummary].filter(Boolean).join('\n\n');
 
