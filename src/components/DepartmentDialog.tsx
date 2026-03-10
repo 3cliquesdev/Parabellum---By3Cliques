@@ -94,6 +94,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
         send_rating_on_close: sendRatingOnClose,
         ai_auto_close_minutes: aiAutoCloseMinutesValue,
         human_auto_close_minutes: humanAutoCloseMinutesValue,
+        human_auto_close_tag_id: humanAutoCloseEnabled && humanAutoCloseTagId ? humanAutoCloseTagId : null,
       });
     } else {
       await createMutation.mutateAsync({
@@ -106,6 +107,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
         send_rating_on_close: sendRatingOnClose,
         ai_auto_close_minutes: aiAutoCloseMinutesValue,
         human_auto_close_minutes: humanAutoCloseMinutesValue,
+        human_auto_close_tag_id: humanAutoCloseEnabled && humanAutoCloseTagId ? humanAutoCloseTagId : null,
       });
     }
 
