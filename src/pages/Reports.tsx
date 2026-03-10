@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileSpreadsheet, TrendingUp, Users, MessageSquare, DollarSign, Target, Clock, BarChart3, RefreshCw, Timer } from "lucide-react";
+import { FileSpreadsheet, TrendingUp, Users, MessageSquare, DollarSign, Target, Clock, BarChart3, RefreshCw, Timer, Mail } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import ReportCard from "@/components/ReportCard";
 import ReportFilterPanel from "@/components/ReportFilterPanel";
 import { AnalyticsReportPanel } from "@/components/reports/AnalyticsReportPanel";
-
+import { EmailSendsExportDialog } from "@/components/email/EmailSendsExportDialog";
 export default function Reports() {
   const navigate = useNavigate();
   const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [emailSendsExportOpen, setEmailSendsExportOpen] = useState(false);
 
   const reportCategories = [
     {
@@ -161,6 +162,20 @@ export default function Reports() {
       ],
     },
     {
+      id: 'email',
+      name: '📧 E-mail',
+      icon: Mail,
+      reports: [
+        {
+          id: 'email_sends_export',
+          name: 'Envios de E-mail por Template',
+          description: 'Status de envio, abertura, clique e bounce por período e template (Excel)',
+          icon: FileSpreadsheet,
+          action: 'emailSendsExport',
+        },
+      ],
+    },
+    {
       id: 'ai_chat',
       name: '🤖 IA & Chat',
       icon: MessageSquare,
@@ -219,7 +234,7 @@ export default function Reports() {
       </div>
 
       <Tabs defaultValue="dashboard" className="space-y-6">
-        <TabsList className="grid grid-cols-6 w-full max-w-4xl">
+        <TabsList className="grid grid-cols-7 w-full max-w-5xl">
           {reportCategories.map((category) => (
             <TabsTrigger key={category.id} value={category.id}>
               {category.name}
@@ -235,7 +250,9 @@ export default function Reports() {
                   key={report.id}
                   report={report}
                   onClick={() => {
-                    if ((report as any).route) {
+                    if ((report as any).action === 'emailSendsExport') {
+                      setEmailSendsExportOpen(true);
+                    } else if ((report as any).route) {
                       navigate((report as any).route);
                     } else {
                       setSelectedReport(report);
@@ -261,6 +278,8 @@ export default function Reports() {
           onOpenChange={(open) => !open && setSelectedReport(null)}
         />
       ) : null}
+
+      <EmailSendsExportDialog open={emailSendsExportOpen} onOpenChange={setEmailSendsExportOpen} />
     </div>
   );
 }

@@ -57,6 +57,7 @@ import { ValidateCustomerPropertiesPanel } from "./ValidateCustomerPropertiesPan
 import { VerifyCustomerOTPPropertiesPanel } from "./VerifyCustomerOTPPropertiesPanel";
 import { VariableAutocomplete } from "./VariableAutocomplete";
 import { CONDITION_CONTACT_FIELDS, CONDITION_CONVERSATION_FIELDS, getAncestorNodeIds } from "./variableCatalog";
+import { useTicketCategories } from "@/hooks/useTicketCategories";
 
 // Tipos de nós para chat flows
 export const chatFlowNodeTypes = {
@@ -147,6 +148,7 @@ const createStartNode = (): Node => ({
 });
 
 function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSaving }: ChatFlowEditorProps) {
+  const { data: ticketCategories = [] } = useTicketCategories();
   // Criar nó de início se não houver nós
   const initialNodes = useMemo(() => {
     if (initialFlow?.nodes && initialFlow.nodes.length > 0) {
@@ -1125,13 +1127,12 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                         >
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="financeiro">Financeiro</SelectItem>
-                            <SelectItem value="tecnico">Técnico</SelectItem>
-                            <SelectItem value="bug">Bug</SelectItem>
-                            <SelectItem value="devolucao">Devolução</SelectItem>
-                            <SelectItem value="reclamacao">Reclamação</SelectItem>
-                            <SelectItem value="saque">Saque</SelectItem>
-                            <SelectItem value="outro">Outro</SelectItem>
+                            {ticketCategories.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                            ))}
+                            {ticketCategories.length === 0 && (
+                              <SelectItem value="outro" disabled>Nenhuma categoria cadastrada</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1233,13 +1234,12 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="financeiro">Financeiro</SelectItem>
-                        <SelectItem value="tecnico">Técnico</SelectItem>
-                        <SelectItem value="bug">Bug</SelectItem>
-                        <SelectItem value="devolucao">Devolução</SelectItem>
-                        <SelectItem value="reclamacao">Reclamação</SelectItem>
-                        <SelectItem value="saque">Saque</SelectItem>
-                        <SelectItem value="outro">Outro</SelectItem>
+                        {ticketCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                        ))}
+                        {ticketCategories.length === 0 && (
+                          <SelectItem value="outro" disabled>Nenhuma categoria cadastrada</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

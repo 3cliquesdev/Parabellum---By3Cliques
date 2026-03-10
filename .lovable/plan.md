@@ -1,31 +1,24 @@
 
-# Plano: Mensagens Configuráveis de Fora do Horário ✅
+# Ajustar tag e mensagem de inatividade no auto-close ✅
 
-## Status: IMPLEMENTADO (com ajustes finos aplicados)
+## Status: IMPLEMENTADO
 
 ## Resumo
 
-As mensagens automáticas enviadas fora do horário comercial (handoff e redistribuição) agora são editáveis via UI na página de SLA Settings. Templates armazenados na tabela `business_messages_config` com fallback para mensagens padrão.
+Encerramento por inatividade agora usa tag **9.98 Falta de Interação** e mensagem dinâmica com horário de atendimento.
 
-## Ajustes Finos Aplicados
+## Alterações
 
-- ✅ Trigger `updated_at` reutilizando `public.update_updated_at_column()`
-- ✅ Validação: botão salvar desabilitado se template vazio
-- ✅ Warning visual se placeholders `{schedule}` / `{next_open}` removidos
-- ✅ Botão "Restaurar Padrão" para resetar mensagens
-
-## Arquivos Alterados
-
-| Arquivo | Mudança |
-|---------|---------|
-| SQL Migrations | Tabela `business_messages_config` + seeds + RLS + trigger updated_at |
-| `src/hooks/useBusinessMessages.ts` | Hook (query + mutation) |
-| `src/pages/SLASettings.tsx` | Seção "Mensagens de Fora do Horário" com validação + restaurar padrão |
-| `supabase/functions/ai-autopilot-chat/index.ts` | Busca template `after_hours_handoff` com fallback |
-| `supabase/functions/redistribute-after-hours/index.ts` | Busca template `business_hours_reopened` com fallback |
+| Local | Mudança |
+|-------|---------|
+| `auto-close-conversations/index.ts` | Import `getBusinessHoursInfo`, constante `FALTA_INTERACAO_TAG_ID`, mensagem dinâmica `buildInactivityCloseMessage()` |
+| Etapa 2 (dept inatividade) | Tag 9.04 → 9.98, mensagem com horário |
+| Etapa 3 (AI inatividade) | Tag 9.04 → 9.98, mensagem unificada com horário |
+| Etapa 3b (sem dept) | Tag 9.04 → 9.98, mensagem unificada com horário |
+| Etapa 1 (WhatsApp expired) | Mantém tag 9.04 (cenário diferente: janela expirada) |
 
 ## Garantias
 
-- Fallback hardcoded se tabela vazia ou inacessível
-- Kill Switch, Shadow Mode, Fluxos: não afetados
-- RLS: leitura authenticated, escrita managers/admins
+- `DESISTENCIA_TAG_ID` mantido no código para uso futuro
+- Horário buscado uma vez no início via `getBusinessHoursInfo`
+- Fallback em `buildScheduleSummary` se sem config: "Sem horário configurado"

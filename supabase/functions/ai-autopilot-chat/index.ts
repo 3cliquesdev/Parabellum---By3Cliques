@@ -22,6 +22,11 @@ interface RAGConfig {
     sandbox: boolean;
   };
   strictMode: boolean;
+  blockFinancial: boolean;
+  confidenceDirect: number;
+  confidenceHandoff: number;
+  ragMinThreshold: number;
+  maxFallback: number;
 }
 
 const DEFAULT_RAG_CONFIG: RAGConfig = {
@@ -30,6 +35,11 @@ const DEFAULT_RAG_CONFIG: RAGConfig = {
   directThreshold: 0.75,
   sources: { kb: true, crm: true, tracking: true, sandbox: true },
   strictMode: false,
+  blockFinancial: true,
+  confidenceDirect: 0.75,
+  confidenceHandoff: 0.45,
+  ragMinThreshold: 0.70,
+  maxFallback: 3,
 };
 
 // Helper: Buscar TODAS as configurações RAG do banco
@@ -44,6 +54,11 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
         'ai_rag_direct_threshold',
         'ai_rag_sources_enabled',
         'ai_strict_rag_mode',
+        'ai_block_financial',
+        'ai_strict_mode',
+        'ai_confidence_direct',
+        'ai_confidence_handoff',
+        'ai_max_fallback_phrases',
       ]);
     
     if (error) {
@@ -69,7 +84,12 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       minThreshold: parseFloat(configMap.get('ai_rag_min_threshold') || String(DEFAULT_RAG_CONFIG.minThreshold)),
       directThreshold: parseFloat(configMap.get('ai_rag_direct_threshold') || String(DEFAULT_RAG_CONFIG.directThreshold)),
       sources,
-      strictMode: configMap.get('ai_strict_rag_mode') === 'true',
+      strictMode: configMap.get('ai_strict_rag_mode') === 'true' || configMap.get('ai_strict_mode') === 'true',
+      blockFinancial: (configMap.get('ai_block_financial') ?? 'true') === 'true',
+      confidenceDirect: parseFloat(configMap.get('ai_confidence_direct') ?? '0.75'),
+      confidenceHandoff: parseFloat(configMap.get('ai_confidence_handoff') ?? '0.45'),
+      ragMinThreshold: parseFloat(configMap.get('ai_rag_min_threshold') ?? '0.70'),
+      maxFallback: parseInt(configMap.get('ai_max_fallback_phrases') ?? '3'),
     };
     
     console.log('[getRAGConfig] ✅ Configuração RAG carregada:', {
@@ -78,6 +98,11 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       directThreshold: config.directThreshold,
       sources: config.sources,
       strictMode: config.strictMode,
+      blockFinancial: config.blockFinancial,
+      confidenceDirect: config.confidenceDirect,
+      confidenceHandoff: config.confidenceHandoff,
+      ragMinThreshold: config.ragMinThreshold,
+      maxFallback: config.maxFallback,
     });
     
     return config;
@@ -1257,6 +1282,10 @@ serve(async (req) => {
 
     const { conversationId, customerMessage, maxHistory = 50, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
     
+    // 🆕 Carregar RAGConfig uma única vez para todo o handler
+    const ragConfig = await getRAGConfig(supabaseClient);
+    console.log('[ai-autopilot-chat] 📊 RAGConfig carregado:', { model: ragConfig.model, strictMode: ragConfig.strictMode, blockFinancial: ragConfig.blockFinancial });
+
     // Validação defensiva
     if (!conversationId || conversationId === 'undefined') {
       console.error('[ai-autopilot-chat] ❌ conversationId inválido:', conversationId);
@@ -1310,7 +1339,7 @@ serve(async (req) => {
     // 🔒 TRAVA FINANCEIRA — Interceptação na ENTRADA (antes de chamar LLM)
     const financialIntentPattern = /saque|sacar|reembolso|estorno|(?<!\bendereco\s+de\s*)(?<!\bendere[çc]o\s+de\s*)(?<!\blocal\s+de\s*)devolu[çc][ãa]o|(?<!\bendereco\s+de\s*)(?<!\bendere[çc]o\s+de\s*)(?<!\blocal\s+de\s*)devolver|cancelar.*assinatura|meu dinheiro|(sacar|tirar|retirar|ver|consultar|meu)\s*saldo|(fazer|realizar|efetuar|cancelar|estornar)\s*pagamento|(cancelar|contestar|cobran[çc]a\s*indevida)|retirar|retirada|caixa|carteira|pix|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|ressarcimento/i;
     
-    if (flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && financialIntentPattern.test(customerMessage)) {
+    if (ragConfig.blockFinancial && flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && financialIntentPattern.test(customerMessage)) {
       console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
       const fixedMessage = 'Entendi. Para assuntos financeiros (saque, reembolso, devolução), vou te encaminhar para um atendente humano agora.';
@@ -3485,8 +3514,8 @@ serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
-    // Buscar modelo AI configurado dinamicamente
-    const configuredAIModel = await getConfiguredAIModel(supabaseClient);
+    // Usar modelo do RAGConfig já carregado (evita query duplicada)
+    const configuredAIModel = ragConfig.model;
     console.log(`[ai-autopilot-chat] Using AI model: ${configuredAIModel}`);
     
     if (!OPENAI_API_KEY && !LOVABLE_API_KEY) {
@@ -4098,20 +4127,9 @@ Responda APENAS: skip ou search`
     // 🎯 SISTEMA ANTI-ALUCINAÇÃO - VERIFICAÇÃO DE CONFIANÇA
     // ============================================================
     
-    // 🆕 Buscar configuração do modo RAG estrito
-    let isStrictRAGMode = false;
-    try {
-      const { data: strictModeConfig } = await supabaseClient
-        .from('system_configurations')
-        .select('value')
-        .eq('key', 'ai_strict_rag_mode')
-        .maybeSingle();
-      
-      isStrictRAGMode = strictModeConfig?.value === 'true';
-      console.log('[ai-autopilot-chat] 🎯 Modo RAG Estrito:', isStrictRAGMode ? 'ATIVADO' : 'desativado');
-    } catch (configError) {
-      console.warn('[ai-autopilot-chat] ⚠️ Erro ao buscar config strict mode:', configError);
-    }
+    // 🆕 Usar RAGConfig já carregado (query única no início do handler)
+    const isStrictRAGMode = ragConfig.strictMode;
+    console.log('[ai-autopilot-chat] 🎯 Modo RAG Estrito:', isStrictRAGMode ? 'ATIVADO' : 'desativado');
     
     // ============================================================
     // 🆕 MODO RAG ESTRITO - Processamento exclusivo com GPT-4o
@@ -7970,6 +7988,16 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
     // Se flow_context existe, IA só pode retornar texto puro
     // Detectar escape ANTES do banco + WhatsApp = zero vazamento
     // ============================================================
+
+    // 🆕 [INTENT:X] TAG DETECTION: Detectar e remover intent tags ANTES do escape check
+    const intentTagMatch = assistantMessage.match(/\[INTENT:([a-zA-Z_]+)\]/i);
+    let detectedIntentTag: string | null = null;
+    if (intentTagMatch) {
+      detectedIntentTag = intentTagMatch[1].toLowerCase();
+      assistantMessage = assistantMessage.replace(/\s*\[INTENT:[a-zA-Z_]+\]\s*/gi, '').trim();
+      console.log(`[ai-autopilot-chat] 🎯 [INTENT:${detectedIntentTag}] detectado e removido da mensagem`);
+    }
+
     if (flow_context && flow_context.response_format === 'text_only') {
       const escapeAttempt = ESCAPE_PATTERNS.some(pattern => pattern.test(assistantMessage));
       
@@ -8426,6 +8454,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       status: 'success',
       message: assistantMessage,
       from_cache: false,
+      // 🆕 INTENT EXIT: Sinalizar intent detectado para o webhook
+      ...(detectedIntentTag ? { intentExit: true, intentType: detectedIntentTag, hasFlowContext: !!flow_context, flow_context: flow_context ? { flow_id: flow_context.flow_id, node_id: flow_context.node_id } : undefined } : {}),
       persona_used: {
         id: persona.id,
         name: persona.name

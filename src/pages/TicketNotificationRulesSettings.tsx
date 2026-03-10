@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTicketCategories } from '@/hooks/useTicketCategories';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,15 +25,7 @@ interface TicketNotificationRule {
   };
 }
 
-const TICKET_CATEGORIES = [
-  { value: 'saque', label: 'Saque' },
-  { value: 'financeiro', label: 'Financeiro' },
-  { value: 'reembolso', label: 'Reembolso' },
-  { value: 'tecnico', label: 'Técnico' },
-  { value: 'suporte', label: 'Suporte Geral' },
-  { value: 'devolucao', label: 'Devolução' },
-  { value: 'troca', label: 'Troca' },
-];
+// Categories are now loaded dynamically from the database
 
 const EVENT_TYPES = [
   { value: 'created', label: 'Ticket Criado', icon: '📬' },
@@ -199,8 +192,10 @@ export default function TicketNotificationRulesSettings() {
     }
   };
 
+  const { data: ticketCategories = [] } = useTicketCategories();
+
   const getCategoryLabel = (value: string) => 
-    TICKET_CATEGORIES.find(c => c.value === value)?.label || value;
+    ticketCategories.find(c => c.name === value)?.name || value;
 
   const getEventInfo = (value: string) => 
     EVENT_TYPES.find(e => e.value === value) || { label: value, icon: '📧' };
@@ -343,8 +338,8 @@ export default function TicketNotificationRulesSettings() {
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {TICKET_CATEGORIES.map(cat => (
-                      <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                    {ticketCategories.map(cat => (
+                      <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

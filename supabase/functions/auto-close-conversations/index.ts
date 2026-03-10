@@ -1,19 +1,25 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { getBusinessHoursInfo } from "../_shared/business-hours.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Tag ID para "9.04 Desistência da conversa"
+// Tag ID para "9.04 Desistência da conversa" (mantido para uso futuro)
 const DESISTENCIA_TAG_ID = 'aa44b48d-c8bf-4def-ac9f-4caa8d9bfea9';
 
-// Mensagem de encerramento por inatividade
-const INACTIVITY_CLOSE_MESSAGE = `Sinto que não recebi resposta nesta conversa.
+// Tag ID para "9.98 Falta de Interação"
+const FALTA_INTERACAO_TAG_ID = '3eb75d67-c027-4c41-bdc6-8ebc414e2eb1';
 
-Como não houve interação recente, estou encerrando o atendimento para liberar o canal.
+/**
+ * Gera mensagem de encerramento por inatividade com horário de atendimento dinâmico.
+ */
+function buildInactivityCloseMessage(scheduleSummary: string): string {
+  return `Não recebi sua resposta, então estou encerrando este atendimento.
 
-Caso precise de ajuda com pedidos, saldo ou qualquer dúvida, basta iniciar um novo chat – estarei à disposição para resolver com prioridade.`;
+Nosso suporte funciona de ${scheduleSummary}. Se precisar de ajuda, entre em contato dentro desse período e teremos prazer em atendê-lo! 😊`;
+}
 
 // Mensagem de CSAT simplificada
 const CSAT_MESSAGE = `📝 Antes de encerrar, pode avaliar nosso atendimento?
@@ -59,6 +65,10 @@ Deno.serve(async (req) => {
     )
 
     console.log('[Auto-Close] Starting...');
+
+    // Buscar horário de atendimento uma vez para usar nas mensagens
+    const businessHoursInfo = await getBusinessHoursInfo(supabase);
+    const INACTIVITY_CLOSE_MESSAGE = buildInactivityCloseMessage(businessHoursInfo.schedule_summary);
 
     // ============================
     // ETAPA 1: WhatsApp Window Expired (>24h)
@@ -231,12 +241,12 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-          // 6. Adicionar a tag "9.04 Desistência da conversa"
+           // 6. Adicionar a tag "9.98 Falta de Interação"
           await supabase
             .from('conversation_tags')
             .upsert({
               conversation_id: conversation.id,
-              tag_id: DESISTENCIA_TAG_ID,
+              tag_id: FALTA_INTERACAO_TAG_ID,
             }, {
               onConflict: 'conversation_id,tag_id',
               ignoreDuplicates: true
@@ -355,9 +365,7 @@ Deno.serve(async (req) => {
               continue;
             }
 
-            const AI_CLOSE_MESSAGE = `Não recebi sua resposta nos últimos minutos, então estou encerrando este atendimento para liberar o canal. 😊
-
-Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
+            const AI_CLOSE_MESSAGE = INACTIVITY_CLOSE_MESSAGE;
 
             // Inserir mensagem de encerramento
             await supabase.from('messages').insert({
@@ -366,10 +374,10 @@ Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
               sender_type: 'user',
             });
 
-            // Tag "Desistência"
+            // Tag "9.98 Falta de Interação"
             await supabase.from('conversation_tags').upsert({
               conversation_id: conv.id,
-              tag_id: DESISTENCIA_TAG_ID,
+              tag_id: FALTA_INTERACAO_TAG_ID,
             }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
 
             // CSAT se configurado
@@ -457,9 +465,7 @@ Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
               continue;
             }
 
-            const AI_CLOSE_MESSAGE = `Não recebi sua resposta nos últimos minutos, então estou encerrando este atendimento para liberar o canal. 😊
-
-Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
+            const AI_CLOSE_MESSAGE = INACTIVITY_CLOSE_MESSAGE;
 
             // Inserir mensagem de encerramento
             await supabase.from('messages').insert({
@@ -468,10 +474,10 @@ Se precisar de ajuda, basta enviar uma nova mensagem a qualquer momento!`;
               sender_type: 'user',
             });
 
-            // Tag "Desistência"
+            // Tag "9.98 Falta de Interação"
             await supabase.from('conversation_tags').upsert({
               conversation_id: conv.id,
-              tag_id: DESISTENCIA_TAG_ID,
+              tag_id: FALTA_INTERACAO_TAG_ID,
             }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
 
             // Enviar via WhatsApp se necessário (sem CSAT - não há departamento)

@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Building2, Plus, Users, TrendingUp, Pencil, Trash2 } from "lucide-react";
+import { Building2, Plus, Users, TrendingUp, Pencil, Trash2, Phone } from "lucide-react";
 import { useOrganizations, useDeleteOrganization } from "@/hooks/useOrganizations";
 import OrganizationDialog from "@/components/OrganizationDialog";
 import OrganizationContactsDialog from "@/components/OrganizationContactsDialog";
@@ -140,7 +140,15 @@ export default function Organizations() {
                           <Users className="h-4 w-4" />
                           <span className="text-sm">Contatos</span>
                         </div>
-                        <span className="font-semibold text-foreground">{org.contactsCount}</span>
+                        <div className="flex items-center gap-2">
+                          {org.phonesCount > 0 && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Phone className="h-3 w-3" />
+                              {org.phonesCount}
+                            </span>
+                          )}
+                          <span className="font-semibold text-foreground">{org.contactsCount}</span>
+                        </div>
                       </button>
                     }
                   />

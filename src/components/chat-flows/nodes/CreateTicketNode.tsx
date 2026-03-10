@@ -3,6 +3,7 @@ import { NodeProps } from "reactflow";
 import { Ticket } from "lucide-react";
 import { ChatFlowNodeWrapper } from "../ChatFlowNodeWrapper";
 import { Badge } from "@/components/ui/badge";
+import { useTicketCategories } from "@/hooks/useTicketCategories";
 
 interface CreateTicketNodeData {
   label: string;
@@ -19,19 +20,12 @@ const priorityColors: Record<string, string> = {
   urgent: "bg-red-500/10 text-red-700",
 };
 
-const categoryLabels: Record<string, string> = {
-  financeiro: "Financeiro",
-  tecnico: "Técnico",
-  bug: "Bug",
-  outro: "Outro",
-  devolucao: "Devolução",
-  reclamacao: "Reclamação",
-  saque: "Saque",
-};
-
 export const CreateTicketNode = memo(({ data, selected }: NodeProps<CreateTicketNodeData>) => {
+  const { data: categories = [] } = useTicketCategories();
   const category = data.ticket_category || "outro";
   const priority = data.ticket_priority || "medium";
+
+  const categoryLabel = categories.find(c => c.name === category)?.name || category;
 
   return (
     <ChatFlowNodeWrapper
@@ -46,7 +40,7 @@ export const CreateTicketNode = memo(({ data, selected }: NodeProps<CreateTicket
           {priority.charAt(0).toUpperCase() + priority.slice(1)}
         </Badge>
         <Badge variant="outline" className="text-[10px]">
-          {categoryLabels[category] || category}
+          {categoryLabel}
         </Badge>
       </div>
     </ChatFlowNodeWrapper>

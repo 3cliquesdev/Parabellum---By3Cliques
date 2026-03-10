@@ -3,15 +3,17 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Database, Download, Trash2, RefreshCw, Upload, Loader2 } from "lucide-react";
+import { Database, Download, Trash2, RefreshCw, Upload, Loader2, Eraser } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { ContactNameCleanupDialog } from "./ContactNameCleanupDialog";
 
 export function DataManagementCard() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [exportingContacts, setExportingContacts] = useState(false);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
 
   // Export contacts to CSV
   const handleExportContacts = async () => {
@@ -168,7 +170,15 @@ export function DataManagementCard() {
           label="Importar Clientes"
           onClick={() => navigate("/import-clients")}
         />
+
+        <ActionButton
+          icon={Eraser}
+          label="Limpar Nomes de Contatos"
+          onClick={() => setCleanupOpen(true)}
+        />
       </CardContent>
+
+      <ContactNameCleanupDialog open={cleanupOpen} onOpenChange={setCleanupOpen} />
     </Card>
   );
 }

@@ -13,7 +13,7 @@ export function useOrganizations() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("organizations")
-        .select("*, contacts(count), deals(value, status)")
+        .select("*, contacts(count), deals(value, status), organization_phones(count)")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -21,6 +21,7 @@ export function useOrganizations() {
       // Calculate stats for each organization
       return data.map((org) => {
         const contactsCount = org.contacts?.[0]?.count || 0;
+        const phonesCount = (org.organization_phones as any)?.[0]?.count || 0;
         const activeDeals = org.deals?.filter(d => d.status === 'open').length || 0;
         const totalRevenue = org.deals
           ?.filter(d => d.status === 'won')
@@ -29,6 +30,7 @@ export function useOrganizations() {
         return {
           ...org,
           contactsCount,
+          phonesCount,
           activeDeals,
           totalRevenue,
         };

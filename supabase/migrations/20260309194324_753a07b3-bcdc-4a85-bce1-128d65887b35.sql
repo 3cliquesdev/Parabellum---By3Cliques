@@ -1,0 +1,1 @@
+ALTER TABLE public.email_sends ADD COLUMN replied_at timestamptz;

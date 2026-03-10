@@ -13,12 +13,14 @@ function fmtDateTime(iso: string | null): string {
 
 function getEmailStatus(row: {
   bounced_at: string | null;
+  replied_at: string | null;
   clicked_at: string | null;
   opened_at: string | null;
   sent_at: string | null;
   status: string | null;
 }): string {
   if (row.bounced_at) return "Bounce";
+  if (row.replied_at) return "Respondido";
   if (row.clicked_at) return "Clicado";
   if (row.opened_at) return "Aberto";
   if (row.status === "error") return "Erro";
@@ -53,7 +55,7 @@ export function useExportEmailSendsReport() {
       while (true) {
         let query = supabase
           .from("email_sends")
-          .select("id, template_id, recipient_email, subject, sent_at, status, clicked_at, opened_at, bounced_at, contact_id, contacts(first_name, last_name)")
+          .select("id, template_id, recipient_email, subject, sent_at, status, clicked_at, opened_at, bounced_at, replied_at, contact_id, contacts(first_name, last_name)")
           .order("sent_at", { ascending: false })
           .range(offset, offset + PAGE_SIZE - 1);
 
@@ -102,6 +104,7 @@ export function useExportEmailSendsReport() {
           "Assunto": row.subject,
           "Data/Hora Envio": fmtDateTime(row.sent_at),
           "Status": getEmailStatus(row),
+          "Respondido": fmtDateTime(row.replied_at),
           "Clicado": fmtDateTime(row.clicked_at),
           "Aberto": fmtDateTime(row.opened_at),
           "Bounce": fmtDateTime(row.bounced_at),

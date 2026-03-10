@@ -498,6 +498,36 @@ export type Database = {
           },
         ]
       }
+      ai_governor_reports: {
+        Row: {
+          ai_analysis: string | null
+          created_at: string | null
+          date: string
+          generated_at: string | null
+          id: string
+          metrics_snapshot: Json
+          sent_to_phones: string[] | null
+        }
+        Insert: {
+          ai_analysis?: string | null
+          created_at?: string | null
+          date: string
+          generated_at?: string | null
+          id?: string
+          metrics_snapshot?: Json
+          sent_to_phones?: string[] | null
+        }
+        Update: {
+          ai_analysis?: string | null
+          created_at?: string | null
+          date?: string
+          generated_at?: string | null
+          id?: string
+          metrics_snapshot?: Json
+          sent_to_phones?: string[] | null
+        }
+        Relationships: []
+      }
       ai_learning_timeline: {
         Row: {
           confidence: string | null
@@ -3404,6 +3434,7 @@ export type Database = {
           playbook_execution_id: string | null
           playbook_node_id: string | null
           recipient_email: string
+          replied_at: string | null
           resend_email_id: string | null
           sent_at: string | null
           status: string | null
@@ -3425,6 +3456,7 @@ export type Database = {
           playbook_execution_id?: string | null
           playbook_node_id?: string | null
           recipient_email: string
+          replied_at?: string | null
           resend_email_id?: string | null
           sent_at?: string | null
           status?: string | null
@@ -3446,6 +3478,7 @@ export type Database = {
           playbook_execution_id?: string | null
           playbook_node_id?: string | null
           recipient_email?: string
+          replied_at?: string | null
           resend_email_id?: string | null
           sent_at?: string | null
           status?: string | null
@@ -6005,6 +6038,38 @@ export type Database = {
           },
         ]
       }
+      organization_phones: {
+        Row: {
+          created_at: string | null
+          id: string
+          label: string
+          organization_id: string
+          phone: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          label: string
+          organization_id: string
+          phone: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          label?: string
+          organization_id?: string
+          phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_phones_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -6610,10 +6675,12 @@ export type Database = {
           last_status_change: string | null
           manager_id: string | null
           manual_offline: boolean | null
+          notify_ai_governor: boolean | null
           onboarding_completed: boolean | null
           onboarding_completed_at: string | null
           onboarding_progress: number | null
           updated_at: string | null
+          whatsapp_number: string | null
         }
         Insert: {
           archived_at?: string | null
@@ -6634,10 +6701,12 @@ export type Database = {
           last_status_change?: string | null
           manager_id?: string | null
           manual_offline?: boolean | null
+          notify_ai_governor?: boolean | null
           onboarding_completed?: boolean | null
           onboarding_completed_at?: string | null
           onboarding_progress?: number | null
           updated_at?: string | null
+          whatsapp_number?: string | null
         }
         Update: {
           archived_at?: string | null
@@ -6658,10 +6727,12 @@ export type Database = {
           last_status_change?: string | null
           manager_id?: string | null
           manual_offline?: boolean | null
+          notify_ai_governor?: boolean | null
           onboarding_completed?: boolean | null
           onboarding_completed_at?: string | null
           onboarding_progress?: number | null
           updated_at?: string | null
+          whatsapp_number?: string | null
         }
         Relationships: [
           {
