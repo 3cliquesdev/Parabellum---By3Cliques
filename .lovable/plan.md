@@ -1,28 +1,28 @@
 
-# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-## Arquivo: `supabase/functions/process-chat-flow/index.ts`
+# Relatório com data em vez de "HOJE"/"ONTEM"
 
-### FIX 1 ✅ — Proteção contra loop flow-to-flow
-- Linhas ~2701 e ~2921: Guard `target_flow_id === activeState.flow_id` antes de fetch recursivo
-- Cancela estado e retorna `flow_to_flow_loop_detected`
+## Mudanças
 
-### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
-- 4 locais: status agora inclui `node.type === 'condition_v2'`
-- Também corrigido o `if (startNode.type === 'condition')` para incluir `condition_v2`
+### 1. Cron: `0 21 * * *` → `0 4 * * *` (01:00 BRT)
+Executar SQL no cron para atualizar o schedule.
 
-### FIX 3 ✅ — Auto-traverse cobre condition_v2
-- 3 while loops (OTP, fetch_order, validate_customer) agora incluem `'condition_v2'`
-- `if` interno também cobre `condition_v2`
+### 2. Labels no `supabase/functions/ai-governor/index.ts`
 
-### FIX 4 ✅ — Transfer node atualiza conversations.department
-- 2 locais de transfer (direto e msg chain): atualiza `ai_mode`, `assigned_to`, `department`
-- Warn log quando `department_id` está vazio
+`dateStr` já existe (linha 1249) com a data formatada. Substituir todas as ocorrências de `HOJE` por `dateStr`:
 
-### FIX 5 ✅ — startMessage com replaceVariables
-- Carrega conversation + contact no escopo do trigger-matched flow
-- Usa `buildVariablesContext` + `replaceVariables` para substituir variáveis
+| Linha | Atual | Novo |
+|-------|-------|------|
+| 1266 | `📞 *HOJE — Atendimento*` | `📞 *${dateStr} — Atendimento*` |
+| 1273 | `CSAT hoje:` | `CSAT:` |
+| 1282 | `💰 *HOJE — Vendas Novas*` | `💰 *${dateStr} — Vendas Novas*` |
+| 1291 | `🔄 *HOJE — Recorrências*` | `🔄 *${dateStr} — Recorrências*` |
+| 1298-1299 | `📥 *HOJE — Pipeline*` (2x) | `📥 *${dateStr} — Pipeline*` |
+| 1303 | `🏷️ *HOJE — Tags*` | `🏷️ *${dateStr} — Tags*` |
+| 1312 | `🎫 *HOJE — Tickets*` | `🎫 *${dateStr} — Tickets*` |
+| 1331 | `Canais de Venda (Hoje)` | `Canais de Venda (${dateStr})` |
 
-### FIX 6 ✅ — financialIntentPattern simplificado
-- Regex com lookbehind complexo substituída por dois patterns: `financialPositive` + `financialContext`
-- Elimina risco de incompatibilidade de runtime
+Header (1335) já usa `dateStr` — manter como está.
+
+Nenhuma lógica de datas muda — apenas labels visuais.
+
