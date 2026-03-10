@@ -1,62 +1,105 @@
 
 
-# Fix: IA Não Responde e Fica em Loop no Nó `ia_entrada`
+# Auditoria Completa: Bugs de IA e Chat Flow
 
-## Diagnóstico
+## Resumo Executivo (AGORA)
 
-Analisei as 4 conversas e identifiquei o ciclo de falha:
+| Métrica | Valor |
+|---------|-------|
+| Conversas abertas TOTAL | 48 |
+| Sem departamento (orphans) | 5 (4 autopilot + 1 copilot) |
+| Sem agente (waiting_human/copilot) | 5 |
+| Dispatch jobs escalados (no_agents) | 17+ |
+| Flow states presos (>30min) | 3 |
+| Contract violations (24h) | 52 |
+| Flow exit clean (24h) | 15 |
 
-1. Cliente envia mensagem → `process-chat-flow` retorna `aiNodeActive: true`
-2. `ai-autopilot-chat` gera resposta com 0% confiança e 0 artigos da KB
-3. A IA (GPT) gera texto como "Vou te direcionar para nosso menu de atendimento para encontrar o especialista certo!"
-4. **`FALLBACK_PHRASES` NÃO detecta** essa frase ("direcionar" não está na lista)
-5. A resposta passa todas as validações e é enviada ao cliente
-6. O fluxo **permanece em `ia_entrada`** → cliente responde → repete o loop
+---
 
-Em alguns casos, a IA gera perguntas/opções proibidas → `contract_violation_blocked` → `forceAIExit` é acionado, mas o `process-chat-flow` não avança o estado corretamente.
+## BUG CRÍTICO 1: Trigger `ensure_dispatch_job` NÃO FUNCIONA
 
-**Resultado**: o cliente recebe 7+ vezes a mesma mensagem de fallback sem nunca ser transferido.
+**O fix anterior não resolveu.** O trigger é tipo `AFTER INSERT/UPDATE`, mas o código faz `NEW.department := ...` que **só funciona em triggers BEFORE**. Em triggers AFTER, modificar NEW não tem efeito.
 
-## Correções
+**Prova:** 4 conversas criadas HOJE após o deploy (14:37, 14:41, 14:45, 14:49) ainda estão com `department = NULL`.
 
-### 1. Adicionar frases faltantes ao `FALLBACK_PHRASES` (ai-autopilot-chat)
-Adicionar na lista `FALLBACK_PHRASES` (linha 638):
-```
-'direcionar para',
-'encontrar o especialista',
-'menu de atendimento',
-'vou te direcionar',
-```
-Isso garante que quando a IA gera o texto do fallback configurado no nó, o detector identifica e retorna `flow_advance_needed`.
+**Conversas afetadas agora:**
+- `9f4027ea` - Tiago Camatta (14:49) - autopilot, sem dept
+- `83e38c1f` - Lucas Mugnol (14:45) - autopilot, sem dept
+- `5098c07f` - Casaiq (14:41) - autopilot, sem dept
+- `1a57232b` - (14:37) - autopilot, sem dept
+- `56e47f5c` - Ana (02:17) - copilot, sem dept
 
-### 2. Detecção imediata: 0 artigos + 0% confiança → flow_advance (ai-autopilot-chat)
-ANTES de chamar a IA (GPT), se `confidenceResult.score === 0` E `knowledgeArticles.length === 0` E existe `flow_context`, retornar `flow_advance_needed` imediatamente. Não há motivo para chamar o modelo se não tem nenhum artigo para fundamentar a resposta.
+**Fix necessário:** Mudar triggers de `AFTER` para `BEFORE` para que a atribuição de NEW.department funcione. TAMBÉM o fallback só cobre `waiting_human`, mas conversas novas entram como `autopilot` — precisa cobrir TODOS os ai_modes.
 
-Inserir APÓS o bloco `shouldSkipHandoff` (após linha ~4720), antes de chegar na geração de resposta:
-```typescript
-// GUARD: 0 artigos + 0% confiança + flow_context → não gerar IA, avançar fluxo
-if (flow_context && confidenceResult.score === 0 && knowledgeArticles.length === 0 && !shouldSkipHandoff) {
-  return Response({ status: 'flow_advance_needed', reason: 'zero_confidence_zero_articles', hasFlowContext: true });
-}
-```
+---
 
-### 3. Detecção do fallback configurado no nó (ai-autopilot-chat)
-Comparar a resposta da IA com o `flow_context.fallbackMessage` configurado no nó. Se forem similares, detectar como fallback automaticamente:
-```typescript
-if (flow_context?.fallbackMessage && assistantMessage.includes(flow_context.fallbackMessage.substring(0, 30))) {
-  isFallbackResponse = true;
-}
-```
+## BUG CRÍTICO 2: IA presa em loop no nó `ia_entrada` com contract_violation
 
-### 4. Max fallback counter anti-loop (ai-autopilot-chat)
-Adicionar um contador de fallbacks consecutivos no `conversation.customer_metadata`. Se atingir 2 fallbacks seguidos para a mesma conversa no nó AI, forçar `flow_advance_needed` automaticamente, mesmo que a detecção de fallback falhe.
+**20 contract violations nas últimas 24h**, todas no nó `ia_entrada`. A IA gera respostas com markdown (`**Baseado nas informações disponíveis:**`) que são bloqueadas como violação de contrato, mas o fluxo **não avança para o próximo nó**.
 
-### 5. Corrigir conversas presas agora (SQL via insert tool)
-Atualizar as 4+ conversas presas em `ia_entrada` para avançar: cancelar o flow state e mover para `waiting_human` com departamento Suporte para serem atendidas.
+**Exemplo real:** Conversa `1a57232b` — cliente perguntou sobre pós-venda/frete. A IA gerou 2 respostas bloqueadas por `contract_violation` mas o cliente nunca foi transferido. O cliente mandou 5 mensagens sem receber resposta.
 
-## Resultado Esperado
-- IA com 0 artigos KB → avança imediatamente para próximo nó (sem gerar resposta inútil)
-- Fallback do nó detectado → avança para próximo nó
-- Máximo 2 fallbacks antes de forçar avanço → sem loops infinitos
-- Conversas presas corrigidas imediatamente
+**Flow states presos no nó `1769459318164`:**
+- `85904262` - copilot, Suporte, sem agente (11:10)
+- `0a6acf51` - copilot, Suporte, sem agente (02:53)
+- `56e47f5c` - copilot, sem dept, com agente (02:17)
+
+**Causa:** Quando `contract_violation_blocked` acontece, o sistema bloqueia a mensagem mas NÃO avança o fluxo. O `forceAIExit` deveria ser acionado pelo webhook, mas aparentemente não está funcionando para todos os casos.
+
+---
+
+## BUG 3: Departamento Customer Success sem agentes (crônico)
+
+**3 conversas esperando com 5-7 tentativas de dispatch, todas escaladas:**
+- `df841e8a` - CS, 5 tentativas, escalated
+- `1a919536` - CS, 7 tentativas, escalated
+- `292f2267` - CS, 6 tentativas, escalated
+
+E há **14+ dispatch jobs históricos** escalados em CS e Financeiro, todos com `last_error: no_agents_available`. Não é bug de código — é que não há agentes online nesses departamentos.
+
+---
+
+## BUG 4: Conversas em copilot sem agente atribuído
+
+**2 conversas** em `copilot` mode com departamento Suporte mas `assigned_to = NULL`:
+- `85904262` - copilot, Suporte, dispatch_attempts: 0
+- `0a6acf51` - copilot, Suporte, dispatch_attempts: 0
+
+O trigger de dispatch só cria jobs para `waiting_human`, não para `copilot`. Essas conversas mudaram para copilot (provavelmente via auto-handoff) mas nenhum dispatch job foi criado.
+
+---
+
+## Estatísticas de IA (Hoje)
+
+| Evento | Quantidade |
+|--------|-----------|
+| ai_response (respostas normais) | 175 |
+| ai_transfer (transferências) | 74 |
+| ai_blocked_commercial | 26 |
+| ai_blocked_financial | 25 |
+| contract_violation_blocked | 20 |
+| flow_exit_clean | 4 |
+
+**Taxa de bloqueio:** 41% das interações resultaram em bloqueio ou transferência (71/175). A IA está tendo dificuldade em resolver muitas perguntas.
+
+---
+
+## Plano de Correção
+
+### Fix 1: Trigger BEFORE (não AFTER)
+Recriar triggers como `BEFORE INSERT` e `BEFORE UPDATE` para que `NEW.department := ...` funcione. Expandir o fallback para cobrir qualquer `ai_mode` quando `department IS NULL` e `status = 'open'`.
+
+### Fix 2: Dispatch para copilot também
+Adicionar condição no trigger: se `ai_mode IN ('waiting_human', 'copilot') AND assigned_to IS NULL`, criar dispatch job.
+
+### Fix 3: Forçar flow advance após contract_violation
+No `ai-autopilot-chat`, quando `contract_violation_blocked` ocorrer e o nó for `ia_entrada`, retornar `flow_advance_needed` em vez de simplesmente bloquear. Isso garante que o webhook avance o fluxo ao próximo nó.
+
+### Fix 4: Corrigir conversas orphans agora (SQL)
+- Atribuir dept Suporte às 5 conversas sem departamento
+- Cancelar flow states presos e criar dispatch jobs
+- Reprocessar as 2 conversas copilot sem agente
+
+### Fix 5: Fallback de dept na CRIAÇÃO da conversa
+No webhook (`meta-whatsapp-webhook` e `handle-whatsapp-event`), ao criar uma conversa, se não houver departamento no flow, atribuir Suporte como default.
 
