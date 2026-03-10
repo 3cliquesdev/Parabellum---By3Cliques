@@ -1300,7 +1300,7 @@ serve(async (req) => {
 
     // ═══ HOJE — Tags de Conversas ═══
     const tagsSummary = (metrics.topConversationTags ?? []).length > 0
-      ? `🏷️ *HOJE — Tags de Conversas*\n` +
+      ? `🏷️ *${dateStr} — Tags de Conversas*\n` +
         (metrics.topConversationTags ?? []).slice(0, 10).map((t: any, i: number) =>
           `${i + 1}. ${t.name} (${t.count}x)`
         ).join('\n')
