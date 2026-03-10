@@ -1130,7 +1130,7 @@ IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu
   };
   
   const baseMessage = ticketMessages[issueType] || ticketMessages['default'];
-  const orderInfo = orderId ? `\n\n**Pedido:** ${orderId}` : '';
+  const orderInfo = orderId ? `\n\nPedido: ${orderId}` : '';
   
   return `${baseMessage}${orderInfo}`;
 }
