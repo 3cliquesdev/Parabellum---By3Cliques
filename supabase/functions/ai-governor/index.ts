@@ -1309,7 +1309,7 @@ serve(async (req) => {
     // ═══ HOJE — Tickets ═══
     const ticketsSummary = metrics.ticketsTodayTotal > 0
       ? [
-          `🎫 *HOJE — Tickets*`,
+          `🎫 *${dateStr} — Tickets*`,
           `Total: ${metrics.ticketsTodayTotal} | Urgentes: ${metrics.ticketsByPriority?.urgent ?? 0} | Abertos: ${metrics.ticketsOpen ?? 0}`,
           ...(metrics.ticketsTopSubjects ?? []).slice(0, 5).map((t: any) =>
             `  #${t.ticket_number} ${t.subject} (${t.priority})`
