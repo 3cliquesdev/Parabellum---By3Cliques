@@ -1106,17 +1106,17 @@ async function createTicketSuccessMessage(
     if (saqueTemplate) return saqueTemplate;
     
     // Fallback se template não existir
-    return `**Solicitação de saque registrada!**
+    return `Solicitação de saque registrada!
 
-**Protocolo:** #${formattedId}
-**Valor Solicitado:** R$ ${withdrawalData.amount.toFixed(2)}
-${withdrawalData.cpf_last4 ? `**CPF (final):** ...${withdrawalData.cpf_last4}` : ''}
-**Prazo:** até 7 dias úteis
+Protocolo: #${formattedId}
+Valor Solicitado: R$ ${withdrawalData.amount.toFixed(2)}
+${withdrawalData.cpf_last4 ? `CPF (final): ...${withdrawalData.cpf_last4}` : ''}
+Prazo: até 7 dias úteis
 
-**Você receberá um email confirmando a abertura do chamado.**
-**Quando o saque for processado, você será notificado por email também.**
+Você receberá um email confirmando a abertura do chamado.
+Quando o saque for processado, você será notificado por email também.
 
-**IMPORTANTE:** O saque será creditado via PIX na chave informada, vinculada ao seu CPF. Não é possível transferir para conta de terceiros.`;
+IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu CPF. Não é possível transferir para conta de terceiros.`;
   }
   
   const ticketMessages: Record<string, string> = {
