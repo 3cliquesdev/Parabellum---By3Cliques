@@ -2271,6 +2271,11 @@ serve(async (req) => {
       }
 
       nextNode = findNextNode(flowDef, currentNode, path);
+      // 🆕 FIX: Se aiExitForced e não achou edge 'ai_exit', tentar edge default (próximo nó do canvas)
+      if (!nextNode && aiExitForced && path === 'ai_exit') {
+        console.log('[process-chat-flow] ⚠️ aiExitForced: sem edge ai_exit, tentando edge default');
+        nextNode = findNextNode(flowDef, currentNode, undefined);
+      }
       console.log(`[process-chat-flow] ➡️ Transition: from=${currentNode.type}(${currentNode.id}) path=${path || 'default'} → next=${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
 
       // 🔒 FIX: Financial/Commercial exit SEM próximo nó → forçar handoff
@@ -2328,6 +2333,43 @@ serve(async (req) => {
             departmentId: targetDeptId,
             collectedData,
             exitReason: `${exitType}_blocked_no_next_node`,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // 🆕 FIX: aiExitForced sem NENHUM próximo nó → forçar handoff genérico
+      if (!nextNode && aiExitForced) {
+        console.log('[process-chat-flow] ⚠️ aiExitForced: sem NENHUM próximo nó → forçando handoff genérico');
+        const aiExitDeptId = currentNode.data?.department_id || null;
+
+        await supabaseClient
+          .from('chat_flow_states')
+          .update({
+            collected_data: collectedData,
+            current_node_id: currentNode.id,
+            status: 'transferred',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', activeState.id);
+
+        const convUpdate: Record<string, unknown> = { ai_mode: 'waiting_human', assigned_to: null };
+        if (aiExitDeptId) convUpdate.department = aiExitDeptId;
+        await supabaseClient
+          .from('conversations')
+          .update(convUpdate)
+          .eq('id', conversationId);
+
+        console.log(`[process-chat-flow] ✅ Handoff aiExitForced aplicado (sem nó): dept=${aiExitDeptId || 'genérico'}`);
+
+        return new Response(
+          JSON.stringify({
+            useAI: false,
+            response: 'Vou te conectar com um atendente agora. Um momento, por favor.',
+            transfer: true,
+            departmentId: aiExitDeptId,
+            collectedData,
+            exitReason: 'ai_exit_forced_no_next_node',
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

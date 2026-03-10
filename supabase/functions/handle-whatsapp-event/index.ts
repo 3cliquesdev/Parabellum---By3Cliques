@@ -1271,6 +1271,41 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
 
           if (aiError) {
             console.error('[handle-whatsapp-event] ❌ AI error (flow context):', aiError);
+            // 🆕 Safety net: IA falhou com flow ativo → forçar avanço
+            console.log('[handle-whatsapp-event] 🔄 Safety net: IA falhou com flow ativo → re-invocando com forceAIExit');
+            try {
+              const { data: safetyResult, error: safetyError } = await supabase.functions.invoke('process-chat-flow', {
+                body: {
+                  conversationId: conversationId,
+                  userMessage: messageText,
+                  forceAIExit: true,
+                }
+              });
+              if (!safetyError && safetyResult) {
+                console.log('[handle-whatsapp-event] ✅ Safety net flow re-invoked:', JSON.stringify({
+                  transfer: safetyResult.transfer,
+                  hasResponse: !!safetyResult.response,
+                  departmentId: safetyResult.departmentId,
+                }));
+                const safetyMsg = safetyResult.response || safetyResult.message;
+                if (safetyMsg) {
+                  const targetNumber = phoneForDatabase.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('+', '');
+                  await supabase.functions.invoke('send-meta-whatsapp', {
+                    body: {
+                      to: targetNumber,
+                      message: safetyMsg,
+                      conversationId: conversationId,
+                      instanceId: instanceId,
+                      is_bot_message: true,
+                    }
+                  });
+                }
+              } else if (safetyError) {
+                console.error('[handle-whatsapp-event] ❌ Safety net re-invoke failed:', safetyError);
+              }
+            } catch (safetyErr) {
+              console.error('[handle-whatsapp-event] ❌ Safety net exception:', safetyErr);
+            }
           } else if (aiResponse) {
             console.log('[handle-whatsapp-event] 📋 AI response (flow context):', JSON.stringify({
               status: aiResponse.status,

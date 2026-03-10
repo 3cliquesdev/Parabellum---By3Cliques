@@ -381,7 +381,13 @@ async function callPipeline(
       );
 
       if (!autopilotResponse.ok) {
-        console.error("[process-buffered-messages] ❌ ai-autopilot-chat error:", await autopilotResponse.text());
+        const errorText = await autopilotResponse.text();
+        console.error("[process-buffered-messages] ❌ ai-autopilot-chat error:", errorText);
+        // 🆕 Safety net: IA falhou com flow ativo → forçar avanço para não deixar conversa presa
+        if (flowContext || flowData?.aiNodeActive) {
+          console.log("[process-buffered-messages] 🔄 Safety net: IA falhou com flow ativo → re-invocando com forceAIExit");
+          await handleFlowReInvoke(supabase, conversationId, concatenatedMessage, instanceId, fromNumber, { forceAIExit: true });
+        }
         return false;
       }
 
