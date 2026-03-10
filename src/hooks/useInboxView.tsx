@@ -339,21 +339,38 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
   deptKeyRef.current = deptKey;
 
   // Memoizar opções de fetch
+  const archivedFilters = scope === 'archived' ? {
+    aiMode: filters?.aiMode,
+    dateRange: filters?.dateRange,
+    channels: filters?.channels,
+    department: filters?.department,
+    assignedTo: filters?.assignedTo,
+  } : {};
+
   const fetchOptions = useMemo(() => ({
     userId: user?.id,
     role,
     departmentIds,
     scope,
-    aiMode: scope === 'archived' ? filters?.aiMode : undefined,
-    dateRange: scope === 'archived' ? filters?.dateRange : undefined,
-  }), [user?.id, role, departmentIds, scope, filters?.aiMode, filters?.dateRange]);
+    ...archivedFilters,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [user?.id, role, departmentIds, scope, filters?.aiMode, filters?.dateRange, filters?.channels?.join(','), filters?.department, filters?.assignedTo]);
 
   const fetchOptionsRef = useRef(fetchOptions);
   fetchOptionsRef.current = fetchOptions;
 
-  // ✅ queryKey SEM filtersKey — scope é o único discriminador de dataset
+  // ✅ queryKey inclui todos os filtros aplicados no banco para archived
   const query = useQuery({
-    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope, scope === 'archived' ? filters?.aiMode : undefined, scope === 'archived' ? filters?.dateRange?.from?.toISOString() : undefined, scope === 'archived' ? filters?.dateRange?.to?.toISOString() : undefined],
+    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope,
+      ...(scope === 'archived' ? [
+        filters?.aiMode,
+        filters?.dateRange?.from?.toISOString(),
+        filters?.dateRange?.to?.toISOString(),
+        filters?.channels?.join(','),
+        filters?.department,
+        filters?.assignedTo,
+      ] : []),
+    ],
     queryFn: async () => {
       const data = await fetchInboxData(fetchOptions);
       
