@@ -261,7 +261,7 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
   }
 
   // Tag filter (usando Set pré-carregado)
-  if (filters.tagId && tagIdsSet) {
+  if (filters.tags && filters.tags.length > 0 && tagIdsSet) {
     result = result.filter(item => tagIdsSet.has(item.conversation_id));
   }
 
