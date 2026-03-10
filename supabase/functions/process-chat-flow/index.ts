@@ -3704,7 +3704,7 @@ serve(async (req) => {
     console.log('[process-chat-flow] Flow started:', newState.id);
     
     // 🆕 Condição multi-regra aguardando input
-    if (startNode.type === 'condition') {
+    if (startNode.type === 'condition' || startNode.type === 'condition_v2') {
       console.log('[process-chat-flow] 🛑 New flow stopped at condition node — waiting for user message');
       return new Response(
         JSON.stringify({
