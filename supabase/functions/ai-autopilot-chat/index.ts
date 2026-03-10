@@ -4139,11 +4139,21 @@ Responda APENAS: skip ou search`
     const detectedDept = pickDepartment(customerMessage);
     const isOperationalTopic = ['suporte_pedidos'].includes(detectedDept);
     
+    // 🆕 BYPASS: Detectar saudações e contatos genéricos ANTES do Strict RAG
+    // Evita que mensagens como "Olá, vim pelo site" sejam rejeitadas por 0% confiança
+    const isSimpleGreetingEarly = /^(oi|olá|ola|hey|boa?\s*(dia|tarde|noite)|obrigad[oa]|valeu|ok)[\s!?.,]*$/i.test(customerMessage.trim());
+    const isGenericContactEarly = /^(ol[aá]|oi|hey|boa?\s*(dia|tarde|noite))?[,!.\s]*(vim|cheguei|estou|preciso|quero|gostaria|queria|buscando|procurando|entrei|acessei).{0,80}(atendimento|ajuda|suporte|falar|contato|informação|informações|saber|conhecer|entender|site|página|pagina|indicação|indicacao)/i.test(customerMessage.trim());
+    const isGreetingBypass = isSimpleGreetingEarly || isGenericContactEarly;
+    
+    if (isGreetingBypass) {
+      console.log('[ai-autopilot-chat] 👋 Greeting/contato genérico detectado — BYPASS Strict RAG para resposta natural');
+    }
+    
     if (isOperationalTopic && isStrictRAGMode) {
       console.log('[ai-autopilot-chat] 📦 Tema operacional (pedidos/tracking) detectado - BYPASS do Strict RAG para usar CRM/Tracking');
     }
     
-    if (isStrictRAGMode && !isOperationalTopic && OPENAI_API_KEY && knowledgeArticles.length > 0) {
+    if (isStrictRAGMode && !isOperationalTopic && !isGreetingBypass && OPENAI_API_KEY && knowledgeArticles.length > 0) {
       console.log('[ai-autopilot-chat] 🎯 STRICT RAG MODE ATIVO - Usando GPT-4o exclusivo');
       
       const strictResult = await callStrictRAG(
