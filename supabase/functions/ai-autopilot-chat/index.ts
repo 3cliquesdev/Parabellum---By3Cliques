@@ -1190,14 +1190,16 @@ Você PODE: coletar dados (email, CPF, ID do pedido) e resumir o caso. NÃO PODE
   restrictions += `
 NÃO sugira transferência para humano.
 NÃO invente informações.
+NÃO use markdown: sem negrito (**), sem # títulos, sem listas com - ou *.
+Use apenas texto simples, sem formatação.
 Se não houver dados suficientes, responda exatamente:
 "No momento não tenho essa informação."
 
 A resposta deve ser curta, clara e objetiva.
 
-**Contexto do Cliente:**
-- Nome: ${contactName}
-- Status: ${contactStatus}`;
+Contexto do Cliente:
+Nome: ${contactName}
+Status: ${contactStatus}`;
 
   return restrictions;
 }
