@@ -143,6 +143,102 @@ Deno.serve(async (req) => {
     console.log(`[Auto-Close] WhatsApp window expired step: closed ${windowExpiredCount} conversations`);
 
     // ============================
+    // ETAPA 1.5: Slow Response Alert (SLA) — NÃO encerra, apenas aplica tag protegida
+    // ============================
+    console.log('[Auto-Close] Starting slow response alert check (Stage 1.5)...');
+    let slaAlertCount = 0;
+
+    try {
+      const { data: slaDepts, error: slaDeptError } = await supabase
+        .from('departments')
+        .select('id, name, slow_response_alert_enabled, slow_response_alert_minutes, slow_response_alert_tag_id')
+        .eq('slow_response_alert_enabled', true)
+        .not('slow_response_alert_minutes', 'is', null)
+        .not('slow_response_alert_tag_id', 'is', null);
+
+      if (slaDeptError) {
+        console.error('[Auto-Close] Error fetching SLA departments:', slaDeptError);
+      } else if (slaDepts && slaDepts.length > 0) {
+        console.log(`[Auto-Close] Found ${slaDepts.length} departments with slow response alert enabled`);
+
+        for (const dept of slaDepts) {
+          const slaThreshold = new Date(Date.now() - dept.slow_response_alert_minutes! * 60 * 1000).toISOString();
+          console.log(`[Auto-Close] SLA check for "${dept.name}" - threshold: ${dept.slow_response_alert_minutes} min`);
+
+          // Find open conversations where the last message is from the contact (customer waiting)
+          const { data: slaConvos, error: slaConvError } = await supabase
+            .from('conversations')
+            .select('id, contact_id, last_message_at')
+            .eq('status', 'open')
+            .eq('department', dept.id)
+            .lt('last_message_at', slaThreshold);
+
+          if (slaConvError) {
+            console.error(`[Auto-Close] Error fetching SLA conversations for ${dept.name}:`, slaConvError);
+            continue;
+          }
+
+          if (!slaConvos || slaConvos.length === 0) {
+            console.log(`[Auto-Close] No SLA-breaching conversations in "${dept.name}"`);
+            continue;
+          }
+
+          for (const conv of slaConvos) {
+            try {
+              // Verify last message is from contact (customer is waiting for our response)
+              const { data: lastMsg } = await supabase
+                .from('messages')
+                .select('sender_type')
+                .eq('conversation_id', conv.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+              if (!lastMsg || lastMsg.sender_type !== 'contact') {
+                continue; // We already responded — skip
+              }
+
+              // Check if tag already applied to avoid duplicates
+              const { data: existingTag } = await supabase
+                .from('conversation_tags')
+                .select('id')
+                .eq('conversation_id', conv.id)
+                .eq('tag_id', dept.slow_response_alert_tag_id!)
+                .maybeSingle();
+
+              if (existingTag) {
+                continue; // Already tagged
+              }
+
+              // Apply the configured alert tag
+              await supabase.from('conversation_tags').upsert({
+                conversation_id: conv.id,
+                tag_id: dept.slow_response_alert_tag_id!,
+              }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+
+              // Mark as protected (agent cannot remove)
+              await supabase.from('protected_conversation_tags').upsert({
+                conversation_id: conv.id,
+                tag_id: dept.slow_response_alert_tag_id!,
+              }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+
+              slaAlertCount++;
+              console.log(`[Auto-Close] ⚠️ SLA alert applied to conversation ${conv.id} (${dept.name}) - NOT closed`);
+            } catch (err) {
+              console.error(`[Auto-Close] Error applying SLA alert to ${conv.id}:`, err);
+            }
+          }
+        }
+      } else {
+        console.log('[Auto-Close] No departments with slow response alert configured');
+      }
+    } catch (err) {
+      console.error('[Auto-Close] Error in slow response alert step:', err);
+    }
+
+    console.log(`[Auto-Close] ✅ Stage 1.5 complete - applied ${slaAlertCount} SLA alerts`);
+
+    // ============================
     // ETAPA 2: Auto-close por departamento (inatividade configurada)
     // ============================
     console.log('[Auto-Close] Starting department-based inactivity check...');
