@@ -396,7 +396,7 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
   });
 
   // ✅ Tag lookup separado (async -> próprio hook/query)
-  const tagIdsSet = useTagConversationIds(filters?.tagId);
+  const tagIdsSet = useTagConversationIds(filters?.tags);
 
   // ✅ Filtragem instantânea via useMemo (0ms, sem rede)
   const filteredData = useMemo(
