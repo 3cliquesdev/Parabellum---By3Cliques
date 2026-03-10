@@ -794,7 +794,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[Auto-Close] ✅ Stage 5 complete - processed ${flowInactivityCount} flow inactivity timeouts`);
-    console.log(`[Auto-Close] ✅ All stages complete - total: ${totalClosedCount + aiClosedCount + noDeptClosedCount + humanClosedCount} inactivity + ${windowExpiredCount} expired + ${flowInactivityCount} flow timeouts`);
+    console.log(`[Auto-Close] ✅ All stages complete - total: ${totalClosedCount + aiClosedCount + noDeptClosedCount + humanClosedCount} inactivity + ${windowExpiredCount} expired + ${slaAlertCount} SLA alerts + ${flowInactivityCount} flow timeouts`);
 
     return new Response(
       JSON.stringify({ 
@@ -804,10 +804,11 @@ Deno.serve(async (req) => {
         ai_inactivity_closed_count: aiClosedCount,
         human_inactivity_closed_count: humanClosedCount,
         no_dept_closed_count: noDeptClosedCount,
+        sla_alert_count: slaAlertCount,
         flow_inactivity_timeout_count: flowInactivityCount,
         closed_ids: closedIds,
         by_department: results,
-        message: `Closed ${totalClosedCount} by inactivity + ${aiClosedCount} by AI inactivity + ${humanClosedCount} by human inactivity + ${noDeptClosedCount} no-dept AI + ${windowExpiredCount} by WhatsApp window expired + ${flowInactivityCount} flow inactivity timeouts` 
+        message: `Closed ${totalClosedCount} by inactivity + ${aiClosedCount} AI + ${humanClosedCount} human + ${noDeptClosedCount} no-dept + ${windowExpiredCount} expired + ${slaAlertCount} SLA alerts + ${flowInactivityCount} flow timeouts` 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
