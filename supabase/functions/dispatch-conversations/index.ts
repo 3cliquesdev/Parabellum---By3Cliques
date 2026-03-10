@@ -343,11 +343,18 @@ async function processJob(supabase: any, job: DispatchJob): Promise<JobResult> {
       return { conversation_id: job.conversation_id, status: 'skipped', reason: 'not_found' };
     }
 
-    // If already assigned or not waiting_human, skip
-    if (conversation.assigned_to || conversation.ai_mode !== 'waiting_human') {
-      console.log(`[dispatch-conversations] Conversation ${job.conversation_id} already handled`);
+    // If already assigned, skip
+    if (conversation.assigned_to) {
+      console.log(`[dispatch-conversations] Conversation ${job.conversation_id} already assigned to ${conversation.assigned_to}`);
       await markJobComplete(supabase, job.id, 'already_assigned');
       return { conversation_id: job.conversation_id, status: 'skipped', reason: 'already_assigned' };
+    }
+
+    // If not in a mode that needs human dispatch, skip
+    if (!['waiting_human', 'copilot'].includes(conversation.ai_mode)) {
+      console.log(`[dispatch-conversations] Conversation ${job.conversation_id} in mode ${conversation.ai_mode}, not dispatching`);
+      await markJobComplete(supabase, job.id, 'mode_not_dispatchable');
+      return { conversation_id: job.conversation_id, status: 'skipped', reason: 'mode_not_dispatchable' };
     }
 
     // If status is not open, skip

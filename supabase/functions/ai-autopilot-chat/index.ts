@@ -992,7 +992,7 @@ function generateResponsePrefix(action: 'direct' | 'cautious' | 'handoff'): stri
     case 'direct':
       return ''; // Sem prefixo para respostas diretas
     case 'cautious':
-      return '**Baseado nas informações disponíveis:**\n\n';
+      return 'Baseado nas informações disponíveis:\n\n';
     case 'handoff':
       return ''; // Handoff usa mensagem própria
   }
@@ -6391,7 +6391,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     // 🎯 PREFIXO DE RESPOSTA CAUTELOSA (confiança média)
     if (confidenceResult.action === 'cautious' && !toolCalls.length) {
       const cautiousPrefix = generateResponsePrefix('cautious');
-      if (cautiousPrefix && !assistantMessage.startsWith('**Baseado')) {
+      if (cautiousPrefix && !assistantMessage.startsWith('Baseado nas informações')) {
         assistantMessage = cautiousPrefix + assistantMessage;
         console.log('[ai-autopilot-chat] ⚠️ Prefixo cauteloso adicionado à resposta');
       }
