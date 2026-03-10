@@ -66,6 +66,10 @@ Deno.serve(async (req) => {
 
     console.log('[Auto-Close] Starting...');
 
+    // Buscar horário de atendimento uma vez para usar nas mensagens
+    const businessHoursInfo = await getBusinessHoursInfo(supabase);
+    const INACTIVITY_CLOSE_MESSAGE = buildInactivityCloseMessage(businessHoursInfo.schedule_summary);
+
     // ============================
     // ETAPA 1: WhatsApp Window Expired (>24h)
     // ============================
