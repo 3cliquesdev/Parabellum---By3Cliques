@@ -47,7 +47,7 @@ export interface InboxFilters {
   slaStatus?: 'ok' | 'warning' | 'critical';
   hasAudio?: boolean;
   hasAttachments?: boolean;
-  aiMode?: 'autopilot' | 'copilot' | 'disabled';
+  aiMode?: 'autopilot' | 'copilot' | 'disabled' | 'waiting_human' | 'ai_all';
   department?: string;
   tagId?: string;
 }
