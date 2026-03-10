@@ -3164,6 +3164,7 @@ export type Database = {
           created_at: string
           description: string | null
           human_auto_close_minutes: number | null
+          human_auto_close_tag_id: string | null
           id: string
           is_active: boolean
           name: string
@@ -3180,6 +3181,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           human_auto_close_minutes?: number | null
+          human_auto_close_tag_id?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -3196,6 +3198,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           human_auto_close_minutes?: number | null
+          human_auto_close_tag_id?: string | null
           id?: string
           is_active?: boolean
           name?: string
@@ -3205,6 +3208,13 @@ export type Database = {
           whatsapp_number?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "departments_human_auto_close_tag_id_fkey"
+            columns: ["human_auto_close_tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "departments_parent_id_fkey"
             columns: ["parent_id"]

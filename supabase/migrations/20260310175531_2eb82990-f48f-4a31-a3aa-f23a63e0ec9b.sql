@@ -1,0 +1,1 @@
+ALTER TABLE public.departments ADD COLUMN human_auto_close_tag_id UUID REFERENCES public.tags(id) ON DELETE SET NULL DEFAULT NULL;

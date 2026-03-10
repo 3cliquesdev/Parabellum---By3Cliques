@@ -15,6 +15,7 @@ export interface Department {
   send_rating_on_close: boolean;
   ai_auto_close_minutes: number | null;
   human_auto_close_minutes: number | null;
+  human_auto_close_tag_id: string | null;
   created_at: string;
   updated_at: string;
 }
