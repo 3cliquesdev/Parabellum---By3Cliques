@@ -723,18 +723,24 @@ serve(async (req) => {
       
       const transferMessage = 'Vou transferir você para um atendente humano.';
       
-      // ✅ Fluxo é SOBERANO: Ele decide a transferência
-      // Atualizar conversa para waiting_human
-      const { error: updateError } = await supabaseClient
-        .from('conversations')
-        .update({ ai_mode: 'waiting_human' })
-        .eq('id', conversationId);
-      
-      if (updateError) {
-        console.error('[process-chat-flow] ❌ Error updating ai_mode:', updateError);
-      } else {
-        console.log('[process-chat-flow] ✅ ai_mode atualizado para waiting_human');
-      }
+      // ✅ FIX 14: Usar transition-conversation-state centralizado
+      await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            conversationId,
+            transition: 'handoff_to_human',
+            reason: 'contract_violation_transfer',
+            metadata: { violation_reason: violationReason }
+          })
+        }
+      );
+      console.log('[process-chat-flow] ✅ Estado transicionado via transition-conversation-state');
       
       // Inserir mensagem de transferência
       await supabaseClient.from('messages').insert({
