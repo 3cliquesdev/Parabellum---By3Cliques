@@ -768,9 +768,8 @@ const EXPLICIT_HUMAN_REQUEST_PATTERNS = [
   /quero\s*(falar\s*(com)?)?\s*(um\s*)?(atendente|humano|pessoa|agente|suporte)/i,
   /preciso\s*(de\s*)?(um\s*)?(atendente|humano|pessoa|agente)/i,
   /fala(r)?\s+com\s+(um\s+)?(atendente|humano|pessoa|alguém|alguem)/i,
-  /atendente\s*(humano)?/i,
-  /pode\s*(me)?\s*transferir/i,
-  /transferir\s*(para)?\s*(um\s*)?(atendente|humano)/i,
+  /me\s+(transfere|transfira|passa)\s+(para|a)\s+(um\s+)?(atendente|humano|pessoa)/i,
+  /transferir\s+(para)?\s*(um\s*)?(atendente|humano)/i,
   /chamar?\s*(um\s*)?(atendente|humano|pessoa)/i,
   /não\s*consigo\s*resolver\s*(sozinho)?/i,
   /atendimento\s*humano/i,
@@ -4324,15 +4323,15 @@ Responda APENAS: skip ou search`
         console.log('[ai-autopilot-chat] 🚨 STRICT RAG: Handoff necessário -', strictResult.reason);
         
         // 🆕 GUARD: Se flow_context existe, NÃO executar handoff direto
-        // Devolver controle ao process-chat-flow para avançar ao próximo nó
+        // Pular todo o bloco Strict RAG e cair no fluxo padrão (persona + contexto)
         if (flow_context) {
-          console.log('[ai-autopilot-chat] ⚠️ STRICT RAG + flow_context → IGNORANDO handoff, IA permanece no nó e responde com conhecimento geral', {
+          console.log('[ai-autopilot-chat] ⚠️ STRICT RAG + flow_context → IGNORANDO handoff E resposta strict, caindo no fluxo padrão (persona)', {
             reason: strictResult.reason,
             flow_id: flow_context.flow_id,
             node_id: flow_context.node_id
           });
-          // NÃO retorna flow_advance_needed — continua execução normal
-          // A IA responderá usando persona + contexto da conversa + conhecimento geral
+          // NÃO usa strictResult.response (pode ser null)
+          // NÃO retorna — cai no fluxo padrão abaixo (linha "FLUXO PADRÃO")
         } else {
         // Executar handoff direto (sem flow_context — comportamento original preservado)
         const handoffTimestamp = new Date().toISOString();
@@ -4436,6 +4435,12 @@ Responda APENAS: skip ou search`
         } // end else (no flow_context)
       }
       
+      // 🆕 GUARD: Se flow_context + shouldHandoff, pular resposta strict (response pode ser null)
+      // Cair direto no fluxo padrão abaixo
+      if (flow_context && strictResult.shouldHandoff) {
+        console.log('[ai-autopilot-chat] ⏩ Pulando bloco strict response — flow_context ativo + shouldHandoff, usando fluxo padrão');
+      } else {
+      
       // Resposta validada - enviar ao cliente
       console.log('[ai-autopilot-chat] ✅ STRICT RAG: Resposta validada com fontes citadas');
       
@@ -4510,6 +4515,7 @@ Responda APENAS: skip ou search`
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
+      } // end else (strict response block — skipped when flow_context + shouldHandoff)
     }
     
     // ============================================================
@@ -8028,23 +8034,15 @@ Conversa: ${conversationId}`;
           cleanedMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
         }
         
-        // Persistir versão limpa no banco
         if (cleanedMessage !== assistantMessage) {
           console.log('[ai-autopilot-chat] 🧹 Mensagem limpa de fallback phrases:', { original: assistantMessage.substring(0, 100), cleaned: cleanedMessage.substring(0, 100) });
-          assistantMessage = cleanedMessage;
-          
-          // Atualizar mensagem no banco com versão limpa
-          await supabaseClient
-            .from('messages')
-            .update({ content: cleanedMessage })
-            .eq('conversation_id', conversationId)
-            .eq('is_bot_message', true)
-            .order('created_at', { ascending: false })
-            .limit(1);
         }
         
+        // Atualizar assistantMessage com versão limpa — será persistida e enviada pelo pipeline normal abaixo
+        assistantMessage = cleanedMessage;
+        
         // Log de qualidade (sem sair do nó)
-        await supabaseClient.from('ai_quality_logs').insert({
+        supabaseClient.from('ai_quality_logs').insert({
           conversation_id: conversationId,
           contact_id: contact.id,
           customer_message: customerMessage,
@@ -8053,25 +8051,13 @@ Conversa: ${conversationId}`;
           handoff_reason: 'fallback_stripped_flow_context',
           confidence_score: 0,
           articles_count: knowledgeArticles.length
-        });
+        }).catch((e: any) => console.error('[ai-autopilot-chat] ⚠️ Falha ao logar fallback_cleaned:', e));
         
         // Resetar flag — NÃO é mais fallback após limpeza
         isFallbackResponse = false;
         
-        // 🆕 FIX: RETURN imediato — não cair no handoff abaixo
-        return new Response(JSON.stringify({
-          status: 'sent',
-          message: cleanedMessage,
-          fallback_cleaned: true,
-          flow_context: {
-            flow_id: flow_context.flow_id,
-            node_id: flow_context.node_id
-          }
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
+        // 🆕 FIX: NÃO return — deixa cair no pipeline normal de persistência + envio WhatsApp
+      } else {
       console.log('[ai-autopilot-chat] 🚨 Sem flow_context - Executando handoff REAL');
       
       // 🛡️ ANTI-RACE-CONDITION: Marcar handoff executado PRIMEIRO
@@ -8243,6 +8229,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       });
       
       console.log('[ai-autopilot-chat] ✅ Nota interna de handoff registrada');
+      } // end else (no flow_context — handoff real)
     }
     // ========== FIM DETECTOR DE FALLBACK ==========
 

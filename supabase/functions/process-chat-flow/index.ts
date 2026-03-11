@@ -2158,10 +2158,18 @@ serve(async (req) => {
           delete collectedData.__ai;
         }
 
-        // Verificar exit keyword (case-insensitive includes)
-        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) =>
-          msgLower.includes(String(kw || '').toLowerCase().trim())
-        );
+        // Verificar exit keyword (word-boundary match — evita falso positivo por substring)
+        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
+          const kwClean = String(kw || '').toLowerCase().trim();
+          if (!kwClean) return false;
+          // Usar word boundary para evitar match parcial (ex: "atendente" dentro de "não sou atendente")
+          try {
+            const kwRegex = new RegExp(`\\b${kwClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+            return kwRegex.test(msgLower);
+          } catch {
+            return msgLower.includes(kwClean);
+          }
+        });
 
         // Verificar max interações
         const maxReached = !financialIntentMatch && !commercialIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
