@@ -104,3 +104,13 @@ pg_cron agendado para rodar a cada hora (`0 * * * *`), invocando a edge function
 - `ai_global_enabled` = true
 - `ai_shadow_mode` = false
 - `ai_passive_learning_enabled` = true
+
+---
+
+# FIX 12 ✅ — Cron job corrigido: anon key no gateway (11/03/2026)
+
+## Problema
+`current_setting('supabase.service_role_key', true)` retorna NULL neste projeto → cron enviava `Authorization: Bearer null` → edge function não autenticava.
+
+## Correção
+Recriado cron job `passive-learning-hourly` (jobid 13) usando anon key no header Authorization. A anon key é suficiente para passar pelo API gateway; a função internamente usa `SUPABASE_SERVICE_ROLE_KEY` do ambiente Deno para operações admin.
