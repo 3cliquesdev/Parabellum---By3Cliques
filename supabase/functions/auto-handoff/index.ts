@@ -137,43 +137,27 @@ serve(async (req) => {
 
     if (routingError) {
       console.error('[auto-handoff] Error in routing:', routingError);
-      // Fallback: mudar para waiting_human sem atribuir agente + garantir departamento
-      // 🆕 FIX: Busca dinâmica do departamento "Suporte" em vez de UUID hardcoded
-      const { data: deptSuporte } = await supabaseClient
-        .from('departments')
-        .select('id')
-        .ilike('name', '%suporte%')
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle();
-      const FALLBACK_DEPT_SUPORTE = deptSuporte?.id || null;
-      if (!FALLBACK_DEPT_SUPORTE) {
-        console.warn('[auto-handoff] ⚠️ Departamento "Suporte" não encontrado no banco — handoff sem departamento');
-      }
-      const fallbackUpdate: Record<string, unknown> = { ai_mode: 'waiting_human' };
-      if (!conversation.department && FALLBACK_DEPT_SUPORTE) {
-        fallbackUpdate.department = FALLBACK_DEPT_SUPORTE;
-        console.log('[auto-handoff] ✅ Departamento Suporte aplicado:', FALLBACK_DEPT_SUPORTE);
-      }
-      await supabaseClient
-        .from('conversations')
-        .update(fallbackUpdate)
-        .eq('id', conversationId);
-      console.log('[auto-handoff] ✅ Conversa marcada como waiting_human (fallback)');
     } else {
       console.log('[auto-handoff] Routing result:', routingResult);
-      
-      // 🆕 GARANTIR que ai_mode seja waiting_human após roteamento
-      const { error: updateError } = await supabaseClient
-        .from('conversations')
-        .update({ ai_mode: 'waiting_human' })
-        .eq('id', conversationId);
-      
-      if (updateError) {
-        console.error('[auto-handoff] ⚠️ Erro ao atualizar ai_mode para waiting_human:', updateError);
-      } else {
-        console.log('[auto-handoff] ✅ Conversa marcada como waiting_human - IA pausada até agente responder');
+    }
+
+    // 🆕 FIX 14: Usar transition-conversation-state centralizado
+    const { data: transitionResult, error: transitionError } = await supabaseClient.functions.invoke(
+      'transition-conversation-state',
+      {
+        body: {
+          conversationId,
+          transition: 'handoff_to_human',
+          reason: handoffReason,
+          metadata: { routing_result: routingResult, sentiment: handoffReason }
+        }
       }
+    );
+
+    if (transitionError) {
+      console.error('[auto-handoff] ❌ Erro na transição de estado:', transitionError);
+    } else {
+      console.log('[auto-handoff] ✅ Estado transicionado:', transitionResult);
     }
 
     // 2. Registrar nota interna com contexto do handoff
