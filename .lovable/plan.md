@@ -80,10 +80,27 @@ Substituído UUID hardcoded `36ce66cd-...` por busca dinâmica do departamento "
 Removido `**bold**` de todas as notas internas (linhas 78, 97, 174-181). Notas agora usam texto plano com emojis para compatibilidade cross-canal (WhatsApp).
 
 ### 10c — ai-autopilot-chat: Memória cross-session
-Ao montar o contexto, busca as últimas 3 conversas fechadas do mesmo `contact_id` e injeta os `ai_summary` no system prompt. IA agora lembra conversas anteriores do mesmo cliente.
+Busca últimas 3 conversas fechadas do mesmo contact_id e injeta última mensagem de agente/sistema no system prompt. IA agora lembra conversas anteriores do mesmo cliente.
 
 ### 10d — ai-autopilot-chat: Persona contextual
 Tom da IA varia automaticamente baseado no status do contato:
 - VIP/assinante → tom premium e proativo
 - Churn risk/inativo → tom empático e acolhedor
 - Lead quente (score ≥ 80) → tom entusiasmado e consultivo
+
+---
+
+# FIX 11 ✅ — Passive Learning ativado + Cron Job (11/03/2026)
+
+## O que foi feito
+
+### 11a — Flag `ai_passive_learning_enabled` = true
+Inserido na tabela `system_configurations` com categoria `ai`.
+
+### 11b — Cron job `passive-learning-hourly`
+pg_cron agendado para rodar a cada hora (`0 * * * *`), invocando a edge function `passive-learning-cron` via `net.http_post`.
+
+### Estado confirmado
+- `ai_global_enabled` = true
+- `ai_shadow_mode` = false
+- `ai_passive_learning_enabled` = true
