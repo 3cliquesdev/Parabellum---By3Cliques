@@ -4324,15 +4324,15 @@ Responda APENAS: skip ou search`
         console.log('[ai-autopilot-chat] 🚨 STRICT RAG: Handoff necessário -', strictResult.reason);
         
         // 🆕 GUARD: Se flow_context existe, NÃO executar handoff direto
-        // Devolver controle ao process-chat-flow para avançar ao próximo nó
+        // Pular todo o bloco Strict RAG e cair no fluxo padrão (persona + contexto)
         if (flow_context) {
-          console.log('[ai-autopilot-chat] ⚠️ STRICT RAG + flow_context → IGNORANDO handoff, IA permanece no nó e responde com conhecimento geral', {
+          console.log('[ai-autopilot-chat] ⚠️ STRICT RAG + flow_context → IGNORANDO handoff E resposta strict, caindo no fluxo padrão (persona)', {
             reason: strictResult.reason,
             flow_id: flow_context.flow_id,
             node_id: flow_context.node_id
           });
-          // NÃO retorna flow_advance_needed — continua execução normal
-          // A IA responderá usando persona + contexto da conversa + conhecimento geral
+          // NÃO usa strictResult.response (pode ser null)
+          // NÃO retorna — cai no fluxo padrão abaixo (linha "FLUXO PADRÃO")
         } else {
         // Executar handoff direto (sem flow_context — comportamento original preservado)
         const handoffTimestamp = new Date().toISOString();
@@ -4435,6 +4435,12 @@ Responda APENAS: skip ou search`
         });
         } // end else (no flow_context)
       }
+      
+      // 🆕 GUARD: Se flow_context + shouldHandoff, pular resposta strict (response pode ser null)
+      // Cair direto no fluxo padrão abaixo
+      if (flow_context && strictResult.shouldHandoff) {
+        console.log('[ai-autopilot-chat] ⏩ Pulando bloco strict response — flow_context ativo + shouldHandoff, usando fluxo padrão');
+      } else {
       
       // Resposta validada - enviar ao cliente
       console.log('[ai-autopilot-chat] ✅ STRICT RAG: Resposta validada com fontes citadas');
