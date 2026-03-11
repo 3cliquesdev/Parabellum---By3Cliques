@@ -156,31 +156,31 @@ const slugify = (text: string) =>
 // Save-as suggestions per node type
 const SAVE_AS_SUGGESTIONS: Record<string, { value: string; label: string }[]> = {
   ask_name: [
-    { value: "name", label: "name (padrão)" },
-    { value: "full_name", label: "full_name" },
-    { value: "customer_name", label: "customer_name" },
+    { value: "name", label: "Nome do contato" },
+    { value: "full_name", label: "Nome completo" },
+    { value: "customer_name", label: "Nome do cliente" },
   ],
   ask_email: [
-    { value: "email", label: "email (padrão)" },
-    { value: "customer_email", label: "customer_email" },
+    { value: "email", label: "E-mail do contato" },
+    { value: "customer_email", label: "E-mail do cliente" },
   ],
   ask_phone: [
-    { value: "phone", label: "phone (padrão)" },
-    { value: "customer_phone", label: "customer_phone" },
+    { value: "phone", label: "Telefone do contato" },
+    { value: "customer_phone", label: "Telefone do cliente" },
   ],
   ask_cpf: [
-    { value: "cpf", label: "cpf (padrão)" },
-    { value: "document", label: "document" },
+    { value: "cpf", label: "CPF do contato" },
+    { value: "document", label: "Documento (genérico)" },
   ],
   ask_text: [
-    { value: "response", label: "response (padrão)" },
-    { value: "feedback", label: "feedback" },
-    { value: "description", label: "description" },
+    { value: "response", label: "Resposta do usuário" },
+    { value: "feedback", label: "Feedback / Opinião" },
+    { value: "description", label: "Descrição / Detalhes" },
   ],
   ask_options: [
-    { value: "choice", label: "choice (padrão)" },
-    { value: "option_selected", label: "option_selected" },
-    { value: "menu_choice", label: "menu_choice" },
+    { value: "choice", label: "Escolha do usuário" },
+    { value: "option_selected", label: "Opção selecionada" },
+    { value: "menu_choice", label: "Escolha do menu" },
   ],
 };
 
