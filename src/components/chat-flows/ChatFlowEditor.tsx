@@ -149,8 +149,44 @@ const createStartNode = (): Node => ({
   }
 });
 
+// Slugify helper for auto-generating option values
+const slugify = (text: string) =>
+  text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+
+// Save-as suggestions per node type
+const SAVE_AS_SUGGESTIONS: Record<string, { value: string; label: string }[]> = {
+  ask_name: [
+    { value: "name", label: "name (padrão)" },
+    { value: "full_name", label: "full_name" },
+    { value: "customer_name", label: "customer_name" },
+  ],
+  ask_email: [
+    { value: "email", label: "email (padrão)" },
+    { value: "customer_email", label: "customer_email" },
+  ],
+  ask_phone: [
+    { value: "phone", label: "phone (padrão)" },
+    { value: "customer_phone", label: "customer_phone" },
+  ],
+  ask_cpf: [
+    { value: "cpf", label: "cpf (padrão)" },
+    { value: "document", label: "document" },
+  ],
+  ask_text: [
+    { value: "response", label: "response (padrão)" },
+    { value: "feedback", label: "feedback" },
+    { value: "description", label: "description" },
+  ],
+  ask_options: [
+    { value: "choice", label: "choice (padrão)" },
+    { value: "option_selected", label: "option_selected" },
+    { value: "menu_choice", label: "menu_choice" },
+  ],
+};
+
 function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSaving }: ChatFlowEditorProps) {
   const { data: ticketCategories = [] } = useTicketCategories();
+  const { data: allTags = [] } = useTags();
   // Criar nó de início se não houver nós
   const initialNodes = useMemo(() => {
     if (initialFlow?.nodes && initialFlow.nodes.length > 0) {
