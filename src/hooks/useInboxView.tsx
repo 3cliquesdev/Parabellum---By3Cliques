@@ -280,10 +280,7 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
     result = result.filter(item => item.department === filters.department);
   }
 
-  // Tag filter (usando Set pré-carregado)
-  if (filters.tags && filters.tags.length > 0 && tagIdsSet) {
-    result = result.filter(item => tagIdsSet.has(item.conversation_id));
-  }
+  // Tag filter — now handled at DB level in fetchInboxData (removed client-side)
 
   // Search filter
   if (hasActiveSearch) {
