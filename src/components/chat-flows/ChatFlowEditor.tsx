@@ -665,7 +665,10 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 
                 return (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Salvar como variável</Label>
+                  <Label className="text-xs font-medium">Salvar resposta como</Label>
+                  <p className="text-[10px] text-muted-foreground -mt-1">
+                    A resposta será guardada nesta variável para uso em nós seguintes.
+                  </p>
                   <Select
                     value={isCustom ? "__custom__" : (currentVal || suggestions[0]?.value || "")}
                     onValueChange={(v) => {
@@ -681,7 +684,12 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                     </SelectTrigger>
                     <SelectContent>
                       {suggestions.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>💾 {s.label}</SelectItem>
+                        <SelectItem key={s.value} value={s.value}>
+                          <span className="flex items-center gap-1.5">
+                            <span>💾 {s.label}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">({s.value})</span>
+                          </span>
+                        </SelectItem>
                       ))}
                       <SelectItem value="__custom__">✏️ Nome personalizado...</SelectItem>
                     </SelectContent>
@@ -695,7 +703,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                     />
                   )}
                   <p className="text-[10px] text-muted-foreground">
-                    Essa variável pode ser usada nos próximos nós com {`{{${currentVal || "variável"}}}`}
+                    Use nos próximos nós com <code className="font-mono text-primary">{`{{${currentVal || "variável"}}}`}</code>
                   </p>
                 </div>
                 );
