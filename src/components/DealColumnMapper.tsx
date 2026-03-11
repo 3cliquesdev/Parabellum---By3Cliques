@@ -9,6 +9,7 @@ interface DealColumnMapperProps {
 }
 
 const DEAL_FIELDS = [
+  { value: 'nome_cliente', label: 'Nome do Cliente' },
   { value: 'title', label: 'Título do Deal *' },
   { value: 'value', label: 'Valor (R$)' },
   { value: 'email_contato', label: 'Email do Contato' },
