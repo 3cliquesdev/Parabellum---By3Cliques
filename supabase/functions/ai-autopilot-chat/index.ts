@@ -4875,37 +4875,20 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     });
     
     // ============================================================
-    // 🆕 GUARD: 0 artigos + 0% confiança + flow_context → avançar fluxo IMEDIATAMENTE
-    // Não há motivo para chamar o modelo se não tem nenhum artigo para fundamentar
+    // 🆕 FIX: 0 artigos + 0% confiança + flow_context → NÃO SAIR, forçar modo cautious
+    // A IA deve sempre tentar responder usando persona + contexto + conhecimento geral
     // ============================================================
     if (flow_context && confidenceResult.score === 0 && knowledgeArticles.length === 0 && !shouldSkipHandoff) {
-      console.log('[ai-autopilot-chat] 🚨 ZERO CONFIDENCE + ZERO ARTICLES + flow_context → flow_advance_needed IMEDIATO', {
+      console.log('[ai-autopilot-chat] ⚠️ ZERO CONFIDENCE + ZERO ARTICLES + flow_context → forçando modo CAUTIOUS (permanece no nó)', {
         score: confidenceResult.score,
         articles: knowledgeArticles.length,
         flow_id: flow_context.flow_id,
         node_id: flow_context.node_id
       });
       
-      // Log de qualidade
-      await supabaseClient.from('ai_quality_logs').insert({
-        conversation_id: conversationId,
-        contact_id: contact.id,
-        customer_message: customerMessage,
-        action_taken: 'flow_advance',
-        handoff_reason: 'zero_confidence_zero_articles',
-        confidence_score: 0,
-        articles_count: 0
-      });
-      
-      return new Response(JSON.stringify({
-        status: 'flow_advance_needed',
-        reason: 'zero_confidence_zero_articles',
-        hasFlowContext: true,
-        score: 0,
-        articles: 0
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      // Forçar modo cautious em vez de sair do nó
+      confidenceResult.action = 'cautious';
+      // Continua execução normalmente — a IA será chamada com persona + contexto
     }
 
 
