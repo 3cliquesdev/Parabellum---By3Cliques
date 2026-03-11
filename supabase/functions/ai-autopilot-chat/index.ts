@@ -1201,6 +1201,18 @@ Contexto do Cliente:
 Nome: ${contactName}
 Status: ${contactStatus}`;
 
+  // Persona contextual baseada em perfil do contato
+  if (contactStatus === 'customer' || contactStatus === 'vip') {
+    restrictions += '\nTom: cordial e proativo. Este é um cliente ativo — priorize resolução ágil.';
+  } else if (contactStatus === 'lead') {
+    restrictions += '\nTom: amigável e consultivo. Foque em entender a necessidade sem pressão.';
+  }
+
+  // Tom empático quando contexto financeiro
+  if (forbidFinancial) {
+    restrictions += '\nSe o cliente demonstrar preocupação financeira, responda com empatia e tranquilidade antes de qualquer informação.';
+  }
+
   return restrictions;
 }
 
@@ -4098,29 +4110,36 @@ Responda APENAS: skip ou search`
     // 🆕 CROSS-SESSION MEMORY: Buscar últimas 3 conversas fechadas do mesmo contato
     let crossSessionContext = '';
     try {
-      const { data: previousConversations } = await supabaseClient
+      const { data: pastConvs } = await supabaseClient
         .from('conversations')
-        .select('id, closed_at, customer_metadata')
+        .select('id, created_at, closed_at')
         .eq('contact_id', contact.id)
         .eq('status', 'closed')
         .neq('id', conversationId)
         .order('closed_at', { ascending: false })
         .limit(3);
       
-      if (previousConversations && previousConversations.length > 0) {
-        const summaries = previousConversations
-          .map((conv: any) => {
-            const summary = conv.customer_metadata?.ai_summary;
-            if (!summary) return null;
-            const date = conv.closed_at ? new Date(conv.closed_at).toLocaleDateString('pt-BR') : '?';
-            return `- ${date}: ${summary}`;
-          })
-          .filter(Boolean);
-        
-        if (summaries.length > 0) {
-          crossSessionContext = `\n\n**Histórico de conversas anteriores deste cliente:**\n${summaries.join('\n')}\nUse este contexto para não repetir perguntas já respondidas e personalizar o atendimento.`;
-          console.log(`[ai-autopilot-chat] 🧠 Cross-session memory: ${summaries.length} conversas anteriores encontradas`);
+      if (pastConvs && pastConvs.length > 0) {
+        for (const conv of pastConvs) {
+          const { data: lastMsg } = await supabaseClient
+            .from('messages')
+            .select('content, sender_type')
+            .eq('conversation_id', conv.id)
+            .in('sender_type', ['agent', 'system'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (lastMsg?.content) {
+            const dateStr = conv.closed_at
+              ? new Date(conv.closed_at).toLocaleDateString('pt-BR')
+              : 'data desconhecida';
+            crossSessionContext += `- ${dateStr}: "${lastMsg.content.substring(0, 150)}"\n`;
+          }
         }
+      }
+      if (crossSessionContext) {
+        crossSessionContext = `\n\nHistórico de atendimentos anteriores deste cliente:\n${crossSessionContext}(Use apenas como contexto, não mencione explicitamente ao cliente)`;
+        console.log(`[ai-autopilot-chat] 🧠 Cross-session memory encontrada para contato ${contact.id}`);
       }
     } catch (memErr) {
       console.warn('[ai-autopilot-chat] ⚠️ Erro ao buscar memória cross-session:', memErr);
