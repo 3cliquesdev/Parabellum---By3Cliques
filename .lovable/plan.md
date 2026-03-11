@@ -1,11 +1,12 @@
 
 
-# Liberar flow states presos + pg_cron automático
+# Executar queries corrigidas em sequência
 
-## Parte 1 — Liberar flow states presos (SQL imediato)
+O usuário apontou corretamente que `cron.unschedule` falha se o job não existe. A solução é usar `DELETE FROM cron.job WHERE jobname = ...` que é seguro (não dá erro se não existir).
 
-Executar via insert tool (operação de dados, não schema):
+## Execução em 3 passos
 
+### Query 1 — Liberar flow states presos agora
 ```sql
 UPDATE public.chat_flow_states
 SET status = 'transferred', completed_at = now()
@@ -16,14 +17,11 @@ WHERE status IN ('waiting_input', 'active', 'in_progress')
   );
 ```
 
-## Parte 2 — pg_cron job a cada 3 minutos
-
-Executar via insert tool (não migration, pois contém dados específicos do projeto):
-
+### Query 2 — Criar pg_cron job (com DELETE seguro em vez de unschedule)
 ```sql
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
-SELECT cron.unschedule('cleanup-stuck-flow-states');
+DELETE FROM cron.job WHERE jobname = 'cleanup-stuck-flow-states';
 
 SELECT cron.schedule(
   'cleanup-stuck-flow-states',
@@ -40,9 +38,21 @@ SELECT cron.schedule(
 );
 ```
 
-## Notas técnicas
+### Query 3 — Confirmar job criado
+```sql
+SELECT jobid, jobname, schedule, active FROM cron.job WHERE jobname = 'cleanup-stuck-flow-states';
+```
 
-- Ambas operações usam `started_at` como referência (confirmado: tabela não tem `updated_at`)
-- O job cron garante limpeza contínua de flows presos sem intervenção manual
-- Flows com mais de 3 min em estado ativo/waiting são marcados como `transferred` para liberar a conversa para atendimento humano
+### Query 4 — Verificação final de conversas órfãs
+```sql
+SELECT COUNT(*) AS sem_dispatch FROM public.conversations c
+LEFT JOIN public.conversation_dispatch_jobs cj
+  ON cj.conversation_id = c.id AND cj.status = 'pending'
+WHERE c.ai_mode IN ('waiting_human', 'copilot')
+  AND c.assigned_to IS NULL AND c.status = 'open' AND cj.id IS NULL;
+```
+
+## Implementação
+
+Executar cada query separadamente via insert tool (data operations, não schema) na ordem acima. Usar `DELETE FROM cron.job` em vez de `cron.unschedule` para evitar erro na primeira execução.
 
