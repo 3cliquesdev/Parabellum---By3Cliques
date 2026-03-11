@@ -7,6 +7,7 @@ const corsHeaders = {
 
 interface DealRow {
   title: string;
+  nome_cliente?: string;
   value?: string | number;
   email_contato?: string;
   telefone_contato?: string;
@@ -36,7 +37,6 @@ Deno.serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Auth check
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Não autorizado' }), {
@@ -68,21 +68,15 @@ Deno.serve(async (req) => {
 
     console.log(`[import-deals] User ${user.id} importing ${deals.length} deals`);
 
-    // Pre-fetch profiles for assigned_to resolution (by email or name)
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, full_name, email:id');
-
+    // Pre-fetch profiles for assigned_to resolution
+    const { data: profiles } = await supabase.from('profiles').select('id, full_name');
     const profileByName = new Map<string, string>();
     profiles?.forEach(p => {
       if (p.full_name) profileByName.set(p.full_name.toLowerCase().trim(), p.id);
     });
 
     // Pre-fetch products for resolution by name
-    const { data: products } = await supabase
-      .from('products')
-      .select('id, name');
-
+    const { data: products } = await supabase.from('products').select('id, name');
     const productByName = new Map<string, string>();
     products?.forEach(p => {
       if (p.name) productByName.set(p.name.toLowerCase().trim(), p.id);
@@ -100,48 +94,12 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Resolve contact
-        let contactId: string | null = null;
-        const email = row.email_contato?.toLowerCase().trim();
-        const phone = row.telefone_contato?.trim();
+        const email = row.email_contato?.toLowerCase().trim() || undefined;
+        const phone = row.telefone_contato?.trim() || undefined;
+        const clientName = row.nome_cliente?.trim() || undefined;
 
-        if (email) {
-          const { data: existing } = await supabase
-            .from('contacts')
-            .select('id')
-            .eq('email', email)
-            .maybeSingle();
-
-          if (existing) {
-            contactId = existing.id;
-          } else {
-            const { data: created, error: createErr } = await supabase
-              .from('contacts')
-              .insert({
-                email,
-                first_name: email.split('@')[0],
-                last_name: '',
-                phone: phone || null,
-              })
-              .select('id')
-              .single();
-
-            if (createErr) {
-              console.error(`[import-deals] Error creating contact for ${email}:`, createErr);
-            } else {
-              contactId = created.id;
-              result.contacts_created++;
-            }
-          }
-        } else if (phone) {
-          const { data: existing } = await supabase
-            .from('contacts')
-            .select('id')
-            .eq('phone', phone)
-            .maybeSingle();
-
-          if (existing) contactId = existing.id;
-        }
+        // Resolve or create contact
+        const contactId = await resolveContact(supabase, { email, phone, clientName }, result);
 
         // Resolve assigned_to
         let assignedTo: string | null = null;
@@ -170,23 +128,21 @@ Deno.serve(async (req) => {
           ? row.status.toLowerCase().trim()
           : 'open';
 
-        const { error: insertErr } = await supabase
-          .from('deals')
-          .insert({
-            title: row.title.trim(),
-            value: dealValue,
-            contact_id: contactId,
-            pipeline_id,
-            stage_id,
-            assigned_to: assignedTo,
-            product_id: productId,
-            expected_close_date: row.expected_close_date || null,
-            external_order_id: row.external_order_id?.trim() || null,
-            lead_source: row.lead_source?.trim() || null,
-            lead_email: email || null,
-            lead_phone: phone || null,
-            status: dealStatus,
-          });
+        const { error: insertErr } = await supabase.from('deals').insert({
+          title: row.title.trim(),
+          value: dealValue,
+          contact_id: contactId,
+          pipeline_id,
+          stage_id,
+          assigned_to: assignedTo,
+          product_id: productId,
+          expected_close_date: row.expected_close_date || null,
+          external_order_id: row.external_order_id?.trim() || null,
+          lead_source: row.lead_source?.trim() || null,
+          lead_email: email || null,
+          lead_phone: phone || null,
+          status: dealStatus,
+        });
 
         if (insertErr) {
           console.error(`[import-deals] Row ${rowNum} insert error:`, insertErr);
@@ -211,3 +167,68 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+async function resolveContact(
+  supabase: any,
+  params: { email?: string; phone?: string; clientName?: string },
+  result: ImportResult
+): Promise<string | null> {
+  const { email, phone, clientName } = params;
+
+  // Try by email first
+  if (email) {
+    const { data: existing } = await supabase
+      .from('contacts').select('id').eq('email', email).maybeSingle();
+    if (existing) return existing.id;
+
+    // Create contact with email
+    const nameParts = clientName ? splitName(clientName) : { first: email.split('@')[0], last: '' };
+    const { data: created, error } = await supabase
+      .from('contacts')
+      .insert({ email, first_name: nameParts.first, last_name: nameParts.last, phone: phone || null })
+      .select('id').single();
+    if (!error && created) { result.contacts_created++; return created.id; }
+    return null;
+  }
+
+  // Try by phone
+  if (phone) {
+    const { data: existing } = await supabase
+      .from('contacts').select('id').eq('phone', phone).maybeSingle();
+    if (existing) return existing.id;
+
+    if (clientName) {
+      const nameParts = splitName(clientName);
+      const { data: created, error } = await supabase
+        .from('contacts')
+        .insert({ first_name: nameParts.first, last_name: nameParts.last, phone })
+        .select('id').single();
+      if (!error && created) { result.contacts_created++; return created.id; }
+    }
+    return null;
+  }
+
+  // Only client name — search by name or create
+  if (clientName) {
+    const nameParts = splitName(clientName);
+    const { data: existing } = await supabase
+      .from('contacts').select('id')
+      .ilike('first_name', nameParts.first)
+      .ilike('last_name', nameParts.last)
+      .maybeSingle();
+    if (existing) return existing.id;
+
+    const { data: created, error } = await supabase
+      .from('contacts')
+      .insert({ first_name: nameParts.first, last_name: nameParts.last })
+      .select('id').single();
+    if (!error && created) { result.contacts_created++; return created.id; }
+  }
+
+  return null;
+}
+
+function splitName(fullName: string): { first: string; last: string } {
+  const parts = fullName.trim().split(/\s+/);
+  return { first: parts[0] || '', last: parts.slice(1).join(' ') || '' };
+}

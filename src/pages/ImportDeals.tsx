@@ -128,8 +128,8 @@ export default function ImportDeals() {
 
   const downloadTemplate = () => {
     import('xlsx').then((XLSX) => {
-      const headers = ['Título', 'Valor', 'Email Contato', 'Telefone Contato', 'Produto', 'Vendedor', 'Data Prevista Fechamento', 'ID Pedido', 'Fonte', 'Status'];
-      const example = ['Deal Exemplo', '5000,00', 'cliente@email.com', '(11) 99999-9999', 'Premium', 'João Silva', '2026-06-30', 'PED-001', 'Indicação', 'open'];
+      const headers = ['Nome do Cliente', 'Título do Deal', 'Valor', 'Email Contato', 'Telefone', 'Vendedor', 'Data Prevista Fechamento', 'Produto', 'Fonte', 'Status'];
+      const example = ['Maria Souza', 'Projeto Website', '5000,00', 'maria@email.com', '(11) 99999-9999', 'João Silva', '2026-06-30', 'Premium', 'Indicação', 'open'];
       const ws = XLSX.utils.aoa_to_sheet([headers, example]);
       ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length + 4, 16) }));
       const wb = XLSX.utils.book_new();
