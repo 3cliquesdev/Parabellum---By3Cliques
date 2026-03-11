@@ -1160,7 +1160,43 @@ interface FlowContext {
 // Substitui o prompt extenso quando flow_context tem controles ativos
 function generateRestrictedPrompt(flowContext: FlowContext, contactName: string, contactStatus: string, enrichment?: { orgName?: string | null; consultantName?: string | null; sellerName?: string | null; tags?: string[] }): string {
   const maxSentences = flowContext.maxSentences ?? 3;
-...
+  const objective = flowContext.objective || 'Responder a dúvida do cliente';
+  const forbidQuestions = flowContext.forbidQuestions ?? true;
+  const forbidOptions = flowContext.forbidOptions ?? true;
+  const forbidFinancial = flowContext.forbidFinancial ?? false;
+  
+  let restrictions = `Você é um assistente corporativo.
+Responda SOMENTE ao seguinte objetivo: "${objective}"
+Use APENAS as fontes permitidas: ${flowContext.allowed_sources.join(', ')}.
+Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;
+
+  if (forbidQuestions) {
+    restrictions += '\nNÃO faça perguntas ao cliente.';
+  }
+  
+  if (forbidOptions) {
+    restrictions += '\nNÃO ofereça opções ou múltipla escolha.';
+  }
+
+  if (forbidFinancial) {
+    restrictions += `\n\n🔒 TRAVA FINANCEIRA ATIVA:
+Você NÃO pode resolver assuntos financeiros (saque, reembolso, estorno, devolução, cancelamento, cobrança, pagamento).
+Se o cliente mencionar qualquer assunto financeiro, responda EXATAMENTE:
+"Esse tipo de solicitação precisa ser tratada por um atendente. Vou te transferir agora!"
+E use request_human_agent imediatamente.
+Você PODE: coletar dados (email, CPF, ID do pedido) e resumir o caso. NÃO PODE: instruir processos financeiros ou prometer resolução.`;
+  }
+  
+  restrictions += `
+NÃO sugira transferência para humano.
+NÃO invente informações.
+NÃO use markdown: sem negrito (**), sem # títulos, sem listas com - ou *.
+Use apenas texto simples, sem formatação.
+Se não houver dados suficientes, responda exatamente:
+"No momento não tenho essa informação."
+
+A resposta deve ser curta, clara e objetiva.
+
 Contexto do Cliente:
 Nome: ${contactName}
 Status: ${contactStatus}${enrichment?.orgName ? `\nOrganização: ${enrichment.orgName}` : ''}${enrichment?.consultantName ? `\nConsultor: ${enrichment.consultantName}` : ''}${enrichment?.sellerName ? `\nVendedor: ${enrichment.sellerName}` : ''}${enrichment?.tags && enrichment.tags.length > 0 ? `\nTags: ${enrichment.tags.join(', ')}` : ''}`;
