@@ -2830,6 +2830,11 @@ serve(async (req) => {
 
         // ✅ FIX 14: Transfer node usa transition-conversation-state centralizado
         const transferDeptId = nextNode.data?.department_id || null;
+        const transferAiMode = nextNode.data?.ai_mode || 'waiting_human';
+        const transitionType =
+          transferAiMode === 'copilot'   ? 'set_copilot' :
+          transferAiMode === 'autopilot' ? 'engage_ai' :
+          'handoff_to_human';
         await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
           {
@@ -2840,10 +2845,10 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               conversationId,
-              transition: 'handoff_to_human',
+              transition: transitionType,
               departmentId: transferDeptId,
               reason: 'flow_transfer_node',
-              metadata: { node_id: nextNode.id, flow_id: activeState.flow_id }
+              metadata: { node_id: nextNode.id, flow_id: activeState.flow_id, ai_mode: transferAiMode }
             })
           }
         );
@@ -3093,6 +3098,11 @@ serve(async (req) => {
 
         // ✅ FIX 14: Transfer node (msg chain) usa transition-conversation-state centralizado
         const chainTransferDeptId = nextNode.data?.department_id || null;
+        const chainTransferAiMode = nextNode.data?.ai_mode || 'waiting_human';
+        const chainTransitionType =
+          chainTransferAiMode === 'copilot'   ? 'set_copilot' :
+          chainTransferAiMode === 'autopilot' ? 'engage_ai' :
+          'handoff_to_human';
         await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
           {
@@ -3103,10 +3113,10 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               conversationId,
-              transition: 'handoff_to_human',
+              transition: chainTransitionType,
               departmentId: chainTransferDeptId,
               reason: 'flow_transfer_node_msg_chain',
-              metadata: { node_id: nextNode.id, flow_id: activeState.flow_id }
+              metadata: { node_id: nextNode.id, flow_id: activeState.flow_id, ai_mode: chainTransferAiMode }
             })
           }
         );
