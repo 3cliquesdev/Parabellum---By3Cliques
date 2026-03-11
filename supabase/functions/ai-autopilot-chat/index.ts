@@ -4516,6 +4516,7 @@ Responda APENAS: skip ou search`
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
+      } // end else (strict response block — skipped when flow_context + shouldHandoff)
     }
     
     // ============================================================
