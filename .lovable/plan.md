@@ -66,3 +66,24 @@ Após `ai-autopilot-chat` retornar OK via buffer, o `updated_at` do `chat_flow_s
 
 ### 9c — Anti-retry infinito (3 ciclos)
 Buffers que falham por quota por 3+ ciclos de cron (~3 min) enviam mensagem de "alta demanda" ao contato e são marcados como processed.
+
+---
+
+# FIX 10 ✅ — Auditoria IA Semana 1: Quick wins (11/03/2026)
+
+## Correções aplicadas
+
+### 10a — auto-handoff: UUID dinâmico
+Substituído UUID hardcoded `36ce66cd-...` por busca dinâmica do departamento "Suporte" via `departments.ilike('name', '%suporte%')`. Se não encontrado, loga warning e aplica handoff sem forçar departamento.
+
+### 10b — auto-handoff: Markdown removido das notas internas
+Removido `**bold**` de todas as notas internas (linhas 78, 97, 174-181). Notas agora usam texto plano com emojis para compatibilidade cross-canal (WhatsApp).
+
+### 10c — ai-autopilot-chat: Memória cross-session
+Ao montar o contexto, busca as últimas 3 conversas fechadas do mesmo `contact_id` e injeta os `ai_summary` no system prompt. IA agora lembra conversas anteriores do mesmo cliente.
+
+### 10d — ai-autopilot-chat: Persona contextual
+Tom da IA varia automaticamente baseado no status do contato:
+- VIP/assinante → tom premium e proativo
+- Churn risk/inativo → tom empático e acolhedor
+- Lead quente (score ≥ 80) → tom entusiasmado e consultivo
