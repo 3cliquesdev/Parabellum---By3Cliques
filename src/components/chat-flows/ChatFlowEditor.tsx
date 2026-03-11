@@ -1273,6 +1273,8 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 <FetchOrderPropertiesPanel
                   selectedNode={selectedNode}
                   updateNodeData={updateNodeData}
+                  nodes={nodes}
+                  edges={edges}
                 />
               )}
 
