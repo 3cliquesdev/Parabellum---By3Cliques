@@ -1903,6 +1903,7 @@ export type Database = {
           lead_score: number | null
           neighborhood: string | null
           next_payment_date: string | null
+          onboarding_completed: boolean | null
           onboarding_submission_id: string | null
           organization_id: string | null
           phone: string | null
@@ -1954,6 +1955,7 @@ export type Database = {
           lead_score?: number | null
           neighborhood?: string | null
           next_payment_date?: string | null
+          onboarding_completed?: boolean | null
           onboarding_submission_id?: string | null
           organization_id?: string | null
           phone?: string | null
@@ -2005,6 +2007,7 @@ export type Database = {
           lead_score?: number | null
           neighborhood?: string | null
           next_payment_date?: string | null
+          onboarding_completed?: boolean | null
           onboarding_submission_id?: string | null
           organization_id?: string | null
           phone?: string | null
