@@ -134,3 +134,45 @@ Agendado para rodar diariamente às 8h UTC (`0 8 * * *`) usando anon key no gate
 
 ### 13c — Workaround CHECK constraint
 `knowledge_candidates.status` só aceita `pending | approved | rejected`. Gaps usam `status: 'pending'` com tag `'gap_detected'` no array de tags para diferenciação.
+
+---
+
+# FIX 14 ✅ — transition-conversation-state: State Machine centralizado (11/03/2026)
+
+## Problema
+Mudanças de estado de conversas (ai_mode, department, assigned_to, dispatch jobs) eram feitas em múltiplos pontos do código (auto-handoff, process-chat-flow, etc.), causando inconsistências como conversa sem departamento, ai_mode errado, ou dispatch job desatualizado.
+
+## Correções aplicadas
+
+### 14a — Edge function `transition-conversation-state`
+Nova edge function que é a ÚNICA fonte da verdade para transições de estado. Suporta 7 tipos:
+- `handoff_to_human`: autopilot → waiting_human + cria dispatch job
+- `assign_agent`: qualquer → copilot + atribui agente + fecha dispatch
+- `unassign_agent`: copilot → waiting_human + reabre dispatch
+- `engage_ai`: qualquer → autopilot + fecha dispatch
+- `set_copilot`: qualquer → copilot
+- `update_department`: atualiza dept + dispatch job
+- `close`: qualquer → closed + fecha dispatch
+
+Cada transição:
+1. Busca estado atual da conversa
+2. Aplica update atômico
+3. Gerencia dispatch jobs (create/close/reopen)
+4. Loga em `ai_events` como `state_transition_{tipo}`
+5. Fallback dinâmico para dept "Suporte"
+
+### 14b — auto-handoff refatorado
+Substituída toda lógica de update direto (fallback dept + update ai_mode) por chamada única:
+```typescript
+supabaseClient.functions.invoke('transition-conversation-state', {
+  body: { conversationId, transition: 'handoff_to_human', reason, metadata }
+});
+```
+
+### 14c — process-chat-flow: 5 blocos de transfer refatorados
+Todos os blocos de update direto de `conversations` em transfer nodes substituídos por `fetch()` para `transition-conversation-state`:
+1. Contract violation handler (~L726)
+2. Handoff sem próximo nó (~L2326)
+3. aiExitForced sem nó (~L2365)
+4. Transfer node principal (~L2808)
+5. Transfer node msg chain (~L3061)
