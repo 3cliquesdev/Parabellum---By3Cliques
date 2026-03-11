@@ -298,23 +298,7 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
   return result;
 }
 
-// Mini-hook para carregar IDs de conversas com tags específicas (suporta múltiplas)
-function useTagConversationIds(tags?: string[]): Set<string> | undefined {
-  const tagKey = tags && tags.length > 0 ? [...tags].sort().join(',') : '';
-  const { data } = useQuery({
-    queryKey: ['tag-conversation-ids', tagKey],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('conversation_tags')
-        .select('conversation_id')
-        .in('tag_id', tags!);
-      return new Set(data?.map(t => t.conversation_id) || []);
-    },
-    enabled: !!tags && tags.length > 0,
-    staleTime: 30000,
-  });
-  return data;
-}
+// useTagConversationIds removed — tag filtering now happens at DB level in fetchInboxData
 
 // Função para fazer merge incremental por conversation_id
 function mergeInboxItems(existing: InboxViewItem[], incoming: InboxViewItem[]): InboxViewItem[] {
