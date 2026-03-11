@@ -657,16 +657,49 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
               )}
 
               {/* save_as para campos de coleta */}
-              {["ask_name", "ask_email", "ask_phone", "ask_cpf", "ask_text", "ask_options"].includes(selectedNode.type || "") && (
+              {["ask_name", "ask_email", "ask_phone", "ask_cpf", "ask_text", "ask_options"].includes(selectedNode.type || "") && (() => {
+                const nodeType = selectedNode.type || "";
+                const suggestions = SAVE_AS_SUGGESTIONS[nodeType] || [];
+                const currentVal = selectedNode.data.save_as || "";
+                const isCustom = currentVal && !suggestions.some(s => s.value === currentVal);
+                
+                return (
                 <div className="space-y-1.5">
                   <Label className="text-xs">Salvar como variável</Label>
-                  <Input
-                    value={selectedNode.data.save_as || ""}
-                    onChange={(e) => updateNodeData("save_as", e.target.value)}
-                    placeholder="nome_variavel"
-                  />
+                  <Select
+                    value={isCustom ? "__custom__" : (currentVal || suggestions[0]?.value || "")}
+                    onValueChange={(v) => {
+                      if (v === "__custom__") {
+                        updateNodeData("save_as", "");
+                      } else {
+                        updateNodeData("save_as", v);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a variável" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {suggestions.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>💾 {s.label}</SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">✏️ Nome personalizado...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {isCustom && (
+                    <Input
+                      value={currentVal}
+                      onChange={(e) => updateNodeData("save_as", e.target.value)}
+                      placeholder="nome_da_variavel"
+                      className="text-sm"
+                    />
+                  )}
+                  <p className="text-[10px] text-muted-foreground">
+                    Essa variável pode ser usada nos próximos nós com {`{{${currentVal || "variável"}}}`}
+                  </p>
                 </div>
-              )}
+                );
+              })()}
 
               {/* Validação toggle */}
               {["ask_email", "ask_phone", "ask_cpf"].includes(selectedNode.type || "") && (
