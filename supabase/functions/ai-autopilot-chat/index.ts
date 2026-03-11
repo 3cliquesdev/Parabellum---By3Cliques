@@ -1512,7 +1512,7 @@ serve(async (req) => {
         .select(`
           *,
           contacts!inner(
-            id, first_name, last_name, email, phone, whatsapp_id, company, status, document, kiwify_validated, kiwify_validated_at
+            id, first_name, last_name, email, phone, whatsapp_id, company, status, document, kiwify_validated, kiwify_validated_at, organization_id, consultant_id, assigned_to
           )
         `)
         .eq('id', conversationId)
