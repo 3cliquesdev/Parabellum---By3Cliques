@@ -301,7 +301,7 @@ async function buildVariablesContext(
 ): Promise<Record<string, any>> {
   const ctx: Record<string, any> = { ...collectedData };
   if (contactData) {
-    for (const f of ['name','email','phone','cpf','city','state','tags','lead_score','kiwify_validated','source','company','document','consultant_id','is_customer','preferred_agent_id','preferred_department_id']) {
+    for (const f of ['name','email','phone','cpf','city','state','tags','lead_score','kiwify_validated','source','company','document','consultant_id','is_customer','preferred_agent_id','preferred_department_id','onboarding_completed','organization_id']) {
       if (contactData[f] != null) ctx[`contact_${f}`] = contactData[f];
     }
     // Compose contact_name from first_name + last_name if not directly available
