@@ -4297,7 +4297,7 @@ Responda APENAS: skip ou search`
     
     // 🆕 BYPASS: Detectar saudações e contatos genéricos ANTES do Strict RAG
     // Evita que mensagens como "Olá, vim pelo site" sejam rejeitadas por 0% confiança
-    const isSimpleGreetingEarly = /^(oi|olá|ola|hey|boa?\s*(dia|tarde|noite)|obrigad[oa]|valeu|ok)[\s!?.,]*$/i.test(customerMessage.trim());
+    const isSimpleGreetingEarly = /^(oi|olá|ola|hey|hi|hello|boa?\s*(dia|tarde|noite)|obrigad[oa]|valeu|ok|tudo\s*(bem|bom|certo|tranquilo|joia|jóia|beleza)|como\s*(vai|está|vc\s*está|vc\s*ta|ce\s*ta)|e\s*a[ií]|eai|eae|blz|tranquilo|suave|beleza|fala|falae|salve)[\s!?.,]*$/i.test(customerMessage.trim());
     const isGenericContactEarly = /^(ol[aá]|oi|hey|boa?\s*(dia|tarde|noite))?[,!.\s]*(vim|cheguei|estou|preciso|quero|gostaria|queria|buscando|procurando|entrei|acessei).{0,80}(atendimento|ajuda|suporte|falar|contato|informação|informações|saber|conhecer|entender|site|página|pagina|indicação|indicacao)/i.test(customerMessage.trim());
     const isGreetingBypass = isSimpleGreetingEarly || isGenericContactEarly;
     
@@ -4554,7 +4554,7 @@ Responda APENAS: skip ou search`
     // 🚨 HANDOFF AUTOMÁTICO POR BAIXA CONFIANÇA
     // FASE 5: Corrigido - Faz handoff baseado no SCORE, não na existência de artigos
     // Antes: só fazia handoff se knowledgeArticles.length === 0 (bug - ignorava artigos irrelevantes)
-    const isSimpleGreeting = /^(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|ok|tá|ta|sim|não|nao)[\s!?.,]*$/i.test(customerMessage.trim());
+    const isSimpleGreeting = /^(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|ok|tá|ta|sim|não|nao|tudo\s*(bem|bom|certo|tranquilo|joia|jóia|beleza)|como\s*(vai|está|vc\s*está|vc\s*ta|ce\s*ta)|e\s*a[ií]|eai|eae|blz|tranquilo|suave|beleza|fala|falae|salve|hey|hi|hello)[\s!?.,]*$/i.test(customerMessage.trim());
     
     // 🆕 BYPASS HANDOFF: Detectar se mensagem parece ser pedido/rastreio
     // Se contém número de pedido ou código de rastreio, FORÇAR processamento com tools
