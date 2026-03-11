@@ -45,6 +45,7 @@ export default function ImportDeals() {
     if (csvHeaders.length === 0) return;
     const autoMapping: Record<string, string> = {};
     const mappings: Record<string, string[]> = {
+      'nome_cliente': ['nome do cliente', 'cliente', 'customer', 'nome_cliente', 'nome cliente', 'client'],
       'title': ['titulo', 'title', 'nome do deal', 'deal', 'negocio', 'oportunidade'],
       'value': ['valor', 'value', 'preco', 'price', 'amount'],
       'email_contato': ['email', 'e-mail', 'email_contato', 'email contato', 'email do contato'],
