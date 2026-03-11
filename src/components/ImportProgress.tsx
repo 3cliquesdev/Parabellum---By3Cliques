@@ -21,17 +21,24 @@ interface ImportProgressProps {
 
 export function ImportProgress({
   total,
-  totalCsvRows,
+  totalCsvRows: totalCsvRowsProp,
   processed,
   created,
   updated,
-  contactsCreated,
-  contactsReused,
-  skippedNoTitle,
-  vendorNotFound,
-  productNotFound,
+  contactsCreated: contactsCreatedProp,
+  contactsReused: contactsReusedProp,
+  skippedNoTitle: skippedNoTitleProp,
+  vendorNotFound: vendorNotFoundProp,
+  productNotFound: productNotFoundProp,
   errors,
 }: ImportProgressProps) {
+  const totalCsvRows = totalCsvRowsProp ?? total;
+  const contactsCreated = contactsCreatedProp ?? 0;
+  const contactsReused = contactsReusedProp ?? 0;
+  const skippedNoTitle = skippedNoTitleProp ?? 0;
+  const vendorNotFound = vendorNotFoundProp ?? [];
+  const productNotFound = productNotFoundProp ?? [];
+
   const progress = total > 0 ? (processed / total) * 100 : 0;
   const isComplete = processed === total && total > 0;
 
