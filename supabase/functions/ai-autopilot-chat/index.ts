@@ -1530,6 +1530,81 @@ serve(async (req) => {
       contact = conversation.contacts as any;
       department = conversation.department || null;
 
+      // 🆕 ENRIQUECIMENTO DE CONTEXTO: Buscar organização, consultor, vendedor e tags do contato
+      let contactOrgName: string | null = null;
+      let contactConsultantName: string | null = null;
+      let contactSellerName: string | null = null;
+      let contactTagsList: string[] = [];
+
+      try {
+        const enrichPromises: Promise<any>[] = [];
+
+        // Organização
+        if (contact.organization_id) {
+          enrichPromises.push(
+            supabaseClient
+              .from('organizations')
+              .select('name')
+              .eq('id', contact.organization_id)
+              .maybeSingle()
+              .then((r: any) => ({ type: 'org', data: r.data }))
+          );
+        }
+
+        // Consultor
+        if (contact.consultant_id) {
+          enrichPromises.push(
+            supabaseClient
+              .from('profiles')
+              .select('full_name')
+              .eq('id', contact.consultant_id)
+              .maybeSingle()
+              .then((r: any) => ({ type: 'consultant', data: r.data }))
+          );
+        }
+
+        // Vendedor (assigned_to)
+        if (contact.assigned_to) {
+          enrichPromises.push(
+            supabaseClient
+              .from('profiles')
+              .select('full_name')
+              .eq('id', contact.assigned_to)
+              .maybeSingle()
+              .then((r: any) => ({ type: 'seller', data: r.data }))
+          );
+        }
+
+        // Tags do contato
+        enrichPromises.push(
+          supabaseClient
+            .from('contact_tags')
+            .select('tags:tag_id(name)')
+            .eq('contact_id', contact.id)
+            .then((r: any) => ({ type: 'tags', data: r.data }))
+        );
+
+        const enrichResults = await Promise.all(enrichPromises);
+
+        for (const result of enrichResults) {
+          if (result.type === 'org' && result.data?.name) contactOrgName = result.data.name;
+          if (result.type === 'consultant' && result.data?.full_name) contactConsultantName = result.data.full_name;
+          if (result.type === 'seller' && result.data?.full_name) contactSellerName = result.data.full_name;
+          if (result.type === 'tags' && result.data) {
+            contactTagsList = result.data.map((t: any) => t.tags?.name).filter(Boolean);
+          }
+        }
+
+        console.log('[ai-autopilot-chat] 🏷️ Contexto enriquecido:', {
+          org: contactOrgName,
+          consultant: contactConsultantName,
+          seller: contactSellerName,
+          tags: contactTagsList
+        });
+      } catch (enrichErr) {
+        console.error('[ai-autopilot-chat] ⚠️ Erro ao enriquecer contexto do contato:', enrichErr);
+      }
+
       // 🆕 BUSINESS HOURS: Buscar info de horário comercial para contexto da IA
       let businessHoursInfo: BusinessHoursResult | null = null;
       try {
