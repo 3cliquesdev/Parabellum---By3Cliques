@@ -500,6 +500,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         </div>
         <ScrollArea className="flex-1 p-4">
           <div className="space-y-6">
+             <TooltipProvider delayDuration={300}>
             {/* Coleta de Dados */}
             <div className="space-y-2">
               <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 flex items-center gap-1">
@@ -507,10 +508,10 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 Coleta de Dados
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                <DraggableBlock type="ask_name" icon={User} label="Nome" color={blockColors.ask_name} />
-                <DraggableBlock type="ask_email" icon={Mail} label="Email" color={blockColors.ask_email} />
-                <DraggableBlock type="ask_phone" icon={Phone} label="Telefone" color={blockColors.ask_phone} />
-                <DraggableBlock type="ask_cpf" icon={CreditCard} label="CPF" color={blockColors.ask_cpf} />
+                <DraggableBlock type="ask_name" icon={User} label="Nome" color={blockColors.ask_name} tooltip="Pede o nome completo do cliente e salva como variável" />
+                <DraggableBlock type="ask_email" icon={Mail} label="Email" color={blockColors.ask_email} tooltip="Pede o email e valida o formato automaticamente" />
+                <DraggableBlock type="ask_phone" icon={Phone} label="Telefone" color={blockColors.ask_phone} tooltip="Pede o telefone e valida o formato" />
+                <DraggableBlock type="ask_cpf" icon={CreditCard} label="CPF" color={blockColors.ask_cpf} tooltip="Pede o CPF e valida se é válido" />
               </div>
             </div>
 
@@ -521,9 +522,9 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 Interação
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                <DraggableBlock type="message" icon={MessageSquare} label="Mensagem" color={blockColors.message} />
-                <DraggableBlock type="ask_options" icon={ListChecks} label="Opções" color={blockColors.ask_options} />
-                <DraggableBlock type="ask_text" icon={MessageCircle} label="Texto" color={blockColors.ask_text} />
+                <DraggableBlock type="message" icon={MessageSquare} label="Mensagem" color={blockColors.message} tooltip="Envia uma mensagem fixa para o cliente" />
+                <DraggableBlock type="ask_options" icon={ListChecks} label="Opções" color={blockColors.ask_options} tooltip="Menu de opções numeradas (1, 2, 3...) para o cliente escolher" />
+                <DraggableBlock type="ask_text" icon={MessageCircle} label="Texto" color={blockColors.ask_text} tooltip="Pergunta aberta — o cliente responde livremente" />
               </div>
             </div>
 
@@ -534,13 +535,13 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 Lógica
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                <DraggableBlock type="condition" icon={GitBranch} label="Condição" color={blockColors.condition} />
-                <DraggableBlock type="condition_v2" icon={GitMerge} label="Condição V2" color={blockColors.condition_v2} />
-                <DraggableBlock type="ai_response" icon={Sparkles} label="IA" color={blockColors.ai_response} />
-                <DraggableBlock type="fetch_order" icon={Package} label="Pedido" color={blockColors.fetch_order} />
-                <DraggableBlock type="validate_customer" icon={ShieldCheck} label="Validar Cliente" color={blockColors.validate_customer} />
-                <DraggableBlock type="verify_customer_otp" icon={KeyRound} label="OTP Cliente" color={blockColors.verify_customer_otp} />
-                <DraggableBlock type="create_ticket" icon={Ticket} label="Ticket" color={blockColors.create_ticket} />
+                <DraggableBlock type="condition" icon={GitBranch} label="Condição" color={blockColors.condition} tooltip="Cria caminhos diferentes baseado em dados do cliente ou variáveis do fluxo" />
+                <DraggableBlock type="condition_v2" icon={GitMerge} label="Condição V2" color={blockColors.condition_v2} tooltip="Condição avançada com múltiplas regras Sim/Não independentes" />
+                <DraggableBlock type="ai_response" icon={Sparkles} label="IA" color={blockColors.ai_response} tooltip="A IA responde usando a base de conhecimento configurada" />
+                <DraggableBlock type="fetch_order" icon={Package} label="Pedido" color={blockColors.fetch_order} tooltip="Busca um pedido pelo código de rastreio ou número" />
+                <DraggableBlock type="validate_customer" icon={ShieldCheck} label="Validar Cliente" color={blockColors.validate_customer} tooltip="Verifica se o contato é cliente na base Kiwify" />
+                <DraggableBlock type="verify_customer_otp" icon={KeyRound} label="OTP Cliente" color={blockColors.verify_customer_otp} tooltip="Verifica identidade do cliente com código OTP por email" />
+                <DraggableBlock type="create_ticket" icon={Ticket} label="Ticket" color={blockColors.create_ticket} tooltip="Cria um ticket de suporte automaticamente" />
               </div>
             </div>
 
@@ -551,10 +552,11 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 Ações Finais
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                <DraggableBlock type="transfer" icon={UserPlus} label="Transferir" color={blockColors.transfer} />
-                <DraggableBlock type="end" icon={CheckCircle} label="Fim" color={blockColors.end} />
+                <DraggableBlock type="transfer" icon={UserPlus} label="Transferir" color={blockColors.transfer} tooltip="Transfere a conversa para atendente humano ou departamento" />
+                <DraggableBlock type="end" icon={CheckCircle} label="Fim" color={blockColors.end} tooltip="Finaliza o fluxo e opcionalmente cria lead, ticket ou adiciona tag" />
               </div>
             </div>
+            </TooltipProvider>
           </div>
         </ScrollArea>
 
