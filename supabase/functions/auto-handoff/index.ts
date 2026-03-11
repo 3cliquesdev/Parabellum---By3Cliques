@@ -75,7 +75,7 @@ serve(async (req) => {
       if (sentiment.includes('crítico') || sentiment.includes('irritado') || sentiment.includes('negativo')) {
         shouldHandoff = true;
         handoffReason = 'critical_sentiment';
-        internalNote = `🚨 **Transbordo Automático - Sentimento Crítico**\n\nO cliente demonstra **${sentimentData.result}**. Recomenda-se atenção especial e abordagem empática.`;
+        internalNote = `🚨 Transbordo Automático - Sentimento Crítico\n\nO cliente demonstra ${sentimentData.result}. Recomenda-se atenção especial e abordagem empática.`;
         console.log('[auto-handoff] ⚠️ Sentimento crítico detectado! Acionando handoff...');
       }
     }
