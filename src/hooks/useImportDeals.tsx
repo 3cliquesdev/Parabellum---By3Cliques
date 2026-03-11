@@ -45,7 +45,7 @@ export function useImportDeals() {
       const total = deals.length;
       setProgress({ current: 0, total });
 
-      const result: ImportResult = { deals_created: 0, contacts_created: 0, errors: [] };
+      const result: ImportResult = { deals_created: 0, contacts_created: 0, contacts_reused: 0, vendor_not_found: [], product_not_found: [], errors: [] };
 
       for (let i = 0; i < total; i += CHUNK_SIZE) {
         const chunk = deals.slice(i, i + CHUNK_SIZE);
