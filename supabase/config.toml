@@ -415,3 +415,6 @@ region = "us-east-1"
 
 [functions.ai-governor]
 verify_jwt = false
+
+[functions.detect-kb-gaps]
+verify_jwt = false
