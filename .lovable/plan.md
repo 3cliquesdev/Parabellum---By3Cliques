@@ -1,68 +1,79 @@
 
-# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-## Arquivo: `supabase/functions/process-chat-flow/index.ts`
+# Plano: Auditoria IA — Correções Prioritárias (Semana 1)
 
-### FIX 1 ✅ — Proteção contra loop flow-to-flow
-### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
-### FIX 3 ✅ — Auto-traverse cobre condition_v2
-### FIX 4 ✅ — Transfer node atualiza conversations.department
-### FIX 5 ✅ — startMessage com replaceVariables
-### FIX 6 ✅ — financialIntentPattern simplificado
+Baseado na auditoria completa, foco nos quick wins de maior impacto.
 
 ---
 
-# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
+## 1. Fix auto-handoff UUID hardcoded (Bug A)
 
-## Problema
-Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
+**Arquivo:** `supabase/functions/auto-handoff/index.ts` linha 141
 
-## Correções aplicadas
+Substituir UUID fixo por busca dinâmica:
+```typescript
+// ANTES: const FALLBACK_DEPT_SUPORTE = '36ce66cd-...';
+// DEPOIS:
+const { data: deptSuporte } = await supabaseClient
+  .from('departments')
+  .select('id')
+  .ilike('name', '%suporte%')
+  .eq('is_active', true)
+  .limit(1)
+  .maybeSingle();
+const FALLBACK_DEPT_SUPORTE = deptSuporte?.id || null;
+```
 
-### 7a — Fallback edge default (process-chat-flow ~L2273)
-Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
-
-### 7b — Guard final sem nó (process-chat-flow ~L2336)
-Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
-
-### 7c — Safety net IA falha (process-buffered-messages ~L383)
-Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
-
-### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
-Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
-
----
-
-# FIX 8 ✅ — pg_cron matando flows prematuramente (11/03/2026)
-
-## Problema
-O pg_cron `cleanup-stuck-flow-states` usava `started_at < now() - 3 min`, mas `started_at` é imutável. Flows com múltiplos passos (>3min) eram mortos antes de chegar ao nó de transfer.
-
-## Correções aplicadas
-
-### 8a — Coluna `updated_at` em `chat_flow_states`
-Nova coluna `updated_at timestamptz DEFAULT now()` adicionada via migration. Registros existentes backfilled com `COALESCE(completed_at, started_at)`.
-
-### 8b — `updated_at` em todos os `.update()` do process-chat-flow
-21 pontos de atualização no `process-chat-flow/index.ts` agora incluem `updated_at: new Date().toISOString()`, renovando o timestamp a cada interação.
-
-### 8c — pg_cron atualizado
-Cron usa `updated_at < now() - INTERVAL '15 minutes'` em vez de `started_at < now() - 3 min`.
+Se `null`, loga warning e apenas seta `ai_mode: waiting_human` sem forçar departamento.
 
 ---
 
-# FIX 9 ✅ — IA não responde: safety net mata flow em quota error (11/03/2026)
+## 2. Fix markdown nas notas internas (Bug B)
 
-## Problema
-O `process-buffered-messages` tratava erros 429/503 (quota/rate limit) como falha fatal, disparando `forceAIExit` e matando o flow antes da IA ter chance de responder.
+**Arquivo:** `supabase/functions/auto-handoff/index.ts` linhas 78, 97, 174-181
 
-## Correções aplicadas
+Remover `**bold**` e formatação markdown das notas internas — usar texto plano com emojis para legibilidade cross-canal.
 
-### 9a — Distinguir quota error de erro técnico real
-Na safety net do `process-buffered-messages`, erros 429/503 com `quota_error` ou `retry_suggested: true` NÃO disparam `forceAIExit`. Buffer fica como `processed=false` para retry no próximo ciclo.
+---
 
-### 9b — Refresh `updated_at` do flow state após buffer processing com sucesso
-Após `ai-autopilot-chat` retornar OK via buffer, o `updated_at` do `chat_flow_states` é atualizado para evitar morte prematura pelo cron de 15 min.
+## 3. Memória cross-session no ai-autopilot-chat
 
-### 9c — Anti-retry infinito (3 ciclos)
-Buffers que falham por quota por 3+ ciclos de cron (~3 min) enviam mensagem de "alta demanda" ao contato e são marcados como processed.
+**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
+
+Ao montar o contexto, buscar últimas 3 conversas fechadas do mesmo `contact_id`:
+```sql
+SELECT id, closed_at, customer_metadata->>'ai_summary' as summary
+FROM conversations
+WHERE contact_id = $1 AND status = 'closed'
+ORDER BY closed_at DESC LIMIT 3
+```
+
+Incluir no system prompt: "Histórico do cliente: [resumos das conversas anteriores]"
+
+---
+
+## 4. Persona contextual baseada em status do contato
+
+**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts` (na geração do prompt)
+
+Adicionar variação de tom no prompt baseado em:
+- Status do contato (VIP, novo, churn risk)
+- Contexto financeiro (se `forbid_financial` ativo → tom empático)
+- Sentimento detectado em mensagens anteriores
+
+---
+
+## Arquivos afetados
+
+| Arquivo | Mudanças |
+|---|---|
+| `auto-handoff/index.ts` | UUID dinâmico + notas sem markdown |
+| `ai-autopilot-chat/index.ts` | Memória cross-session + persona contextual |
+
+## Itens para Semana 2+ (não incluídos neste plano)
+
+- Auto-KB Gap Detection (nova edge function)
+- Proactive Messaging
+- Agent Orchestration
+- `transition-conversation-state` (refactor arquitetural)
+
