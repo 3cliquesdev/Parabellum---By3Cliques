@@ -4554,7 +4554,7 @@ Responda APENAS: skip ou search`
     // 🚨 HANDOFF AUTOMÁTICO POR BAIXA CONFIANÇA
     // FASE 5: Corrigido - Faz handoff baseado no SCORE, não na existência de artigos
     // Antes: só fazia handoff se knowledgeArticles.length === 0 (bug - ignorava artigos irrelevantes)
-    const isSimpleGreeting = /^(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|ok|tá|ta|sim|não|nao)[\s!?.,]*$/i.test(customerMessage.trim());
+    const isSimpleGreeting = /^(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|ok|tá|ta|sim|não|nao|tudo\s*(bem|bom|certo|tranquilo|joia|jóia|beleza)|como\s*(vai|está|vc\s*está|vc\s*ta|ce\s*ta)|e\s*a[ií]|eai|eae|blz|tranquilo|suave|beleza|fala|falae|salve|hey|hi|hello)[\s!?.,]*$/i.test(customerMessage.trim());
     
     // 🆕 BYPASS HANDOFF: Detectar se mensagem parece ser pedido/rastreio
     // Se contém número de pedido ou código de rastreio, FORÇAR processamento com tools
