@@ -184,12 +184,12 @@ serve(async (req) => {
 
     const noteContent = `🤖 → 👤 Handoff Automático
 
-**Motivo:** ${handoffReasons[handoffReason] || handoffReason}
+Motivo: ${handoffReasons[handoffReason] || handoffReason}
 
-**Resumo da Conversa:**
+Resumo da Conversa:
 ${summary}
 
-**Atribuição:** ${routingResult?.agent_name || 'Fila de espera'}`;
+Atribuição: ${routingResult?.agent_name || 'Fila de espera'}`;
 
     await supabaseClient
       .from('interactions')
