@@ -1,14 +1,30 @@
-import { Node } from "reactflow";
+import { Node, Edge } from "reactflow";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ReadOnlyVariableBadge } from "./ReadOnlyVariableBadge";
+import { getAncestorNodeIds } from "./variableCatalog";
 
 interface FetchOrderPropertiesPanelProps {
   selectedNode: Node;
   updateNodeData: (field: string, value: any) => void;
+  nodes?: Node[];
+  edges?: Edge[];
 }
 
-export function FetchOrderPropertiesPanel({ selectedNode, updateNodeData }: FetchOrderPropertiesPanelProps) {
+export function FetchOrderPropertiesPanel({ selectedNode, updateNodeData, nodes = [], edges = [] }: FetchOrderPropertiesPanelProps) {
+  // Collect ancestor variables for source_variable dropdown
+  const ancestorIds = getAncestorNodeIds(selectedNode.id, edges);
+  const ancestorVariables = nodes
+    .filter((n) => ancestorIds.has(n.id) && n.data?.save_as)
+    .map((n) => ({
+      value: n.data.save_as as string,
+      label: `${n.data.save_as} (${n.data.label || n.type})`,
+    }))
+    .filter((v, i, arr) => arr.findIndex((x) => x.value === v.value) === i);
+
+  const currentSource = selectedNode.data.source_variable || "";
+  const isCustomSource = currentSource && !ancestorVariables.some(v => v.value === currentSource) && currentSource !== "__last_message__";
+
   return (
     <div className="space-y-4">
       {/* Tipo de busca */}
@@ -22,9 +38,9 @@ export function FetchOrderPropertiesPanel({ selectedNode, updateNodeData }: Fetc
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="auto">Detectar automaticamente</SelectItem>
-            <SelectItem value="tracking">Código de rastreio (BR...)</SelectItem>
-            <SelectItem value="order_id">Número do pedido (SA...)</SelectItem>
+            <SelectItem value="auto">🔍 Detectar automaticamente</SelectItem>
+            <SelectItem value="tracking">📦 Código de rastreio (BR...)</SelectItem>
+            <SelectItem value="order_id">🧾 Número do pedido (SA...)</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-[10px] text-muted-foreground">
@@ -32,62 +48,55 @@ export function FetchOrderPropertiesPanel({ selectedNode, updateNodeData }: Fetc
         </p>
       </div>
 
-      {/* Variável fonte */}
+      {/* Variável fonte — dropdown com ancestrais */}
       <div className="space-y-1.5">
-        <Label className="text-xs">Variável de origem</Label>
-        <Input
-          value={selectedNode.data.source_variable || ""}
-          onChange={(e) => updateNodeData("source_variable", e.target.value)}
-          placeholder="customer_code"
-        />
+        <Label className="text-xs">De onde vem o código?</Label>
+        <Select
+          value={isCustomSource ? "__custom__" : (currentSource || "__last_message__")}
+          onValueChange={(v) => {
+            if (v === "__last_message__") {
+              updateNodeData("source_variable", "");
+            } else if (v === "__custom__") {
+              updateNodeData("source_variable", "");
+            } else {
+              updateNodeData("source_variable", v);
+            }
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Selecione a origem" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__last_message__">💬 Última mensagem do cliente</SelectItem>
+            {ancestorVariables.length > 0 && (
+              <SelectGroup>
+                <SelectLabel>Variáveis coletadas no fluxo</SelectLabel>
+                {ancestorVariables.map((v) => (
+                  <SelectItem key={v.value} value={v.value}>
+                    💾 {v.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            )}
+          </SelectContent>
+        </Select>
         <p className="text-[10px] text-muted-foreground">
-          Variável coletada anteriormente ou deixe vazio para usar última mensagem
+          Selecione de qual nó anterior vem o código de rastreio ou pedido
         </p>
       </div>
 
-      {/* Variáveis de saída */}
-      <div className="pt-2 border-t">
-        <Label className="text-xs text-muted-foreground">Variáveis de saída</Label>
-        <div className="mt-2 space-y-2">
-          <div className="space-y-1">
-            <Label className="text-[10px]">Pedido encontrado?</Label>
-            <Input
-              value={selectedNode.data.save_found_as || "order_found"}
-              onChange={(e) => updateNodeData("save_found_as", e.target.value)}
-              placeholder="order_found"
-              className="h-8 text-sm"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[10px]">Status do pedido</Label>
-            <Input
-              value={selectedNode.data.save_status_as || "order_status"}
-              onChange={(e) => updateNodeData("save_status_as", e.target.value)}
-              placeholder="order_status"
-              className="h-8 text-sm"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[10px]">Horário de embalagem</Label>
-            <Input
-              value={selectedNode.data.save_packed_at_as || "packed_at_formatted"}
-              onChange={(e) => updateNodeData("save_packed_at_as", e.target.value)}
-              placeholder="packed_at_formatted"
-              className="h-8 text-sm"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Preview de variáveis */}
-      <div className="p-3 bg-muted/50 rounded-lg space-y-1">
-        <p className="text-[10px] font-medium text-muted-foreground">Variáveis disponíveis após execução:</p>
-        <div className="space-y-0.5 font-mono text-[10px]">
-          <p><span className="text-green-600">{`{{${selectedNode.data.save_found_as || "order_found"}}}`}</span> → true/false</p>
-          <p><span className="text-blue-600">{`{{${selectedNode.data.save_status_as || "order_status"}}}`}</span> → PACKED, etc</p>
-          <p><span className="text-purple-600">{`{{${selectedNode.data.save_packed_at_as || "packed_at_formatted"}}}`}</span> → "10/12/2025 às 10:17"</p>
-          <p><span className="text-amber-600">{`{{order_box_number}}`}</span> → Código original</p>
-          <p><span className="text-cyan-600">{`{{order_platform}}`}</span> → Plataforma</p>
+      {/* Variáveis de saída - READ ONLY */}
+      <div className="pt-2 border-t space-y-2">
+        <Label className="text-xs font-semibold">Variáveis geradas automaticamente</Label>
+        <p className="text-[10px] text-muted-foreground">
+          Clique para copiar e usar em nós seguintes
+        </p>
+        <div className="space-y-1.5">
+          <ReadOnlyVariableBadge variable="order_found" description="true/false — Pedido encontrado?" colorClass="text-green-600" />
+          <ReadOnlyVariableBadge variable="order_status" description="Status: PACKED, SHIPPED, etc" colorClass="text-blue-600" />
+          <ReadOnlyVariableBadge variable="packed_at_formatted" description='Data: "10/12/2025 às 10:17"' colorClass="text-purple-600" />
+          <ReadOnlyVariableBadge variable="order_box_number" description="Código original informado" colorClass="text-amber-600" />
+          <ReadOnlyVariableBadge variable="order_platform" description="Plataforma do pedido" colorClass="text-cyan-600" />
         </div>
       </div>
     </div>
