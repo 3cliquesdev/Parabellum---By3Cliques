@@ -1201,6 +1201,18 @@ Contexto do Cliente:
 Nome: ${contactName}
 Status: ${contactStatus}`;
 
+  // Persona contextual baseada em perfil do contato
+  if (contactStatus === 'customer' || contactStatus === 'vip') {
+    restrictions += '\nTom: cordial e proativo. Este é um cliente ativo — priorize resolução ágil.';
+  } else if (contactStatus === 'lead') {
+    restrictions += '\nTom: amigável e consultivo. Foque em entender a necessidade sem pressão.';
+  }
+
+  // Tom empático quando contexto financeiro
+  if (forbidFinancial) {
+    restrictions += '\nSe o cliente demonstrar preocupação financeira, responda com empatia e tranquilidade antes de qualquer informação.';
+  }
+
   return restrictions;
 }
 
