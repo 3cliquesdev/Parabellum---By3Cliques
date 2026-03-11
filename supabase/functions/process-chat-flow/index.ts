@@ -2373,12 +2373,24 @@ serve(async (req) => {
           })
           .eq('id', activeState.id);
 
-        const convUpdate: Record<string, unknown> = { ai_mode: 'waiting_human', assigned_to: null };
-        if (aiExitDeptId) convUpdate.department = aiExitDeptId;
-        await supabaseClient
-          .from('conversations')
-          .update(convUpdate)
-          .eq('id', conversationId);
+        // ✅ FIX 14: Usar transition-conversation-state centralizado
+        await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+            },
+            body: JSON.stringify({
+              conversationId,
+              transition: 'handoff_to_human',
+              departmentId: aiExitDeptId || null,
+              reason: 'ai_exit_forced_no_next_node',
+              metadata: { node_id: currentNode.id, flow_id: activeState.flow_id }
+            })
+          }
+        );
 
         console.log(`[process-chat-flow] ✅ Handoff aiExitForced aplicado (sem nó): dept=${aiExitDeptId || 'genérico'}`);
 
