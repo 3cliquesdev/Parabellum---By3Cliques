@@ -50,6 +50,7 @@ const SetupPassword = lazy(() => import("./pages/SetupPassword"));
 const Goals = lazy(() => import("./pages/Goals"));
 const GoalsManagement = lazy(() => import("./pages/GoalsManagement"));
 const ImportClients = lazy(() => import("./pages/ImportClients"));
+const ImportDeals = lazy(() => import("./pages/ImportDeals"));
 const Support = lazy(() => import("./pages/Support"));
 const TicketDetail = lazy(() => import("./pages/TicketDetail"));
 const Knowledge = lazy(() => import("./pages/Knowledge"));
