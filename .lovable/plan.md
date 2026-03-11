@@ -114,3 +114,23 @@ pg_cron agendado para rodar a cada hora (`0 * * * *`), invocando a edge function
 
 ## Correção
 Recriado cron job `passive-learning-hourly` (jobid 13) usando anon key no header Authorization. A anon key é suficiente para passar pelo API gateway; a função internamente usa `SUPABASE_SERVICE_ROLE_KEY` do ambiente Deno para operações admin.
+
+---
+
+# FIX 13 ✅ — Auto-KB Gap Detection (11/03/2026)
+
+## O que foi feito
+
+### 13a — Edge function `detect-kb-gaps`
+Criada edge function que:
+1. Busca eventos de IA das últimas 24h onde a IA fez handoff/exit (tipos: `ai_handoff_exit`, `contract_violation_blocked`, `flow_exit_clean`, `ai_exit_intent`)
+2. Clusteriza por similaridade textual (primeiras 3 palavras normalizadas)
+3. Filtra clusters com >= 2 ocorrências (gaps recorrentes)
+4. Cria `knowledge_candidates` com `status: 'pending'` + tag `'gap_detected'` (CHECK constraint impede valor custom)
+5. Notifica admins/managers via tabela `notifications`
+
+### 13b — Cron job `detect-kb-gaps-daily`
+Agendado para rodar diariamente às 8h UTC (`0 8 * * *`) usando anon key no gateway.
+
+### 13c — Workaround CHECK constraint
+`knowledge_candidates.status` só aceita `pending | approved | rejected`. Gaps usam `status: 'pending'` com tag `'gap_detected'` no array de tags para diferenciação.
