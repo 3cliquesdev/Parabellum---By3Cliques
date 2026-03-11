@@ -13,6 +13,7 @@ interface DealRow {
   telefone_contato?: string;
   produto?: string;
   assigned_to?: string;
+  assigned_to_user_id?: string;
   expected_close_date?: string;
   external_order_id?: string;
   lead_source?: string;
@@ -22,6 +23,9 @@ interface DealRow {
 interface ImportResult {
   deals_created: number;
   contacts_created: number;
+  contacts_reused: number;
+  vendor_not_found: Array<{ row: number; title: string; vendor_name: string }>;
+  product_not_found: Array<{ row: number; title: string; product_name: string }>;
   errors: Array<{ row: number; title: string; error: string }>;
 }
 
@@ -82,7 +86,14 @@ Deno.serve(async (req) => {
       if (p.name) productByName.set(p.name.toLowerCase().trim(), p.id);
     });
 
-    const result: ImportResult = { deals_created: 0, contacts_created: 0, errors: [] };
+    const result: ImportResult = {
+      deals_created: 0,
+      contacts_created: 0,
+      contacts_reused: 0,
+      vendor_not_found: [],
+      product_not_found: [],
+      errors: [],
+    };
 
     for (let i = 0; i < deals.length; i++) {
       const row = deals[i];
@@ -103,16 +114,22 @@ Deno.serve(async (req) => {
 
         // Resolve assigned_to: prefer direct user_id, fallback to name resolution
         let assignedTo: string | null = null;
-        if ((row as any).assigned_to_user_id) {
-          assignedTo = (row as any).assigned_to_user_id;
+        if (row.assigned_to_user_id) {
+          assignedTo = row.assigned_to_user_id;
         } else if (row.assigned_to?.trim()) {
           assignedTo = profileByName.get(row.assigned_to.toLowerCase().trim()) || null;
+          if (!assignedTo) {
+            result.vendor_not_found.push({ row: rowNum, title: row.title.trim(), vendor_name: row.assigned_to.trim() });
+          }
         }
 
         // Resolve product
         let productId: string | null = null;
         if (row.produto?.trim()) {
           productId = productByName.get(row.produto.toLowerCase().trim()) || null;
+          if (!productId) {
+            result.product_not_found.push({ row: rowNum, title: row.title.trim(), product_name: row.produto.trim() });
+          }
         }
 
         // Parse value
@@ -157,7 +174,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[import-deals] Done: ${result.deals_created} created, ${result.contacts_created} contacts, ${result.errors.length} errors`);
+    console.log(`[import-deals] Done: ${result.deals_created} created, ${result.contacts_created} contacts new, ${result.contacts_reused} reused, ${result.vendor_not_found.length} vendor warnings, ${result.product_not_found.length} product warnings, ${result.errors.length} errors`);
 
     return new Response(JSON.stringify(result), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -181,7 +198,7 @@ async function resolveContact(
   if (email) {
     const { data: existing } = await supabase
       .from('contacts').select('id').eq('email', email).maybeSingle();
-    if (existing) return existing.id;
+    if (existing) { result.contacts_reused++; return existing.id; }
 
     // Create contact with email
     const nameParts = clientName ? splitName(clientName) : { first: email.split('@')[0], last: '' };
@@ -197,7 +214,7 @@ async function resolveContact(
   if (phone) {
     const { data: existing } = await supabase
       .from('contacts').select('id').eq('phone', phone).maybeSingle();
-    if (existing) return existing.id;
+    if (existing) { result.contacts_reused++; return existing.id; }
 
     if (clientName) {
       const nameParts = splitName(clientName);
@@ -218,7 +235,7 @@ async function resolveContact(
       .ilike('first_name', nameParts.first)
       .ilike('last_name', nameParts.last)
       .maybeSingle();
-    if (existing) return existing.id;
+    if (existing) { result.contacts_reused++; return existing.id; }
 
     const { data: created, error } = await supabase
       .from('contacts')

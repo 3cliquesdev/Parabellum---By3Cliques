@@ -19,6 +19,9 @@ interface DealRow {
 interface ImportResult {
   deals_created: number;
   contacts_created: number;
+  contacts_reused: number;
+  vendor_not_found: Array<{ row: number; title: string; vendor_name: string }>;
+  product_not_found: Array<{ row: number; title: string; product_name: string }>;
   errors: Array<{ row: number; title: string; error: string }>;
 }
 
@@ -42,7 +45,7 @@ export function useImportDeals() {
       const total = deals.length;
       setProgress({ current: 0, total });
 
-      const result: ImportResult = { deals_created: 0, contacts_created: 0, errors: [] };
+      const result: ImportResult = { deals_created: 0, contacts_created: 0, contacts_reused: 0, vendor_not_found: [], product_not_found: [], errors: [] };
 
       for (let i = 0; i < total; i += CHUNK_SIZE) {
         const chunk = deals.slice(i, i + CHUNK_SIZE);
@@ -54,7 +57,14 @@ export function useImportDeals() {
           const chunkResult = data as ImportResult;
           result.deals_created += chunkResult.deals_created;
           result.contacts_created += chunkResult.contacts_created;
+          result.contacts_reused += chunkResult.contacts_reused || 0;
           // Adjust row numbers for chunk offset
+          (chunkResult.vendor_not_found || []).forEach(v => {
+            result.vendor_not_found.push({ ...v, row: v.row + i });
+          });
+          (chunkResult.product_not_found || []).forEach(p => {
+            result.product_not_found.push({ ...p, row: p.row + i });
+          });
           chunkResult.errors.forEach(e => {
             result.errors.push({ ...e, row: e.row + i });
           });

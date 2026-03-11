@@ -101,11 +101,9 @@ export default function ImportDeals() {
       .map(row => {
         const deal: any = {};
         Object.entries(mapping).forEach(([dbField, csvCol]) => {
-          // Skip assigned_to from CSV if using fixed vendor
           if (dbField === 'assigned_to' && fixedAssignedTo) return;
           if (csvCol && row[csvCol]) deal[dbField] = row[csvCol];
         });
-        // Inject fixed assigned_to_user_id
         if (fixedAssignedTo) {
           deal.assigned_to_user_id = fixedAssignedTo;
         }
@@ -115,6 +113,9 @@ export default function ImportDeals() {
 
     if (mappedDeals.length === 0) { alert('Nenhum deal válido para importar.'); return; }
 
+    const totalCsvRows = csvData.length;
+    const skippedNoTitle = totalCsvRows - mappedDeals.length;
+
     try {
       const result = await importMutation.mutateAsync({
         deals: mappedDeals,
@@ -123,9 +124,15 @@ export default function ImportDeals() {
       });
       setImportResult({
         total: mappedDeals.length,
+        totalCsvRows,
         processed: mappedDeals.length,
         created: result.deals_created,
         updated: 0,
+        contactsCreated: result.contacts_created,
+        contactsReused: result.contacts_reused || 0,
+        skippedNoTitle,
+        vendorNotFound: result.vendor_not_found || [],
+        productNotFound: result.product_not_found || [],
         errors: result.errors.map(e => ({ row: e.row, email: e.title, error: e.error })),
       });
     } catch (error) {
@@ -232,9 +239,15 @@ export default function ImportDeals() {
         {importResult && (
           <ImportProgress
             total={importResult.total}
+            totalCsvRows={importResult.totalCsvRows}
             processed={importResult.processed}
             created={importResult.created}
             updated={importResult.updated}
+            contactsCreated={importResult.contactsCreated}
+            contactsReused={importResult.contactsReused}
+            skippedNoTitle={importResult.skippedNoTitle}
+            vendorNotFound={importResult.vendorNotFound}
+            productNotFound={importResult.productNotFound}
             errors={importResult.errors}
           />
         )}
