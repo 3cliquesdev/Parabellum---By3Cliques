@@ -6271,6 +6271,10 @@ ${knowledgeContext}${identityWallNote}
 ${contactEmail ? `- Email: ${safeEmail}` : (flow_context ? '- Email: Não identificado (a IA pode ajudar sem email)' : '- Email: NÃO CADASTRADO - SOLICITAR')}
 ${contact.phone ? `- Telefone: ${safePhone}` : ''}
 - CPF: ${maskedCPF}
+${contactOrgName ? `- Organização: ${contactOrgName}` : ''}
+${contactConsultantName ? `- Consultor responsável: ${contactConsultantName}` : ''}
+${contactSellerName ? `- Vendedor responsável: ${contactSellerName}` : ''}
+${contactTagsList.length > 0 ? `- Tags: ${contactTagsList.join(', ')}` : ''}
 ${crossSessionContext}${personaToneInstruction}
 
 Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
