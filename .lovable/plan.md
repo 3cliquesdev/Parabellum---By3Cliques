@@ -1,32 +1,48 @@
 
-# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-## Arquivo: `supabase/functions/process-chat-flow/index.ts`
+# Liberar flow states presos + pg_cron automático
 
-### FIX 1 ✅ — Proteção contra loop flow-to-flow
-### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
-### FIX 3 ✅ — Auto-traverse cobre condition_v2
-### FIX 4 ✅ — Transfer node atualiza conversations.department
-### FIX 5 ✅ — startMessage com replaceVariables
-### FIX 6 ✅ — financialIntentPattern simplificado
+## Parte 1 — Liberar flow states presos (SQL imediato)
 
----
+Executar via insert tool (operação de dados, não schema):
 
-# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
+```sql
+UPDATE public.chat_flow_states
+SET status = 'transferred', completed_at = now()
+WHERE status IN ('waiting_input', 'active', 'in_progress')
+  AND started_at < now() - INTERVAL '3 minutes'
+  AND conversation_id IN (
+    SELECT id FROM public.conversations WHERE status = 'open'
+  );
+```
 
-## Problema
-Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
+## Parte 2 — pg_cron job a cada 3 minutos
 
-## Correções aplicadas
+Executar via insert tool (não migration, pois contém dados específicos do projeto):
 
-### 7a — Fallback edge default (process-chat-flow ~L2273)
-Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_cron;
 
-### 7b — Guard final sem nó (process-chat-flow ~L2336)
-Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
+SELECT cron.unschedule('cleanup-stuck-flow-states');
 
-### 7c — Safety net IA falha (process-buffered-messages ~L383)
-Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
+SELECT cron.schedule(
+  'cleanup-stuck-flow-states',
+  '*/3 * * * *',
+  $$
+    UPDATE public.chat_flow_states
+    SET status = 'transferred', completed_at = now()
+    WHERE status IN ('waiting_input', 'active', 'in_progress')
+      AND started_at < now() - INTERVAL '3 minutes'
+      AND conversation_id IN (
+        SELECT id FROM public.conversations WHERE status = 'open'
+      );
+  $$
+);
+```
 
-### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
-Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
+## Notas técnicas
+
+- Ambas operações usam `started_at` como referência (confirmado: tabela não tem `updated_at`)
+- O job cron garante limpeza contínua de flows presos sem intervenção manual
+- Flows com mais de 3 min em estado ativo/waiting são marcados como `transferred` para liberar a conversa para atendimento humano
+
