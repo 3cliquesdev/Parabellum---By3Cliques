@@ -19,6 +19,9 @@ interface DealRow {
 interface ImportResult {
   deals_created: number;
   contacts_created: number;
+  contacts_reused: number;
+  vendor_not_found: Array<{ row: number; title: string; vendor_name: string }>;
+  product_not_found: Array<{ row: number; title: string; product_name: string }>;
   errors: Array<{ row: number; title: string; error: string }>;
 }
 
