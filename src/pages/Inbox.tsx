@@ -604,6 +604,9 @@ export default function Inbox() {
           <InboxFilterPopover filters={filters} onFiltersChange={setFilters} />
         </div>
         
+        {/* Active filter chips - visible outside popover */}
+        <ActiveFilterChips filters={filters} onFiltersChange={setFilters} />
+        
         {/* Bulk Actions Bar for waiting_human conversations */}
         {filter === 'human_queue' && !selectionMode && (
           <BulkActionsBar
