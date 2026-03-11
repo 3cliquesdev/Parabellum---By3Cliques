@@ -94,7 +94,7 @@ serve(async (req) => {
       if (errorCount >= 2) {
         shouldHandoff = true;
         handoffReason = 'error_loop';
-        internalNote = `🔄 **Transbordo Automático - Loop de Erro**\n\nA IA não conseguiu resolver a solicitação do cliente após ${errorCount} tentativas. É necessário intervenção humana especializada.`;
+        internalNote = `🔄 Transbordo Automático - Loop de Erro\n\nA IA não conseguiu resolver a solicitação do cliente após ${errorCount} tentativas. É necessário intervenção humana especializada.`;
         console.log('[auto-handoff] 🔄 Loop de erro detectado! Acionando handoff...');
       }
     }
