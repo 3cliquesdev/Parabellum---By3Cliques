@@ -57,7 +57,14 @@ export function useImportDeals() {
           const chunkResult = data as ImportResult;
           result.deals_created += chunkResult.deals_created;
           result.contacts_created += chunkResult.contacts_created;
+          result.contacts_reused += chunkResult.contacts_reused || 0;
           // Adjust row numbers for chunk offset
+          (chunkResult.vendor_not_found || []).forEach(v => {
+            result.vendor_not_found.push({ ...v, row: v.row + i });
+          });
+          (chunkResult.product_not_found || []).forEach(p => {
+            result.product_not_found.push({ ...p, row: p.row + i });
+          });
           chunkResult.errors.forEach(e => {
             result.errors.push({ ...e, row: e.row + i });
           });
