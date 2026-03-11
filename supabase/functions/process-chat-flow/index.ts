@@ -1315,7 +1315,7 @@ serve(async (req) => {
 
           const { error: advErr } = await supabaseClient
             .from('chat_flow_states')
-            .update({ current_node_id: advanceNode.id, status: advanceStatus })
+            .update({ current_node_id: advanceNode.id, status: advanceStatus , updated_at: new Date().toISOString() })
             .eq('id', newState.id);
 
           if (advErr) {
@@ -1369,7 +1369,7 @@ serve(async (req) => {
       const idsToCancel = activeStates.slice(1).map((s: any) => s.id);
       await supabaseClient
         .from('chat_flow_states')
-        .update({ status: 'cancelled' })
+        .update({ status: 'cancelled' , updated_at: new Date().toISOString() })
         .in('id', idsToCancel);
     }
 
@@ -1388,7 +1388,7 @@ serve(async (req) => {
         console.log('[process-chat-flow] 🧪 TEST MODE: Cancelando estado residual de fluxo automático:', activeState.flow_id);
         await supabaseClient
           .from('chat_flow_states')
-          .update({ status: 'cancelled' })
+          .update({ status: 'cancelled' , updated_at: new Date().toISOString() })
           .eq('id', activeState.id);
 
         return new Response(JSON.stringify({
@@ -2239,6 +2239,7 @@ serve(async (req) => {
             .update({
               collected_data: collectedData,
               current_node_id: currentNode.id,
+              updated_at: new Date().toISOString(),
             })
             .eq('id', activeState.id);
 
@@ -2312,6 +2313,7 @@ serve(async (req) => {
             current_node_id: currentNode.id,
             status: 'transferred',
             completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
 
@@ -2350,6 +2352,7 @@ serve(async (req) => {
             current_node_id: currentNode.id,
             status: 'transferred',
             completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
 
@@ -2409,6 +2412,7 @@ serve(async (req) => {
                 current_node_id: nextNode.id,
                 collected_data: inactivityMeta,
                 status: 'waiting_input',
+                updated_at: new Date().toISOString(),
               })
               .eq('id', activeState.id);
 
@@ -2450,6 +2454,7 @@ serve(async (req) => {
           .update({
             collected_data: collectedData,
             current_node_id: nextNode.id,
+            updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
 
@@ -2483,6 +2488,7 @@ serve(async (req) => {
               collected_data: collectedData,
               current_node_id: nextNode.id,
               status: fetchStatus,
+              updated_at: new Date().toISOString(),
             })
             .eq('id', activeState.id);
         }
@@ -2589,7 +2595,7 @@ serve(async (req) => {
         // Update state
         await supabaseClient
           .from('chat_flow_states')
-          .update({ collected_data: collectedData, current_node_id: nextNode.id })
+          .update({ collected_data: collectedData, current_node_id: nextNode.id , updated_at: new Date().toISOString() })
           .eq('id', activeState.id);
 
         // Auto-traverse to next node
@@ -2615,7 +2621,7 @@ serve(async (req) => {
             ? 'waiting_input' : 'active';
           await supabaseClient
             .from('chat_flow_states')
-            .update({ collected_data: collectedData, current_node_id: nextNode.id, status: vcStatus })
+            .update({ collected_data: collectedData, current_node_id: nextNode.id, status: vcStatus , updated_at: new Date().toISOString() })
             .eq('id', activeState.id);
         }
       }
@@ -2652,6 +2658,7 @@ serve(async (req) => {
             collected_data: collectedData,
             status: 'completed',
             completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
 
@@ -2788,6 +2795,7 @@ serve(async (req) => {
             collected_data: collectedData,
             current_node_id: nextNode.id,
             status: 'transferred',
+            updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
 
@@ -2822,6 +2830,7 @@ serve(async (req) => {
           .update({
             collected_data: collectedData,
             current_node_id: nextNode.id,
+            updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
 
@@ -2918,6 +2927,7 @@ serve(async (req) => {
             collected_data: collectedData,
             status: 'completed',
             completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
 
@@ -2942,6 +2952,7 @@ serve(async (req) => {
             collected_data: collectedData,
             status: 'completed',
             completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
 
@@ -3037,6 +3048,7 @@ serve(async (req) => {
             current_node_id: nextNode.id,
             status: 'transferred',
             completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
 
@@ -3072,6 +3084,7 @@ serve(async (req) => {
           collected_data: collectedData,
           current_node_id: nextNode.id,
           status: nextStatus,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', activeState.id);
 
@@ -3495,6 +3508,7 @@ serve(async (req) => {
               collected_data: collectedData,
               // 🔧 FIX 2: condition_v2 reconhecido como waiting_input
               status: (node.type === 'condition' || node.type === 'condition_v2') ? 'waiting_input' : 'active',
+              updated_at: new Date().toISOString(),
             })
             .eq('id', existingState.id);
         } else {
@@ -3578,7 +3592,7 @@ serve(async (req) => {
         if (node.type === 'transfer') {
           await supabaseClient
             .from('chat_flow_states')
-            .update({ status: 'transferred' })
+            .update({ status: 'transferred' , updated_at: new Date().toISOString() })
             .eq('id', stateId);
             
           const transferMsg = replaceVariables(node.data?.message || 'Transferindo para um atendente...', masterVariablesContext);
@@ -3602,7 +3616,7 @@ serve(async (req) => {
         if (node.type === 'end') {
           await supabaseClient
             .from('chat_flow_states')
-            .update({ status: 'completed', completed_at: new Date().toISOString() })
+            .update({ status: 'completed', completed_at: new Date().toISOString() , updated_at: new Date().toISOString() })
             .eq('id', stateId);
             
           const endMsg = replaceVariables(node.data?.message || '', masterVariablesContext);

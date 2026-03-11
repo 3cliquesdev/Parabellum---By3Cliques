@@ -75,7 +75,7 @@ serve(async (req) => {
       if (sentiment.includes('crítico') || sentiment.includes('irritado') || sentiment.includes('negativo')) {
         shouldHandoff = true;
         handoffReason = 'critical_sentiment';
-        internalNote = `🚨 **Transbordo Automático - Sentimento Crítico**\n\nO cliente demonstra **${sentimentData.result}**. Recomenda-se atenção especial e abordagem empática.`;
+        internalNote = `🚨 Transbordo Automático - Sentimento Crítico\n\nO cliente demonstra ${sentimentData.result}. Recomenda-se atenção especial e abordagem empática.`;
         console.log('[auto-handoff] ⚠️ Sentimento crítico detectado! Acionando handoff...');
       }
     }
@@ -94,7 +94,7 @@ serve(async (req) => {
       if (errorCount >= 2) {
         shouldHandoff = true;
         handoffReason = 'error_loop';
-        internalNote = `🔄 **Transbordo Automático - Loop de Erro**\n\nA IA não conseguiu resolver a solicitação do cliente após ${errorCount} tentativas. É necessário intervenção humana especializada.`;
+        internalNote = `🔄 Transbordo Automático - Loop de Erro\n\nA IA não conseguiu resolver a solicitação do cliente após ${errorCount} tentativas. É necessário intervenção humana especializada.`;
         console.log('[auto-handoff] 🔄 Loop de erro detectado! Acionando handoff...');
       }
     }
@@ -138,11 +138,22 @@ serve(async (req) => {
     if (routingError) {
       console.error('[auto-handoff] Error in routing:', routingError);
       // Fallback: mudar para waiting_human sem atribuir agente + garantir departamento
-      const FALLBACK_DEPT_SUPORTE = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      // 🆕 FIX: Busca dinâmica do departamento "Suporte" em vez de UUID hardcoded
+      const { data: deptSuporte } = await supabaseClient
+        .from('departments')
+        .select('id')
+        .ilike('name', '%suporte%')
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+      const FALLBACK_DEPT_SUPORTE = deptSuporte?.id || null;
+      if (!FALLBACK_DEPT_SUPORTE) {
+        console.warn('[auto-handoff] ⚠️ Departamento "Suporte" não encontrado no banco — handoff sem departamento');
+      }
       const fallbackUpdate: Record<string, unknown> = { ai_mode: 'waiting_human' };
-      if (!conversation.department) {
+      if (!conversation.department && FALLBACK_DEPT_SUPORTE) {
         fallbackUpdate.department = FALLBACK_DEPT_SUPORTE;
-        console.log('[auto-handoff] ⚠️ No department — applying Suporte fallback');
+        console.log('[auto-handoff] ✅ Departamento Suporte aplicado:', FALLBACK_DEPT_SUPORTE);
       }
       await supabaseClient
         .from('conversations')
@@ -173,12 +184,12 @@ serve(async (req) => {
 
     const noteContent = `🤖 → 👤 Handoff Automático
 
-**Motivo:** ${handoffReasons[handoffReason] || handoffReason}
+Motivo: ${handoffReasons[handoffReason] || handoffReason}
 
-**Resumo da Conversa:**
+Resumo da Conversa:
 ${summary}
 
-**Atribuição:** ${routingResult?.agent_name || 'Fila de espera'}`;
+Atribuição: ${routingResult?.agent_name || 'Fila de espera'}`;
 
     await supabaseClient
       .from('interactions')

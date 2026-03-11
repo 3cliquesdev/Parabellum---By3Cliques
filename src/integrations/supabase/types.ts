@@ -1718,6 +1718,7 @@ export type Database = {
           id: string
           started_at: string | null
           status: string | null
+          updated_at: string | null
         }
         Insert: {
           collected_data?: Json | null
@@ -1728,6 +1729,7 @@ export type Database = {
           id?: string
           started_at?: string | null
           status?: string | null
+          updated_at?: string | null
         }
         Update: {
           collected_data?: Json | null
@@ -1738,6 +1740,7 @@ export type Database = {
           id?: string
           started_at?: string | null
           status?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {

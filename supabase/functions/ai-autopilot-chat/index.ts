@@ -1201,6 +1201,18 @@ Contexto do Cliente:
 Nome: ${contactName}
 Status: ${contactStatus}`;
 
+  // Persona contextual baseada em perfil do contato
+  if (contactStatus === 'customer' || contactStatus === 'vip') {
+    restrictions += '\nTom: cordial e proativo. Este é um cliente ativo — priorize resolução ágil.';
+  } else if (contactStatus === 'lead') {
+    restrictions += '\nTom: amigável e consultivo. Foque em entender a necessidade sem pressão.';
+  }
+
+  // Tom empático quando contexto financeiro
+  if (forbidFinancial) {
+    restrictions += '\nSe o cliente demonstrar preocupação financeira, responda com empatia e tranquilidade antes de qualquer informação.';
+  }
+
   return restrictions;
 }
 
@@ -4095,6 +4107,54 @@ Responda APENAS: skip ou search`
     const contactCompany = contact.company ? ` da empresa ${contact.company}` : '';
     const contactStatus = contact.status || 'lead';
     
+    // 🆕 CROSS-SESSION MEMORY: Buscar últimas 3 conversas fechadas do mesmo contato
+    let crossSessionContext = '';
+    try {
+      const { data: pastConvs } = await supabaseClient
+        .from('conversations')
+        .select('id, created_at, closed_at')
+        .eq('contact_id', contact.id)
+        .eq('status', 'closed')
+        .neq('id', conversationId)
+        .order('closed_at', { ascending: false })
+        .limit(3);
+      
+      if (pastConvs && pastConvs.length > 0) {
+        for (const conv of pastConvs) {
+          const { data: lastMsg } = await supabaseClient
+            .from('messages')
+            .select('content, sender_type')
+            .eq('conversation_id', conv.id)
+            .in('sender_type', ['agent', 'system'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (lastMsg?.content) {
+            const dateStr = conv.closed_at
+              ? new Date(conv.closed_at).toLocaleDateString('pt-BR')
+              : 'data desconhecida';
+            crossSessionContext += `- ${dateStr}: "${lastMsg.content.substring(0, 150)}"\n`;
+          }
+        }
+      }
+      if (crossSessionContext) {
+        crossSessionContext = `\n\nHistórico de atendimentos anteriores deste cliente:\n${crossSessionContext}(Use apenas como contexto, não mencione explicitamente ao cliente)`;
+        console.log(`[ai-autopilot-chat] 🧠 Cross-session memory encontrada para contato ${contact.id}`);
+      }
+    } catch (memErr) {
+      console.warn('[ai-autopilot-chat] ⚠️ Erro ao buscar memória cross-session:', memErr);
+    }
+    
+    // 🆕 PERSONA CONTEXTUAL: Variar tom baseado no status/contexto do contato
+    let personaToneInstruction = '';
+    if (contact.status === 'vip' || contact.subscription_plan) {
+      personaToneInstruction = '\n\nTom: Extremamente cordial e proativo. Este é um cliente VIP/assinante. Ofereça assistência premium e priorize a resolução rápida.';
+    } else if (contact.status === 'churn_risk' || contact.status === 'inactive') {
+      personaToneInstruction = '\n\nTom: Empático e acolhedor. Este cliente pode estar insatisfeito. Demonstre cuidado genuíno e resolva com atenção especial.';
+    } else if (contact.lead_score && contact.lead_score >= 80) {
+      personaToneInstruction = '\n\nTom: Entusiasmado e consultivo. Este é um lead quente com alta pontuação. Seja proativo em ajudar e guiar.';
+    }
+    
     // 🆕 CORREÇÃO: Cliente é "conhecido" se tem email OU se foi validado via Kiwify OU se está na base como customer
     const isKiwifyValidated = contact.kiwify_validated === true;
     const isCustomerInDatabase = contact.status === 'customer';
@@ -6136,6 +6196,7 @@ ${knowledgeContext}${identityWallNote}
 ${contactEmail ? `- Email: ${safeEmail}` : (flow_context ? '- Email: Não identificado (a IA pode ajudar sem email)' : '- Email: NÃO CADASTRADO - SOLICITAR')}
 ${contact.phone ? `- Telefone: ${safePhone}` : ''}
 - CPF: ${maskedCPF}
+${crossSessionContext}${personaToneInstruction}
 
 Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 
