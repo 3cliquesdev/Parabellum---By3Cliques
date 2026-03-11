@@ -2222,6 +2222,7 @@ serve(async (req) => {
             const fallbackMsg = currentNode.data?.fallback_message;
             if (fallbackMsg && String(fallbackMsg).trim().length > 0) {
               try {
+                // 🔧 RISK 2 FIX: Usar canal real da conversa em vez de 'web_chat' hardcoded
                 await supabaseClient.from('messages').insert({
                   conversation_id: conversationId,
                   content: String(fallbackMsg),
@@ -2229,7 +2230,7 @@ serve(async (req) => {
                   is_ai_generated: true,
                   is_internal: false,
                   status: 'sent',
-                  channel: 'web_chat',
+                  channel: activeConversationData?.channel || 'web_chat',
                 });
                 console.log('[process-chat-flow] ✅ fallback_message inserted on AI exit (will advance)');
               } catch (sendErr) {
