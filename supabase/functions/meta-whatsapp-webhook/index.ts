@@ -1227,30 +1227,23 @@ serve(async (req) => {
                                 }));
                                 
                                 // Se o flow retornou mensagem, enviar via Meta API
-                                const flowMessage = flowData.response || flowData.message;
+                                const flowMessageRaw = flowData.response || flowData.message;
+                                const flowMessage = flowMessageRaw
+                                  ? flowMessageRaw + formatOptionsAsText(flowData.options)
+                                  : null;
                                 if (flowMessage) {
-                                  const metaToken = instance.whatsapp_meta_token || Deno.env.get("WHATSAPP_META_TOKEN");
-                                  const phoneNumberId = instance.whatsapp_meta_phone_id || Deno.env.get("WHATSAPP_META_PHONE_NUMBER_ID");
-                                  
-                                  if (metaToken && phoneNumberId) {
-                                    await supabase.functions.invoke("send-meta-whatsapp", {
-                                      body: {
-                                        instance_id: instance.id,
-                                        phone_number: fromNumber,
-                                        message: flowMessage,
-                                        conversation_id: conversation.id,
-                                        skip_db_save: true,
-                                      },
-                                    });
-                                    
-                                    await supabase.from("messages").insert({
+                                  await supabase.functions.invoke("send-meta-whatsapp", {
+                                    body: {
+                                      instance_id: instance.id,
+                                      phone_number: fromNumber,
+                                      message: flowMessage,
                                       conversation_id: conversation.id,
-                                      content: flowMessage,
-                                      sender_type: "system",
-                                      message_type: "text",
-                                    });
-                                    console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (financial exit)");
-                                  }
+                                      skip_db_save: false,
+                                      is_bot_message: true,
+                                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                                    },
+                                  });
+                                  console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (financial exit)");
                                 }
                                 
                                 // Se o flow retornou transfer, aplicar
