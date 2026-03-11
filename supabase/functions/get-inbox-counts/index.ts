@@ -350,10 +350,11 @@ Deno.serve(async (req: Request) => {
         "X-Counts-Cache": "miss",
       },
     });
-  } catch (error) {
-    console.error("[get-inbox-counts] Error:", error);
+  } catch (error: any) {
+    const errMsg = error?.message || error?.msg || (typeof error === 'string' ? error : JSON.stringify(error));
+    console.error("[get-inbox-counts] Error:", errMsg, error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Erro desconhecido" }),
+      JSON.stringify({ error: errMsg || "Erro desconhecido" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
