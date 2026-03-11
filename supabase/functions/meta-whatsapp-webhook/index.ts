@@ -1145,7 +1145,12 @@ serve(async (req) => {
 
               // CASO 3: Fluxo ativou AIResponseNode → Chamar IA com flow_context
               if (flowData.useAI && flowData.aiNodeActive) {
-                if (conversation.ai_mode === "autopilot" && !conversation.awaiting_rating) {
+                // FIX: Se process-chat-flow retornou aiNodeActive=true, a soberania do fluxo
+                // já restaurou ai_mode para autopilot no DB. Confiar no fluxo em vez do objeto stale.
+                const effectiveAiMode = (flowData.useAI && flowData.aiNodeActive) 
+                  ? "autopilot" 
+                  : conversation.ai_mode;
+                if (effectiveAiMode === "autopilot" && !conversation.awaiting_rating) {
                   
                   // 📦 BATCHING: Se delay > 0, acumular mensagem no buffer em vez de chamar IA diretamente
                   if (batchDelaySeconds > 0) {
