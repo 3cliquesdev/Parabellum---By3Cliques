@@ -17,6 +17,7 @@ export default function ImportDeals() {
   const [importResult, setImportResult] = useState<any>(null);
   const [selectedPipeline, setSelectedPipeline] = useState<string>("");
   const [selectedStage, setSelectedStage] = useState<string>("");
+  const [fixedAssignedTo, setFixedAssignedTo] = useState<string | null>(null);
 
   const importMutation = useImportDeals();
   const { data: pipelines } = usePipelines();
@@ -100,8 +101,14 @@ export default function ImportDeals() {
       .map(row => {
         const deal: any = {};
         Object.entries(mapping).forEach(([dbField, csvCol]) => {
+          // Skip assigned_to from CSV if using fixed vendor
+          if (dbField === 'assigned_to' && fixedAssignedTo) return;
           if (csvCol && row[csvCol]) deal[dbField] = row[csvCol];
         });
+        // Inject fixed assigned_to_user_id
+        if (fixedAssignedTo) {
+          deal.assigned_to_user_id = fixedAssignedTo;
+        }
         return deal;
       })
       .filter(d => d.title?.toString().trim());
@@ -186,6 +193,8 @@ export default function ImportDeals() {
               csvHeaders={csvHeaders}
               mapping={mapping}
               onMappingChange={handleMappingChange}
+              fixedAssignedTo={fixedAssignedTo}
+              onFixedAssignedToChange={setFixedAssignedTo}
             />
 
             {csvData.length > 0 && (
@@ -203,7 +212,7 @@ export default function ImportDeals() {
             )}
 
             <div className="flex justify-end gap-4">
-              <Button variant="outline" onClick={() => { setCsvData([]); setCsvHeaders([]); setMapping({}); setImportResult(null); }}>
+              <Button variant="outline" onClick={() => { setCsvData([]); setCsvHeaders([]); setMapping({}); setImportResult(null); setFixedAssignedTo(null); }}>
                 Limpar
               </Button>
               <Button

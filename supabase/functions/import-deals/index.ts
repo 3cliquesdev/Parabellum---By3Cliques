@@ -101,9 +101,11 @@ Deno.serve(async (req) => {
         // Resolve or create contact
         const contactId = await resolveContact(supabase, { email, phone, clientName }, result);
 
-        // Resolve assigned_to
+        // Resolve assigned_to: prefer direct user_id, fallback to name resolution
         let assignedTo: string | null = null;
-        if (row.assigned_to?.trim()) {
+        if ((row as any).assigned_to_user_id) {
+          assignedTo = (row as any).assigned_to_user_id;
+        } else if (row.assigned_to?.trim()) {
           assignedTo = profileByName.get(row.assigned_to.toLowerCase().trim()) || null;
         }
 
