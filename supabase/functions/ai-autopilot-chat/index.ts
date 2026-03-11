@@ -7962,7 +7962,7 @@ Conversa: ${conversationId}`;
       }
     }
 
-    // 🆕 FIX LOOP: Anti-loop counter - máximo 2 fallbacks consecutivos no mesmo nó AI
+    // 🆕 FIX LOOP: Anti-loop counter - máximo 5 fallbacks consecutivos no mesmo nó AI
     if (!isFallbackResponse && flow_context) {
       const existingMetadata = conversation.customer_metadata || {};
       const aiNodeFallbackCount = existingMetadata.ai_node_fallback_count || 0;
@@ -7972,7 +7972,7 @@ Conversa: ${conversationId}`;
       if (aiNodeId !== flow_context.node_id) {
         // Novo nó, resetar
       } else if (aiNodeFallbackCount >= 5) {
-        console.log('[ai-autopilot-chat] 🚨 ANTI-LOOP: Máximo de 2 fallbacks atingido no nó AI → forçando flow_advance_needed', {
+        console.log('[ai-autopilot-chat] 🚨 ANTI-LOOP: Máximo de 5 fallbacks atingido no nó AI → forçando flow_advance_needed', {
           node_id: flow_context.node_id,
           fallback_count: aiNodeFallbackCount
         });
