@@ -4433,6 +4433,7 @@ Responda APENAS: skip ou search`
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
+        } // end else (no flow_context)
       }
       
       // Resposta validada - enviar ao cliente
