@@ -2828,15 +2828,25 @@ serve(async (req) => {
           })
           .eq('id', activeState.id);
 
-        // 🔧 FIX 4: Transfer node atualiza conversations.department
+        // ✅ FIX 14: Transfer node usa transition-conversation-state centralizado
         const transferDeptId = nextNode.data?.department_id || null;
-        const transferAiMode = nextNode.data?.ai_mode || 'waiting_human';
-        const convUpdatePayload: any = { ai_mode: transferAiMode, assigned_to: null };
-        if (transferDeptId) convUpdatePayload.department = transferDeptId;
-        await supabaseClient.from('conversations').update(convUpdatePayload).eq('id', conversationId);
-        if (!transferDeptId) {
-          console.warn('[process-chat-flow] ⚠️ Transfer node sem department_id — conversa ficará sem dept atribuído');
-        }
+        await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+            },
+            body: JSON.stringify({
+              conversationId,
+              transition: 'handoff_to_human',
+              departmentId: transferDeptId,
+              reason: 'flow_transfer_node',
+              metadata: { node_id: nextNode.id, flow_id: activeState.flow_id }
+            })
+          }
+        );
 
         return new Response(
           JSON.stringify({
