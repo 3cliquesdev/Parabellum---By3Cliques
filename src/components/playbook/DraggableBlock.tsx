@@ -1,20 +1,22 @@
 import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface DraggableBlockProps {
   type: string;
   icon: LucideIcon;
   label: string;
   color?: string;
+  tooltip?: string;
 }
 
-export function DraggableBlock({ type, icon: Icon, label, color }: DraggableBlockProps) {
+export function DraggableBlock({ type, icon: Icon, label, color, tooltip }: DraggableBlockProps) {
   const onDragStart = (event: React.DragEvent<HTMLDivElement>) => {
     event.dataTransfer.setData('application/reactflow', type);
     event.dataTransfer.effectAllowed = 'move';
   };
 
-  return (
+  const block = (
     <div
       draggable
       onDragStart={onDragStart}
@@ -37,4 +39,19 @@ export function DraggableBlock({ type, icon: Icon, label, color }: DraggableBloc
       <span className="text-xs font-medium text-center leading-tight">{label}</span>
     </div>
   );
+
+  if (tooltip) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {block}
+        </TooltipTrigger>
+        <TooltipContent side="right" className="max-w-[200px] text-xs">
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return block;
 }

@@ -2,6 +2,7 @@ import { Node } from "reactflow";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ReadOnlyVariableBadge } from "./ReadOnlyVariableBadge";
 
 interface VerifyCustomerOTPPropertiesPanelProps {
   selectedNode: Node;
@@ -70,30 +71,17 @@ export function VerifyCustomerOTPPropertiesPanel({ selectedNode, updateNodeData 
         </div>
       </div>
 
-      {/* Variáveis de saída */}
-      <div className="pt-2 border-t">
-        <Label className="text-xs text-muted-foreground">Variável de saída</Label>
-        <div className="mt-2 space-y-2">
-          <div className="space-y-1">
-            <Label className="text-[10px]">Cliente verificado?</Label>
-            <Input
-              value={selectedNode.data.save_verified_as || "customer_verified"}
-              onChange={(e) => updateNodeData("save_verified_as", e.target.value)}
-              placeholder="customer_verified"
-              className="h-8 text-sm"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Preview de variáveis */}
-      <div className="p-3 bg-muted/50 rounded-lg space-y-1">
-        <p className="text-[10px] font-medium text-muted-foreground">Variáveis disponíveis após execução:</p>
-        <div className="space-y-0.5 font-mono text-[10px]">
-          <p><span className="text-green-600">{`{{${selectedNode.data.save_verified_as || "customer_verified"}}}`}</span> → true/false</p>
-          <p><span className="text-blue-600">{`{{customer_verified_email}}`}</span> → Email verificado</p>
-          <p><span className="text-purple-600">{`{{customer_verified_name}}`}</span> → Nome do cliente</p>
-          <p><span className="text-amber-600">{`{{__otp_result}}`}</span> → verified / not_customer / failed</p>
+      {/* Variáveis de saída - READ ONLY */}
+      <div className="pt-2 border-t space-y-2">
+        <Label className="text-xs font-semibold">Variáveis geradas automaticamente</Label>
+        <p className="text-[10px] text-muted-foreground">
+          Clique para copiar e usar em nós seguintes
+        </p>
+        <div className="space-y-1.5">
+          <ReadOnlyVariableBadge variable="customer_verified" description="true/false — Cliente verificado?" colorClass="text-green-600" />
+          <ReadOnlyVariableBadge variable="customer_verified_email" description="Email verificado pelo OTP" colorClass="text-blue-600" />
+          <ReadOnlyVariableBadge variable="customer_verified_name" description="Nome do cliente" colorClass="text-purple-600" />
+          <ReadOnlyVariableBadge variable="__otp_result" description="verified / not_customer / failed" colorClass="text-amber-600" />
         </div>
       </div>
 
