@@ -185,7 +185,7 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
 }
 
 // Função para aplicar filtros client-side (PURAMENTE SÍNCRONA)
-function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?: Set<string>, scope?: 'active' | 'archived'): InboxViewItem[] {
+function applyFilters(items: InboxViewItem[], filters?: InboxFilters, _tagIdsSet?: Set<string>, scope?: 'active' | 'archived'): InboxViewItem[] {
   if (!filters) return items;
 
   let result = [...items];
