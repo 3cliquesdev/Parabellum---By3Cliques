@@ -382,10 +382,45 @@ async function callPipeline(
 
       if (!autopilotResponse.ok) {
         const errorText = await autopilotResponse.text();
-        console.error("[process-buffered-messages] ❌ ai-autopilot-chat error:", errorText);
-        // 🆕 Safety net: IA falhou com flow ativo → forçar avanço para não deixar conversa presa
+        console.error("[process-buffered-messages] ❌ ai-autopilot-chat error:", autopilotResponse.status, errorText);
+
+        // 🆕 FIX 1: Distinguir quota error (temporário) de erro técnico real
+        let isQuotaError = autopilotResponse.status === 503 || autopilotResponse.status === 429;
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.status === 'quota_error' || errorData.code === 'QUOTA_EXCEEDED' || errorData.retry_suggested === true) {
+            isQuotaError = true;
+          }
+        } catch { /* non-JSON */ }
+
+        if (isQuotaError) {
+          console.warn("[process-buffered-messages] ⚠️ QUOTA ERROR — NÃO disparar forceAIExit, retry no próximo ciclo");
+          // 🆕 FIX 3: Anti-retry infinito — contar tentativas via retry_count
+          const retryCount = await incrementBufferRetryCount(supabase, conversationId);
+          if (retryCount >= 3) {
+            console.warn(`[process-buffered-messages] 🚨 Conv ${conversationId}: ${retryCount} retries — enviando msg de alta demanda e avançando`);
+            // Enviar mensagem de alta demanda para o contato
+            if (instanceId && fromNumber) {
+              await supabase.functions.invoke("send-meta-whatsapp", {
+                body: {
+                  instance_id: instanceId,
+                  phone_number: fromNumber,
+                  message: "Estamos com alta demanda no momento. Sua mensagem será respondida em breve. Agradecemos a paciência! 🙏",
+                  conversation_id: conversationId,
+                  skip_db_save: false,
+                  is_bot_message: true,
+                },
+              });
+            }
+            // Marcar como processed para não ficar retentando infinitamente
+            return true; // caller marcará processed=true
+          }
+          return false; // Não marcar como processed → retry no próximo cron
+        }
+
+        // Erro técnico real → safety net (forceAIExit)
         if (flowContext || flowData?.aiNodeActive) {
-          console.log("[process-buffered-messages] 🔄 Safety net: IA falhou com flow ativo → re-invocando com forceAIExit");
+          console.log("[process-buffered-messages] 🔄 Safety net: IA falhou com erro técnico → re-invocando com forceAIExit");
           await handleFlowReInvoke(supabase, conversationId, concatenatedMessage, instanceId, fromNumber, { forceAIExit: true });
         }
         return false;
@@ -421,6 +456,13 @@ async function callPipeline(
         const exitType = autopilotData.financialBlocked ? "forceFinancialExit" : "forceCommercialExit";
         await handleFlowReInvoke(supabase, conversationId, concatenatedMessage, instanceId, fromNumber, { [exitType]: true });
       }
+
+      // 🆕 FIX 2: Refresh updated_at do flow state após sucesso do buffer
+      await supabase
+        .from('chat_flow_states')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('conversation_id', conversationId)
+        .in('status', ['active', 'in_progress', 'waiting_input']);
 
       return true;
     } else {
@@ -471,7 +513,37 @@ async function callPipeline(
         );
 
         if (!autopilotResponse.ok) {
-          console.error("[process-buffered-messages] ❌ ai-autopilot-chat error:", await autopilotResponse.text());
+          const gErrorText = await autopilotResponse.text();
+          console.error("[process-buffered-messages] ❌ ai-autopilot-chat (global) error:", autopilotResponse.status, gErrorText);
+          // FIX 1 (global path): Não matar em quota error
+          let isGlobalQuotaError = autopilotResponse.status === 503 || autopilotResponse.status === 429;
+          try {
+            const gErr = JSON.parse(gErrorText);
+            if (gErr.status === 'quota_error' || gErr.code === 'QUOTA_EXCEEDED' || gErr.retry_suggested === true) {
+              isGlobalQuotaError = true;
+            }
+          } catch { /* non-JSON */ }
+          if (isGlobalQuotaError) {
+            console.warn("[process-buffered-messages] ⚠️ QUOTA ERROR (global) — retry no próximo ciclo");
+            const retryCount = await incrementBufferRetryCount(supabase, conversationId);
+            if (retryCount >= 3) {
+              console.warn(`[process-buffered-messages] 🚨 Conv ${conversationId}: ${retryCount} retries (global) — enviando msg`);
+              if (instanceId && fromNumber) {
+                await supabase.functions.invoke("send-meta-whatsapp", {
+                  body: {
+                    instance_id: instanceId,
+                    phone_number: fromNumber,
+                    message: "Estamos com alta demanda no momento. Sua mensagem será respondida em breve. Agradecemos a paciência! 🙏",
+                    conversation_id: conversationId,
+                    skip_db_save: false,
+                    is_bot_message: true,
+                  },
+                });
+              }
+              return true;
+            }
+            return false;
+          }
           return false;
         }
       } else if (flowResult.response && instanceId && fromNumber) {
@@ -557,5 +629,37 @@ async function handleFlowReInvoke(
     }
   } else {
     console.error(`[process-buffered-messages] ❌ Flow re-invoke failed (${flagName}):`, await flowResponse.text());
+  }
+}
+
+// 🆕 FIX 3: Contador de retries por conversa para evitar retry infinito em quota errors
+// Usa um campo em memória baseado nos buffers não-processados mais antigos
+async function incrementBufferRetryCount(
+  supabase: any,
+  conversationId: string
+): Promise<number> {
+  try {
+    // Contar quantos ciclos de cron este buffer já sobreviveu
+    // Aproximação: idade do buffer mais antigo não-processado / intervalo do cron (60s)
+    const { data: oldestBuffer } = await supabase
+      .from("message_buffer")
+      .select("created_at")
+      .eq("conversation_id", conversationId)
+      .eq("processed", false)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!oldestBuffer) return 0;
+
+    const ageSeconds = (Date.now() - new Date(oldestBuffer.created_at).getTime()) / 1000;
+    // Cada ciclo de cron é ~60s, batch delay ~8s
+    // Retry count = quantos ciclos completos já passaram
+    const retryCount = Math.floor(ageSeconds / 60);
+    console.log(`[process-buffered-messages] 📊 Conv ${conversationId}: buffer age ${ageSeconds.toFixed(0)}s → ~${retryCount} retries`);
+    return retryCount;
+  } catch (err) {
+    console.error("[process-buffered-messages] ⚠️ Error counting retries:", err);
+    return 0;
   }
 }

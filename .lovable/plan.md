@@ -1,101 +1,68 @@
 
+# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-# Diagnóstico: IA não responde — 2 bugs críticos no pipeline
+## Arquivo: `supabase/functions/process-chat-flow/index.ts`
 
-## Problema identificado
+### FIX 1 ✅ — Proteção contra loop flow-to-flow
+### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
+### FIX 3 ✅ — Auto-traverse cobre condition_v2
+### FIX 4 ✅ — Transfer node atualiza conversations.department
+### FIX 5 ✅ — startMessage com replaceVariables
+### FIX 6 ✅ — financialIntentPattern simplificado
 
-Investigando as conversas não atribuídas de hoje (D6954192, F0268BFF, 8BDC2780, 787571B4, e outras), identifiquei um padrão claro:
+---
 
-1. O contato envia a primeira mensagem → flow greeting é enviado
-2. O contato responde → mensagem é corretamente bufferizada (batching de 8s)
-3. O buffer é processado → `ai-autopilot-chat` é chamado → **429 (rate limit)** → retorna HTTP 503
-4. A safety net do `process-buffered-messages` vê `!autopilotResponse.ok` → dispara `forceAIExit` → mata o flow → conversa vai para `waiting_human` **sem a IA jamais ter respondido**
-5. Mensagens subsequentes do contato chegam mas o flow já foi morto — a IA nunca tenta resolver
+# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
 
-**Evidências concretas:**
-- D6954192: 5 mensagens, 0 respostas da IA, flow morto
-- F0268BFF: 4 mensagens, 0 respostas da IA, flow morto
-- 8BDC2780: 4 mensagens, 0 respostas da IA, flow morto
-- `analyze-ticket` logs confirmam 429 rate limit constante no AI Gateway
-- Apenas 1 `ai_failure_log` de hoje (erro técnico, não quota)
+## Problema
+Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
 
-## Causa raiz
+## Correções aplicadas
 
-### BUG 1: Safety net trata 429 como falha fatal (process-buffered-messages)
+### 7a — Fallback edge default (process-chat-flow ~L2273)
+Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
 
-**Linha 383-391** de `process-buffered-messages/index.ts`:
-```javascript
-if (!autopilotResponse.ok) {
-  // Safety net: IA falhou → forceAIExit
-  await handleFlowReInvoke(..., { forceAIExit: true }); // MATA O FLOW!
-}
-```
+### 7b — Guard final sem nó (process-chat-flow ~L2336)
+Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
 
-O `ai-autopilot-chat` retorna HTTP 503 com `{ status: 'quota_error', retry_suggested: true, handoff_triggered: false }` — indicando que é um erro temporário e NÃO deve transferir. Mas o `process-buffered-messages` ignora o corpo da resposta e dispara `forceAIExit`, matando o flow e transferindo para humano.
+### 7c — Safety net IA falha (process-buffered-messages ~L383)
+Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
 
-### BUG 2: `updated_at` do flow state não é refreshed pelo buffer processing
+### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
+Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
 
-Quando `process-buffered-messages` processa um buffer com sucesso (AI respondeu), ele NÃO atualiza o `updated_at` do `chat_flow_states`. O único ponto que atualiza é dentro do `process-chat-flow`. Isso faz com que o cron de 15 minutos mate flows que estão ativos mas cujo último `process-chat-flow` foi há mais de 15 minutos.
+---
 
-## Correções
+# FIX 8 ✅ — pg_cron matando flows prematuramente (11/03/2026)
 
-### FIX 1: Não disparar forceAIExit em erros de quota/429
+## Problema
+O pg_cron `cleanup-stuck-flow-states` usava `started_at < now() - 3 min`, mas `started_at` é imutável. Flows com múltiplos passos (>3min) eram mortos antes de chegar ao nó de transfer.
 
-Em `process-buffered-messages/index.ts`, alterar a safety net para distinguir entre:
-- **Erro de quota (503 com quota_error)**: NÃO disparar forceAIExit, marcar buffer como `processed=false` para retry no próximo ciclo do cron
-- **Erro técnico real (500)**: manter comportamento atual (forceAIExit)
+## Correções aplicadas
 
-```javascript
-if (!autopilotResponse.ok) {
-  const errorText = await autopilotResponse.text();
-  
-  // Parse para verificar se é quota error (temporário)
-  let isQuotaError = autopilotResponse.status === 503;
-  try {
-    const errorData = JSON.parse(errorText);
-    isQuotaError = isQuotaError || errorData.status === 'quota_error' || errorData.code === 'QUOTA_EXCEEDED';
-  } catch {}
-  
-  if (isQuotaError) {
-    console.warn("[process-buffered-messages] ⚠️ QUOTA ERROR - NÃO disparar forceAIExit, retry no próximo ciclo");
-    return false; // Não marcar como processed → retry no próximo cron
-  }
-  
-  // Erro técnico real → safety net (forceAIExit)
-  if (flowContext || flowData?.aiNodeActive) {
-    await handleFlowReInvoke(...);
-  }
-  return false;
-}
-```
+### 8a — Coluna `updated_at` em `chat_flow_states`
+Nova coluna `updated_at timestamptz DEFAULT now()` adicionada via migration. Registros existentes backfilled com `COALESCE(completed_at, started_at)`.
 
-### FIX 2: Refreshar `updated_at` após buffer processing com sucesso
+### 8b — `updated_at` em todos os `.update()` do process-chat-flow
+21 pontos de atualização no `process-chat-flow/index.ts` agora incluem `updated_at: new Date().toISOString()`, renovando o timestamp a cada interação.
 
-Após `ai-autopilot-chat` retornar sucesso, atualizar o `updated_at` do flow state ativo para evitar que o cron o mate.
+### 8c — pg_cron atualizado
+Cron usa `updated_at < now() - INTERVAL '15 minutes'` em vez de `started_at < now() - 3 min`.
 
-```javascript
-// Após ai-autopilot-chat retornar OK:
-await supabase
-  .from('chat_flow_states')
-  .update({ updated_at: new Date().toISOString() })
-  .eq('conversation_id', conversationId)
-  .in('status', ['active', 'in_progress', 'waiting_input']);
-```
+---
 
-### FIX 3: Proteção anti-retry infinito no buffer
+# FIX 9 ✅ — IA não responde: safety net mata flow em quota error (11/03/2026)
 
-Adicionar um limite de retries para buffers que ficam falhando por quota. Se um buffer falhou 3+ vezes, marcar como processed e enviar a mensagem de "alta demanda" para não deixar o contato sem resposta indefinidamente.
+## Problema
+O `process-buffered-messages` tratava erros 429/503 (quota/rate limit) como falha fatal, disparando `forceAIExit` e matando o flow antes da IA ter chance de responder.
 
-## Arquivos afetados
+## Correções aplicadas
 
-| Arquivo | Mudança |
-|---|---|
-| `supabase/functions/process-buffered-messages/index.ts` | FIX 1 (quota check), FIX 2 (updated_at refresh), FIX 3 (retry limit) |
+### 9a — Distinguir quota error de erro técnico real
+Na safety net do `process-buffered-messages`, erros 429/503 com `quota_error` ou `retry_suggested: true` NÃO disparam `forceAIExit`. Buffer fica como `processed=false` para retry no próximo ciclo.
 
-## Resultado esperado
+### 9b — Refresh `updated_at` do flow state após buffer processing com sucesso
+Após `ai-autopilot-chat` retornar OK via buffer, o `updated_at` do `chat_flow_states` é atualizado para evitar morte prematura pelo cron de 15 min.
 
-- Erros 429 temporários NÃO matam o flow — a mensagem fica no buffer e é retentada no próximo ciclo (1 min)
-- Flows com interação via buffer têm o `updated_at` refreshed, evitando morte prematura pelo cron
-- Após 3 retries falhados, o contato recebe a mensagem de "alta demanda" em vez de silêncio total
-- A IA volta a tentar ajudar nas conversas em vez de transferir silenciosamente para humano
-
+### 9c — Anti-retry infinito (3 ciclos)
+Buffers que falham por quota por 3+ ciclos de cron (~3 min) enviam mensagem de "alta demanda" ao contato e são marcados como processed.
