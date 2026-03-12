@@ -121,8 +121,12 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
 const VALID_OPENAI_MODELS = new Set([
   'gpt-4o', 'gpt-4o-mini',
   'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
+  'gpt-5', 'gpt-5-mini', 'gpt-5-nano',
   'o3', 'o3-mini', 'o4-mini',
 ]);
+
+// Reasoning models use max_completion_tokens instead of max_tokens
+const REASONING_MODELS = new Set(['o3', 'o3-mini', 'o4-mini']);
 
 function sanitizeModelName(model: string): string {
   // If it's already a valid OpenAI model, pass through
@@ -3820,15 +3824,24 @@ serve(async (req) => {
       }
     };
 
-    // Helper: Chamar IA com OpenAI direta
+    // Helper: Chamar IA com OpenAI direta (usa modelo configurado)
     const callAIWithFallback = async (payload: any) => {
+      const configuredModel = sanitizeModelName(ragConfig.model);
+      
+      // Reasoning models: convert max_tokens → max_completion_tokens
+      const finalPayload = { ...payload };
+      if (REASONING_MODELS.has(configuredModel) && finalPayload.max_tokens) {
+        finalPayload.max_completion_tokens = finalPayload.max_tokens;
+        delete finalPayload.max_tokens;
+      }
+      
       const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ model: 'gpt-4o-mini', ...payload }),
+        body: JSON.stringify({ model: configuredModel, ...finalPayload }),
       }, 60000);
       
       if (!response.ok) {

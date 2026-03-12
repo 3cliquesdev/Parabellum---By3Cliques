@@ -63,6 +63,33 @@ const AI_MODELS: AIModel[] = [
     badge: "Novo",
     badgeVariant: "outline",
   },
+  {
+    id: "gpt-5-nano",
+    name: "GPT-5 Nano",
+    category: "chat",
+    description: "⚡ Velocidade + economia máxima",
+    icon: Zap,
+    badge: "Econômico",
+    badgeVariant: "outline",
+  },
+  {
+    id: "gpt-5-mini",
+    name: "GPT-5 Mini",
+    category: "chat",
+    description: "🎯 Forte performance - Custo moderado",
+    icon: Target,
+    badge: "Balanceado",
+    badgeVariant: "default",
+  },
+  {
+    id: "gpt-5",
+    name: "GPT-5",
+    category: "chat",
+    description: "👑 Máxima capacidade - Raciocínio + multimodal",
+    icon: Crown,
+    badge: "Premium+",
+    badgeVariant: "secondary",
+  },
   // Reasoning Models
   {
     id: "o4-mini",
@@ -255,8 +282,8 @@ export default function AIModelConfigCard() {
 
             {/* Info */}
             <div className="text-xs text-muted-foreground bg-muted/30 p-3 rounded-md">
-              💡 <strong>Dica:</strong> Use GPT-4.1 Nano para economia máxima, GPT-4o Mini para equilíbrio,
-              ou modelos de Reasoning (o3/o4-mini) quando precisar de raciocínio avançado.
+              💡 <strong>Dica:</strong> Use GPT-5 Nano para economia, GPT-5 Mini para equilíbrio,
+              GPT-5 para máxima precisão, ou modelos de Reasoning (o3/o4-mini) para raciocínio avançado.
             </div>
           </>
         )}
