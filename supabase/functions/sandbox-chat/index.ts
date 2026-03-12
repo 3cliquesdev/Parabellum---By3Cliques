@@ -415,10 +415,10 @@ Você está conversando com um cliente identificado. Use essas informações par
         throw new Error('OPENAI_API_KEY not configured');
       }
 
-      console.log('[sandbox-chat] Calling OpenAI (gpt-4o-mini)');
+      console.log('[sandbox-chat] Calling OpenAI with model:', configuredModel);
       
       const openaiPayload: any = {
-        model: "gpt-4o-mini",
+        model: configuredModel,
         messages: aiMessages,
         temperature: persona.temperature || 0.7,
         max_completion_tokens: persona.max_tokens || 500,
