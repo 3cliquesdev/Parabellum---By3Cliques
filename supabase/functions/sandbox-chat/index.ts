@@ -16,10 +16,15 @@ async function getConfiguredAIModel(supabase: any): Promise<string> {
       .eq('key', 'ai_default_model')
       .maybeSingle();
     
-    return data?.value || 'openai/gpt-5-mini';
+    // Converter modelos gateway para modelos OpenAI reais
+    const model = data?.value || 'gpt-4o-mini';
+    if (model.startsWith('openai/') || model.startsWith('google/')) {
+      return 'gpt-4o-mini';
+    }
+    return model;
   } catch (error) {
     console.error('[sandbox-chat] Error fetching AI model config:', error);
-    return 'openai/gpt-5-mini';
+    return 'gpt-4o-mini';
   }
 }
 
