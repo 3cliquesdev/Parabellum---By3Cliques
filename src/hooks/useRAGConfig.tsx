@@ -32,10 +32,16 @@ const DEFAULT_CONFIG: RAGConfig = {
 
 // Models available - OpenAI direct API
 export const RAG_MODELS = [
-  { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", description: "Balanceado - Custo-benefício", badge: "Recomendado" },
-  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", description: "Máxima precisão", badge: "Premium" },
-  { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", provider: "OpenAI", description: "Ultra rápido - Alto volume", badge: "Econômico" },
-  { id: "gpt-4.1", name: "GPT-4.1", provider: "OpenAI", description: "Última geração - Raciocínio avançado", badge: "Novo" },
+  // Chat Models
+  { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", category: "chat", description: "Balanceado - Custo-benefício", badge: "Recomendado" },
+  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", category: "chat", description: "Máxima precisão multimodal", badge: "Premium" },
+  { id: "gpt-4.1-nano", name: "GPT-4.1 Nano", provider: "OpenAI", category: "chat", description: "Mais barato - Tarefas simples", badge: "Econômico" },
+  { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", provider: "OpenAI", category: "chat", description: "Ultra rápido - Alto volume", badge: "Rápido" },
+  { id: "gpt-4.1", name: "GPT-4.1", provider: "OpenAI", category: "chat", description: "Última geração - Contexto longo", badge: "Novo" },
+  // Reasoning Models
+  { id: "o4-mini", name: "o4-mini", provider: "OpenAI", category: "reasoning", description: "Raciocínio avançado - Custo acessível", badge: "Smart" },
+  { id: "o3", name: "o3", provider: "OpenAI", category: "reasoning", description: "Raciocínio máximo - Problemas complexos", badge: "Top" },
+  { id: "o3-mini", name: "o3-mini", provider: "OpenAI", category: "reasoning", description: "Raciocínio econômico - Bom equilíbrio", badge: "Eficiente" },
 ];
 
 export function useRAGConfig() {

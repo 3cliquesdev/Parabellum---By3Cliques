@@ -117,7 +117,18 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
 }
 
 // Sanitize legacy gateway model names to real OpenAI model names
+// Valid OpenAI models pass through unchanged
+const VALID_OPENAI_MODELS = new Set([
+  'gpt-4o', 'gpt-4o-mini',
+  'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
+  'o3', 'o3-mini', 'o4-mini',
+]);
+
 function sanitizeModelName(model: string): string {
+  // If it's already a valid OpenAI model, pass through
+  if (VALID_OPENAI_MODELS.has(model)) return model;
+  
+  // Legacy gateway names → fallback to gpt-4o-mini
   const MODEL_MAP: Record<string, string> = {
     'openai/gpt-5-mini': 'gpt-4o-mini',
     'openai/gpt-5': 'gpt-4o',
@@ -132,7 +143,7 @@ function sanitizeModelName(model: string): string {
     'google/gemini-3.1-pro-preview': 'gpt-4o',
     'google/gemini-3.1-flash-image-preview': 'gpt-4o-mini',
   };
-  return MODEL_MAP[model] || model;
+  return MODEL_MAP[model] || 'gpt-4o-mini';
 }
 
 // Helper: Buscar modelo AI configurado no banco (mantido para compatibilidade)

@@ -2,15 +2,14 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Brain, Zap, Crown, Target, Rocket, Loader2, Check } from "lucide-react";
+import { Brain, Zap, Crown, Target, Rocket, Loader2, Check, Cpu, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface AIModel {
   id: string;
   name: string;
-  provider: "openai";
+  category: "chat" | "reasoning";
   description: string;
   icon: typeof Brain;
   badge: string;
@@ -18,10 +17,11 @@ interface AIModel {
 }
 
 const AI_MODELS: AIModel[] = [
+  // Chat Models
   {
     id: "gpt-4o-mini",
     name: "GPT-4o Mini",
-    provider: "openai",
+    category: "chat",
     description: "🎯 Balanceado - Boa performance com custo menor",
     icon: Target,
     badge: "Recomendado",
@@ -30,28 +30,65 @@ const AI_MODELS: AIModel[] = [
   {
     id: "gpt-4o",
     name: "GPT-4o",
-    provider: "openai",
-    description: "💎 Máxima precisão - Melhor raciocínio e nuance",
+    category: "chat",
+    description: "💎 Máxima precisão multimodal",
     icon: Crown,
     badge: "Premium",
     badgeVariant: "secondary",
   },
   {
-    id: "gpt-4.1-mini",
-    name: "GPT-4.1 Mini",
-    provider: "openai",
-    description: "⚡ Ultra-rápido - Ideal para tarefas simples",
+    id: "gpt-4.1-nano",
+    name: "GPT-4.1 Nano",
+    category: "chat",
+    description: "💰 Mais barato - Ideal para tarefas simples",
     icon: Zap,
     badge: "Econômico",
     badgeVariant: "outline",
   },
   {
+    id: "gpt-4.1-mini",
+    name: "GPT-4.1 Mini",
+    category: "chat",
+    description: "⚡ Ultra-rápido - Alto volume",
+    icon: Zap,
+    badge: "Rápido",
+    badgeVariant: "outline",
+  },
+  {
     id: "gpt-4.1",
     name: "GPT-4.1",
-    provider: "openai",
-    description: "🆕 Última geração - Raciocínio avançado",
+    category: "chat",
+    description: "🆕 Última geração - Contexto longo",
     icon: Rocket,
     badge: "Novo",
+    badgeVariant: "outline",
+  },
+  // Reasoning Models
+  {
+    id: "o4-mini",
+    name: "o4-mini",
+    category: "reasoning",
+    description: "🧠 Raciocínio avançado - Custo acessível",
+    icon: Cpu,
+    badge: "Smart",
+    badgeVariant: "secondary",
+  },
+  {
+    id: "o3",
+    name: "o3",
+    category: "reasoning",
+    description: "🏆 Raciocínio máximo - Problemas complexos",
+    icon: Sparkles,
+    badge: "Top",
+    badgeVariant: "secondary",
+  },
+  {
+    id: "o3-mini",
+    name: "o3-mini",
+    category: "reasoning",
+    description: "⚙️ Raciocínio econômico - Bom equilíbrio",
+    icon: Cpu,
+    badge: "Eficiente",
     badgeVariant: "outline",
   },
 ];
@@ -120,6 +157,9 @@ export default function AIModelConfigCard() {
   const selectedModel = AI_MODELS.find(m => m.id === currentModel);
   const SelectedIcon = selectedModel?.icon || Brain;
 
+  const chatModels = AI_MODELS.filter(m => m.category === "chat");
+  const reasoningModels = AI_MODELS.filter(m => m.category === "reasoning");
+
   return (
     <Card>
       <CardHeader>
@@ -149,12 +189,15 @@ export default function AIModelConfigCard() {
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
               <SelectedIcon className="h-8 w-8 text-primary" />
               <div className="flex-1">
-                <div className="font-medium text-foreground">{selectedModel?.name}</div>
+                <div className="font-medium text-foreground">{selectedModel?.name || currentModel}</div>
                 <div className="text-sm text-muted-foreground">{selectedModel?.description}</div>
               </div>
-              <Badge variant="outline" className="text-xs">
-                OpenAI
-              </Badge>
+              <div className="flex flex-col items-end gap-1">
+                <Badge variant="outline" className="text-xs">OpenAI</Badge>
+                {selectedModel && (
+                  <Badge variant="outline" className="text-xs capitalize">{selectedModel.category}</Badge>
+                )}
+              </div>
             </div>
 
             {/* Model Selector */}
@@ -166,9 +209,26 @@ export default function AIModelConfigCard() {
                 </SelectTrigger>
                 <SelectContent>
                   <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                    OpenAI
+                    💬 Chat Models
                   </div>
-                  {AI_MODELS.map((model) => {
+                  {chatModels.map((model) => {
+                    const Icon = model.icon;
+                    return (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-4 w-4" />
+                          <span>{model.name}</span>
+                          {model.id === currentModel && (
+                            <Check className="h-3 w-3 text-primary ml-auto" />
+                          )}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground mt-1 border-t">
+                    🧠 Reasoning Models
+                  </div>
+                  {reasoningModels.map((model) => {
                     const Icon = model.icon;
                     return (
                       <SelectItem key={model.id} value={model.id}>
@@ -195,8 +255,8 @@ export default function AIModelConfigCard() {
 
             {/* Info */}
             <div className="text-xs text-muted-foreground bg-muted/30 p-3 rounded-md">
-              💡 <strong>Dica:</strong> Use GPT-4o Mini para economia ou GPT-4o quando precisar de máxima precisão.
-              A mudança é aplicada imediatamente em todas as funções de IA.
+              💡 <strong>Dica:</strong> Use GPT-4.1 Nano para economia máxima, GPT-4o Mini para equilíbrio,
+              ou modelos de Reasoning (o3/o4-mini) quando precisar de raciocínio avançado.
             </div>
           </>
         )}

@@ -17,10 +17,16 @@ import { useRolePermissions } from "@/hooks/useRolePermissions";
 
 // Modelos disponíveis - OpenAI direta
 const AVAILABLE_MODELS = [
+  // Chat
   { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", description: "Balanceado - Rápido e preciso", badge: "Recomendado" },
-  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", description: "Máxima precisão", badge: "Premium" },
-  { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", provider: "OpenAI", description: "Ultra rápido - Tarefas simples", badge: "Econômico" },
-  { id: "gpt-4.1", name: "GPT-4.1", provider: "OpenAI", description: "Última geração - Raciocínio avançado", badge: "Novo" },
+  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", description: "Máxima precisão multimodal", badge: "Premium" },
+  { id: "gpt-4.1-nano", name: "GPT-4.1 Nano", provider: "OpenAI", description: "Mais barato - Tarefas simples", badge: "Econômico" },
+  { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", provider: "OpenAI", description: "Ultra rápido - Alto volume", badge: "Rápido" },
+  { id: "gpt-4.1", name: "GPT-4.1", provider: "OpenAI", description: "Última geração - Contexto longo", badge: "Novo" },
+  // Reasoning
+  { id: "o4-mini", name: "o4-mini", provider: "OpenAI", description: "Raciocínio avançado - Custo acessível", badge: "Smart" },
+  { id: "o3", name: "o3", provider: "OpenAI", description: "Raciocínio máximo", badge: "Top" },
+  { id: "o3-mini", name: "o3-mini", provider: "OpenAI", description: "Raciocínio econômico", badge: "Eficiente" },
 ];
 
 export default function AITrainer() {
