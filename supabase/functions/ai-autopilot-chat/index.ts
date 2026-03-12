@@ -30,7 +30,7 @@ interface RAGConfig {
 }
 
 const DEFAULT_RAG_CONFIG: RAGConfig = {
-  model: 'openai/gpt-5-mini',
+  model: 'gpt-4o-mini',
   minThreshold: 0.10,
   directThreshold: 0.75,
   sources: { kb: true, crm: true, tracking: true, sandbox: true },
