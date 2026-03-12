@@ -3960,9 +3960,9 @@ serve(async (req) => {
     const callAIWithFallback = async (payload: any) => {
       const configuredModel = sanitizeModelName(ragConfig.model);
       
-      // Reasoning models: convert max_tokens → max_completion_tokens
+      // Models requiring max_completion_tokens: convert max_tokens
       const finalPayload = { ...payload };
-      if (REASONING_MODELS.has(configuredModel) && finalPayload.max_tokens) {
+      if (MAX_COMPLETION_TOKEN_MODELS.has(configuredModel) && finalPayload.max_tokens) {
         finalPayload.max_completion_tokens = finalPayload.max_tokens;
         delete finalPayload.max_tokens;
       }
