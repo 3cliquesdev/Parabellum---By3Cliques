@@ -54,7 +54,7 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
   const maxSentences = data.max_sentences ?? 3;
   const hasRestrictions = forbidQuestions || forbidOptions;
 
-  // 🆕 Custom handles: target (left) + 5 source handles (right) por intenção
+  // 🆕 Custom handles: target (left) + 6 source handles (right) por intenção
   const customHandles = (
     <>
       {/* Target handle (entrada) */}
@@ -63,13 +63,13 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
         position={Position.Left}
         className="!w-4 !h-4 !bg-primary !border-2 !border-background"
       />
-      {/* Source handle padrão (saída normal / max_interactions / fallback) */}
+      {/* Source handle padrão */}
       <Handle
         type="source"
         position={Position.Right}
         id="default"
         className="!w-4 !h-4 !bg-primary !border-2 !border-background"
-        style={{ top: '15%' }}
+        style={{ top: '12%' }}
       />
       {/* Source handle financeiro */}
       <Handle
@@ -77,7 +77,7 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
         position={Position.Right}
         id="financeiro"
         className="!w-4 !h-4 !bg-amber-500 !border-2 !border-background"
-        style={{ top: '33%' }}
+        style={{ top: '27%' }}
       />
       {/* Source handle cancelamento */}
       <Handle
@@ -85,7 +85,7 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
         position={Position.Right}
         id="cancelamento"
         className="!w-4 !h-4 !bg-red-500 !border-2 !border-background"
-        style={{ top: '51%' }}
+        style={{ top: '42%' }}
       />
       {/* Source handle comercial */}
       <Handle
@@ -93,31 +93,42 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
         position={Position.Right}
         id="comercial"
         className="!w-4 !h-4 !bg-emerald-500 !border-2 !border-background"
-        style={{ top: '69%' }}
+        style={{ top: '57%' }}
       />
-      {/* Source handle suporte (humano) */}
+      {/* Source handle suporte */}
       <Handle
         type="source"
         position={Position.Right}
         id="suporte"
         className="!w-4 !h-4 !bg-blue-500 !border-2 !border-background"
+        style={{ top: '72%' }}
+      />
+      {/* Source handle consultor */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="consultor"
+        className="!w-4 !h-4 !bg-violet-500 !border-2 !border-background"
         style={{ top: '87%' }}
       />
-      {/* Labels visuais para os handles — pointer-events-none para não bloquear cliques */}
-      <div className="absolute right-[-55px] text-[8px] text-muted-foreground font-medium pointer-events-none" style={{ top: '8%' }}>
+      {/* Labels visuais */}
+      <div className="absolute right-[-55px] text-[8px] text-muted-foreground font-medium pointer-events-none" style={{ top: '5%' }}>
         padrão
       </div>
-      <div className="absolute right-[-70px] text-[8px] text-amber-600 font-medium pointer-events-none" style={{ top: '26%' }}>
+      <div className="absolute right-[-70px] text-[8px] text-amber-600 font-medium pointer-events-none" style={{ top: '20%' }}>
         💰 financeiro
       </div>
-      <div className="absolute right-[-80px] text-[8px] text-red-600 font-medium pointer-events-none" style={{ top: '44%' }}>
+      <div className="absolute right-[-80px] text-[8px] text-red-600 font-medium pointer-events-none" style={{ top: '35%' }}>
         ❌ cancelamento
       </div>
-      <div className="absolute right-[-65px] text-[8px] text-emerald-600 font-medium pointer-events-none" style={{ top: '62%' }}>
+      <div className="absolute right-[-65px] text-[8px] text-emerald-600 font-medium pointer-events-none" style={{ top: '50%' }}>
         🛒 comercial
       </div>
-      <div className="absolute right-[-60px] text-[8px] text-blue-600 font-medium pointer-events-none" style={{ top: '80%' }}>
+      <div className="absolute right-[-60px] text-[8px] text-blue-600 font-medium pointer-events-none" style={{ top: '65%' }}>
         🧑 suporte
+      </div>
+      <div className="absolute right-[-65px] text-[8px] text-violet-600 font-medium pointer-events-none" style={{ top: '80%' }}>
+        💼 consultor
       </div>
     </>
   );
