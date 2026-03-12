@@ -1370,9 +1370,10 @@ serve(async (req) => {
         const verifiedKey = contentNode.data?.save_verified_as || 'customer_verified';
 
         // 🆕 PRE-CHECK: Se validate_customer já rodou, usar dados existentes
-        if (collectedDataForState.customer_validated === true && collectedDataForState.customer_email_found) {
+        const preEmailZ1 = collectedDataForState.customer_email_found || manualContactData?.email;
+        if (collectedDataForState.customer_validated === true && preEmailZ1) {
           // Cliente já validado → enviar OTP direto para email de cadastro
-          const preEmail = collectedDataForState.customer_email_found;
+          const preEmail = preEmailZ1;
           console.log('[process-chat-flow] 🔐 OTP pre-check: customer already validated, sending OTP to:', preEmail);
 
           collectedDataForState.__otp_step = 'wait_code';
