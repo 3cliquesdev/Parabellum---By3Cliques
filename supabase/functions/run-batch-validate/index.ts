@@ -18,7 +18,7 @@ serve(async (req) => {
     );
 
     const { data, error } = await supabaseClient.rpc('batch_validate_kiwify_contacts');
-    if (error) throw error;
+    if (error) throw new Error(JSON.stringify(error));
 
     return new Response(JSON.stringify({ success: true, result: data }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
