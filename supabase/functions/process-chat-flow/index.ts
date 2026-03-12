@@ -5116,10 +5116,12 @@ serve(async (req) => {
             console.log('[process-chat-flow] 🔐 OTP pre-check [master]: customer validated, sending OTP to:', preEmail);
             const otpData = { ...collectedData, __otp_step: 'wait_code', __otp_attempts: 0, __otp_email: preEmail, __otp_customer_name: collectedData.customer_name_found || '' };
             await supabaseClient.from('chat_flow_states').update({ collected_data: otpData, status: 'waiting_input' }).eq('id', stateId);
-            await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+            const otpSendResZ5 = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
               method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
-              body: JSON.stringify({ email: preEmail }),
+              body: JSON.stringify({ email: preEmail, type: 'customer' }),
             });
+            const otpSendBodyZ5 = await otpSendResZ5.text();
+            if (!otpSendResZ5.ok) { console.error('[process-chat-flow] ⚠️ Failed to send OTP [master]:', otpSendBodyZ5); }
             const otpSentMsg = node.data?.message_otp_sent
               ? node.data.message_otp_sent.replace(/\{\{email\}\}/g, preEmail)
               : `Enviamos um código de verificação para seu email de cadastro. Digite o código:`;
