@@ -1982,6 +1982,16 @@ serve(async (req) => {
       let nextNode: any = null;
       let path: string | undefined;
 
+      // 🔧 FIX: Variáveis de intent declaradas fora do bloco ai_response
+      // para que condition/condition_v2 também alcancem o código de delivery
+      let financialIntentMatch = false;
+      let cancellationIntentMatch = false;
+      let supportIntentMatch = false;
+      let commercialIntentMatch = false;
+      let consultorIntentMatch = false;
+      let consultorHasConsultant = false;
+      let aiExitForced = false;
+
       // 🔧 FIX CRÍTICO: Nós genéricos ask_* (email, name, phone, cpf, text)
       // Antes, esses nós não entravam em nenhum branch do if/else if chain,
       // fazendo o motor cair no bloco de triggers e retornar "invalidOption".
@@ -2269,7 +2279,7 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO FINANCEIRA: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
         }
         
-        const financialIntentMatch =
+        financialIntentMatch =
           (forceFinancialExit && forbidFinancial) ||
           (forbidFinancial && msgLower.length > 0 && isFinancialAction && !isFinancialInfo);
         if (forceFinancialExit) {
@@ -2287,7 +2297,7 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO CANCELAMENTO: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
         }
         
-        const cancellationIntentMatch = forbidCancellation && msgLower.length > 0 && isCancellationAction;
+        cancellationIntentMatch = forbidCancellation && msgLower.length > 0 && isCancellationAction;
         
         if (cancellationIntentMatch) {
           console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada | msg="${(userMessage || '').substring(0, 100)}"`);
@@ -2295,7 +2305,7 @@ serve(async (req) => {
 
         // 🧑 TRAVA SUPORTE: Detectar pedido de atendente humano como exit do nó AI
         const supportIntentPattern = /falar\s+com\s*(um\s*)?(atendente|humano|pessoa|agente|operador)|quero\s+(atendente|humano|pessoa|suporte)|atendimento\s+humano|preciso\s+de\s+(ajuda\s+)?humana?|me\s+transfira|transferir\s+para\s+(atendente|humano|suporte)|chamar?\s+(atendente|humano|suporte)|n[ãa]o\s+quero\s+(falar\s+com\s+)?(rob[ôo]|bot|ia|intelig[êe]ncia)/i;
-        let supportIntentMatch = forbidSupport && msgLower.length > 0 && supportIntentPattern.test(userMessage || '');
+        supportIntentMatch = forbidSupport && msgLower.length > 0 && supportIntentPattern.test(userMessage || '');
         
         if (supportIntentMatch) {
           console.log(`[process-chat-flow] 🧑 TRAVA SUPORTE: Pedido de atendente detectado | msg="${(userMessage || '').substring(0, 100)}"`);
@@ -2334,7 +2344,7 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO COMERCIAL: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
         }
         
-        const commercialIntentMatch = (forceCommercialExit && forbidCommercial) || (forbidCommercial && msgLower.length > 0 && isCommercialAction);
+        commercialIntentMatch = (forceCommercialExit && forbidCommercial) || (forbidCommercial && msgLower.length > 0 && isCommercialAction);
         if (forceCommercialExit) {
           console.log('[process-chat-flow] 🛒 forceCommercialExit=true recebido do webhook, forçando exit do nó AI');
         }
@@ -2349,8 +2359,8 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO CONSULTOR: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
         }
         
-        let consultorIntentMatch = forbidConsultant && msgLower.length > 0 && isConsultorAction;
-        let consultorHasConsultant = false;
+        consultorIntentMatch = forbidConsultant && msgLower.length > 0 && isConsultorAction;
+        consultorHasConsultant = false;
         
         // Verificar se contato tem consultant_id
         if (consultorIntentMatch) {
@@ -2506,7 +2516,7 @@ serve(async (req) => {
         if (forceAIExit) {
           console.log('[process-chat-flow] 🔄 forceAIExit=true recebido do webhook, forçando exit do nó AI (IA não conseguiu resolver)');
         }
-        const aiExitForced = !!forceAIExit;
+        aiExitForced = !!forceAIExit;
 
         // 🆕 INTENT DATA: Salvar ai_exit_intent no collectedData quando recebido do webhook
         if (intentData && intentData.ai_exit_intent) {
@@ -2669,7 +2679,9 @@ serve(async (req) => {
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+      } // end else if (ai_response)
 
+      // 🔧 FIX: findNextNode agora acessível para TODOS os tipos (condition, condition_v2, ai_response)
       nextNode = findNextNode(flowDef, currentNode, path);
       // findNextNode já tem fallback hierárquico (path → ai_exit → default → any)
       console.log(`[process-chat-flow] ➡️ Transition: from=${currentNode.type}(${currentNode.id}) path=${path || 'default'} → next=${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
@@ -3572,7 +3584,8 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
+
+
 
     // 🧪 MODO TESTE: Bloquear triggers e Master Flow automáticos
     // Em modo teste, APENAS fluxos iniciados manualmente devem rodar
