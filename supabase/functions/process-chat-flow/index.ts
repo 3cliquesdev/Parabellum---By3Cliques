@@ -1721,11 +1721,13 @@ serve(async (req) => {
               collectedData.__otp_customer_name = verifyData.customer?.name || '';
               collectedData.__otp_customer_id = verifyData.customer?.id || '';
 
-              await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
+              const otpSendResWC = await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                body: JSON.stringify({ email: emailInput }),
+                body: JSON.stringify({ email: emailInput, type: 'customer' }),
               });
+              const otpSendBodyWC = await otpSendResWC.text();
+              if (!otpSendResWC.ok) { console.error('[process-chat-flow] ⚠️ Failed to send OTP [wait_code]:', otpSendBodyWC); }
 
               collectedData.__otp_step = 'wait_code';
               collectedData.__otp_attempts = 0;
