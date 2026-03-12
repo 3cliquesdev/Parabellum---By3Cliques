@@ -4923,11 +4923,7 @@ serve(async (req) => {
               const vcPromises: Promise<any>[] = [];
               if (node.data?.validate_phone !== false && (contactData.phone || contactData.whatsapp_id)) {
                 vcPromises.push(
-                  fetch(`${supabaseUrl}/functions/v1/validate-by-kiwify-phone`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                    body: JSON.stringify({ phone: contactData.phone, whatsapp_id: contactData.whatsapp_id, contact_id: conversation?.contact_id })
-                  }).then(r => r.json()).catch(() => ({ found: false }))
+                  inlineKiwifyValidation(supabaseClient, contactData.phone, contactData.whatsapp_id, conversation?.contact_id)
                 );
               }
               if (node.data?.validate_email !== false && contactData.email) {
