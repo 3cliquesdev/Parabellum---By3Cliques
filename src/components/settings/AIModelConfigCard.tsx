@@ -19,44 +19,8 @@ interface AIModel {
 
 const AI_MODELS: AIModel[] = [
   {
-    id: "google/gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
-    provider: "google",
-    description: "⚡ Rápido e econômico - Melhor custo-benefício",
-    icon: Zap,
-    badge: "Padrão",
-    badgeVariant: "default",
-  },
-  {
-    id: "google/gemini-2.5-pro",
-    name: "Gemini 2.5 Pro",
-    provider: "google",
-    description: "🧠 Mais poderoso - Bom para contexto grande e raciocínio complexo",
-    icon: Brain,
-    badge: "Premium",
-    badgeVariant: "secondary",
-  },
-  {
-    id: "google/gemini-3-pro-preview",
-    name: "Gemini 3 Pro Preview",
-    provider: "google",
-    description: "🆕 Próxima geração - Mais recente do Google",
-    icon: Rocket,
-    badge: "Novo",
-    badgeVariant: "outline",
-  },
-  {
-    id: "openai/gpt-5",
-    name: "GPT-5",
-    provider: "openai",
-    description: "💎 Máxima precisão - Melhor raciocínio e nuance",
-    icon: Crown,
-    badge: "Premium",
-    badgeVariant: "secondary",
-  },
-  {
-    id: "openai/gpt-5-mini",
-    name: "GPT-5 Mini",
+    id: "gpt-4o-mini",
+    name: "GPT-4o Mini",
     provider: "openai",
     description: "🎯 Balanceado - Boa performance com custo menor",
     icon: Target,
@@ -64,18 +28,36 @@ const AI_MODELS: AIModel[] = [
     badgeVariant: "default",
   },
   {
-    id: "openai/gpt-5-nano",
-    name: "GPT-5 Nano",
+    id: "gpt-4o",
+    name: "GPT-4o",
     provider: "openai",
-    description: "💨 Ultra-rápido - Ideal para tarefas simples",
-    icon: Sparkles,
+    description: "💎 Máxima precisão - Melhor raciocínio e nuance",
+    icon: Crown,
+    badge: "Premium",
+    badgeVariant: "secondary",
+  },
+  {
+    id: "gpt-4.1-mini",
+    name: "GPT-4.1 Mini",
+    provider: "openai",
+    description: "⚡ Ultra-rápido - Ideal para tarefas simples",
+    icon: Zap,
     badge: "Econômico",
+    badgeVariant: "outline",
+  },
+  {
+    id: "gpt-4.1",
+    name: "GPT-4.1",
+    provider: "openai",
+    description: "🆕 Última geração - Raciocínio avançado",
+    icon: Rocket,
+    badge: "Novo",
     badgeVariant: "outline",
   },
 ];
 
 export default function AIModelConfigCard() {
-  const [currentModel, setCurrentModel] = useState<string>("openai/gpt-5-mini");
+  const [currentModel, setCurrentModel] = useState<string>("gpt-4o-mini");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();

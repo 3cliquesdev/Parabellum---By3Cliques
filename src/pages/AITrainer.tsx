@@ -78,7 +78,7 @@ export default function AITrainer() {
   });
 
   // Set selected model when config loads
-  const configuredModel = currentConfig?.value || "google/gemini-2.5-flash";
+  const configuredModel = currentConfig?.value || "gpt-4o-mini";
 
   if (permLoading) {
     return (
