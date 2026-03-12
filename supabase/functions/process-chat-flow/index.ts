@@ -2632,8 +2632,8 @@ serve(async (req) => {
               if (tagId) {
                 if (tagScope === 'conversation') {
                   await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
-                } else if (activeState.conversations?.contact_id) {
-                  await supabaseClient.from('contact_tags').upsert({ contact_id: activeState.conversations.contact_id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                } else if (activeContactData?.id) {
+                  await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
                 }
               }
             }
