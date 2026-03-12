@@ -8421,7 +8421,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             entity_type: 'conversation',
             entity_id: conversationId,
             event_type: 'contract_violation_blocked',
-            model: configuredAIModel || 'openai/gpt-5-mini',
+            model: configuredAIModel || 'gpt-4o-mini',
             output_json: {
               blocked_preview: assistantMessage.substring(0, 150),
               flow_id: flow_context.flow_id,
