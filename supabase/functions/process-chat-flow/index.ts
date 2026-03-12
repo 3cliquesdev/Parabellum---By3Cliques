@@ -2384,10 +2384,13 @@ serve(async (req) => {
           } else if (supportIntentMatch) {
             path = 'suporte';
             console.log('[process-chat-flow] 🎯 supportIntentMatch → path set to "suporte"');
-          } else if (keywordMatch || aiExitForced) {
+          } else if (keywordMatch) {
             path = 'suporte';
             collectedData.ai_exit_intent = 'suporte';
-            console.log(`[process-chat-flow] 🎯 keyword/aiExitForced → path set to "suporte" | keyword=${keywordMatch} aiExitForced=${aiExitForced}`);
+            console.log(`[process-chat-flow] 🎯 keywordMatch → path set to "suporte"`);
+          } else if (aiExitForced) {
+            path = 'default';
+            console.log(`[process-chat-flow] 🎯 aiExitForced → path set to "default"`);
           } else {
             // maxReached sem intent específico → saída pelo handle default
             path = 'default';
