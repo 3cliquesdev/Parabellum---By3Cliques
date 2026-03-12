@@ -39,7 +39,7 @@ import { ContactsBulkActions } from "@/components/contacts/ContactsBulkActions";
 import { ChangeConsultantDialog } from "@/components/playbooks/ChangeConsultantDialog";
 import { ConsultantClientsSheet } from "@/components/contacts/ConsultantClientsSheet";
 import { useUserRole } from "@/hooks/useUserRole";
-import { useProfiles } from "@/hooks/useProfiles";
+import { useConsultants } from "@/hooks/useConsultants";
 import { LeadScoreBadge } from "@/components/scoring/LeadScoreBadge";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -60,7 +60,7 @@ export default function Contacts() {
   
   const { isAdmin, isManager, isCSManager } = useUserRole();
   const canChangeConsultant = isAdmin || isManager || isCSManager;
-  const { data: profiles } = useProfiles();
+  const { data: consultants } = useConsultants(true);
   
   // Advanced filters state
   const [contactFilters, setContactFilters] = useState<ContactFilters & { search: string; tags: string[] }>({
@@ -316,7 +316,7 @@ export default function Contacts() {
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       {(() => {
-                        const consultant = profiles?.find(p => p.id === contact.consultant_id);
+                        const consultant = consultants?.find(c => c.id === contact.consultant_id);
                         return consultant ? (
                           <div className="flex items-center gap-2">
                             {canChangeConsultant ? (
