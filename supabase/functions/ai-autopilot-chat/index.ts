@@ -8770,7 +8770,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           entity_type: 'conversation',
           entity_id: conversationId,
           event_type: 'ai_response',
-          model: configuredAIModel || 'openai/gpt-5-mini',
+          model: configuredAIModel || 'gpt-4o-mini',
           output_json: {
             confidence_score: confidenceResult?.score ?? null,
             confidence_action: confidenceResult?.action ?? null,
