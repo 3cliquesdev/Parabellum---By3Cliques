@@ -159,31 +159,31 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
           case 'sentiment':
             fallbackResult = 'neutro'; // Safe default sentiment
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados. Adicione créditos ao seu workspace.' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Análise de sentimento indisponível';
             break;
           case 'summary':
             fallbackResult = 'Resumo indisponível temporariamente. Por favor, revise a conversa manualmente.';
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Sistema de resumo temporariamente indisponível';
             break;
           case 'reply':
             fallbackResult = 'Obrigado pela sua mensagem. Nossa equipe irá analisar seu caso e retornar em breve.';
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Sugestão de resposta temporariamente indisponível';
             break;
           case 'tags':
             fallbackResult = ''; // Empty tags
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Sistema de tags temporariamente indisponível';
             break;
           default:
             fallbackResult = 'Resultado não disponível';
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Serviço temporariamente indisponível';
         }
         
