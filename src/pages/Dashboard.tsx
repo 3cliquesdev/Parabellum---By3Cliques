@@ -48,7 +48,7 @@ export default function Dashboard() {
   // Deep-link: /?tab=sales ou /?tab=vendas
   const tabParam = searchParams.get("tab");
   const TAB_ALIAS: Record<string, string> = { vendas: "sales" };
-  const VALID_TABS = ["overview", "sales", "support", "financial", "operations", "churn", "performance", "advanced"];
+  const VALID_TABS = ["overview", "sales", "support", "financial", "operations", "churn", "performance", "advanced", "ai-telemetry"];
   const resolvedTab = TAB_ALIAS[tabParam || ""] || tabParam || "";
   const initialTab = VALID_TABS.includes(resolvedTab) ? resolvedTab : "overview";
   const { role, loading } = useUserRole();
