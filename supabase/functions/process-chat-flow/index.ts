@@ -4002,7 +4002,7 @@ serve(async (req) => {
     console.log('[process-chat-flow] Matched flow:', matchedFlow.id, matchedFlow.name);
 
     // 4. Iniciar novo fluxo
-    const flowDef = matchedFlow.flow_definition as any;
+    const trigFlowDef = matchedFlow.flow_definition as any;
     if (!flowDef?.nodes?.length) {
       return new Response(
         JSON.stringify({ useAI: true, reason: "Empty flow definition" }),
