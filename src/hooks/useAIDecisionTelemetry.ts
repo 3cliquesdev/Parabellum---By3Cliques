@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 export interface AIDecisionEvent {
   id: string;
@@ -18,6 +18,8 @@ export interface AIDecisionEvent {
 }
 
 export function useAIDecisionTelemetry(hoursBack = 24) {
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
   const since = useMemo(() => {
     const d = new Date();
     d.setHours(d.getHours() - hoursBack);
@@ -36,6 +38,7 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
         .limit(500);
 
       if (error) throw error;
+      setLastUpdated(new Date());
       return (data ?? []) as AIDecisionEvent[];
     },
     refetchInterval: 30_000,
@@ -44,14 +47,17 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
 
   const kpis = useMemo(() => {
     const total = events.length;
+    // Handoffs: strict_rag_handoff + confidence_flow_advance (both transfer to human)
     const handoffs = events.filter(e =>
-      e.event_type.includes("handoff") || (e.output_json as any)?.exitType === "handoff"
+      e.event_type.includes("handoff") || e.event_type.includes("confidence_flow_advance")
     ).length;
+    // Fallbacks: fallback_phrase_detected + zero_confidence_cautious
     const fallbacks = events.filter(e =>
-      e.event_type.includes("fallback") || e.event_type.includes("anti_loop")
+      e.event_type.includes("fallback_phrase") || e.event_type.includes("zero_confidence")
     ).length;
+    // Violations: restriction_violation + anti_loop_max_fallbacks
     const violations = events.filter(e =>
-      e.event_type.includes("restriction_violation")
+      e.event_type.includes("restriction_violation") || e.event_type.includes("anti_loop")
     ).length;
     return { total, handoffs, fallbacks, violations };
   }, [events]);
@@ -60,7 +66,9 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
     const map: Record<string, number> = {};
     events.forEach(e => {
       const shortType = e.event_type.replace("ai_decision_", "");
-      map[shortType] = (map[shortType] || 0) + 1;
+      // Normalize restriction_violation_* to single bucket
+      const key = shortType.startsWith("restriction_violation") ? "restriction_violation" : shortType;
+      map[key] = (map[key] || 0) + 1;
     });
     return Object.entries(map)
       .map(([name, value]) => ({ name, value }))
@@ -78,5 +86,5 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
       .reverse();
   }, [events]);
 
-  return { events, isLoading, refetch, kpis, typeBreakdown, hourlyData };
+  return { events, isLoading, refetch, kpis, typeBreakdown, hourlyData, lastUpdated };
 }
