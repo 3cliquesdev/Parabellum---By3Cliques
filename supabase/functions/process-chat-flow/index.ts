@@ -2235,9 +2235,13 @@ serve(async (req) => {
               .maybeSingle();
             consultorHasConsultant = !!(contactRow?.consultant_id);
             if (!consultorHasConsultant) {
-              console.log(`[process-chat-flow] 💼 CONSULTOR: Intenção detectada mas contato não tem consultant_id → roteando para suporte`);
+              console.log(`[process-chat-flow] 💼 CONSULTOR: Intenção detectada mas contato não tem consultant_id → forçando roteamento para suporte`);
               // Sem consultor → redireciona para suporte ao invés de consultor
               consultorIntentMatch = false;
+              // 🆕 FIX: Forçar supportIntentMatch para não engolir o pedido silenciosamente
+              supportIntentMatch = true;
+              collectedData.ai_exit_intent = 'suporte';
+              console.log(`[process-chat-flow] 🧑 supportIntentMatch forçado=true (fallback de consultor sem consultant_id)`);
             } else {
               console.log(`[process-chat-flow] 💼 CONSULTOR: Intenção detectada e contato tem consultant_id → saída consultor`);
             }
