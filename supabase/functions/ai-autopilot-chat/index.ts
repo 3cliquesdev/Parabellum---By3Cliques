@@ -4039,9 +4039,9 @@ serve(async (req) => {
     }
     
     // ============================================================
-    // 🎯 MODO RAG ESTRITO - OpenAI GPT-4o Exclusivo (Anti-Alucinação)
+    // 🎯 MODO RAG ESTRITO - OpenAI GPT-5 Exclusivo (Anti-Alucinação)
     // ============================================================
-    // Quando ativo: usa APENAS OpenAI GPT-4o, sem fallback, com thresholds rígidos
+    // Quando ativo: usa APENAS OpenAI GPT-5, sem fallback, com thresholds rígidos
     // Cita fontes explicitamente e recusa responder quando não tem informação
     // ============================================================
     interface StrictRAGResult {
