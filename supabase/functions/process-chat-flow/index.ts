@@ -3709,7 +3709,7 @@ serve(async (req) => {
             conversationId: conversationId,
             flowStateId: activeState.id,
             nodeId: nextNode.id,
-            contactId: activeState.conversations?.contact_id || null,
+            contactId: activeContactData?.id || null,
             subject,
             description,
             category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
