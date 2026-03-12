@@ -192,7 +192,7 @@ Retorne APENAS um JSON válido:
 
 async function handleDocumentImport(request: DocumentRequest, supabaseClient: any) {
   const { text, fileName, category, tags, mode } = request;
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
   
   const result = {
     created: 0,
