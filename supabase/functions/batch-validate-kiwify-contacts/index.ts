@@ -39,18 +39,32 @@ serve(async (req) => {
     console.log("[batch-validate] Iniciando validação em massa...", specificIds ? `IDs específicos: ${specificIds.length}` : "Todos pendentes");
 
     // 1. Buscar contatos não validados que têm telefone válido (skip LID format)
-    let query = supabaseClient
-      .from('contacts')
-      .select('id, phone, whatsapp_id, first_name, last_name, email')
-      .or('kiwify_validated.is.null,kiwify_validated.eq.false');
+    // 1. Buscar contatos não validados (paginado)
+    const allContacts: Array<{ id: string; phone: string; whatsapp_id: string; first_name: string; last_name: string; email: string }> = [];
+    let cOffset = 0;
+    let cHasMore = true;
 
-    if (specificIds && specificIds.length > 0) {
-      query = query.in('id', specificIds);
+    while (cHasMore) {
+      let query = supabaseClient
+        .from('contacts')
+        .select('id, phone, whatsapp_id, first_name, last_name, email')
+        .or('kiwify_validated.is.null,kiwify_validated.eq.false');
+
+      if (specificIds && specificIds.length > 0) {
+        query = query.in('id', specificIds);
+      }
+
+      const { data: cPage, error: contactsErr } = await query.range(cOffset, cOffset + 999);
+      if (contactsErr) throw contactsErr;
+
+      if (cPage && cPage.length > 0) {
+        allContacts.push(...cPage);
+        cOffset += cPage.length;
+        cHasMore = cPage.length === 1000;
+      } else {
+        cHasMore = false;
+      }
     }
-
-    const { data: allContacts, error: contactsErr } = await query.limit(2000);
-
-    if (contactsErr) throw contactsErr;
 
     // Filter out contacts with LID/invalid phone numbers
     const contacts = (allContacts || []).filter(c => {
