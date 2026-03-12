@@ -2285,6 +2285,13 @@ serve(async (req) => {
             console.log('[process-chat-flow] 🎯 aiExitForced → path set to "ai_exit" for findNextNode');
           }
 
+          // 🆕 FIX CRÍTICO: financialIntentMatch/commercialIntentMatch também devem seguir edge ai_exit
+          // Sem isso, path ficava undefined e findNextNode pegava edge default → nó errado
+          if (financialIntentMatch || commercialIntentMatch) {
+            path = 'ai_exit';
+            console.log(`[process-chat-flow] 🎯 financial/commercial exit → path set to "ai_exit" | financial=${financialIntentMatch} commercial=${commercialIntentMatch}`);
+          }
+
           // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir
           delete collectedData.__ai;
           // Cai no findNextNode normal abaixo
