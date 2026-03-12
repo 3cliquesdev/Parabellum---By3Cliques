@@ -1380,7 +1380,8 @@ serve(async (req) => {
 
     // 🔒 TRAVA FINANCEIRA — Interceptação na ENTRADA (antes de chamar LLM)
     // 🆕 SEPARAÇÃO: Apenas AÇÕES financeiras bloqueiam. Perguntas informativas passam para a LLM.
-    const financialActionPattern = /quero\s*(sacar|retirar|meu\s*(reembolso|dinheiro|estorno|saldo))|fa(z|ça)\s*(meu\s*)?(reembolso|estorno|saque|devolu[çc][ãa]o)|(sacar|retirar|tirar)\s*(meu\s*)?(saldo|dinheiro|valor)|(solicitar|pedir|fazer|realizar|efetuar|cancelar|estornar)\s*(saque|reembolso|estorno|devolu[çc][ãa]o|pagamento)|(quero|preciso|necessito)\s*(meu\s+dinheiro|devolu[çc][ãa]o|reembolso|estorno|ressarcimento)|cancelar\s*(minha\s*)?(assinatura|cobran[çc]a|pagamento)|transferir\s*(meu\s*)?saldo|devolver\s*(meu\s*)?dinheiro|cobran[çc]a\s*indevida|contestar\s*(cobran[çc]a|pagamento)|cad[êe]\s*(meu\s*)?(dinheiro|saldo|reembolso)|n[ãa]o\s+recebi\s*(meu\s*)?(reembolso|estorno|saque|pagamento|dinheiro)|me\s+(devolvam|reembolsem|paguem)|preciso\s+do\s+meu\s+(saque|reembolso|saldo)|quero\s+receber\s*(meu\s*)?(pagamento|dinheiro|saldo)/i;
+    // 🆕 CORREÇÃO: Termos de cancelamento REMOVIDOS — tratados separadamente abaixo
+    const financialActionPattern = /quero\s*(sacar|retirar|meu\s*(reembolso|dinheiro|estorno|saldo))|fa(z|ça)\s*(meu\s*)?(reembolso|estorno|saque|devolu[çc][ãa]o)|(sacar|retirar|tirar)\s*(meu\s*)?(saldo|dinheiro|valor)|(solicitar|pedir|fazer|realizar|efetuar|estornar)\s*(saque|reembolso|estorno|devolu[çc][ãa]o|pagamento)|(quero|preciso|necessito)\s*(meu\s+dinheiro|devolu[çc][ãa]o|reembolso|estorno|ressarcimento)|transferir\s*(meu\s*)?saldo|devolver\s*(meu\s*)?dinheiro|cobran[çc]a\s*indevida|contestar\s*(cobran[çc]a|pagamento)|cad[êe]\s*(meu\s*)?(dinheiro|saldo|reembolso)|n[ãa]o\s+recebi\s*(meu\s*)?(reembolso|estorno|saque|pagamento|dinheiro)|me\s+(devolvam|reembolsem|paguem)|preciso\s+do\s+meu\s+(saque|reembolso|saldo)|quero\s+receber\s*(meu\s*)?(pagamento|dinheiro|saldo)/i;
     const financialInfoPattern = /qual\s*(o\s*)?(prazo|tempo|data)|como\s*(funciona|fa[çc]o|solicito|pe[çc]o)|onde\s*(vejo|consulto|acompanho)|quando\s*(posso|vou|ser[áa])|pol[ií]tica\s*de\s*(reembolso|devolu[çc][ãa]o|estorno|saque|cancelamento)|regras?\s*(de|para|do)\s*(saque|reembolso|estorno|devolu[çc][ãa]o)|d[úu]vida\s+(sobre|com|de|do|da)\s+(saque|reembolso|estorno|devolu|financ|saldo|cobran)|saber\s+sobre|informar\s+sobre|informa[çc][ãa]o\s+(sobre|de|do|da)|perguntar\s+sobre|entender\s+(como|sobre|o\s+que)|explicar?\s+(como|sobre|o\s+que)|gostaria\s+de\s+(saber|entender|me\s+informar)|o\s+que\s+[ée]\s*(saque|reembolso|estorno|devolu[çc][ãa]o)|confirma[çc][ãa]o\s+de/i;
     // 🆕 Regex para termos financeiros AMBÍGUOS (palavra isolada, sem verbo de ação nem contexto informativo)
     const financialAmbiguousPattern = /\b(saque|saldo|reembolso|estorno|devolu[çc][ãa]o|ressarcimento|cobran[çc]a)\b/i;
@@ -1394,6 +1395,10 @@ serve(async (req) => {
     if (ambiguousFinancialDetected) {
       console.log('[ai-autopilot-chat] 🔍 DESAMBIGUAÇÃO FINANCEIRA: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
     }
+
+    // 🆕 TRAVA CANCELAMENTO — Separada do financeiro para roteamento independente
+    const cancellationActionPattern = /cancelar\s*(minha\s*)?(assinatura|cobran[çc]a|pagamento|plano|conta|servi[çc]o)|quero\s+cancelar|desistir\s*(do|da|de)\s*(plano|assinatura|servi[çc]o|conta)|n[ãa]o\s+quero\s+mais\s*(o\s*)?(plano|assinatura|servi[çc]o)|encerrar\s*(minha\s*)?(conta|assinatura|plano)/i;
+    const isCancellationAction = cancellationActionPattern.test(customerMessage || '');
     
     // Só bloquear AÇÕES financeiras. Info passa para LLM responder via KB. Ambíguo → IA pergunta.
     if (ragConfig.blockFinancial && flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && isFinancialAction && !isFinancialInfo) {
@@ -1476,6 +1481,59 @@ serve(async (req) => {
         response: fixedMessage,
         message: fixedMessage,
         aiResponse: fixedMessage,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 🆕 TRAVA CANCELAMENTO — Interceptação na ENTRADA (antes de chamar LLM)
+    if (flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && isCancellationAction && !isFinancialInfo) {
+      console.warn('[ai-autopilot-chat] 🚫 TRAVA CANCELAMENTO (ENTRADA): Intenção de cancelamento detectada, bloqueando IA:', customerMessage.substring(0, 80));
+      
+      const cancelMsg = 'Entendi que você deseja cancelar. Vou te direcionar para o processo de cancelamento.';
+      const hasFlowContext = !!(flow_context);
+
+      try {
+        await supabaseClient
+          .from('ai_events')
+          .insert({
+            entity_type: 'conversation',
+            entity_id: conversationId,
+            event_type: 'ai_blocked_cancellation',
+            model: 'ai-autopilot-chat',
+            output_json: {
+              phase: 'input_interception',
+              pattern: 'cancellationActionPattern',
+              message_preview: customerMessage.substring(0, 200),
+              has_flow_context: hasFlowContext,
+            },
+            input_summary: customerMessage.substring(0, 200),
+          });
+      } catch (logErr) {
+        console.error('[ai-autopilot-chat] ⚠️ Failed to log cancellation block event:', logErr);
+      }
+
+      if (hasFlowContext) {
+        return new Response(JSON.stringify({
+          ok: true,
+          cancellationBlocked: true,
+          exitKeywordDetected: true,
+          hasFlowContext: true,
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({
+        ok: true,
+        cancellationBlocked: true,
+        exitKeywordDetected: true,
+        hasFlowContext: false,
+        response: cancelMsg,
+        message: cancelMsg,
+        aiResponse: cancelMsg,
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
