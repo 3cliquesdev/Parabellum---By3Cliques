@@ -3280,6 +3280,8 @@ serve(async (req) => {
       // Se é um nó de resposta IA
       if (nextNode.type === 'ai_response') {
         console.log(`[process-chat-flow] 🤖 AI response node: id=${nextNode.id} persona=${nextNode.data?.persona_id || 'default'} maxInteractions=${nextNode.data?.max_ai_interactions || 0} exitKeywords=[${(nextNode.data?.exit_keywords || []).join(',')}]`);
+        // Reinicializar contador de interações para novo nó AI
+        collectedData.__ai = { interaction_count: 0 };
         await supabaseClient
           .from('chat_flow_states')
           .update({
