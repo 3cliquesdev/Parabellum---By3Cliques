@@ -347,7 +347,7 @@ Analise e gere suas sugestões em JSON.`;
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error('[generate-smart-reply] Erro na chamada AI:', aiResponse.status, errorText);
-      throw new Error(`Lovable AI error: ${aiResponse.status}`);
+      throw new Error(`OpenAI error: ${aiResponse.status}`);
     }
 
     const aiData = await aiResponse.json();
