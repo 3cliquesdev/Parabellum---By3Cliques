@@ -186,7 +186,7 @@ async function processConversation(
       if (aiResult.content) {
         messageContent = aiResult.content;
         messageSource = "ai_generated";
-        aiModel = "gpt-4o-mini";
+        aiModel = "gpt-5-nano";
         aiTokens = aiResult.tokens || null;
       }
       aiLatency = Date.now() - aiStart;
