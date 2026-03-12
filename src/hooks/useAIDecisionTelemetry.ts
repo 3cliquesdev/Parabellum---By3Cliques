@@ -17,6 +17,15 @@ export interface AIDecisionEvent {
   created_at: string;
 }
 
+export const REASON_LABELS: Record<string, string> = {
+  zero_confidence_cautious: "Confiança Zero",
+  strict_rag_handoff: "RAG Estrito",
+  confidence_flow_advance: "Handoff por Confiança",
+  fallback_phrase_detected: "Frase de Fallback",
+  restriction_violation: "Violação de Restrição",
+  anti_loop_max_fallbacks: "Anti-Loop",
+};
+
 export function useAIDecisionTelemetry(hoursBack = 24) {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -26,7 +35,7 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
     return d.toISOString();
   }, [hoursBack]);
 
-  const { data: events = [], isLoading, refetch } = useQuery({
+  const { data: events = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["ai-decision-telemetry", hoursBack],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -47,17 +56,14 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
 
   const kpis = useMemo(() => {
     const total = events.length;
-    // Handoffs: strict_rag_handoff + confidence_flow_advance (both transfer to human)
     const handoffs = events.filter(e =>
-      e.event_type.includes("handoff") || e.event_type.includes("confidence_flow_advance")
+      e.event_type.includes("strict_rag") || e.event_type.includes("confidence_flow")
     ).length;
-    // Fallbacks: fallback_phrase_detected + zero_confidence_cautious
     const fallbacks = events.filter(e =>
       e.event_type.includes("fallback_phrase") || e.event_type.includes("zero_confidence")
     ).length;
-    // Violations: restriction_violation + anti_loop_max_fallbacks
     const violations = events.filter(e =>
-      e.event_type.includes("restriction_violation") || e.event_type.includes("anti_loop")
+      e.event_type.includes("restriction") || e.event_type.includes("anti_loop")
     ).length;
     return { total, handoffs, fallbacks, violations };
   }, [events]);
@@ -66,7 +72,6 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
     const map: Record<string, number> = {};
     events.forEach(e => {
       const shortType = e.event_type.replace("ai_decision_", "");
-      // Normalize restriction_violation_* to single bucket
       const key = shortType.startsWith("restriction_violation") ? "restriction_violation" : shortType;
       map[key] = (map[key] || 0) + 1;
     });
@@ -86,5 +91,5 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
       .reverse();
   }, [events]);
 
-  return { events, isLoading, refetch, kpis, typeBreakdown, hourlyData, lastUpdated };
+  return { events, isLoading, isError, error, refetch, kpis, typeBreakdown, hourlyData, lastUpdated };
 }
