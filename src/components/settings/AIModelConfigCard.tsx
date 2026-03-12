@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 interface AIModel {
   id: string;
   name: string;
-  provider: "google" | "openai";
+  provider: "openai";
   description: string;
   icon: typeof Brain;
   badge: string;
