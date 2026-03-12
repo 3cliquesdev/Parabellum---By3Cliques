@@ -4262,7 +4262,7 @@ serve(async (req) => {
           if (vcContactMain && !vcContactMain.kiwify_validated) {
             const vPromisesMain: Promise<any>[] = [];
             if (nextNode.data?.validate_phone !== false && (vcContactMain.phone || vcContactMain.whatsapp_id)) {
-              vPromisesMain.push(fetch(`${vcUrlMain}/functions/v1/validate-by-kiwify-phone`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKeyMain}` }, body: JSON.stringify({ phone: vcContactMain.phone, whatsapp_id: vcContactMain.whatsapp_id, contact_id: vcConvMain?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+              vPromisesMain.push(inlineKiwifyValidation(supabaseClient, vcContactMain.phone, vcContactMain.whatsapp_id, vcConvMain?.contact_id));
             }
             if (nextNode.data?.validate_email !== false && vcContactMain.email) {
               vPromisesMain.push(fetch(`${vcUrlMain}/functions/v1/verify-customer-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKeyMain}` }, body: JSON.stringify({ email: vcContactMain.email, contact_id: vcConvMain?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
