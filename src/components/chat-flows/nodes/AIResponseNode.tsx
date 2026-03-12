@@ -29,6 +29,7 @@ interface AIResponseNodeData {
   forbid_commercial?: boolean;
   forbid_cancellation?: boolean;
   forbid_support?: boolean;
+  forbid_consultant?: boolean;
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
