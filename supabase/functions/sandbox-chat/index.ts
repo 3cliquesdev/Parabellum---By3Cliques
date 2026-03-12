@@ -11,12 +11,12 @@ const corsHeaders = {
 const VALID_OPENAI_MODELS = new Set([
   'gpt-4o', 'gpt-4o-mini',
   'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
-  'gpt-5', 'gpt-5-mini', 'gpt-5-nano',
-  'o3', 'o3-mini', 'o4-mini',
+  'gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2',
+  'o3', 'o3-mini', 'o4-mini', 'o4',
 ]);
 
 const MAX_COMPLETION_TOKEN_MODELS = new Set([
-  'o3', 'o3-mini', 'o4-mini',
+  'o3', 'o3-mini', 'o4-mini', 'o4',
   'gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2',
 ]);
 
@@ -29,16 +29,28 @@ async function getConfiguredAIModel(supabase: any): Promise<string> {
       .eq('key', 'ai_default_model')
       .maybeSingle();
     
-    const model = data?.value || 'gpt-4o-mini';
+    const model = data?.value || 'gpt-5-mini';
     if (VALID_OPENAI_MODELS.has(model)) return model;
-    // Legacy gateway names → fallback
-    if (model.startsWith('openai/') || model.startsWith('google/')) {
-      return 'gpt-4o-mini';
-    }
+    // Gateway names → correct OpenAI equivalents
+    const MODEL_MAP: Record<string, string> = {
+      'openai/gpt-5-mini': 'gpt-5-mini',
+      'openai/gpt-5': 'gpt-5',
+      'openai/gpt-5-nano': 'gpt-5-nano',
+      'openai/gpt-5.2': 'gpt-5.2',
+      'google/gemini-2.5-flash': 'gpt-5-mini',
+      'google/gemini-2.5-flash-lite': 'gpt-5-nano',
+      'google/gemini-2.5-pro': 'gpt-5',
+      'google/gemini-3-pro-preview': 'gpt-5',
+      'google/gemini-3-pro-image-preview': 'gpt-5',
+      'google/gemini-3-flash-preview': 'gpt-5-mini',
+      'google/gemini-3.1-pro-preview': 'gpt-5',
+      'google/gemini-3.1-flash-image-preview': 'gpt-5-mini',
+    };
+    if (MODEL_MAP[model]) return MODEL_MAP[model];
     return model;
   } catch (error) {
     console.error('[sandbox-chat] Error fetching AI model config:', error);
-    return 'gpt-4o-mini';
+    return 'gpt-5-mini';
   }
 }
 

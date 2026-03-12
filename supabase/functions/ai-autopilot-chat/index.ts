@@ -30,7 +30,7 @@ interface RAGConfig {
 }
 
 const DEFAULT_RAG_CONFIG: RAGConfig = {
-  model: 'gpt-4o-mini',
+  model: 'gpt-5-mini',
   minThreshold: 0.10,
   directThreshold: 0.75,
   sources: { kb: true, crm: true, tracking: true, sandbox: true },
@@ -121,13 +121,13 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
 const VALID_OPENAI_MODELS = new Set([
   'gpt-4o', 'gpt-4o-mini',
   'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
-  'gpt-5', 'gpt-5-mini', 'gpt-5-nano',
-  'o3', 'o3-mini', 'o4-mini',
+  'gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2',
+  'o3', 'o3-mini', 'o4-mini', 'o4',
 ]);
 
 // Models that require max_completion_tokens instead of max_tokens
 const MAX_COMPLETION_TOKEN_MODELS = new Set([
-  'o3', 'o3-mini', 'o4-mini',
+  'o3', 'o3-mini', 'o4-mini', 'o4',
   'gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2',
 ]);
 
@@ -135,22 +135,22 @@ function sanitizeModelName(model: string): string {
   // If it's already a valid OpenAI model, pass through
   if (VALID_OPENAI_MODELS.has(model)) return model;
   
-  // Legacy gateway names → fallback to gpt-4o-mini
+  // Gateway names → correct OpenAI equivalents
   const MODEL_MAP: Record<string, string> = {
-    'openai/gpt-5-mini': 'gpt-4o-mini',
-    'openai/gpt-5': 'gpt-4o',
-    'openai/gpt-5-nano': 'gpt-4o-mini',
-    'openai/gpt-5.2': 'gpt-4o',
-    'google/gemini-2.5-flash': 'gpt-4o-mini',
-    'google/gemini-2.5-flash-lite': 'gpt-4o-mini',
-    'google/gemini-2.5-pro': 'gpt-4o',
-    'google/gemini-3-pro-preview': 'gpt-4o',
-    'google/gemini-3-pro-image-preview': 'gpt-4o',
-    'google/gemini-3-flash-preview': 'gpt-4o-mini',
-    'google/gemini-3.1-pro-preview': 'gpt-4o',
-    'google/gemini-3.1-flash-image-preview': 'gpt-4o-mini',
+    'openai/gpt-5-mini': 'gpt-5-mini',
+    'openai/gpt-5': 'gpt-5',
+    'openai/gpt-5-nano': 'gpt-5-nano',
+    'openai/gpt-5.2': 'gpt-5.2',
+    'google/gemini-2.5-flash': 'gpt-5-mini',
+    'google/gemini-2.5-flash-lite': 'gpt-5-nano',
+    'google/gemini-2.5-pro': 'gpt-5',
+    'google/gemini-3-pro-preview': 'gpt-5',
+    'google/gemini-3-pro-image-preview': 'gpt-5',
+    'google/gemini-3-flash-preview': 'gpt-5-mini',
+    'google/gemini-3.1-pro-preview': 'gpt-5',
+    'google/gemini-3.1-flash-image-preview': 'gpt-5-mini',
   };
-  return MODEL_MAP[model] || 'gpt-4o-mini';
+  return MODEL_MAP[model] || 'gpt-5-nano';
 }
 
 // Helper: Buscar modelo AI configurado no banco (mantido para compatibilidade)
@@ -4016,7 +4016,7 @@ serve(async (req) => {
         
         // Se é erro 400/422 (payload inválido), tentar modelo de contingência seguro
         if (errMsg.includes('400') || errMsg.includes('422')) {
-          console.warn(`[callAIWithFallback] ⚠️ Erro ${errMsg.includes('400') ? '400' : '422'} com ${configuredModel}, tentando fallback gpt-4o-mini`);
+          console.warn(`[callAIWithFallback] ⚠️ Erro ${errMsg.includes('400') ? '400' : '422'} com ${configuredModel}, tentando fallback gpt-5-nano`);
           
           try {
             // Fallback: modelo mais estável e tolerante
@@ -4027,9 +4027,9 @@ serve(async (req) => {
               safeFallbackPayload.max_tokens = 1024;
             }
             
-            return await tryModel('gpt-4o-mini', 'Fallback técnico', safeFallbackPayload);
+            return await tryModel('gpt-5-nano', 'Fallback técnico', safeFallbackPayload);
           } catch (fallbackError) {
-            console.error('[callAIWithFallback] ❌ Fallback gpt-4o-mini também falhou:', fallbackError);
+            console.error('[callAIWithFallback] ❌ Fallback gpt-5-nano também falhou:', fallbackError);
             throw primaryError; // Propagar erro original
           }
         }
@@ -8683,7 +8683,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             entity_type: 'conversation',
             entity_id: conversationId,
             event_type: 'flow_exit_clean',
-            model: configuredAIModel || 'gpt-4o-mini',
+            model: configuredAIModel || 'gpt-5-mini',
             output_json: {
               blocked_preview: assistantMessage.substring(0, 150),
               flow_id: flow_context.flow_id,
@@ -8713,7 +8713,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             entity_type: 'conversation',
             entity_id: conversationId,
             event_type: 'contract_violation_blocked',
-            model: configuredAIModel || 'gpt-4o-mini',
+            model: configuredAIModel || 'gpt-5-mini',
             output_json: {
               blocked_preview: assistantMessage.substring(0, 150),
               flow_id: flow_context.flow_id,
@@ -9062,7 +9062,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           entity_type: 'conversation',
           entity_id: conversationId,
           event_type: 'ai_response',
-          model: configuredAIModel || 'gpt-4o-mini',
+          model: configuredAIModel || 'gpt-5-mini',
           output_json: {
             confidence_score: confidenceResult?.score ?? null,
             confidence_action: confidenceResult?.action ?? null,
