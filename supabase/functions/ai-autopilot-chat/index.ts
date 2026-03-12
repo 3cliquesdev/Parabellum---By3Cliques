@@ -1296,12 +1296,14 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
     restrictions += `\n\n🛒 TRAVA COMERCIAL ATIVA:
 Se o cliente solicitar COMPRAR claramente (ex: "quero comprar", "quanto custa"), responda:
 "Ótimo interesse! Vou te conectar com nosso time comercial."
-E retorne [[FLOW_EXIT]] imediatamente.
+E retorne [[FLOW_EXIT:comercial]] imediatamente.
 
 🔍 DESAMBIGUAÇÃO COMERCIAL OBRIGATÓRIA:
 Se o cliente mencionar termos como plano, compra, preço ou assinatura sem deixar claro se quer uma INFORMAÇÃO ou realizar uma COMPRA, você DEVE perguntar:
 "Você deseja comprar algum plano ou tem dúvidas sobre seu plano atual?"
-Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.`;
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer COMPRAR → responda com [[FLOW_EXIT:comercial]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
   }
 
   const forbidConsultant = flowContext.forbidConsultant ?? false;
@@ -1309,12 +1311,14 @@ Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguida
     restrictions += `\n\n💼 TRAVA CONSULTOR ATIVA:
 Se o cliente solicitar FALAR COM CONSULTOR claramente (ex: "quero meu consultor", "falar com consultor"), responda:
 "Certo! Vou te conectar com seu consultor."
-E retorne [[FLOW_EXIT]] imediatamente.
+E retorne [[FLOW_EXIT:consultor]] imediatamente.
 
 🔍 DESAMBIGUAÇÃO CONSULTOR OBRIGATÓRIA:
 Se o cliente mencionar termos como consultor, assessor, gestor ou estratégia sem deixar claro a intenção, você DEVE perguntar:
 "Você deseja falar com um consultor para saber estratégias de vendas? Ou quer um atendimento normal pela equipe de suporte?"
-Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.`;
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer FALAR COM CONSULTOR → responda com [[FLOW_EXIT:consultor]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
   }
   
   restrictions += `
@@ -6343,7 +6347,7 @@ REGRA: Tente resolver sozinha. Se não conseguir e o cliente pedir humano, use r
 
 🔒 TRAVA FINANCEIRA ATIVA — REGRAS OBRIGATÓRIAS:
 - Responda perguntas INFORMATIVAS sobre finanças usando APENAS dados da base de conhecimento.
-- Se o cliente pedir uma AÇÃO financeira (saque, reembolso, estorno, devolução), responda: "Entendi sua solicitação. Vou te encaminhar para o setor responsável." e retorne [[FLOW_EXIT]].
+- Se o cliente pedir uma AÇÃO financeira (saque, reembolso, estorno, devolução), responda: "Entendi sua solicitação. Vou te encaminhar para o setor responsável." e retorne [[FLOW_EXIT:financeiro]].
 - NUNCA cite valores monetários, prazos em dias ou percentuais sobre saques/reembolsos A MENOS que existam EXATAMENTE na base de conhecimento.
 - Se não encontrar a informação na KB, responda: "Não tenho essa informação no momento. O setor financeiro poderá te orientar com detalhes."
 - NUNCA invente, deduza ou estime valores financeiros.
