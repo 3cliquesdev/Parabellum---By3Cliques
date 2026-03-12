@@ -517,7 +517,7 @@ function evaluateConditionPath(nodeData: any, collectedData: Record<string, any>
   }
   
   // Modo clássico: true/false
-  const result = evaluateCondition(nodeData, collectedData, userMessage, extraFlags, undefined, undefined);
+  const result = evaluateCondition(nodeData, collectedData, userMessage, extraFlags, contactData, conversationData);
   return result ? 'true' : 'false';
 }
 
