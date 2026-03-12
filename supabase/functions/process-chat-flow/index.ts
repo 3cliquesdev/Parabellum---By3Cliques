@@ -1821,7 +1821,7 @@ serve(async (req) => {
                       ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
                     await createTicketFromFlow(supabaseClient, {
                       conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
-                      contactId: contactData?.id || null,
+                      contactId: activeContactData?.id || null,
                       subject, description,
                       category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
                       priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
@@ -1836,8 +1836,8 @@ serve(async (req) => {
                     if (tagId) {
                       if (tagScope === 'conversation') {
                         await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
-                      } else if (contactData?.id) {
-                        await supabaseClient.from('contact_tags').upsert({ contact_id: contactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                      } else if (activeContactData?.id) {
+                        await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
                       }
                     }
                   }
@@ -1852,11 +1852,48 @@ serve(async (req) => {
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
+                // Bug T fix: OTP not_customer → ai_response must initialize __ai and update state
+                if (resolvedNode.type === 'ai_response') {
+                  collectedData.__ai = { interaction_count: 0 };
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    current_node_id: resolvedNode.id,
+                    status: 'active',
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', activeState.id);
+
+                  return new Response(JSON.stringify({
+                    useAI: true,
+                    aiNodeActive: true,
+                    nodeId: resolvedNode.id,
+                    response: notCustomerMsg || '',
+                    flowId: activeState.flow_id,
+                    flowName: activeState.chat_flows?.name || null,
+                    contextPrompt: resolvedNode.data?.context_prompt,
+                    useKnowledgeBase: resolvedNode.data?.use_knowledge_base !== false,
+                    collectedData,
+                    allowedSources: buildAllowedSources(resolvedNode.data),
+                    responseFormat: 'text_only',
+                    personaId: resolvedNode.data?.persona_id || null,
+                    personaName: resolvedNode.data?.persona_name || null,
+                    kbCategories: resolvedNode.data?.kb_categories || null,
+                    fallbackMessage: resolvedNode.data?.fallback_message || null,
+                    objective: resolvedNode.data?.objective || null,
+                    maxSentences: resolvedNode.data?.max_sentences ?? 3,
+                    forbidQuestions: resolvedNode.data?.forbid_questions ?? true,
+                    forbidOptions: resolvedNode.data?.forbid_options ?? true,
+                    forbidFinancial: resolvedNode.data?.forbid_financial ?? false,
+                    forbidCommercial: resolvedNode.data?.forbid_commercial ?? false,
+                    forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
+                    forbidSupport: resolvedNode.data?.forbid_support ?? false,
+                    forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
                 variablesContext = await rebuildCtx();
                 const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
                 return new Response(JSON.stringify({
-                  useAI: resolvedNode.type === 'ai_response',
-                  aiNodeActive: resolvedNode.type === 'ai_response',
+                  useAI: false,
                   response: [notCustomerMsg, nextMsg].filter(Boolean).join('\n\n'),
                   flowId: activeState.flow_id,
                   collectedData,
@@ -2011,7 +2048,7 @@ serve(async (req) => {
                       ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
                     await createTicketFromFlow(supabaseClient, {
                       conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
-                      contactId: contactData?.id || null,
+                      contactId: activeContactData?.id || null,
                       subject, description,
                       category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
                       priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
@@ -2026,8 +2063,8 @@ serve(async (req) => {
                     if (tagId) {
                       if (tagScope === 'conversation') {
                         await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
-                      } else if (contactData?.id) {
-                        await supabaseClient.from('contact_tags').upsert({ contact_id: contactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                      } else if (activeContactData?.id) {
+                        await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
                       }
                     }
                   }
@@ -2042,14 +2079,41 @@ serve(async (req) => {
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
+                // Bug S fix: OTP success → ai_response must initialize __ai and update state
                 if (resolvedNode.type === 'ai_response') {
+                  collectedData.__ai = { interaction_count: 0 };
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    current_node_id: resolvedNode.id,
+                    status: 'active',
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', activeState.id);
+
                   return new Response(JSON.stringify({
                     useAI: true,
                     aiNodeActive: true,
+                    nodeId: resolvedNode.id,
                     response: "✅ Identidade verificada!",
                     flowId: activeState.flow_id,
+                    flowName: activeState.chat_flows?.name || null,
+                    contextPrompt: resolvedNode.data?.context_prompt,
+                    useKnowledgeBase: resolvedNode.data?.use_knowledge_base !== false,
                     collectedData,
-                    nodeId: resolvedNode.id,
+                    allowedSources: buildAllowedSources(resolvedNode.data),
+                    responseFormat: 'text_only',
+                    personaId: resolvedNode.data?.persona_id || null,
+                    personaName: resolvedNode.data?.persona_name || null,
+                    kbCategories: resolvedNode.data?.kb_categories || null,
+                    fallbackMessage: resolvedNode.data?.fallback_message || null,
+                    objective: resolvedNode.data?.objective || null,
+                    maxSentences: resolvedNode.data?.max_sentences ?? 3,
+                    forbidQuestions: resolvedNode.data?.forbid_questions ?? true,
+                    forbidOptions: resolvedNode.data?.forbid_options ?? true,
+                    forbidFinancial: resolvedNode.data?.forbid_financial ?? false,
+                    forbidCommercial: resolvedNode.data?.forbid_commercial ?? false,
+                    forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
+                    forbidSupport: resolvedNode.data?.forbid_support ?? false,
+                    forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
