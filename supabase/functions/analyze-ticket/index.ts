@@ -140,7 +140,7 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
       }
       
       const errorText = await response.text();
-      console.error(`[analyze-ticket] AI Gateway error: ${response.status}`, errorText);
+      console.error(`[analyze-ticket] OpenAI API error: ${response.status}`, errorText);
       
       // GRACEFUL DEGRADATION: Return fallback values for known errors (including 402 payment required, 500 server error)
       if (response.status === 429 || response.status === 503 || response.status === 502 || response.status === 402 || response.status === 500) {
