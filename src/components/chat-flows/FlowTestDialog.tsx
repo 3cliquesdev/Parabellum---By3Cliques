@@ -76,7 +76,7 @@ export function FlowTestDialog({ open, onClose, flowId, flowName, onAutoSave }: 
         .update({ 
           is_test_mode: true, 
           ai_mode: "autopilot",
-          customer_metadata: cleanMetadata,
+          customer_metadata: cleanMetadata as Record<string, string | number | boolean | null>,
         })
         .eq("id", conversationId);
 
