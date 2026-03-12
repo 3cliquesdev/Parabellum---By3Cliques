@@ -3760,7 +3760,7 @@ serve(async (req) => {
 
     // Obter API keys antecipadamente
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    // LOVABLE_API_KEY removida - usando OpenAI diretamente
     
     // Usar modelo do RAGConfig já carregado (evita query duplicada)
     const configuredAIModel = ragConfig.model;
