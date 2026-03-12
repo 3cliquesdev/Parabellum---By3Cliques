@@ -6,31 +6,8 @@ const corsHeaders = {
 };
 
 // Helper: Buscar modelo AI configurado no banco
-async function getConfiguredAIModel(): Promise<string> {
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    // Se as envs não existirem, não tentar inicializar client (evita falha no boot)
-    if (!supabaseUrl || !serviceRoleKey) {
-      console.warn('[analyze-ticket] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY; using default model');
-      return 'google/gemini-2.5-flash-lite';
-    }
-
-    const supabaseClient = createClient(supabaseUrl, serviceRoleKey);
-    
-    const { data } = await supabaseClient
-      .from('system_configurations')
-      .select('value')
-      .eq('key', 'ai_default_model')
-      .maybeSingle();
-    
-    return data?.value || 'google/gemini-2.5-flash-lite';
-  } catch (error) {
-    console.error('[analyze-ticket] Error fetching AI model config:', error);
-    return 'google/gemini-2.5-flash-lite';
-  }
-}
+// Modelo padrão OpenAI
+const DEFAULT_MODEL = 'gpt-4o-mini';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
