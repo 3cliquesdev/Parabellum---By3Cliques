@@ -8344,20 +8344,32 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         
         // Continua execução — mensagem será persistida abaixo
       } else if (forbidFinancial) {
-        const financialResolutionPattern = /(j[áa] processei|foi estornado|solicitei reembolso|vou reembolsar|pode sacar|liberei o saque|reembolso aprovado|estorno realizado|cancelamento confirmado|pagamento devolvido|já estornei|processando.*reembolso|aprovei.*devolu[çc][ãa]o|cancelar.*assinatura|sacar.*saldo|saque.*(realizado|solicitado)|op[çc][ãa]o.*(saque|reembolso|estorno)|para\s+prosseguir\s+com\s+o\s+(saque|reembolso|estorno)|confirmar.*dados.*(saque|reembolso|estorno)|devolver.*dinheiro)/i;
+        // 🆕 Apenas bloquear se a IA tentou EXECUTAR uma ação financeira (não informações)
+        const financialResolutionPattern = /(j[áa] processei|foi estornado|solicitei reembolso|vou reembolsar|pode sacar|liberei o saque|reembolso aprovado|estorno realizado|cancelamento confirmado|pagamento devolvido|já estornei|processando.*reembolso|aprovei.*devolu[çc][ãa]o|sacar.*saldo|saque.*(realizado|solicitado)|para\s+prosseguir\s+com\s+o\s+(saque|reembolso|estorno)|confirmar.*dados.*(saque|reembolso|estorno)|devolver.*dinheiro)/i;
         if (financialResolutionPattern.test(assistantMessage)) {
-          console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (pré-save): IA tentou resolver assunto financeiro');
-          assistantMessage = 'Esse tipo de solicitação precisa ser tratada por um atendente. Vou te transferir agora!';
-          try {
-            await supabaseClient
-              .from('conversations')
-              .update({ ai_mode: 'waiting_human', assigned_to: null })
-              .eq('id', conversationId);
-            console.log('[ai-autopilot-chat] 🔒 Conversa transferida para humano (trava financeira)');
-          } catch (transferErr) {
-            console.error('[ai-autopilot-chat] Erro ao transferir (trava financeira):', transferErr);
-          }
+          console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (pré-save): IA tentou EXECUTAR ação financeira');
+          assistantMessage = 'Entendi sua solicitação. Vou te encaminhar para o setor responsável que poderá te ajudar com isso.';
+          
+          // Sinalizar flow_advance_needed para que o webhook avance no fluxo financeiro
+          return new Response(JSON.stringify({
+            ok: true,
+            financialBlocked: true,
+            exitKeywordDetected: true,
+            flow_advance_needed: true,
+            hasFlowContext: true,
+            response: assistantMessage,
+            message: assistantMessage,
+            aiResponse: assistantMessage,
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
         }
+        
+        // Se não tentou executar ação, aplicar limitação de frases normalmente
+        const maxSentences = flow_context.maxSentences ?? 3;
+        assistantMessage = limitSentences(assistantMessage, maxSentences);
+        console.log('[ai-autopilot-chat] ✅ forbidFinancial ativo mas resposta é informativa — permitida');
       } else {
         const maxSentences = flow_context.maxSentences ?? 3;
         assistantMessage = limitSentences(assistantMessage, maxSentences);
