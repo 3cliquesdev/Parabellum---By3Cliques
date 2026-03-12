@@ -15,7 +15,10 @@ const VALID_OPENAI_MODELS = new Set([
   'o3', 'o3-mini', 'o4-mini',
 ]);
 
-const REASONING_MODELS = new Set(['o3', 'o3-mini', 'o4-mini']);
+const MAX_COMPLETION_TOKEN_MODELS = new Set([
+  'o3', 'o3-mini', 'o4-mini',
+  'gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2',
+]);
 
 // Helper: Buscar modelo AI configurado no banco
 async function getConfiguredAIModel(supabase: any): Promise<string> {
