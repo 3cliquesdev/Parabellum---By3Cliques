@@ -2190,10 +2190,32 @@ serve(async (req) => {
 
         // 🧑 TRAVA SUPORTE: Detectar pedido de atendente humano como exit do nó AI
         const supportIntentPattern = /falar\s+com\s*(um\s*)?(atendente|humano|pessoa|agente|operador)|quero\s+(atendente|humano|pessoa|suporte)|atendimento\s+humano|preciso\s+de\s+(ajuda\s+)?humana?|me\s+transfira|transferir\s+para\s+(atendente|humano|suporte)|chamar?\s+(atendente|humano|suporte)|n[ãa]o\s+quero\s+(falar\s+com\s+)?(rob[ôo]|bot|ia|intelig[êe]ncia)/i;
-        const supportIntentMatch = forbidSupport && msgLower.length > 0 && supportIntentPattern.test(userMessage || '');
+        let supportIntentMatch = forbidSupport && msgLower.length > 0 && supportIntentPattern.test(userMessage || '');
         
         if (supportIntentMatch) {
           console.log(`[process-chat-flow] 🧑 TRAVA SUPORTE: Pedido de atendente detectado | msg="${(userMessage || '').substring(0, 100)}"`);
+          
+          // 🆕 FIX: Log ai_blocked_support (paridade com financeiro, cancelamento, comercial, consultor)
+          try {
+            await supabaseClient
+              .from('ai_events')
+              .insert({
+                entity_type: 'conversation',
+                entity_id: conversationId,
+                event_type: 'ai_blocked_support',
+                model: 'process-chat-flow',
+                output_json: {
+                  phase: 'flow_node_exit',
+                  node_id: currentNode.id,
+                  flow_id: activeState.flow_id,
+                  interaction_count: aiCount,
+                  message_preview: (userMessage || '').substring(0, 200),
+                },
+                input_summary: (userMessage || '').substring(0, 200),
+              });
+          } catch (logErr) {
+            console.error('[process-chat-flow] ⚠️ Failed to log support block event:', logErr);
+          }
         }
 
         // 🛒 TRAVA COMERCIAL: Detectar intenção de compra como exit do nó AI
@@ -2235,9 +2257,13 @@ serve(async (req) => {
               .maybeSingle();
             consultorHasConsultant = !!(contactRow?.consultant_id);
             if (!consultorHasConsultant) {
-              console.log(`[process-chat-flow] 💼 CONSULTOR: Intenção detectada mas contato não tem consultant_id → roteando para suporte`);
+              console.log(`[process-chat-flow] 💼 CONSULTOR: Intenção detectada mas contato não tem consultant_id → forçando roteamento para suporte`);
               // Sem consultor → redireciona para suporte ao invés de consultor
               consultorIntentMatch = false;
+              // 🆕 FIX: Forçar supportIntentMatch para não engolir o pedido silenciosamente
+              supportIntentMatch = true;
+              collectedData.ai_exit_intent = 'suporte';
+              console.log(`[process-chat-flow] 🧑 supportIntentMatch forçado=true (fallback de consultor sem consultant_id)`);
             } else {
               console.log(`[process-chat-flow] 💼 CONSULTOR: Intenção detectada e contato tem consultant_id → saída consultor`);
             }
@@ -2271,7 +2297,7 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log financial block event:', logErr);
           }
 
-          delete collectedData.__ai;
+          // delete redundante removido — confiamos no delete centralizado na linha de exit geral
         }
 
         if (cancellationIntentMatch) {
@@ -2298,7 +2324,7 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log cancellation block event:', logErr);
           }
 
-          delete collectedData.__ai;
+          // delete redundante removido — confiamos no delete centralizado na linha de exit geral
         }
 
         if (commercialIntentMatch) {
@@ -2325,7 +2351,7 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log commercial block event:', logErr);
           }
 
-          delete collectedData.__ai;
+          // delete redundante removido — confiamos no delete centralizado na linha de exit geral
         }
 
         if (consultorIntentMatch) {
@@ -2353,7 +2379,7 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log consultant block event:', logErr);
           }
 
-          delete collectedData.__ai;
+          // delete redundante removido — confiamos no delete centralizado na linha de exit geral
         }
 
         // Verificar exit keyword (word-boundary match — evita falso positivo por substring)
@@ -3450,6 +3476,8 @@ serve(async (req) => {
       });
     }
 
+    } // end if (activeState)
+
     // 3. Detectar se mensagem dispara um fluxo
     if (!userMessage) {
       return new Response(
@@ -4018,39 +4046,39 @@ serve(async (req) => {
 
     // 🆕 CORREÇÃO: Se o nó inicial é "input" ou "condition", seguir para o próximo nó
     // Esses nós não têm conteúdo para enviar ao usuário
-    let currentNode = startNode;
+    let trigCurrentNode = startNode;
     let attempts = 0;
     const maxAttempts = 10; // Evitar loop infinito
     
-    while (attempts < maxAttempts && (currentNode.type === 'input' || currentNode.type === 'condition')) {
+    while (attempts < maxAttempts && (trigCurrentNode.type === 'input' || trigCurrentNode.type === 'condition')) {
       attempts++;
-      console.log('[process-chat-flow] ⏩ Nó sem conteúdo (', currentNode.type, ') - avançando...');
+      console.log('[process-chat-flow] ⏩ Nó sem conteúdo (', trigCurrentNode.type, ') - avançando...');
       
-      if (currentNode.type === 'condition') {
+      if (trigCurrentNode.type === 'condition') {
         // 🆕 FIX: Multi-regra com keywords precisa de mensagem real
-        const hasMultiRules = currentNode.data?.condition_rules?.length > 0;
-        const hasFieldRules = hasMultiRules && currentNode.data.condition_rules.some((r: any) => !!r.field);
+        const hasMultiRules = trigCurrentNode.data?.condition_rules?.length > 0;
+        const hasFieldRules = hasMultiRules && trigCurrentNode.data.condition_rules.some((r: any) => !!r.field);
         if (hasMultiRules && !hasFieldRules && (!userMessage || userMessage.trim().length === 0)) {
           console.log('[process-chat-flow] 🛑 New flow: multi-rule keyword condition without userMessage — stopping as waiting_input');
           break;
         }
-        const path = evaluateConditionPath(currentNode.data, {}, userMessage);
+        const path = evaluateConditionPath(trigCurrentNode.data, {}, userMessage);
         console.log('[process-chat-flow] 🔍 Condição avaliada → path:', path);
-        currentNode = findNextNode(trigFlowDef, currentNode, path);
+        trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, path);
       } else {
         // Para nó input, apenas seguir para o próximo
-        currentNode = findNextNode(trigFlowDef, currentNode, undefined);
+        trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, undefined);
       }
       
-      if (!currentNode) {
+      if (!trigCurrentNode) {
         console.log('[process-chat-flow] ❌ Sem próximo nó após avançar');
         break;
       }
       
-      console.log('[process-chat-flow] 📍 Novo nó:', currentNode.type, currentNode.id);
+      console.log('[process-chat-flow] 📍 Novo nó:', trigCurrentNode.type, trigCurrentNode.id);
     }
 
-    if (!currentNode) {
+    if (!trigCurrentNode) {
       console.log('[process-chat-flow] ❌ Não encontrou nó com conteúdo');
       return new Response(
         JSON.stringify({ useAI: true, reason: "Flow has no content nodes" }),
@@ -4059,7 +4087,7 @@ serve(async (req) => {
     }
 
     // Atualizar startNode para o nó com conteúdo real
-    startNode = currentNode;
+    startNode = trigCurrentNode;
     
     console.log('[process-chat-flow] ✅ Nó final com conteúdo:', startNode.type, startNode.id);
 
