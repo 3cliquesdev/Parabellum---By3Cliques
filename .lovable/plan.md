@@ -1,178 +1,58 @@
 
-# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-## Arquivo: `supabase/functions/process-chat-flow/index.ts`
+# Plano de Melhorias Visuais — 6 Prompts
 
-### FIX 1 ✅ — Proteção contra loop flow-to-flow
-### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
-### FIX 3 ✅ — Auto-traverse cobre condition_v2
-### FIX 4 ✅ — Transfer node atualiza conversations.department
-### FIX 5 ✅ — startMessage com replaceVariables
-### FIX 6 ✅ — financialIntentPattern simplificado
+## PROMPT 1 — Login: Typo + Ícone
 
----
+**Arquivo**: `src/pages/Auth.tsx`
+- Corrigir L132: `"Bem-vindo de ao Q.G"` → `"Bem-vindo ao Q.G"`
+- Adicionar ícone `Target` do Lucide ao lado do texto "PARABELLUM" na coluna esquerda (brand area), ambos em azul primário. Substituir/complementar a logo com um header `Target + PARABELLUM` estilizado.
 
-# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
+## PROMPT 2 — Dashboard: Cards com borda e ícone
 
-## Problema
-Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
+**Arquivo**: `src/components/dashboard/OverviewDashboardTab.tsx`
+- Envolver cada seção (Vendas, Suporte, Financeiro, Operacional) em `Card` com classes `border border-gray-100 rounded-xl shadow-sm p-4`
+- Mover o ícone colorido da seção para o canto superior direito do card wrapper
+- No `KPICard` (`src/components/widgets/KPICard.tsx`), o valor já é `text-2xl font-semibold` — mudar para `text-2xl font-bold`
 
-## Correções aplicadas
+## PROMPT 3 — Sidebar: Separadores e item ativo
 
-### 7a — Fallback edge default (process-chat-flow ~L2273)
-Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
+**Arquivo**: `src/components/AppSidebar.tsx`
+- No `SidebarGroupLabel` (L360): adicionar classes `uppercase tracking-widest text-xs text-gray-400 pt-4`
+- Adicionar `Separator` (ou `border-t`) acima de cada grupo (exceto o primeiro)
+- No `renderMenuItem` (L276): mudar `activeClassName` para usar `bg-primary/15 text-primary font-medium border-l-[3px] border-primary`
 
-### 7b — Guard final sem nó (process-chat-flow ~L2336)
-Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
+## PROMPT 4 — Header: Breadcrumb + Busca global
 
-### 7c — Safety net IA falha (process-buffered-messages ~L383)
-Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
+**Arquivo**: `src/components/Layout.tsx`
+- Após o `SidebarTrigger`, adicionar breadcrumb simples baseado em `location.pathname` (mapeamento de rotas para labels em português)
+- Adicionar campo de busca centralizado com ícone `Search` e placeholder "Buscar..."
+- Manter `NotificationBell` à direita
 
-### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
-Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
+## PROMPT 5 — Organizações: Avatares com iniciais
 
----
+**Arquivo**: `src/pages/Organizations.tsx`
+- Substituir o bloco `Building2` icon (L92-94) por um `Avatar` com `AvatarFallback` contendo as iniciais da empresa (ex: "ST" para "Saint Tropez")
+- Cor de fundo gerada por hash simples do nome da organização (função `stringToColor`)
+- Adicionar `hover:shadow-md cursor-pointer` nos cards
 
-# FIX 8 ✅ — pg_cron matando flows prematuramente (11/03/2026)
+## PROMPT 6 — Analytics Hub: Cards menores + Atividade Recente
 
-## Problema
-O pg_cron `cleanup-stuck-flow-states` usava `started_at < now() - 3 min`, mas `started_at` é imutável. Flows com múltiplos passos (>3min) eram mortos antes de chegar ao nó de transfer.
-
-## Correções aplicadas
-
-### 8a — Coluna `updated_at` em `chat_flow_states`
-Nova coluna `updated_at timestamptz DEFAULT now()` adicionada via migration. Registros existentes backfilled com `COALESCE(completed_at, started_at)`.
-
-### 8b — `updated_at` em todos os `.update()` do process-chat-flow
-21 pontos de atualização no `process-chat-flow/index.ts` agora incluem `updated_at: new Date().toISOString()`, renovando o timestamp a cada interação.
-
-### 8c — pg_cron atualizado
-Cron usa `updated_at < now() - INTERVAL '15 minutes'` em vez de `started_at < now() - 3 min`.
+**Arquivo**: `src/pages/Analytics.tsx`
+- Reduzir padding dos 4 cards (CardHeader `pb-2`, CardContent compact)
+- Adicionar seção "Atividade Recente" abaixo dos cards com timeline dos últimos 5 eventos (query à tabela `audit_logs` ou `tickets` + `contacts` para montar timeline)
 
 ---
 
-# FIX 9 ✅ — IA não responde: safety net mata flow em quota error (11/03/2026)
+## Arquivos impactados
 
-## Problema
-O `process-buffered-messages` tratava erros 429/503 (quota/rate limit) como falha fatal, disparando `forceAIExit` e matando o flow antes da IA ter chance de responder.
+| Arquivo | Mudanças |
+|---|---|
+| `src/pages/Auth.tsx` | Typo fix + ícone Target |
+| `src/components/dashboard/OverviewDashboardTab.tsx` | Cards wrapper com borda |
+| `src/components/widgets/KPICard.tsx` | `font-semibold` → `font-bold` |
+| `src/components/AppSidebar.tsx` | Separadores + activeClassName |
+| `src/components/Layout.tsx` | Breadcrumb + busca global |
+| `src/pages/Organizations.tsx` | Avatar iniciais + hover |
+| `src/pages/Analytics.tsx` | Cards compactos + timeline |
 
-## Correções aplicadas
-
-### 9a — Distinguir quota error de erro técnico real
-Na safety net do `process-buffered-messages`, erros 429/503 com `quota_error` ou `retry_suggested: true` NÃO disparam `forceAIExit`. Buffer fica como `processed=false` para retry no próximo ciclo.
-
-### 9b — Refresh `updated_at` do flow state após buffer processing com sucesso
-Após `ai-autopilot-chat` retornar OK via buffer, o `updated_at` do `chat_flow_states` é atualizado para evitar morte prematura pelo cron de 15 min.
-
-### 9c — Anti-retry infinito (3 ciclos)
-Buffers que falham por quota por 3+ ciclos de cron (~3 min) enviam mensagem de "alta demanda" ao contato e são marcados como processed.
-
----
-
-# FIX 10 ✅ — Auditoria IA Semana 1: Quick wins (11/03/2026)
-
-## Correções aplicadas
-
-### 10a — auto-handoff: UUID dinâmico
-Substituído UUID hardcoded `36ce66cd-...` por busca dinâmica do departamento "Suporte" via `departments.ilike('name', '%suporte%')`. Se não encontrado, loga warning e aplica handoff sem forçar departamento.
-
-### 10b — auto-handoff: Markdown removido das notas internas
-Removido `**bold**` de todas as notas internas (linhas 78, 97, 174-181). Notas agora usam texto plano com emojis para compatibilidade cross-canal (WhatsApp).
-
-### 10c — ai-autopilot-chat: Memória cross-session
-Busca últimas 3 conversas fechadas do mesmo contact_id e injeta última mensagem de agente/sistema no system prompt. IA agora lembra conversas anteriores do mesmo cliente.
-
-### 10d — ai-autopilot-chat: Persona contextual
-Tom da IA varia automaticamente baseado no status do contato:
-- VIP/assinante → tom premium e proativo
-- Churn risk/inativo → tom empático e acolhedor
-- Lead quente (score ≥ 80) → tom entusiasmado e consultivo
-
----
-
-# FIX 11 ✅ — Passive Learning ativado + Cron Job (11/03/2026)
-
-## O que foi feito
-
-### 11a — Flag `ai_passive_learning_enabled` = true
-Inserido na tabela `system_configurations` com categoria `ai`.
-
-### 11b — Cron job `passive-learning-hourly`
-pg_cron agendado para rodar a cada hora (`0 * * * *`), invocando a edge function `passive-learning-cron` via `net.http_post`.
-
-### Estado confirmado
-- `ai_global_enabled` = true
-- `ai_shadow_mode` = false
-- `ai_passive_learning_enabled` = true
-
----
-
-# FIX 12 ✅ — Cron job corrigido: anon key no gateway (11/03/2026)
-
-## Problema
-`current_setting('supabase.service_role_key', true)` retorna NULL neste projeto → cron enviava `Authorization: Bearer null` → edge function não autenticava.
-
-## Correção
-Recriado cron job `passive-learning-hourly` (jobid 13) usando anon key no header Authorization. A anon key é suficiente para passar pelo API gateway; a função internamente usa `SUPABASE_SERVICE_ROLE_KEY` do ambiente Deno para operações admin.
-
----
-
-# FIX 13 ✅ — Auto-KB Gap Detection (11/03/2026)
-
-## O que foi feito
-
-### 13a — Edge function `detect-kb-gaps`
-Criada edge function que:
-1. Busca eventos de IA das últimas 24h onde a IA fez handoff/exit (tipos: `ai_handoff_exit`, `contract_violation_blocked`, `flow_exit_clean`, `ai_exit_intent`)
-2. Clusteriza por similaridade textual (primeiras 3 palavras normalizadas)
-3. Filtra clusters com >= 2 ocorrências (gaps recorrentes)
-4. Cria `knowledge_candidates` com `status: 'pending'` + tag `'gap_detected'` (CHECK constraint impede valor custom)
-5. Notifica admins/managers via tabela `notifications`
-
-### 13b — Cron job `detect-kb-gaps-daily`
-Agendado para rodar diariamente às 8h UTC (`0 8 * * *`) usando anon key no gateway.
-
-### 13c — Workaround CHECK constraint
-`knowledge_candidates.status` só aceita `pending | approved | rejected`. Gaps usam `status: 'pending'` com tag `'gap_detected'` no array de tags para diferenciação.
-
----
-
-# FIX 14 ✅ — transition-conversation-state: State Machine centralizado (11/03/2026)
-
-## Problema
-Mudanças de estado de conversas (ai_mode, department, assigned_to, dispatch jobs) eram feitas em múltiplos pontos do código (auto-handoff, process-chat-flow, etc.), causando inconsistências como conversa sem departamento, ai_mode errado, ou dispatch job desatualizado.
-
-## Correções aplicadas
-
-### 14a — Edge function `transition-conversation-state`
-Nova edge function que é a ÚNICA fonte da verdade para transições de estado. Suporta 7 tipos:
-- `handoff_to_human`: autopilot → waiting_human + cria dispatch job
-- `assign_agent`: qualquer → copilot + atribui agente + fecha dispatch
-- `unassign_agent`: copilot → waiting_human + reabre dispatch
-- `engage_ai`: qualquer → autopilot + fecha dispatch
-- `set_copilot`: qualquer → copilot
-- `update_department`: atualiza dept + dispatch job
-- `close`: qualquer → closed + fecha dispatch
-
-Cada transição:
-1. Busca estado atual da conversa
-2. Aplica update atômico
-3. Gerencia dispatch jobs (create/close/reopen)
-4. Loga em `ai_events` como `state_transition_{tipo}`
-5. Fallback dinâmico para dept "Suporte"
-
-### 14b — auto-handoff refatorado
-Substituída toda lógica de update direto (fallback dept + update ai_mode) por chamada única:
-```typescript
-supabaseClient.functions.invoke('transition-conversation-state', {
-  body: { conversationId, transition: 'handoff_to_human', reason, metadata }
-});
-```
-
-### 14c — process-chat-flow: 5 blocos de transfer refatorados
-Todos os blocos de update direto de `conversations` em transfer nodes substituídos por `fetch()` para `transition-conversation-state`:
-1. Contract violation handler (~L726)
-2. Handoff sem próximo nó (~L2326)
-3. aiExitForced sem nó (~L2365)
-4. Transfer node principal (~L2808)
-5. Transfer node msg chain (~L3061)
