@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { NodeProps } from "reactflow";
+import { Handle, Position, NodeProps } from "reactflow";
 import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign, Store } from "lucide-react";
 import { ChatFlowNodeWrapper } from "../ChatFlowNodeWrapper";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +51,41 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
   const maxSentences = data.max_sentences ?? 3;
   const hasRestrictions = forbidQuestions || forbidOptions;
 
+  // 🆕 Custom handles: target (left) + source default (right top) + source ai_exit (right bottom)
+  const customHandles = (
+    <>
+      {/* Target handle (entrada) */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!w-4 !h-4 !bg-primary !border-2 !border-background"
+      />
+      {/* Source handle padrão (saída normal) */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="default"
+        className="!w-4 !h-4 !bg-primary !border-2 !border-background"
+        style={{ top: '35%' }}
+      />
+      {/* Source handle ai_exit (saída por intenção detectada) */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="ai_exit"
+        className="!w-4 !h-4 !bg-emerald-500 !border-2 !border-background"
+        style={{ top: '65%' }}
+      />
+      {/* Labels visuais para os handles */}
+      <div className="absolute right-[-4px] text-[8px] text-muted-foreground font-medium" style={{ top: '25%' }}>
+        padrão
+      </div>
+      <div className="absolute right-[-4px] text-[8px] text-emerald-600 font-medium" style={{ top: '72%' }}>
+        saída IA
+      </div>
+    </>
+  );
+
   return (
     <ChatFlowNodeWrapper
       type="ai_response"
@@ -58,6 +93,7 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
       title={data.label || "Resposta IA"}
       subtitle={getSubtitle()}
       selected={selected}
+      customHandles={customHandles}
     >
       <div className="flex items-center gap-1 mt-1 flex-wrap">
         {/* 🆕 Badge de Objetivo definido */}

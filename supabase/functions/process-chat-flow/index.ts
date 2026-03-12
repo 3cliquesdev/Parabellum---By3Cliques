@@ -2129,7 +2129,8 @@ serve(async (req) => {
 
         // 🔒 TRAVA FINANCEIRA: Detectar intenção financeira como exit do nó AI
         // 🆕 SEPARAÇÃO: Apenas AÇÕES financeiras disparam exit. Perguntas informativas passam para a LLM.
-        const financialActionPattern = /quero\s*(sacar|retirar|meu\s*(reembolso|dinheiro|estorno|saldo))|fa(z|ça)\s*(meu\s*)?(reembolso|estorno|saque|devolu[çc][ãa]o)|(sacar|retirar|tirar)\s*(meu\s*)?(saldo|dinheiro|valor)|(solicitar|pedir|fazer|realizar|efetuar|cancelar|estornar)\s*(saque|reembolso|estorno|devolu[çc][ãa]o|pagamento)|(quero|preciso|necessito)\s*(meu\s+dinheiro|devolu[çc][ãa]o|reembolso|estorno|ressarcimento)|cancelar\s*(minha\s*)?(assinatura|cobran[çc]a|pagamento)|transferir\s*(meu\s*)?saldo|devolver\s*(meu\s*)?dinheiro|cobran[çc]a\s*indevida|contestar\s*(cobran[çc]a|pagamento)|cad[êe]\s*(meu\s*)?(dinheiro|saldo|reembolso)|n[ãa]o\s+recebi\s*(meu\s*)?(reembolso|estorno|saque|pagamento|dinheiro)|me\s+(devolvam|reembolsem|paguem)|preciso\s+do\s+meu\s+(saque|reembolso|saldo)|quero\s+receber\s*(meu\s*)?(pagamento|dinheiro|saldo)/i;
+        // 🆕 CORREÇÃO: Termos de cancelamento REMOVIDOS — tratados separadamente abaixo
+        const financialActionPattern = /quero\s*(sacar|retirar|meu\s*(reembolso|dinheiro|estorno|saldo))|fa(z|ça)\s*(meu\s*)?(reembolso|estorno|saque|devolu[çc][ãa]o)|(sacar|retirar|tirar)\s*(meu\s*)?(saldo|dinheiro|valor)|(solicitar|pedir|fazer|realizar|efetuar|estornar)\s*(saque|reembolso|estorno|devolu[çc][ãa]o|pagamento)|(quero|preciso|necessito)\s*(meu\s+dinheiro|devolu[çc][ãa]o|reembolso|estorno|ressarcimento)|transferir\s*(meu\s*)?saldo|devolver\s*(meu\s*)?dinheiro|cobran[çc]a\s*indevida|contestar\s*(cobran[çc]a|pagamento)|cad[êe]\s*(meu\s*)?(dinheiro|saldo|reembolso)|n[ãa]o\s+recebi\s*(meu\s*)?(reembolso|estorno|saque|pagamento|dinheiro)|me\s+(devolvam|reembolsem|paguem)|preciso\s+do\s+meu\s+(saque|reembolso|saldo)|quero\s+receber\s*(meu\s*)?(pagamento|dinheiro|saldo)/i;
         const financialInfoPattern = /qual\s*(o\s*)?(prazo|tempo|data)|como\s*(funciona|fa[çc]o|solicito|pe[çc]o)|onde\s*(vejo|consulto|acompanho)|quando\s*(posso|vou|ser[áa])|pol[ií]tica\s*de\s*(reembolso|devolu[çc][ãa]o|estorno|saque|cancelamento)|regras?\s*(de|para|do)\s*(saque|reembolso|estorno|devolu[çc][ãa]o)|d[úu]vida\s+(sobre|com|de|do|da)\s+(saque|reembolso|estorno|devolu|financ|saldo|cobran)|saber\s+sobre|informar\s+sobre|informa[çc][ãa]o\s+(sobre|de|do|da)|perguntar\s+sobre|entender\s+(como|sobre|o\s+que)|explicar?\s+(como|sobre|o\s+que)|gostaria\s+de\s+(saber|entender|me\s+informar)|o\s+que\s+[ée]\s*(saque|reembolso|estorno|devolu[çc][ãa]o)|confirma[çc][ãa]o\s+de/i;
         const financialContext = /endere[çc]o\s+de|local\s+de\s+entrega|forma\s+de\s+pagamento/i;
         // 🆕 Regex ambígua — termos financeiros isolados que NÃO são ação nem info
@@ -2148,6 +2149,14 @@ serve(async (req) => {
           (forbidFinancial && msgLower.length > 0 && isFinancialAction && !isFinancialInfo);
         if (forceFinancialExit) {
           console.log('[process-chat-flow] 🔒 forceFinancialExit=true recebido do webhook, forçando exit do nó AI');
+        }
+
+        // 🆕 TRAVA CANCELAMENTO: Separada do financeiro para roteamento independente
+        const cancellationActionPattern = /cancelar\s*(minha\s*)?(assinatura|cobran[çc]a|pagamento|plano|conta|servi[çc]o)|quero\s+cancelar|desistir\s*(do|da|de)\s*(plano|assinatura|servi[çc]o|conta)|n[ãa]o\s+quero\s+mais\s*(o\s*)?(plano|assinatura|servi[çc]o)|encerrar\s*(minha\s*)?(conta|assinatura|plano)/i;
+        const cancellationIntentMatch = forbidFinancial && msgLower.length > 0 && cancellationActionPattern.test(userMessage || '') && !isFinancialInfo;
+        
+        if (cancellationIntentMatch) {
+          console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada | msg="${(userMessage || '').substring(0, 100)}"`);
         }
 
         // 🛒 TRAVA COMERCIAL: Detectar intenção de compra como exit do nó AI
@@ -2184,6 +2193,33 @@ serve(async (req) => {
           delete collectedData.__ai;
         }
 
+        if (cancellationIntentMatch) {
+          console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada no nó AI, tratando como exit | msg="${(userMessage || '').substring(0, 100)}"`);
+          
+          try {
+            await supabaseClient
+              .from('ai_events')
+              .insert({
+                entity_type: 'conversation',
+                entity_id: conversationId,
+                event_type: 'ai_blocked_cancellation',
+                model: 'process-chat-flow',
+                output_json: {
+                  phase: 'flow_node_exit',
+                  node_id: currentNode.id,
+                  flow_id: activeState.flow_id,
+                  interaction_count: aiCount,
+                  message_preview: (userMessage || '').substring(0, 200),
+                },
+                input_summary: (userMessage || '').substring(0, 200),
+              });
+          } catch (logErr) {
+            console.error('[process-chat-flow] ⚠️ Failed to log cancellation block event:', logErr);
+          }
+
+          delete collectedData.__ai;
+        }
+
         if (commercialIntentMatch) {
           console.log(`[process-chat-flow] 🛒 TRAVA COMERCIAL: Intenção comercial detectada no nó AI, tratando como exit`);
           
@@ -2212,10 +2248,9 @@ serve(async (req) => {
         }
 
         // Verificar exit keyword (word-boundary match — evita falso positivo por substring)
-        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
+        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
           const kwClean = String(kw || '').toLowerCase().trim();
           if (!kwClean) return false;
-          // Usar word boundary para evitar match parcial (ex: "atendente" dentro de "não sou atendente")
           try {
             const kwRegex = new RegExp(`\\b${kwClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
             return kwRegex.test(msgLower);
@@ -2225,7 +2260,7 @@ serve(async (req) => {
         });
 
         // Verificar max interações
-        const maxReached = !financialIntentMatch && !commercialIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
+        const maxReached = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
 
         // 🆕 forceAIExit: IA detectou handoff (strict RAG ou confidence) e quer sair do nó
         if (forceAIExit) {
@@ -2238,19 +2273,23 @@ serve(async (req) => {
           collectedData.ai_exit_intent = intentData.ai_exit_intent;
           console.log(`[process-chat-flow] 🎯 ai_exit_intent salvo: "${intentData.ai_exit_intent}"`);
         }
-        // Salvar intent automático quando financialIntentMatch ou commercialIntentMatch
+        // Salvar intent automático quando financialIntentMatch, cancellationIntentMatch ou commercialIntentMatch
         if (financialIntentMatch && !collectedData.ai_exit_intent) {
           collectedData.ai_exit_intent = 'financeiro';
           console.log('[process-chat-flow] 🎯 ai_exit_intent=financeiro (auto-detect from financialIntentMatch)');
+        }
+        if (cancellationIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'cancelamento';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=cancelamento (auto-detect from cancellationIntentMatch)');
         }
         if (commercialIntentMatch && !collectedData.ai_exit_intent) {
           collectedData.ai_exit_intent = 'comercial';
           console.log('[process-chat-flow] 🎯 ai_exit_intent=comercial (auto-detect from commercialIntentMatch)');
         }
 
-        if (financialIntentMatch || commercialIntentMatch || keywordMatch || maxReached || aiExitForced) {
-          const exitReason = financialIntentMatch ? 'financial_blocked' : commercialIntentMatch ? 'commercial_blocked' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
-          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} commercial=${commercialIntentMatch} count=${aiCount}`);
+        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || keywordMatch || maxReached || aiExitForced) {
+          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
+          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} count=${aiCount}`);
 
           // Log de transferência estruturado em ai_events
           try {
@@ -2307,11 +2346,10 @@ serve(async (req) => {
             console.log('[process-chat-flow] 🎯 aiExitForced → path set to "ai_exit" for findNextNode');
           }
 
-          // 🆕 FIX CRÍTICO: financialIntentMatch/commercialIntentMatch também devem seguir edge ai_exit
-          // Sem isso, path ficava undefined e findNextNode pegava edge default → nó errado
-          if (financialIntentMatch || commercialIntentMatch) {
+          // 🆕 FIX CRÍTICO: financialIntentMatch/cancellationIntentMatch/commercialIntentMatch também devem seguir edge ai_exit
+          if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch) {
             path = 'ai_exit';
-            console.log(`[process-chat-flow] 🎯 financial/commercial exit → path set to "ai_exit" | financial=${financialIntentMatch} commercial=${commercialIntentMatch}`);
+            console.log(`[process-chat-flow] 🎯 financial/cancellation/commercial exit → path set to "ai_exit" | financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch}`);
           }
 
           // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir
