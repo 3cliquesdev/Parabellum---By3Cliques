@@ -125,8 +125,11 @@ const VALID_OPENAI_MODELS = new Set([
   'o3', 'o3-mini', 'o4-mini',
 ]);
 
-// Reasoning models use max_completion_tokens instead of max_tokens
-const REASONING_MODELS = new Set(['o3', 'o3-mini', 'o4-mini']);
+// Models that require max_completion_tokens instead of max_tokens
+const MAX_COMPLETION_TOKEN_MODELS = new Set([
+  'o3', 'o3-mini', 'o4-mini',
+  'gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2',
+]);
 
 function sanitizeModelName(model: string): string {
   // If it's already a valid OpenAI model, pass through
@@ -3957,9 +3960,9 @@ serve(async (req) => {
     const callAIWithFallback = async (payload: any) => {
       const configuredModel = sanitizeModelName(ragConfig.model);
       
-      // Reasoning models: convert max_tokens → max_completion_tokens
+      // Models requiring max_completion_tokens: convert max_tokens
       const finalPayload = { ...payload };
-      if (REASONING_MODELS.has(configuredModel) && finalPayload.max_tokens) {
+      if (MAX_COMPLETION_TOKEN_MODELS.has(configuredModel) && finalPayload.max_tokens) {
         finalPayload.max_completion_tokens = finalPayload.max_tokens;
         delete finalPayload.max_tokens;
       }
@@ -3969,8 +3972,8 @@ serve(async (req) => {
       
       const tryModel = async (model: string, attempt: string, overridePayload?: Record<string, any>) => {
         const attemptPayload = overridePayload ? { ...overridePayload } : { ...finalPayload };
-        // Reasoning models não suportam max_tokens nem temperature
-        if (REASONING_MODELS.has(model)) {
+        // Models that don't support max_tokens / temperature
+        if (MAX_COMPLETION_TOKEN_MODELS.has(model)) {
           if (attemptPayload.max_tokens) {
             attemptPayload.max_completion_tokens = attemptPayload.max_tokens;
             delete attemptPayload.max_tokens;
