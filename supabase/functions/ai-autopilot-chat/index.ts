@@ -6017,7 +6017,23 @@ Quem decide transferências, menus e direcionamentos é o FLUXO, não você.
 REGRA: Tente resolver sozinha. Se não conseguir e o cliente pedir humano, use request_human_agent — o sistema cuidará do restante (registrará a pendência para o próximo expediente).\n`
     ) : '';
 
-    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}
+    // 🔒 TRAVA FINANCEIRA: Injetar instruções diretamente no prompt da LLM
+    const financialGuardInstruction = flowForbidFinancial ? `
+
+🔒 TRAVA FINANCEIRA ATIVA — REGRAS OBRIGATÓRIAS:
+- Responda perguntas INFORMATIVAS sobre finanças usando APENAS dados da base de conhecimento.
+- Se o cliente pedir uma AÇÃO financeira (saque, reembolso, estorno, devolução), responda: "Entendi sua solicitação. Vou te encaminhar para o setor responsável." e retorne [[FLOW_EXIT]].
+- NUNCA cite valores monetários, prazos em dias ou percentuais sobre saques/reembolsos A MENOS que existam EXATAMENTE na base de conhecimento.
+- Se não encontrar a informação na KB, responda: "Não tenho essa informação no momento. O setor financeiro poderá te orientar com detalhes."
+- NUNCA invente, deduza ou estime valores financeiros.
+${ambiguousFinancialDetected ? `
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo financeiro sem deixar claro se quer informação ou realizar uma ação.
+Você DEVE perguntar de forma natural e empática: "Posso te ajudar com informações sobre [tema] ou você gostaria de fazer uma solicitação?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+` : ''}
+` : '';
+
+    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}
 
 **🚫 REGRA DE HANDOFF (SÓ QUANDO CLIENTE PEDIR):**
 Transferência para humano SÓ acontece quando:
