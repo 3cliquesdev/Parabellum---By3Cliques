@@ -136,21 +136,21 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
 
     if (!response || !response.ok) {
       if (!response) {
-        throw new Error('Failed to get response from AI Gateway');
+        throw new Error('Failed to get response from OpenAI');
       }
       
       const errorText = await response.text();
-      console.error(`[analyze-ticket] AI Gateway error: ${response.status}`, errorText);
+      console.error(`[analyze-ticket] OpenAI API error: ${response.status}`, errorText);
       
       // GRACEFUL DEGRADATION: Return fallback values for known errors (including 402 payment required, 500 server error)
       if (response.status === 429 || response.status === 503 || response.status === 502 || response.status === 402 || response.status === 500) {
         const errorReason = response.status === 429 ? 'rate_limit' : 
                            response.status === 503 ? 'service_unavailable' :
                            response.status === 502 ? 'bad_gateway' : 
-                           response.status === 402 ? 'credits_depleted' :
-                           response.status === 500 ? 'server_error' : 'unknown';
+                            response.status === 402 ? 'payment_error' :
+                            response.status === 500 ? 'server_error' : 'unknown';
         
-        console.warn(`[analyze-ticket] ⚠️ AI Gateway error ${response.status}, returning fallback for mode: ${mode}`);
+        console.warn(`[analyze-ticket] ⚠️ OpenAI API error ${response.status}, returning fallback for mode: ${mode}`);
         
         let fallbackResult = '';
         let fallbackMessage = '';
@@ -159,31 +159,31 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
           case 'sentiment':
             fallbackResult = 'neutro'; // Safe default sentiment
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados. Adicione créditos ao seu workspace.' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Análise de sentimento indisponível';
             break;
           case 'summary':
             fallbackResult = 'Resumo indisponível temporariamente. Por favor, revise a conversa manualmente.';
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Sistema de resumo temporariamente indisponível';
             break;
           case 'reply':
             fallbackResult = 'Obrigado pela sua mensagem. Nossa equipe irá analisar seu caso e retornar em breve.';
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Sugestão de resposta temporariamente indisponível';
             break;
           case 'tags':
             fallbackResult = ''; // Empty tags
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Sistema de tags temporariamente indisponível';
             break;
           default:
             fallbackResult = 'Resultado não disponível';
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Serviço temporariamente indisponível';
         }
         
@@ -199,7 +199,7 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
         });
       }
 
-      throw new Error(`AI Gateway error: ${response.status}`);
+      throw new Error(`OpenAI API error: ${response.status}`);
     }
 
     const data = await response.json();

@@ -211,7 +211,7 @@ serve(async (req) => {
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error('[ai-chat-stream] AI Gateway error:', aiResponse.status, errorText);
+      console.error('[ai-chat-stream] OpenAI API error:', aiResponse.status, errorText);
       
       // Handle rate limits
       if (aiResponse.status === 429) {
@@ -221,13 +221,13 @@ serve(async (req) => {
         });
       }
       if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: 'Payment required. Please add credits to your workspace.' }), {
+        return new Response(JSON.stringify({ error: 'OpenAI billing error. Please check your API account.' }), {
           status: 402,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       
-      return new Response(JSON.stringify({ error: 'AI Gateway error' }), {
+      return new Response(JSON.stringify({ error: 'OpenAI API error' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
