@@ -2727,13 +2727,59 @@ serve(async (req) => {
       try {
         const validationPromises: Promise<any>[] = [];
 
-        // 1) Telefone
+        // 1) Telefone — inline query (sem invoke entre edge functions)
         if (contact.phone || contact.whatsapp_id) {
-          validationPromises.push(
-            supabaseClient.functions.invoke('validate-by-kiwify-phone', {
-              body: { phone: contact.phone, whatsapp_id: contact.whatsapp_id, contact_id: contact.id }
-            }).then(r => ({ source: 'phone', ...r }))
-          );
+          const phoneVal = contact.phone || contact.whatsapp_id || '';
+          const digitsVal = phoneVal.replace(/\D/g, '');
+          let normVal = '';
+          if (digitsVal.startsWith('55') && digitsVal.length >= 12 && digitsVal.length <= 13) normVal = digitsVal;
+          else if (digitsVal.length >= 10 && digitsVal.length <= 11) normVal = '55' + digitsVal;
+
+          if (normVal.length >= 9) {
+            const last9Val = normVal.slice(-9);
+            validationPromises.push(
+              supabaseClient
+                .from('kiwify_events')
+                .select('id, payload, customer_email, created_at')
+                .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
+                .filter('payload->Customer->>mobile', 'ilike', `%${last9Val}`)
+                .order('created_at', { ascending: false })
+                .limit(10)
+                .then(({ data: matches, error: matchErr }) => {
+                  if (matchErr || !matches || matches.length === 0) {
+                    return { source: 'phone', data: { found: false } };
+                  }
+                  const customer = matches[0].payload?.Customer || {};
+                  const products = [...new Set(matches.map(e => e.payload?.Product?.product_name || 'Produto'))];
+                  
+                  // Atualizar contato inline
+                  const updatePayload: Record<string, unknown> = {
+                    status: 'customer', source: 'kiwify_validated',
+                    kiwify_validated: true, kiwify_validated_at: new Date().toISOString(),
+                  };
+                  if (customer.email) updatePayload.email = customer.email;
+                  supabaseClient.from('contacts').update(updatePayload).eq('id', contact.id).then(() => {
+                    supabaseClient.from('interactions').insert({
+                      customer_id: contact.id, type: 'internal_note',
+                      content: `✅ Cliente identificado via autopilot inline Kiwify. Produtos: ${products.join(', ')}`,
+                      channel: 'system',
+                    });
+                  });
+
+                  return {
+                    source: 'phone',
+                    data: {
+                      found: true,
+                      customer: {
+                        name: customer.full_name || customer.first_name || 'Cliente',
+                        email: customer.email || matches[0].customer_email || '',
+                        products,
+                      }
+                    }
+                  };
+                })
+            );
+          }
         }
 
         // 2) Email

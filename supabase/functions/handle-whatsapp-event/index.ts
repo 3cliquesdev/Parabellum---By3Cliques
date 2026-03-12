@@ -953,22 +953,53 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     phone: phoneForDatabase
   });
 
-  // Validação Kiwify adicional para enriquecer dados do cliente
+  // Validação Kiwify INLINE (query direta, sem invoke entre edge functions)
   try {
-    const { data: kiwifyValidation, error: kiwifyError } = await supabase.functions.invoke('validate-by-kiwify-phone', {
-      body: { 
-        phone: phoneForDatabase,
-        contact_id: contactId
-      }
-    });
+    const phoneToValidate = phoneForDatabase || '';
+    const digitsOnly = phoneToValidate.replace(/\D/g, '');
+    let normalizedKiwify = '';
+    if (digitsOnly.startsWith('55') && digitsOnly.length >= 12 && digitsOnly.length <= 13) normalizedKiwify = digitsOnly;
+    else if (digitsOnly.length >= 10 && digitsOnly.length <= 11) normalizedKiwify = '55' + digitsOnly;
+    
+    if (normalizedKiwify.length >= 9) {
+      const last9 = normalizedKiwify.slice(-9);
+      const { data: kiwifyMatches, error: kiwifyErr } = await supabase
+        .from('kiwify_events')
+        .select('id, payload, customer_email, created_at')
+        .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
+        .filter('payload->Customer->>mobile', 'ilike', `%${last9}`)
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-    if (!kiwifyError && kiwifyValidation?.found) {
-      // Cliente tem compra Kiwify - confirma que vai para Suporte
-      targetDepartmentId = SUPORTE_DEPT_ID;
-      console.log(`[handle-whatsapp-event] ✅ Cliente Kiwify confirmado - Suporte`);
+      if (!kiwifyErr && kiwifyMatches && kiwifyMatches.length > 0) {
+        // Cliente tem compra Kiwify - confirma que vai para Suporte
+        targetDepartmentId = SUPORTE_DEPT_ID;
+        const products = [...new Set(kiwifyMatches.map(e => e.payload?.Product?.product_name || 'Produto'))];
+        const customerData = kiwifyMatches[0].payload?.Customer || {};
+        console.log(`[handle-whatsapp-event] ✅ Cliente Kiwify confirmado (inline) - Suporte. Produtos: ${products.join(', ')}`);
+
+        // Atualizar contato como cliente validado
+        const updateData: Record<string, unknown> = {
+          status: 'customer',
+          source: 'kiwify_validated',
+          kiwify_validated: true,
+          kiwify_validated_at: new Date().toISOString(),
+        };
+        if (customerData.email && contactId) updateData.email = customerData.email;
+
+        if (contactId) {
+          await supabase.from('contacts').update(updateData).eq('id', contactId);
+          await supabase.from('interactions').insert({
+            customer_id: contactId,
+            type: 'internal_note',
+            content: `✅ Cliente identificado via webhook inline Kiwify. Produtos: ${products.join(', ')}`,
+            channel: 'system',
+          });
+        }
+      }
     }
   } catch (kiwifyErr) {
-    console.warn('[handle-whatsapp-event] ⚠️ Validação Kiwify falhou (não crítico):', kiwifyErr);
+    console.warn('[handle-whatsapp-event] ⚠️ Validação Kiwify inline falhou (não crítico):', kiwifyErr);
   }
 
   // Buscar estado atual da conversa (incluindo instância atual para detectar swap e is_test_mode)
