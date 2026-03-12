@@ -3874,6 +3874,22 @@ serve(async (req) => {
           if (ticket) collectedData.__last_ticket_id = ticket.id;
         }
 
+        // 🛡️ BUG I FIX: EndNode action: add_tag (after auto-advance message chain)
+        if (nextNode.data?.end_action === 'add_tag') {
+          const tagId = nextNode.data.action_data?.tag_id;
+          const tagScope = nextNode.data.action_data?.tag_scope || 'contact';
+          if (tagId) {
+            const tagName = nextNode.data.action_data?.tag_name || tagId;
+            if (tagScope === 'conversation') {
+              console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to conversation ${conversationId} (after msg chain)`);
+              await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+            } else if (activeState.conversations?.contact_id) {
+              console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to contact ${activeState.conversations.contact_id} (after msg chain)`);
+              await supabaseClient.from('contact_tags').upsert({ contact_id: activeState.conversations.contact_id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+            }
+          }
+        }
+
         const endMsg = replaceVariables(nextNode.data?.message || '', variablesContext);
         const allMessages = [...extraMessages, endMsg].filter(Boolean).join('\n\n');
         return new Response(
