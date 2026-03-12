@@ -188,7 +188,7 @@ const App = () => {
               <Route path="/cs-management" element={<Navigate to="/?tab=overview" replace />} />
               <Route path="/cs-management/consultant/:id" element={<ProtectedRoute requiredPermission="cs.view_management"><Layout><ConsultantDetail /></Layout></ProtectedRoute>} />
               <Route path="/consultants" element={<ProtectedRoute requiredPermission="cadastros.view_consultants"><Layout><Consultants /></Layout></ProtectedRoute>} />
-              <Route path="/sales-management" element={<ProtectedRoute requiredPermission="sales.view_management"><Layout><SalesManagement /></Layout></ProtectedRoute>} />
+              <Route path="/sales-management" element={<Navigate to="/?tab=sales" replace />} />
               <Route path="/sales-management/rep/:id" element={<ProtectedRoute requiredPermission="sales.view_management"><Layout><SalesRepDetail /></Layout></ProtectedRoute>} />
               
               <Route path="/contacts" element={<ProtectedRoute requiredPermission="contacts.view"><Layout><Contacts /></Layout></ProtectedRoute>} />
