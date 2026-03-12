@@ -8481,6 +8481,14 @@ Conversa: ${conversationId}`;
           articles_found: 0,
           timestamp: new Date().toISOString()
         }));
+        supabaseClient.from('ai_events').insert({
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          event_type: 'ai_decision_anti_loop_max_fallbacks',
+          model: 'system',
+          score: 0,
+          output_json: { reason: 'anti_loop_max_fallbacks', exitType: 'flow_advance_needed', fallback_used: true, articles_found: 0, hasFlowContext: true },
+        }).then(() => {}).catch(() => {});
         isFallbackResponse = true;
       }
     }
