@@ -1277,6 +1277,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             forbidOptions: flowResult.forbidOptions ?? true,
             forbidFinancial: flowResult.forbidFinancial ?? false,
             forbidCommercial: flowResult.forbidCommercial ?? false,
+            forbidCancellation: flowResult.forbidCancellation ?? false,
+            forbidConsultant: flowResult.forbidConsultant ?? false,
             collectedData: flowResult.collectedData || null,
           };
 
@@ -1285,6 +1287,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             node_id: flowContext.node_id,
             forbidFinancial: flowContext.forbidFinancial,
             forbidCommercial: flowContext.forbidCommercial,
+            forbidCancellation: flowContext.forbidCancellation,
+            forbidConsultant: flowContext.forbidConsultant,
           }));
 
           const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-autopilot-chat', {
@@ -1367,7 +1371,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
                     conversationId: conversationId,
                     userMessage: messageText,
                     ...(aiResponse.financialBlocked ? { forceFinancialExit: true } : {}),
-                    ...(aiResponse.commercialBlocked ? { forceCommercialExit: true } : {}),
+                    ...(aiResponse.commercialBlocked ? { forceCommercialExit: true, intentData: { ai_exit_intent: 'comercial' } } : {}),
                     ...(aiResponse.cancellationBlocked ? { forceCancellationExit: true, intentData: { ai_exit_intent: 'cancelamento' } } : {}),
                     ...(!aiResponse.financialBlocked && !aiResponse.commercialBlocked && !aiResponse.cancellationBlocked ? { forceAIExit: true } : {}),
                     ...(aiResponse.ai_exit_intent ? { intentData: { ai_exit_intent: aiResponse.ai_exit_intent } } : {}),

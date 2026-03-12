@@ -1178,6 +1178,8 @@ serve(async (req) => {
                           forbidOptions: (flowData as any).forbidOptions,
                           forbidFinancial: (flowData as any).forbidFinancial,
                           forbidCommercial: (flowData as any).forbidCommercial,
+                          forbidCancellation: (flowData as any).forbidCancellation,
+                          forbidConsultant: (flowData as any).forbidConsultant,
                         },
                       });
                     } catch (bufferErr) {
@@ -1225,6 +1227,7 @@ serve(async (req) => {
                           forbidFinancial: (flowData as any).forbidFinancial ?? false,
                           forbidCommercial: (flowData as any).forbidCommercial ?? false,
                           forbidCancellation: (flowData as any).forbidCancellation ?? false,
+                          forbidConsultant: (flowData as any).forbidConsultant ?? false,
                           },
                         }),
                       }
@@ -1460,6 +1463,7 @@ serve(async (req) => {
                                     conversationId: conversation.id,
                                     userMessage: messageContent,
                                     forceCommercialExit: true,
+                                    intentData: { ai_exit_intent: 'comercial' },
                                   }),
                                 }
                               );
@@ -1523,6 +1527,7 @@ serve(async (req) => {
                                         conversationId: conversation.id,
                                         userMessage: messageContent,
                                         forceCommercialExit: true,
+                                        intentData: { ai_exit_intent: 'comercial' },
                                       }),
                                     }
                                   );
