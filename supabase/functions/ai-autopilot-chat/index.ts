@@ -8622,10 +8622,16 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       const escapeAttempt = ESCAPE_PATTERNS.some(pattern => pattern.test(assistantMessage));
       
       if (escapeAttempt) {
-        const isCleanExit = /^\s*\[\[FLOW_EXIT\]\]\s*$/.test(assistantMessage);
+        const isCleanExit = /^\s*\[\[FLOW_EXIT(:[a-zA-Z_]+)?\]\]\s*$/.test(assistantMessage);
         
         if (isCleanExit) {
-          console.log('[ai-autopilot-chat] ✅ [[FLOW_EXIT]] detectado ANTES de salvar — saída limpa');
+          // 🆕 Extrair intent do token [[FLOW_EXIT:financeiro]] → "financeiro"
+          const exitIntentMatch = assistantMessage.match(/\[\[FLOW_EXIT:([a-zA-Z_]+)\]\]/i);
+          const aiExitIntent = exitIntentMatch ? exitIntentMatch[1].toLowerCase() : undefined;
+          
+          console.log('[ai-autopilot-chat] ✅ [[FLOW_EXIT]] detectado ANTES de salvar — saída limpa', {
+            ai_exit_intent: aiExitIntent || 'none',
+          });
           // Log auditoria non-blocking
           supabaseClient.from('ai_events').insert({
             entity_type: 'conversation',
@@ -8637,6 +8643,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
               flow_id: flow_context.flow_id,
               node_id: flow_context.node_id,
               reason: 'ai_requested_exit',
+              ai_exit_intent: aiExitIntent,
             },
             input_summary: customerMessage?.substring(0, 200) || '',
           }).then(() => {}).catch(err => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
@@ -8644,6 +8651,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             flowExit: true,
             reason: 'ai_requested_exit',
             hasFlowContext: true,
+            ...(aiExitIntent ? { ai_exit_intent: aiExitIntent } : {}),
             flow_context: {
               flow_id: flow_context.flow_id,
               node_id: flow_context.node_id
