@@ -2359,8 +2359,8 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO CONSULTOR: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
         }
         
-        let consultorIntentMatch = forbidConsultant && msgLower.length > 0 && isConsultorAction;
-        let consultorHasConsultant = false;
+        consultorIntentMatch = forbidConsultant && msgLower.length > 0 && isConsultorAction;
+        consultorHasConsultant = false;
         
         // Verificar se contato tem consultant_id
         if (consultorIntentMatch) {
