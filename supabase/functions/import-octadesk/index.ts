@@ -35,7 +35,7 @@ serve(async (req) => {
   try {
     const OCTADESK_API_KEY = Deno.env.get("OCTADESK_API_KEY");
     const OCTADESK_BASE_URL = Deno.env.get("OCTADESK_BASE_URL");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -43,8 +43,8 @@ serve(async (req) => {
       throw new Error("Credenciais do Octadesk não configuradas");
     }
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY não configurada");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY não configurada");
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
