@@ -86,12 +86,12 @@ export function OverviewDashboardTab({ dateRange }: OverviewDashboardTabProps) {
     <BentoGrid cols={4}>
       {/* Seção Vendas */}
       <BentoCard span="full">
-        <Card className="border-none shadow-none bg-transparent">
+        <Card className="border border-border/50 rounded-xl shadow-sm p-4">
           <CardHeader className="pb-2 px-0 pt-0">
-            <CardTitle className="text-lg flex items-center gap-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">Vendas</CardTitle>
               <TrendingUp className="h-5 w-5 text-primary" />
-              Vendas
-            </CardTitle>
+            </div>
           </CardHeader>
           <CardContent className="px-0 pb-0">
             <div className="grid grid-cols-4 gap-4">
