@@ -4113,7 +4113,7 @@ ${a.content}`).join('\n\n---\n\n')}`;
         
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('[callStrictRAG] ❌ OpenAI GPT-4o falhou:', response.status, errorText);
+          console.error('[callStrictRAG] ❌ OpenAI GPT-5 falhou:', response.status, errorText);
           throw new Error(`OpenAI strict RAG failed: ${response.status}`);
         }
         
