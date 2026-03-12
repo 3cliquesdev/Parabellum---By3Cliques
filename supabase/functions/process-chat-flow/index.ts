@@ -2468,6 +2468,10 @@ serve(async (req) => {
 
         const handoffMsg = financialIntentMatch
           ? 'Entendi. Para assuntos financeiros, vou te encaminhar para um atendente humano agora.'
+          : cancellationIntentMatch
+          ? 'Entendi que deseja cancelar. Vou te conectar com um atendente para resolver isso.'
+          : supportIntentMatch
+          ? 'Claro! Vou te transferir para um atendente humano agora.'
           : 'Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso.';
 
         // Completar flow state como transferred
