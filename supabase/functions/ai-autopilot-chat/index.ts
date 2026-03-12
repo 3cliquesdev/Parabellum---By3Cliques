@@ -1379,7 +1379,7 @@ serve(async (req) => {
     if (ragConfig.blockFinancial && flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && isFinancialAction && !isFinancialInfo) {
       console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
-      const fixedMessage = 'Entendi. Para assuntos financeiros (saque, reembolso, devolução), vou te encaminhar para um atendente humano agora.';
+      const fixedMessage = 'Entendi sua solicitação. Vou te encaminhar para o setor financeiro que poderá te ajudar com isso.';
       
       const hasFlowContext = !!(flow_context);
       
