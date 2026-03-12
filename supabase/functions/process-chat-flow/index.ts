@@ -2010,6 +2010,95 @@ serve(async (req) => {
                 }
 
                 if (resolvedNode) {
+                  // 🛡️ BUG G FIX: OTP max_attempts → transfer chama transition-conversation-state
+                  if (resolvedNode.type === 'transfer') {
+                    await supabaseClient.from('chat_flow_states').update({
+                      collected_data: collectedData,
+                      current_node_id: resolvedNode.id,
+                      status: 'transferred',
+                      completed_at: new Date().toISOString(),
+                    }).eq('id', activeState.id);
+
+                    const otpMaxDeptId = resolvedNode.data?.department_id || null;
+                    const otpMaxAiMode = resolvedNode.data?.ai_mode || 'waiting_human';
+                    const otpMaxTransType =
+                      otpMaxAiMode === 'copilot'   ? 'set_copilot' :
+                      otpMaxAiMode === 'autopilot' ? 'engage_ai' :
+                      'handoff_to_human';
+                    await fetch(
+                      `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+                        body: JSON.stringify({ conversationId, transition: otpMaxTransType, departmentId: otpMaxDeptId, reason: 'flow_transfer_otp_max_attempts', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id, ai_mode: otpMaxAiMode } })
+                      }
+                    );
+
+                    variablesContext = await rebuildCtx();
+                    const transferMsg = replaceVariables(resolvedNode.data?.message || 'Transferindo para um atendente...', variablesContext);
+                    return new Response(JSON.stringify({
+                      useAI: false,
+                      response: "❌ Máximo de tentativas excedido.\n\n" + transferMsg,
+                      transfer: true,
+                      departmentId: otpMaxDeptId,
+                      transferType: resolvedNode.data?.transfer_type,
+                      collectedData,
+                      flowId: activeState.flow_id,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
+                  // 🛡️ BUG H FIX: OTP max_attempts → end executa end_actions
+                  if (resolvedNode.type === 'end') {
+                    await supabaseClient.from('chat_flow_states').update({
+                      collected_data: collectedData,
+                      current_node_id: resolvedNode.id,
+                      status: 'completed',
+                      completed_at: new Date().toISOString(),
+                    }).eq('id', activeState.id);
+
+                    // Execute end_actions
+                    if (resolvedNode.data?.end_action === 'create_ticket') {
+                      const actionData = resolvedNode.data.action_data || {};
+                      variablesContext = await rebuildCtx();
+                      const subject = replaceVariables(actionData.subject || resolvedNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+                      const description = replaceVariables(actionData.description || resolvedNode.data.description_template || '', variablesContext);
+                      const internalNote = (actionData.internal_note || resolvedNode.data.internal_note)
+                        ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
+                      const ticket = await createTicketFromFlow(supabaseClient, {
+                        conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
+                        contactId: activeState.conversations?.contact_id || null,
+                        subject, description,
+                        category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                        priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
+                        departmentId: actionData.department_id || resolvedNode.data.department_id || null,
+                        internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
+                        collectedData,
+                      });
+                      if (ticket) collectedData.__last_ticket_id = ticket.id;
+                    }
+                    if (resolvedNode.data?.end_action === 'add_tag') {
+                      const tagId = resolvedNode.data.action_data?.tag_id;
+                      const tagScope = resolvedNode.data.action_data?.tag_scope || 'contact';
+                      if (tagId) {
+                        if (tagScope === 'conversation') {
+                          await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+                        } else if (activeState.conversations?.contact_id) {
+                          await supabaseClient.from('contact_tags').upsert({ contact_id: activeState.conversations.contact_id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                        }
+                      }
+                    }
+
+                    variablesContext = await rebuildCtx();
+                    const endMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
+                    return new Response(JSON.stringify({
+                      useAI: false,
+                      response: "❌ Máximo de tentativas excedido.\n\n" + (endMsg || 'Atendimento finalizado.'),
+                      flowCompleted: true,
+                      collectedData,
+                      flowId: activeState.flow_id,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
                   const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2' || resolvedNode.type === 'verify_customer_otp'
                     ? 'waiting_input' : 'active';
                   await supabaseClient.from('chat_flow_states').update({
