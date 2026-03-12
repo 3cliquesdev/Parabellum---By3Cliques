@@ -6868,7 +6868,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           parameters: {
             type: 'object',
             properties: {
-              reason: { type: 'string', description: 'Motivo do encerramento (ex: "assunto_resolvido", "cliente_agradeceu")' },
+              reason: { type: 'string', description: 'Motivo do encerramento (ex: "assunto_resolvido", "duvida_esclarecida")' },
               customer_confirmed: { type: 'boolean', description: 'true SOMENTE após cliente confirmar explicitamente que pode encerrar' }
             },
             required: ['reason', 'customer_confirmed']

@@ -1195,7 +1195,48 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     console.log('[handle-whatsapp-event] 🧪 Kill Switch ativo, mas MODO TESTE permite processar');
   }
 
-  // 7. Se ai_mode = 'autopilot' E IA global está ativada (ou test mode), disparar AI
+  // 7a. 🔓 BYPASS: Se awaiting_close_confirmation=true, redirecionar para ai-autopilot-chat
+  // independente do ai_mode (pode estar em waiting_human após handoff)
+  const hasAwaitingCloseConfirmation = (metadata as any)?.awaiting_close_confirmation === true;
+  
+  if ((isAIGloballyEnabled || isTestMode) && hasAwaitingCloseConfirmation && conversationAIMode !== 'autopilot') {
+    console.log('[handle-whatsapp-event] 🔓 BYPASS: awaiting_close_confirmation=true → chamando ai-autopilot-chat');
+    try {
+      const closeConfirmResponse = await fetch(
+        `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-autopilot-chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            conversationId: conversationId,
+            customerMessage: messageText,
+            contact_id: contactId,
+            whatsapp_provider: "evolution",
+            whatsapp_instance_id: instance.id,
+          }),
+        }
+      );
+      if (!closeConfirmResponse.ok) {
+        console.error("[handle-whatsapp-event] ❌ Close confirmation autopilot error:", await closeConfirmResponse.text());
+      } else {
+        console.log("[handle-whatsapp-event] ✅ Close confirmation processed by ai-autopilot-chat");
+      }
+    } catch (closeErr) {
+      console.error("[handle-whatsapp-event] ⚠️ Close confirmation exception:", closeErr);
+    }
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message_saved: true, 
+      ai_processed: true, 
+      reason: 'awaiting_close_confirmation_bypass' 
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // 7b. Se ai_mode = 'autopilot' E IA global está ativada (ou test mode), disparar AI
   if ((isAIGloballyEnabled || isTestMode) && conversationAIMode === 'autopilot') {
     console.log('[handle-whatsapp-event] Triggering AI autopilot...');
     
