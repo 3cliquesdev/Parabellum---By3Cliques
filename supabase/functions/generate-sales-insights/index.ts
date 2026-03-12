@@ -113,7 +113,7 @@ Responda APENAS com os insights, sem introdução ou conclusão.`;
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
+            model: 'gpt-5-mini',
             messages: [
               { role: 'system', content: 'Você é um analista de vendas especializado em CRM.' },
               { role: 'user', content: prompt }
