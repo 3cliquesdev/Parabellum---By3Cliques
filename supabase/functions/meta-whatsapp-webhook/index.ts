@@ -2307,6 +2307,39 @@ serve(async (req) => {
                 continue;
               }
 
+              // CASO 3.5: 🧪 TEST MODE - IA permitida sem fluxo ativo
+              // Quando process-chat-flow retorna test_mode_ai_allowed, chamar ai-autopilot-chat diretamente
+              if (flowData.useAI && !flowData.aiNodeActive && flowData.reason === 'test_mode_ai_allowed') {
+                console.log("[meta-whatsapp-webhook] 🧪 TEST MODE: Chamando ai-autopilot-chat sem flow context");
+                try {
+                  const autopilotResp = await fetch(
+                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-autopilot-chat`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                      },
+                      body: JSON.stringify({
+                        conversationId: conversation.id,
+                        customerMessage: messageContent,
+                        contact_id: contact.id,
+                        whatsapp_provider: "meta",
+                        whatsapp_meta_instance_id: instance.id,
+                      }),
+                    }
+                  );
+                  if (!autopilotResp.ok) {
+                    console.error("[meta-whatsapp-webhook] ❌ TEST MODE autopilot error:", await autopilotResp.text());
+                  } else {
+                    console.log("[meta-whatsapp-webhook] ✅ TEST MODE autopilot triggered successfully");
+                  }
+                } catch (aiErr) {
+                  console.error("[meta-whatsapp-webhook] ❌ TEST MODE autopilot exception:", aiErr);
+                }
+                continue;
+              }
+
               // CASO 4: Sem fluxo ativo e sem AIResponseNode → Fallback controlado
               // Se IA está ligada mas não há fluxo específico, mover para humano (safety first)
               if (conversation.assigned_to && (conversation.ai_mode === 'copilot' || conversation.ai_mode === 'disabled')) {
