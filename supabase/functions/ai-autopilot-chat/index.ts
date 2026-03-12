@@ -4102,13 +4102,12 @@ ${a.content}`).join('\n\n---\n\n')}`;
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'gpt-4o', // Modelo mais preciso (não gpt-4o-mini)
+            model: 'gpt-5', // Modelo mais preciso para Strict RAG
             messages: [
               { role: 'system', content: strictPrompt },
               { role: 'user', content: `${contactName}: ${customerMessage}` }
             ],
-            temperature: 0.3, // Baixa criatividade = alta fidelidade à KB
-            max_tokens: 400
+            max_completion_tokens: 400
           }),
         });
         

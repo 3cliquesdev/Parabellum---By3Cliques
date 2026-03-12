@@ -204,8 +204,7 @@ serve(async (req) => {
         model: aiModel,
         messages,
         stream: true,
-        temperature: 0.7,
-        max_tokens: 1024,
+        max_completion_tokens: 1024,
       }),
     });
 

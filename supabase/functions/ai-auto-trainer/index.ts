@@ -207,7 +207,7 @@ Se não houver conhecimento útil OU se for duplicado, retorne: { "extracted_ite
           { role: 'system', content: structuredPrompt },
           { role: 'user', content: `TRANSCRIPT:\n${transcript.substring(0, 10000)}` }
         ],
-        max_tokens: 2000,
+        max_completion_tokens: 2000,
       }),
     });
 
