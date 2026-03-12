@@ -2533,6 +2533,7 @@ serve(async (req) => {
               forbidCommercial: currentNode.data?.forbid_commercial ?? false,
               forbidCancellation: currentNode.data?.forbid_cancellation ?? false,
               forbidSupport: currentNode.data?.forbid_support ?? false,
+              forbidConsultant: currentNode.data?.forbid_consultant ?? false,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
