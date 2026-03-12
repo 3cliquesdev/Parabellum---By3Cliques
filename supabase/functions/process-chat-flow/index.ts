@@ -2564,10 +2564,7 @@ serve(async (req) => {
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-      } // end else if (ai_response)
 
-      // 🔧 FIX CRÍTICO: findNextNode COMPARTILHADO por TODOS os tipos de nó
-      // Antes estava DENTRO do bloco ai_response, fazendo ask_email/ask_name/etc nunca avançarem
       nextNode = findNextNode(flowDef, currentNode, path);
       // findNextNode já tem fallback hierárquico (path → ai_exit → default → any)
       console.log(`[process-chat-flow] ➡️ Transition: from=${currentNode.type}(${currentNode.id}) path=${path || 'default'} → next=${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
