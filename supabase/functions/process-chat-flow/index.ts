@@ -2172,17 +2172,18 @@ serve(async (req) => {
 
         // 🆕 TRAVA CANCELAMENTO: Separada do financeiro para roteamento independente
         const cancellationActionPattern = /cancelar\s*(minha\s*)?(assinatura|cobran[çc]a|pagamento|plano|conta|servi[çc]o)|quero\s+cancelar|desistir\s*(do|da|de)\s*(plano|assinatura|servi[çc]o|conta)|n[ãa]o\s+quero\s+mais\s*(o\s*)?(plano|assinatura|servi[çc]o)|encerrar\s*(minha\s*)?(conta|assinatura|plano)/i;
-        const cancellationIntentMatch = forbidFinancial && msgLower.length > 0 && cancellationActionPattern.test(userMessage || '') && !isFinancialInfo;
+        const cancellationIntentMatch = forbidCancellation && msgLower.length > 0 && cancellationActionPattern.test(userMessage || '') && !isFinancialInfo;
         
         if (cancellationIntentMatch) {
           console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada | msg="${(userMessage || '').substring(0, 100)}"`);
         }
 
-        // 🛒 TRAVA COMERCIAL: Detectar intenção de compra como exit do nó AI
-        const commercialIntentPattern = /comprar|quero comprar|quanto custa|pre[çc]o|proposta|or[çc]amento|cat[aá]logo|assinar|plano|tabela de pre[çc]o|conhecer.*produto|demonstra[çc][aã]o|demo|trial|teste gr[aá]tis|upgrade|downgrade|mudar.*plano/i;
-        const commercialIntentMatch = (forceCommercialExit && forbidCommercial) || (forbidCommercial && msgLower.length > 0 && commercialIntentPattern.test(userMessage || ''));
-        if (forceCommercialExit) {
-          console.log('[process-chat-flow] 🛒 forceCommercialExit=true recebido do webhook, forçando exit do nó AI');
+        // 🧑 TRAVA SUPORTE: Detectar pedido de atendente humano como exit do nó AI
+        const supportIntentPattern = /falar\s+com\s*(um\s*)?(atendente|humano|pessoa|agente|operador)|quero\s+(atendente|humano|pessoa|suporte)|atendimento\s+humano|preciso\s+de\s+(ajuda\s+)?humana?|me\s+transfira|transferir\s+para\s+(atendente|humano|suporte)|chamar?\s+(atendente|humano|suporte)|n[ãa]o\s+quero\s+(falar\s+com\s+)?(rob[ôo]|bot|ia|intelig[êe]ncia)/i;
+        const supportIntentMatch = forbidSupport && msgLower.length > 0 && supportIntentPattern.test(userMessage || '');
+        
+        if (supportIntentMatch) {
+          console.log(`[process-chat-flow] 🧑 TRAVA SUPORTE: Pedido de atendente detectado | msg="${(userMessage || '').substring(0, 100)}"`);
         }
 
         if (financialIntentMatch) {
