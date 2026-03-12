@@ -422,43 +422,8 @@ Você está conversando com um cliente identificado. Use essas informações par
       });
     }
 
-    if (actualProvider === 'lovable' || !aiResponse) {
-      if (!LOVABLE_API_KEY) {
-        throw new Error('LOVABLE_API_KEY not configured');
-      }
-
-      console.log(`[sandbox-chat] Calling Lovable AI (${configuredModel})`);
-
-      // Modelos OpenAI via Lovable AI não suportam temperature customizada
-      const isOpenAIModel = configuredModel.startsWith('openai/');
-      
-      const aiPayload: any = {
-        model: configuredModel,
-        messages: aiMessages,
-        max_completion_tokens: persona.max_tokens || 500,
-      };
-
-      // Apenas adicionar temperature para modelos que suportam (Gemini)
-      if (!isOpenAIModel) {
-        aiPayload.temperature = persona.temperature ?? 0.7;
-      }
-
-      if (tools.length > 0) {
-        aiPayload.tools = tools;
-      }
-
-      aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(aiPayload),
-      });
-    }
-
     if (!aiResponse) {
-      throw new Error('No AI response received from any provider');
+      throw new Error('No AI response received');
     }
 
     if (!aiResponse.ok) {

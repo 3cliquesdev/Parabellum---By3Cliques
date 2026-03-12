@@ -95,78 +95,39 @@ Analise profundamente estes dados e forneça uma análise executiva estruturada 
 
     let analysis: string | null = null;
 
-    // Try OpenAI first
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (OPENAI_API_KEY) {
-      console.log('[analyze-dashboard] Tentando OpenAI...');
-      try {
-        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ],
-            temperature: 0.7,
-            max_tokens: 1500,
-          }),
-        });
-
-        if (openaiResponse.ok) {
-          const data = await openaiResponse.json();
-          analysis = data.choices?.[0]?.message?.content;
-          if (analysis) {
-            console.log('[analyze-dashboard] ✅ Análise gerada via OpenAI');
-          }
-        } else {
-          const errorText = await openaiResponse.text();
-          console.warn('[analyze-dashboard] OpenAI falhou:', openaiResponse.status, errorText);
-        }
-      } catch (err) {
-        console.warn('[analyze-dashboard] Erro OpenAI:', err);
-      }
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY não configurada');
     }
 
-    // Fallback to Lovable AI
-    if (!analysis) {
-      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-      if (!LOVABLE_API_KEY) {
-        throw new Error('Nenhum provedor de AI disponível');
-      }
+    console.log('[analyze-dashboard] Chamando OpenAI...');
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 1500,
+      }),
+    });
 
-      console.log('[analyze-dashboard] Tentando Lovable AI...');
-      const lovableResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'openai/gpt-5-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-          ],
-        }),
-      });
-
-      if (!lovableResponse.ok) {
-        const errorText = await lovableResponse.text();
-        console.error('[analyze-dashboard] Lovable AI error:', lovableResponse.status, errorText);
-        throw new Error(`AI API error: ${lovableResponse.status}`);
-      }
-
-      const lovableData = await lovableResponse.json();
-      analysis = lovableData.choices?.[0]?.message?.content;
-      
+    if (openaiResponse.ok) {
+      const data = await openaiResponse.json();
+      analysis = data.choices?.[0]?.message?.content;
       if (analysis) {
-        console.log('[analyze-dashboard] ✅ Análise gerada via Lovable AI');
+        console.log('[analyze-dashboard] ✅ Análise gerada via OpenAI');
       }
+    } else {
+      const errorText = await openaiResponse.text();
+      console.error('[analyze-dashboard] OpenAI falhou:', openaiResponse.status, errorText);
+      throw new Error(`OpenAI error: ${openaiResponse.status}`);
     }
 
     if (!analysis) {
