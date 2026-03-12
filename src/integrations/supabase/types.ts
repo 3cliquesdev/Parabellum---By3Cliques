@@ -4492,8 +4492,10 @@ export type Database = {
           contact_avatar: string | null
           contact_email: string | null
           contact_id: string
+          contact_kiwify_validated: boolean | null
           contact_name: string | null
           contact_phone: string | null
+          contact_status: string | null
           contact_whatsapp_id: string | null
           conversation_id: string
           created_at: string | null
@@ -4524,8 +4526,10 @@ export type Database = {
           contact_avatar?: string | null
           contact_email?: string | null
           contact_id: string
+          contact_kiwify_validated?: boolean | null
           contact_name?: string | null
           contact_phone?: string | null
+          contact_status?: string | null
           contact_whatsapp_id?: string | null
           conversation_id: string
           created_at?: string | null
@@ -4556,8 +4560,10 @@ export type Database = {
           contact_avatar?: string | null
           contact_email?: string | null
           contact_id?: string
+          contact_kiwify_validated?: boolean | null
           contact_name?: string | null
           contact_phone?: string | null
+          contact_status?: string | null
           contact_whatsapp_id?: string | null
           conversation_id?: string
           created_at?: string | null

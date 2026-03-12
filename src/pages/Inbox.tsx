@@ -239,7 +239,7 @@ export default function Inbox() {
         source: null,
         state: null,
         state_registration: null,
-        status: null,
+        status: (item as any).contact_status ?? null,
         subscription_plan: null,
         support_channel_id: null,
         total_ltv: null,
