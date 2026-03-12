@@ -726,27 +726,38 @@ export function useInboxCounts(userId?: string) {
     enabled: !!userId && isRoleReady && !deptLoading,
     queryFn: async (): Promise<InboxCounts> => {
       const { data, error } = await supabase.functions.invoke("get-inbox-counts");
-      if (error) throw error;
+      if (error) {
+        const status = (error as any)?.status;
+        const message = (error as any)?.message || "";
+        const isBootError = status === 503 || message.includes("BOOT_ERROR");
+        if (isBootError) {
+          console.warn("[useInboxCounts] BOOT_ERROR (cold start), retrying...");
+          return {
+            total: 0, mine: 0, aiQueue: 0, humanQueue: 0,
+            slaCritical: 0, slaWarning: 0, notResponded: 0, myNotResponded: 0,
+            unassigned: 0, unread: 0, closed: 0, byDepartment: [], byTag: [],
+          } as InboxCounts;
+        }
+        throw error;
+      }
       return (data?.counts || {
-        total: 0,
-        mine: 0,
-        aiQueue: 0,
-        humanQueue: 0,
-        slaCritical: 0,
-        slaWarning: 0,
-        notResponded: 0,
-        myNotResponded: 0,
-        unassigned: 0,
-        unread: 0,
-        closed: 0,
-        byDepartment: [],
-        byTag: [],
+        total: 0, mine: 0, aiQueue: 0, humanQueue: 0,
+        slaCritical: 0, slaWarning: 0, notResponded: 0, myNotResponded: 0,
+        unassigned: 0, unread: 0, closed: 0, byDepartment: [], byTag: [],
       }) as InboxCounts;
     },
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
-    retry: 2,
-    retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 3000),
+    retry: (failureCount, error: any) => {
+      const status = error?.status;
+      const message = error?.message || "";
+      const isBootError = status === 503 || String(message).includes("BOOT_ERROR");
+      return isBootError ? failureCount < 5 : failureCount < 2;
+    },
+    retryDelay: (attempt) => {
+      const base = Math.min(750 * 2 ** attempt, 6000);
+      return base + Math.floor(Math.random() * 250);
+    },
     placeholderData: {
       total: 0,
       mine: 0,
