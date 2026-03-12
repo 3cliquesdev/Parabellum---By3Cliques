@@ -3374,6 +3374,17 @@ serve(async (req) => {
         if (intentData && intentData.ai_exit_intent) {
           collectedData.ai_exit_intent = intentData.ai_exit_intent;
           console.log(`[process-chat-flow] 🎯 ai_exit_intent salvo: "${intentData.ai_exit_intent}"`);
+          
+          // 🔴 FIX: Mapear ai_exit_intent para os flags *IntentMatch
+          if (!financialIntentMatch && !cancellationIntentMatch && !commercialIntentMatch && !supportIntentMatch && !consultorIntentMatch) {
+            const intent = intentData.ai_exit_intent;
+            if (intent === 'financeiro') { financialIntentMatch = true; }
+            else if (intent === 'cancelamento') { cancellationIntentMatch = true; }
+            else if (intent === 'comercial') { commercialIntentMatch = true; }
+            else if (intent === 'suporte') { supportIntentMatch = true; }
+            else if (intent === 'consultor') { consultorIntentMatch = true; }
+            console.log(`[process-chat-flow] 🎯 intentData.ai_exit_intent="${intent}" → *IntentMatch forçado`);
+          }
         }
         // Salvar intent automático
         if (financialIntentMatch && !collectedData.ai_exit_intent) {
