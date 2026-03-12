@@ -30,7 +30,7 @@ interface RAGConfig {
 }
 
 const DEFAULT_RAG_CONFIG: RAGConfig = {
-  model: 'openai/gpt-5-mini',
+  model: 'gpt-4o-mini',
   minThreshold: 0.10,
   directThreshold: 0.75,
   sources: { kb: true, crm: true, tracking: true, sandbox: true },
@@ -3760,7 +3760,7 @@ serve(async (req) => {
 
     // Obter API keys antecipadamente
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    // LOVABLE_API_KEY removida - usando OpenAI diretamente
     
     // Usar modelo do RAGConfig já carregado (evita query duplicada)
     const configuredAIModel = ragConfig.model;
@@ -4035,7 +4035,7 @@ Responda APENAS: skip ou search`
       
       try {
         // FASE 5: Query Expansion + Semantic Search Múltiplo
-        if (OPENAI_API_KEY || LOVABLE_API_KEY) {
+        if (OPENAI_API_KEY) {
           console.log('[ai-autopilot-chat] 🚀 Iniciando Query Expansion...');
           
           // Step 1: Expandir query para múltiplas variações
@@ -8393,7 +8393,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             entity_type: 'conversation',
             entity_id: conversationId,
             event_type: 'flow_exit_clean',
-            model: configuredAIModel || 'openai/gpt-5-mini',
+            model: configuredAIModel || 'gpt-4o-mini',
             output_json: {
               blocked_preview: assistantMessage.substring(0, 150),
               flow_id: flow_context.flow_id,
@@ -8421,7 +8421,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             entity_type: 'conversation',
             entity_id: conversationId,
             event_type: 'contract_violation_blocked',
-            model: configuredAIModel || 'openai/gpt-5-mini',
+            model: configuredAIModel || 'gpt-4o-mini',
             output_json: {
               blocked_preview: assistantMessage.substring(0, 150),
               flow_id: flow_context.flow_id,
@@ -8770,7 +8770,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           entity_type: 'conversation',
           entity_id: conversationId,
           event_type: 'ai_response',
-          model: configuredAIModel || 'openai/gpt-5-mini',
+          model: configuredAIModel || 'gpt-4o-mini',
           output_json: {
             confidence_score: confidenceResult?.score ?? null,
             confidence_action: confidenceResult?.action ?? null,

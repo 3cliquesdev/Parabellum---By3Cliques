@@ -16,10 +16,15 @@ async function getConfiguredAIModel(supabase: any): Promise<string> {
       .eq('key', 'ai_default_model')
       .maybeSingle();
     
-    return data?.value || 'openai/gpt-5-mini';
+    // Converter modelos gateway para modelos OpenAI reais
+    const model = data?.value || 'gpt-4o-mini';
+    if (model.startsWith('openai/') || model.startsWith('google/')) {
+      return 'gpt-4o-mini';
+    }
+    return model;
   } catch (error) {
     console.error('[sandbox-chat] Error fetching AI model config:', error);
-    return 'openai/gpt-5-mini';
+    return 'gpt-4o-mini';
   }
 }
 
@@ -42,7 +47,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    // LOVABLE_API_KEY removida - usando OpenAI diretamente
     
     // Buscar modelo configurado dinamicamente
     const configuredModel = await getConfiguredAIModel(supabase);
