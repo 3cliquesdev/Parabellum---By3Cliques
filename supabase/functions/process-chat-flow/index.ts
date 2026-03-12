@@ -13,6 +13,110 @@ const corsHeaders = {
 // 🆕 HELPER: Construir allowedSources a partir dos toggles individuais do nó
 // Fontes: use_knowledge_base, use_crm_data, use_kiwify_data, use_tracking, use_sandbox_data
 // ============================================================
+// ============================================================
+// 🆕 HELPER: Validação Kiwify inline (sem fetch HTTP)
+// Substitui chamada fetch → validate-by-kiwify-phone
+// ============================================================
+function normalizePhoneDigits(phone: string): string {
+  if (!phone) return '';
+  return phone.replace(/\D/g, '');
+}
+
+async function inlineKiwifyValidation(
+  supabaseClient: any,
+  phone: string | null,
+  whatsapp_id: string | null,
+  contact_id: string | null
+): Promise<{ found: boolean; customer?: { name: string; email: string; products: string[] } }> {
+  try {
+    const raw = phone || whatsapp_id || '';
+    const digits = normalizePhoneDigits(raw);
+    
+    // Normalizar para E.164
+    let normalized = '';
+    if (digits.startsWith('55') && digits.length >= 12 && digits.length <= 13) {
+      normalized = digits;
+    } else if (digits.length >= 10 && digits.length <= 11) {
+      normalized = '55' + digits;
+    } else if (digits.length >= 12) {
+      normalized = digits;
+    }
+    
+    if (!normalized || normalized.length < 10) {
+      console.log('[inlineKiwifyValidation] Telefone inválido:', raw);
+      return { found: false };
+    }
+
+    const last9 = normalized.slice(-9);
+    console.log(`[inlineKiwifyValidation] Buscando para: ${normalized} (last9: ${last9})`);
+
+    const { data: events, error } = await supabaseClient
+      .from('kiwify_events')
+      .select('id, event_type, customer_email, payload, created_at')
+      .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
+      .filter("payload->Customer->>mobile", 'ilike', `%${last9}`)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.error('[inlineKiwifyValidation] Query error:', error);
+      return { found: false };
+    }
+
+    // Validar normalização completa
+    const matching = (events || []).filter((e: any) => {
+      const mobile = e.payload?.Customer?.mobile || '';
+      const mDigits = normalizePhoneDigits(mobile);
+      return mDigits.slice(-9) === last9;
+    });
+
+    if (matching.length === 0) {
+      console.log(`[inlineKiwifyValidation] Nenhuma compra para: ${normalized}`);
+      return { found: false };
+    }
+
+    const first = matching[0];
+    const customer = first.payload?.Customer || {};
+    const products = [...new Set(matching.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
+
+    const result = {
+      found: true,
+      customer: {
+        name: customer.full_name || customer.first_name || 'Cliente',
+        email: customer.email || first.customer_email || '',
+        products,
+      },
+    };
+
+    console.log(`[inlineKiwifyValidation] ✅ Found:`, { name: result.customer.name, products: products.length });
+
+    // Update contact if provided
+    if (contact_id) {
+      const updateData: Record<string, any> = {
+        status: 'customer',
+        source: 'kiwify_validated',
+        kiwify_validated: true,
+        kiwify_validated_at: new Date().toISOString(),
+      };
+      if (result.customer.email) updateData.email = result.customer.email;
+      
+      await supabaseClient.from('contacts').update(updateData).eq('id', contact_id);
+      
+      await supabaseClient.from('interactions').insert({
+        customer_id: contact_id,
+        type: 'internal_note',
+        content: `✅ Cliente identificado via número Kiwify. ${result.customer.email ? `Email: ${result.customer.email}. ` : ''}Produtos: ${products.join(', ')}`,
+        channel: 'system'
+      });
+    }
+
+    return result;
+  } catch (err) {
+    console.error('[inlineKiwifyValidation] Error:', err);
+    return { found: false };
+  }
+}
+
 function buildAllowedSources(nodeData: any): string[] {
   const sources: string[] = [];
   if (nodeData?.use_knowledge_base !== false) sources.push('kb');
