@@ -76,7 +76,7 @@ async function handleCsvImport(request: any, supabaseClient: any) {
       errors: [] as Array<{ row: number; error: string }>,
     };
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
