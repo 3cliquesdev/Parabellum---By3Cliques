@@ -3168,6 +3168,7 @@ serve(async (req) => {
             forbidCommercial: nextNode.data?.forbid_commercial ?? false,
             forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
             forbidSupport: nextNode.data?.forbid_support ?? false,
+            forbidConsultant: nextNode.data?.forbid_consultant ?? false,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
