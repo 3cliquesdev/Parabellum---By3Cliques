@@ -16,14 +16,13 @@ Deno.serve(async (req) => {
 
   try {
     const { mode, messages, description, ticketSubject } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY not configured');
     }
     
-    // Buscar modelo configurado dinamicamente
-    const aiModel = await getConfiguredAIModel();
+    const aiModel = DEFAULT_MODEL;
     console.log(`[analyze-ticket] Using AI model: ${aiModel}`);
 
     let systemPrompt = '';
