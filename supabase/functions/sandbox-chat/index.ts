@@ -160,7 +160,9 @@ Responda APENAS: skip ou search`
             { role: 'user', content: lastUserMessage }
           ],
           temperature: 0.1,
-          max_completion_tokens: 10
+          ...(['o3', 'o3-mini', 'o4-mini'].includes(configuredModel)
+            ? { max_completion_tokens: 10 }
+            : { max_tokens: 10 })
         };
 
         let intentResponse;
@@ -417,11 +419,14 @@ Você está conversando com um cliente identificado. Use essas informações par
 
       console.log('[sandbox-chat] Calling OpenAI with model:', configuredModel);
       
+      const isReasoningModel = ['o3', 'o3-mini', 'o4-mini'].includes(configuredModel);
       const openaiPayload: any = {
         model: configuredModel,
         messages: aiMessages,
-        temperature: persona.temperature || 0.7,
-        max_completion_tokens: persona.max_tokens || 500,
+        temperature: isReasoningModel ? undefined : (persona.temperature || 0.7),
+        ...(isReasoningModel
+          ? { max_completion_tokens: persona.max_tokens || 500 }
+          : { max_tokens: persona.max_tokens || 500 }),
       };
 
       if (tools.length > 0) {
@@ -455,7 +460,7 @@ Você está conversando com um cliente identificado. Use essas informações par
       
       if (aiResponse.status === 402) {
         return new Response(
-          JSON.stringify({ error: 'Payment required. Please add credits to your Lovable workspace.' }),
+          JSON.stringify({ error: 'Erro de billing na API OpenAI. Verifique sua conta OpenAI.' }),
           { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
