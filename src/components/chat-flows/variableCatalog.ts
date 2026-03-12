@@ -96,6 +96,7 @@ export const CONDITION_CONVERSATION_FIELDS = [
   { value: "priority", label: "Prioridade" },
   { value: "protocol_number", label: "Protocolo" },
   { value: "queue", label: "Fila" },
+  { value: "ai_exit_intent", label: "Intenção de Saída IA" },
 ];
 
 /**

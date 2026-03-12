@@ -1109,9 +1109,29 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                         />
                       )}
                       {rule.field && (
-                        <p className="text-[10px] text-muted-foreground italic">
-                          ✅ Verifica se o campo tem dado — saída Sim/Não
-                        </p>
+                        <div className="space-y-1.5">
+                          <Select value={rule.check_type || 'has_data'} onValueChange={(val) => updateConditionRule(idx, 'check_type', val)}>
+                            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="has_data">✅ Tem dado</SelectItem>
+                              <SelectItem value="no_data">❌ Não tem dado</SelectItem>
+                              <SelectItem value="equals">🎯 É igual a</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {rule.check_type === 'equals' && (
+                            <Input
+                              value={rule.keywords || ''}
+                              onChange={(e) => updateConditionRule(idx, 'keywords', e.target.value)}
+                              placeholder="Valor esperado (ex: financeiro)"
+                              className="h-7 text-xs"
+                            />
+                          )}
+                          {rule.check_type !== 'equals' && (
+                            <p className="text-[10px] text-muted-foreground italic">
+                              ✅ Verifica se o campo tem dado — saída Sim/Não
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   ))}
