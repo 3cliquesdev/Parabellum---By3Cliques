@@ -2124,6 +2124,8 @@ serve(async (req) => {
         const maxInteractions: number = currentNode.data?.max_ai_interactions ?? 0;
         let forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
         const forbidCommercial: boolean = currentNode.data?.forbid_commercial ?? false;
+        const forbidCancellation: boolean = currentNode.data?.forbid_cancellation ?? forbidFinancial; // fallback: se forbid_financial=true, cancelamento também ativo (backward compat)
+        const forbidSupport: boolean = currentNode.data?.forbid_support ?? false;
 
         // 🆕 INFERÊNCIA AUTOMÁTICA: Se o nó tem edge para condition_v2 com regra ai_exit_intent=financeiro, forçar forbidFinancial
         if (!forbidFinancial) {
@@ -2170,10 +2172,18 @@ serve(async (req) => {
 
         // 🆕 TRAVA CANCELAMENTO: Separada do financeiro para roteamento independente
         const cancellationActionPattern = /cancelar\s*(minha\s*)?(assinatura|cobran[çc]a|pagamento|plano|conta|servi[çc]o)|quero\s+cancelar|desistir\s*(do|da|de)\s*(plano|assinatura|servi[çc]o|conta)|n[ãa]o\s+quero\s+mais\s*(o\s*)?(plano|assinatura|servi[çc]o)|encerrar\s*(minha\s*)?(conta|assinatura|plano)/i;
-        const cancellationIntentMatch = forbidFinancial && msgLower.length > 0 && cancellationActionPattern.test(userMessage || '') && !isFinancialInfo;
+        const cancellationIntentMatch = forbidCancellation && msgLower.length > 0 && cancellationActionPattern.test(userMessage || '') && !isFinancialInfo;
         
         if (cancellationIntentMatch) {
           console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada | msg="${(userMessage || '').substring(0, 100)}"`);
+        }
+
+        // 🧑 TRAVA SUPORTE: Detectar pedido de atendente humano como exit do nó AI
+        const supportIntentPattern = /falar\s+com\s*(um\s*)?(atendente|humano|pessoa|agente|operador)|quero\s+(atendente|humano|pessoa|suporte)|atendimento\s+humano|preciso\s+de\s+(ajuda\s+)?humana?|me\s+transfira|transferir\s+para\s+(atendente|humano|suporte)|chamar?\s+(atendente|humano|suporte)|n[ãa]o\s+quero\s+(falar\s+com\s+)?(rob[ôo]|bot|ia|intelig[êe]ncia)/i;
+        const supportIntentMatch = forbidSupport && msgLower.length > 0 && supportIntentPattern.test(userMessage || '');
+        
+        if (supportIntentMatch) {
+          console.log(`[process-chat-flow] 🧑 TRAVA SUPORTE: Pedido de atendente detectado | msg="${(userMessage || '').substring(0, 100)}"`);
         }
 
         // 🛒 TRAVA COMERCIAL: Detectar intenção de compra como exit do nó AI
@@ -2183,7 +2193,6 @@ serve(async (req) => {
           console.log('[process-chat-flow] 🛒 forceCommercialExit=true recebido do webhook, forçando exit do nó AI');
         }
 
-        if (financialIntentMatch) {
           console.log(`[process-chat-flow] 🔒 TRAVA FINANCEIRA: Intenção financeira AÇÃO detectada no nó AI, tratando como exit | msg="${(userMessage || '').substring(0, 100)}" | forceExit=${forceFinancialExit} | actionMatch=${isFinancialAction} | infoMatch=${isFinancialInfo}`);
           
           try {
@@ -2265,7 +2274,7 @@ serve(async (req) => {
         }
 
         // Verificar exit keyword (word-boundary match — evita falso positivo por substring)
-        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
+        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && !supportIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
           const kwClean = String(kw || '').toLowerCase().trim();
           if (!kwClean) return false;
           try {
@@ -2277,7 +2286,7 @@ serve(async (req) => {
         });
 
         // Verificar max interações
-        const maxReached = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
+        const maxReached = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && !supportIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
 
         // 🆕 forceAIExit: IA detectou handoff (strict RAG ou confidence) e quer sair do nó
         if (forceAIExit) {
@@ -2303,10 +2312,14 @@ serve(async (req) => {
           collectedData.ai_exit_intent = 'comercial';
           console.log('[process-chat-flow] 🎯 ai_exit_intent=comercial (auto-detect from commercialIntentMatch)');
         }
+        if (supportIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'suporte';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=suporte (auto-detect from supportIntentMatch)');
+        }
 
-        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || keywordMatch || maxReached || aiExitForced) {
-          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
-          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} count=${aiCount}`);
+        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || keywordMatch || maxReached || aiExitForced) {
+          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : supportIntentMatch ? 'support_requested' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
+          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} support=${supportIntentMatch} count=${aiCount}`);
 
           // Log de transferência estruturado em ai_events
           try {
@@ -2367,6 +2380,9 @@ serve(async (req) => {
           } else if (commercialIntentMatch) {
             path = 'comercial';
             console.log('[process-chat-flow] 🎯 commercialIntentMatch → path set to "comercial"');
+          } else if (supportIntentMatch) {
+            path = 'suporte';
+            console.log('[process-chat-flow] 🎯 supportIntentMatch → path set to "suporte"');
           } else if (keywordMatch || aiExitForced) {
             path = 'suporte';
             collectedData.ai_exit_intent = 'suporte';
@@ -2418,6 +2434,8 @@ serve(async (req) => {
               forbidOptions: currentNode.data?.forbid_options ?? true,
               forbidFinancial: currentNode.data?.forbid_financial ?? false,
               forbidCommercial: currentNode.data?.forbid_commercial ?? false,
+              forbidCancellation: currentNode.data?.forbid_cancellation ?? false,
+              forbidSupport: currentNode.data?.forbid_support ?? false,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -2428,14 +2446,14 @@ serve(async (req) => {
       // findNextNode já tem fallback hierárquico (path → ai_exit → default → any)
       console.log(`[process-chat-flow] ➡️ Transition: from=${currentNode.type}(${currentNode.id}) path=${path || 'default'} → next=${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
 
-      // 🔒 FIX: Financial/Commercial exit SEM próximo nó → forçar handoff
-      if (!nextNode && (financialIntentMatch || commercialIntentMatch)) {
-        const exitType = financialIntentMatch ? 'financial' : 'commercial';
+      // 🔒 FIX: Financial/Commercial/Support/Cancellation exit SEM próximo nó → forçar handoff
+      if (!nextNode && (financialIntentMatch || commercialIntentMatch || cancellationIntentMatch || supportIntentMatch)) {
+        const exitType = financialIntentMatch ? 'financial' : cancellationIntentMatch ? 'cancellation' : commercialIntentMatch ? 'commercial' : 'support';
         console.log(`[process-chat-flow] 🔒 ${exitType} exit com nextNode=null → forçando handoff`);
         
-        // Buscar departamento financeiro/comercial dinamicamente
+        // Buscar departamento dinamicamente
         let targetDeptId: string | null = null;
-        const deptSearchName = financialIntentMatch ? '%financ%' : '%comerci%';
+        const deptSearchName = financialIntentMatch ? '%financ%' : cancellationIntentMatch ? '%cancel%' : commercialIntentMatch ? '%comerci%' : '%suporte%';
         try {
           const { data: deptRow } = await supabaseClient
             .from('departments')
@@ -2452,6 +2470,10 @@ serve(async (req) => {
 
         const handoffMsg = financialIntentMatch
           ? 'Entendi. Para assuntos financeiros, vou te encaminhar para um atendente humano agora.'
+          : cancellationIntentMatch
+          ? 'Entendi que deseja cancelar. Vou te conectar com um atendente para resolver isso.'
+          : supportIntentMatch
+          ? 'Claro! Vou te transferir para um atendente humano agora.'
           : 'Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso.';
 
         // Completar flow state como transferred
@@ -3045,6 +3067,8 @@ serve(async (req) => {
             forbidOptions: nextNode.data?.forbid_options ?? true,
             forbidFinancial: nextNode.data?.forbid_financial ?? false,
             forbidCommercial: nextNode.data?.forbid_commercial ?? false,
+            forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
+            forbidSupport: nextNode.data?.forbid_support ?? false,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -3785,6 +3809,8 @@ serve(async (req) => {
               forbidOptions: node.data?.forbid_options ?? true,
               forbidFinancial: node.data?.forbid_financial ?? false,
               forbidCommercial: node.data?.forbid_commercial ?? false,
+              forbidCancellation: node.data?.forbid_cancellation ?? false,
+              forbidSupport: node.data?.forbid_support ?? false,
               debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -4000,6 +4026,8 @@ serve(async (req) => {
           forbidOptions: startNode.data?.forbid_options ?? true,
           forbidFinancial: startNode.data?.forbid_financial ?? false,
           forbidCommercial: startNode.data?.forbid_commercial ?? false,
+          forbidCancellation: startNode.data?.forbid_cancellation ?? false,
+          forbidSupport: startNode.data?.forbid_support ?? false,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
