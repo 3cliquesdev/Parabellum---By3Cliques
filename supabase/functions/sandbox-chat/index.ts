@@ -160,7 +160,9 @@ Responda APENAS: skip ou search`
             { role: 'user', content: lastUserMessage }
           ],
           temperature: 0.1,
-          max_completion_tokens: 10
+          ...(['o3', 'o3-mini', 'o4-mini'].includes(configuredModel)
+            ? { max_completion_tokens: 10 }
+            : { max_tokens: 10 })
         };
 
         let intentResponse;
