@@ -4661,7 +4661,7 @@ serve(async (req) => {
               ? replaceVariables(actionData.internal_note || node.data.internal_note, masterVariablesContext) : null;
             await createTicketFromFlow(supabaseClient, {
               conversationId, flowStateId: stateId, nodeId: node.id,
-              contactId: masterContactData?.id || null,
+              contactId: contactData?.id || null,
               subject, description,
               category: actionData.ticket_category || node.data.ticket_category || 'outro',
               priority: actionData.ticket_priority || node.data.ticket_priority || 'medium',
