@@ -29,7 +29,7 @@ async function getConfiguredAIModel(supabase: any): Promise<string> {
       .eq('key', 'ai_default_model')
       .maybeSingle();
     
-    const model = data?.value || 'gpt-4o-mini';
+    const model = data?.value || 'gpt-5-mini';
     if (VALID_OPENAI_MODELS.has(model)) return model;
     // Gateway names → correct OpenAI equivalents
     const MODEL_MAP: Record<string, string> = {
