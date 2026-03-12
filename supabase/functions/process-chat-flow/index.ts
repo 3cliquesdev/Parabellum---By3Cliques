@@ -2544,13 +2544,13 @@ serve(async (req) => {
       console.log(`[process-chat-flow] ➡️ Transition: from=${currentNode.type}(${currentNode.id}) path=${path || 'default'} → next=${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
 
       // 🔒 FIX: Financial/Commercial/Support/Cancellation exit SEM próximo nó → forçar handoff
-      if (!nextNode && (financialIntentMatch || commercialIntentMatch || cancellationIntentMatch || supportIntentMatch)) {
-        const exitType = financialIntentMatch ? 'financial' : cancellationIntentMatch ? 'cancellation' : commercialIntentMatch ? 'commercial' : 'support';
+      if (!nextNode && (financialIntentMatch || commercialIntentMatch || cancellationIntentMatch || supportIntentMatch || consultorIntentMatch)) {
+        const exitType = financialIntentMatch ? 'financial' : cancellationIntentMatch ? 'cancellation' : commercialIntentMatch ? 'commercial' : consultorIntentMatch ? 'consultant' : 'support';
         console.log(`[process-chat-flow] 🔒 ${exitType} exit com nextNode=null → forçando handoff`);
         
         // Buscar departamento dinamicamente
         let targetDeptId: string | null = null;
-        const deptSearchName = financialIntentMatch ? '%financ%' : cancellationIntentMatch ? '%cancel%' : commercialIntentMatch ? '%comerci%' : '%suporte%';
+        const deptSearchName = financialIntentMatch ? '%financ%' : cancellationIntentMatch ? '%cancel%' : commercialIntentMatch ? '%comerci%' : consultorIntentMatch ? '%consult%' : '%suporte%';
         try {
           const { data: deptRow } = await supabaseClient
             .from('departments')
@@ -2571,6 +2571,8 @@ serve(async (req) => {
           ? 'Entendi que deseja cancelar. Vou te conectar com um atendente para resolver isso.'
           : supportIntentMatch
           ? 'Claro! Vou te transferir para um atendente humano agora.'
+          : consultorIntentMatch
+          ? 'Certo! Vou te conectar com seu consultor agora.'
           : 'Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso.';
 
         // Completar flow state como transferred
