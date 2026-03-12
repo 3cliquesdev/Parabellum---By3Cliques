@@ -1,34 +1,60 @@
 
 
-# Auditoria Final — Todos os 5 Fixes estão 100% ✅
+# Dashboard de Telemetria AI Decision
 
-## Resultado: APROVADO — zero pendências
+## Situação Atual
 
-| # | Fix | Arquivo | Status | Evidência |
-|---|------|---------|--------|-----------|
-| 1a | `userMessage` → `customerMessage` em webhooks | `meta-whatsapp-webhook` | ✅ | `grep` retorna 0 matches |
-| 1b | `userMessage` → `customerMessage` em webhooks | `handle-whatsapp-event` | ✅ | `grep` retorna 0 matches |
-| 1c | `userMessage` em chamada a `process-chat-flow` | `ai-autopilot-chat` L3209 | ✅ CORRETO | `process-chat-flow` L776 desestrutura `userMessage` — contrato diferente, chave mantida intencionalmente |
-| 1d | Validação 400 para `customerMessage` vazio | `ai-autopilot-chat` L1461-1471 | ✅ | Retorna 400 com `BAD_REQUEST` |
-| 2a | Guarantee block no handoff | `transition-conversation-state` L161-181 | ✅ | Cria job se ausente após `handoff_to_human` |
-| 2b | Reconciliação de órfãs | `dispatch-conversations` L64-100 | ✅ | Loop com `maybeSingle()` + insert |
-| 2c | Requeue de escalated | `dispatch-conversations` L132-136 | ✅ | Função `requeueEscalatedJobs` chamada |
-| 3a | Queue hygiene (purge) | `dispatch-conversations` L102-116 | ✅ | Filtra `['closed', 'resolved', 'finished']` |
-| 3b | Filtro de fila (posição) | `route-conversation` L797 | ✅ | `.not('conversations.status', 'in', '("closed","resolved","finished")')` |
-| 4 | Telemetria `ai_decision` (6 pontos) | `ai-autopilot-chat` | ✅ | 6/6 confirmados: `strict_rag_handoff`, `zero_confidence_cautious`, `confidence_flow_advance`, `anti_loop_max_fallbacks`, `fallback_phrase_detected`, `restriction_violation_*` |
-| 5a | Auth do health-check-ai | `health-check-ai` L18-22 | ✅ | `authHeader !== Bearer ${serviceKey}` → 401 |
-| 5b | Stale queue metric | `health-check-ai` L69 | ✅ | Filtra `['closed', 'resolved', 'finished']` |
+Os 6 pontos de telemetria `ai_decision` estão **apenas em `console.log`** — não são persistidos em nenhuma tabela. Isso significa que não há como consultá-los via frontend.
 
-## Conclusão
+Existem duas tabelas candidatas:
+- **`ai_decision_logs`** — tem RLS `service_role` only, esquema limitado (decision: reply/handoff/blocked/ignored), não está sendo usada por nenhuma edge function
+- **`ai_events`** — já usada amplamente, tem RLS para managers/admins, esquema flexível com `event_type`, `output_json`, `score`
 
-Nenhuma pendência restante. Todos os critérios de aceitação estão satisfeitos:
+## Plano (3 partes)
 
-- Zero chamadas usando `userMessage` em invocações de `ai-autopilot-chat`
-- Body vazio retorna HTTP 400
-- Conversas `waiting_human` sem dispatch job são reconciliadas automaticamente
-- Queue entries de conversas fechadas são purgadas a cada ciclo de dispatch
-- 6 pontos de telemetria `ai_decision` ativos
-- `health-check-ai` retorna JSON válido com 5 métricas, protegido por service-role key
+### Parte 1: Persistir telemetria na tabela `ai_events`
 
-**Os 5 fixes estão 100% implementados. Pronto para a próxima melhoria.**
+Em `ai-autopilot-chat/index.ts`, nos 6 pontos de `console.log` com `event: 'ai_decision'`, adicionar um insert na tabela `ai_events` logo após cada `console.log`:
+
+```typescript
+// Após cada console.log de ai_decision, inserir:
+supabase.from('ai_events').insert({
+  entity_type: 'conversation',
+  entity_id: conversationId,
+  event_type: 'ai_decision_' + reason,  // ex: ai_decision_strict_rag_handoff
+  model: 'system',
+  score: score,
+  output_json: { reason, exitType, fallback_used, articles_found, hasFlowContext },
+}).then(() => {}).catch(() => {}); // non-blocking
+```
+
+6 inserções, uma para cada ponto de decisão.
+
+### Parte 2: Criar página de Dashboard AI Telemetry
+
+Nova rota `/ai-telemetry` com:
+
+- **KPIs no topo**: Total de decisões (24h), handoffs, fallbacks, violations
+- **Gráfico de linha**: Decisões ao longo do tempo (últimas 24h, agrupado por hora)
+- **Tabela de eventos recentes**: Últimos 50 eventos com conversation_id, reason, score, timestamp
+- **Breakdown por tipo**: Gráfico de barras/pie com distribuição dos 6 tipos de decisão
+
+Componentes:
+- `src/pages/AITelemetry.tsx` — página principal
+- `src/hooks/useAIDecisionTelemetry.ts` — hook para consultar `ai_events` filtrado por `event_type LIKE 'ai_decision_%'`
+
+### Parte 3: Adicionar rota e menu
+
+- Rota em `App.tsx`: `/ai-telemetry` com permission `ai.manage_personas`
+- Item no menu em `routes.ts` no grupo "Automação & AI"
+
+## Arquivos modificados
+
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/ai-autopilot-chat/index.ts` | 6 inserts em `ai_events` nos pontos de telemetria |
+| `src/pages/AITelemetry.tsx` | Nova página com KPIs, gráfico e tabela |
+| `src/hooks/useAIDecisionTelemetry.ts` | Hook para consultar ai_events |
+| `src/App.tsx` | Nova rota `/ai-telemetry` |
+| `src/config/routes.ts` | Novo item de menu |
 
