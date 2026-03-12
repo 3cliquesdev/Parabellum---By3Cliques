@@ -2357,16 +2357,20 @@ serve(async (req) => {
             console.log(`[process-chat-flow] 🔄 AI exit: reason=${aiExitForced ? 'ai_handoff_exit' : 'max_interactions'} (${aiCount}/${maxInteractions}) - advancing to next node`);
           }
 
-          // 🆕 FIX: Quando aiExitForced, setar path='ai_exit' para findNextNode priorizar edge com handle ai_exit
-          if (aiExitForced) {
-            path = 'ai_exit';
-            console.log('[process-chat-flow] 🎯 aiExitForced → path set to "ai_exit" for findNextNode');
-          }
-
-          // 🆕 FIX CRÍTICO: financialIntentMatch/cancellationIntentMatch/commercialIntentMatch também devem seguir edge ai_exit
-          if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch) {
-            path = 'ai_exit';
-            console.log(`[process-chat-flow] 🎯 financial/cancellation/commercial exit → path set to "ai_exit" | financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch}`);
+          // 🆕 Paths dedicados por intenção (handles separados no nó IA)
+          if (financialIntentMatch) {
+            path = 'financeiro';
+            console.log('[process-chat-flow] 🎯 financialIntentMatch → path set to "financeiro"');
+          } else if (cancellationIntentMatch) {
+            path = 'cancelamento';
+            console.log('[process-chat-flow] 🎯 cancellationIntentMatch → path set to "cancelamento"');
+          } else if (commercialIntentMatch) {
+            path = 'comercial';
+            console.log('[process-chat-flow] 🎯 commercialIntentMatch → path set to "comercial"');
+          } else if (keywordMatch || aiExitForced) {
+            path = 'suporte';
+            collectedData.ai_exit_intent = 'suporte';
+            console.log(`[process-chat-flow] 🎯 keyword/aiExitForced → path set to "suporte" | keyword=${keywordMatch} aiExitForced=${aiExitForced}`);
           }
 
           // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir
