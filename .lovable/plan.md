@@ -1,178 +1,89 @@
 
-# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-## Arquivo: `supabase/functions/process-chat-flow/index.ts`
+# Plano: 5 Fixes Críticos Anti-Alucinação e Estabilidade
 
-### FIX 1 ✅ — Proteção contra loop flow-to-flow
-### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
-### FIX 3 ✅ — Auto-traverse cobre condition_v2
-### FIX 4 ✅ — Transfer node atualiza conversations.department
-### FIX 5 ✅ — startMessage com replaceVariables
-### FIX 6 ✅ — financialIntentPattern simplificado
+## Escopo
+
+5 correções em 6 edge functions + 1 nova edge function.
 
 ---
 
-# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
+## FIX 1 — Payload contract: `userMessage` → `customerMessage`
 
-## Problema
-Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
+### `meta-whatsapp-webhook/index.ts`
+- ~15 ocorrências de `userMessage` em invocações de `ai-autopilot-chat` (linhas ~737, 1253, 1320, 1461, 1525, 1636, 1700, 1827, 1969, 2005, 2055, 2220, 2245, 2270, etc.)
+- Renomear todas para `customerMessage`
 
-## Correções aplicadas
+### `handle-whatsapp-event/index.ts`
+- 3 ocorrências (linhas ~1254, 1356, 1413)
+- Renomear todas para `customerMessage`
 
-### 7a — Fallback edge default (process-chat-flow ~L2273)
-Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
-
-### 7b — Guard final sem nó (process-chat-flow ~L2336)
-Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
-
-### 7c — Safety net IA falha (process-buffered-messages ~L383)
-Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
-
-### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
-Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
+### `ai-autopilot-chat/index.ts`
+- Adicionar validação hard logo após o warmup check (~L1459), antes de qualquer processamento:
+  - Se `customerMessage` vazio/ausente e não for warmup → retornar 400 `BAD_REQUEST`
 
 ---
 
-# FIX 8 ✅ — pg_cron matando flows prematuramente (11/03/2026)
+## FIX 2 — Dispatch reconciliation: zero conversas órfãs
 
-## Problema
-O pg_cron `cleanup-stuck-flow-states` usava `started_at < now() - 3 min`, mas `started_at` é imutável. Flows com múltiplos passos (>3min) eram mortos antes de chegar ao nó de transfer.
+### `transition-conversation-state/index.ts`
+- Após o bloco `shouldCreateDispatch` existente (~L130), adicionar uma verificação guarantee: se a transição foi `handoff_to_human` e não encontrou job existente `pending`/`escalated`, criar um novo
 
-## Correções aplicadas
-
-### 8a — Coluna `updated_at` em `chat_flow_states`
-Nova coluna `updated_at timestamptz DEFAULT now()` adicionada via migration. Registros existentes backfilled com `COALESCE(completed_at, started_at)`.
-
-### 8b — `updated_at` em todos os `.update()` do process-chat-flow
-21 pontos de atualização no `process-chat-flow/index.ts` agora incluem `updated_at: new Date().toISOString()`, renovando o timestamp a cada interação.
-
-### 8c — pg_cron atualizado
-Cron usa `updated_at < now() - INTERVAL '15 minutes'` em vez de `started_at < now() - 3 min`.
+### `dispatch-conversations/index.ts`
+- Adicionar rotina de reconciliação no início do ciclo (~L62, antes do fetch de pending jobs):
+  - Query: conversas com `ai_mode='waiting_human'`, `status='open'`, `assigned_to IS NULL`
+  - Para cada uma sem dispatch job `pending`/`escalated`, criar job
+  - Log `[RECONCILE]`
 
 ---
 
-# FIX 9 ✅ — IA não responde: safety net mata flow em quota error (11/03/2026)
+## FIX 3 — Queue hygiene: remover registros mortos
 
-## Problema
-O `process-buffered-messages` tratava erros 429/503 (quota/rate limit) como falha fatal, disparando `forceAIExit` e matando o flow antes da IA ter chance de responder.
+### `route-conversation/index.ts`
+- Na query de posição na fila (~L791-796), adicionar join/filter para excluir conversas fechadas
+- Adicionar limpeza de `conversation_queue` entries de conversas já fechadas no início do `route-conversation` ou no `dispatch-conversations`
 
-## Correções aplicadas
-
-### 9a — Distinguir quota error de erro técnico real
-Na safety net do `process-buffered-messages`, erros 429/503 com `quota_error` ou `retry_suggested: true` NÃO disparam `forceAIExit`. Buffer fica como `processed=false` para retry no próximo ciclo.
-
-### 9b — Refresh `updated_at` do flow state após buffer processing com sucesso
-Após `ai-autopilot-chat` retornar OK via buffer, o `updated_at` do `chat_flow_states` é atualizado para evitar morte prematura pelo cron de 15 min.
-
-### 9c — Anti-retry infinito (3 ciclos)
-Buffers que falham por quota por 3+ ciclos de cron (~3 min) enviam mensagem de "alta demanda" ao contato e são marcados como processed.
+### `dispatch-conversations/index.ts`
+- Adicionar cleanup de queue entries de conversas fechadas no início do ciclo de dispatch (mais eficiente que no route)
 
 ---
 
-# FIX 10 ✅ — Auditoria IA Semana 1: Quick wins (11/03/2026)
+## FIX 4 — Telemetria anti-alucinação
 
-## Correções aplicadas
-
-### 10a — auto-handoff: UUID dinâmico
-Substituído UUID hardcoded `36ce66cd-...` por busca dinâmica do departamento "Suporte" via `departments.ilike('name', '%suporte%')`. Se não encontrado, loga warning e aplica handoff sem forçar departamento.
-
-### 10b — auto-handoff: Markdown removido das notas internas
-Removido `**bold**` de todas as notas internas (linhas 78, 97, 174-181). Notas agora usam texto plano com emojis para compatibilidade cross-canal (WhatsApp).
-
-### 10c — ai-autopilot-chat: Memória cross-session
-Busca últimas 3 conversas fechadas do mesmo contact_id e injeta última mensagem de agente/sistema no system prompt. IA agora lembra conversas anteriores do mesmo cliente.
-
-### 10d — ai-autopilot-chat: Persona contextual
-Tom da IA varia automaticamente baseado no status do contato:
-- VIP/assinante → tom premium e proativo
-- Churn risk/inativo → tom empático e acolhedor
-- Lead quente (score ≥ 80) → tom entusiasmado e consultivo
+### `ai-autopilot-chat/index.ts`
+- Adicionar log estruturado `ai_decision` nos 6 pontos de decisão:
+  1. Zero confidence guard
+  2. Strict RAG handoff
+  3. Confidence handoff (`flow_advance_needed`)
+  4. Fallback phrase detection
+  5. Restriction violation (contrato)
+  6. Anti-loop (`ai_node_fallback_count >= 5`)
+- Formato: `JSON.stringify({ event: 'ai_decision', conversation_id, reason, score, hasFlowContext, exitType, fallback_used, articles_found, timestamp })`
 
 ---
 
-# FIX 11 ✅ — Passive Learning ativado + Cron Job (11/03/2026)
+## FIX 5 — Nova edge function `health-check-ai`
 
-## O que foi feito
-
-### 11a — Flag `ai_passive_learning_enabled` = true
-Inserido na tabela `system_configurations` com categoria `ai`.
-
-### 11b — Cron job `passive-learning-hourly`
-pg_cron agendado para rodar a cada hora (`0 * * * *`), invocando a edge function `passive-learning-cron` via `net.http_post`.
-
-### Estado confirmado
-- `ai_global_enabled` = true
-- `ai_shadow_mode` = false
-- `ai_passive_learning_enabled` = true
+### `supabase/functions/health-check-ai/index.ts`
+- Endpoint protegido por `SUPABASE_SERVICE_ROLE_KEY`
+- Retorna JSON com 5 métricas:
+  1. Conversas órfãs (`waiting_human` + sem `assigned_to` + sem dispatch job ativo)
+  2. Jobs escalados por departamento
+  3. Queue entries de conversas fechadas (deve ser 0)
+  4. Últimos 100 logs `ai_decision` com breakdown por `reason`
+  5. `flow_advance_needed` nas últimas 24h vs total de respostas
 
 ---
 
-# FIX 12 ✅ — Cron job corrigido: anon key no gateway (11/03/2026)
+## Arquivos editados
 
-## Problema
-`current_setting('supabase.service_role_key', true)` retorna NULL neste projeto → cron enviava `Authorization: Bearer null` → edge function não autenticava.
+| Arquivo | Tipo de mudança |
+|---|---|
+| `meta-whatsapp-webhook/index.ts` | ~15 renomeações `userMessage` → `customerMessage` |
+| `handle-whatsapp-event/index.ts` | 3 renomeações `userMessage` → `customerMessage` |
+| `ai-autopilot-chat/index.ts` | Validação 400 + 6 logs de telemetria |
+| `transition-conversation-state/index.ts` | Guarantee block no handoff |
+| `dispatch-conversations/index.ts` | Reconciliação de órfãs + limpeza de queue |
+| `route-conversation/index.ts` | Filtro de conversas fechadas na posição de fila |
+| `health-check-ai/index.ts` | **NOVO** — endpoint de health check |
 
-## Correção
-Recriado cron job `passive-learning-hourly` (jobid 13) usando anon key no header Authorization. A anon key é suficiente para passar pelo API gateway; a função internamente usa `SUPABASE_SERVICE_ROLE_KEY` do ambiente Deno para operações admin.
-
----
-
-# FIX 13 ✅ — Auto-KB Gap Detection (11/03/2026)
-
-## O que foi feito
-
-### 13a — Edge function `detect-kb-gaps`
-Criada edge function que:
-1. Busca eventos de IA das últimas 24h onde a IA fez handoff/exit (tipos: `ai_handoff_exit`, `contract_violation_blocked`, `flow_exit_clean`, `ai_exit_intent`)
-2. Clusteriza por similaridade textual (primeiras 3 palavras normalizadas)
-3. Filtra clusters com >= 2 ocorrências (gaps recorrentes)
-4. Cria `knowledge_candidates` com `status: 'pending'` + tag `'gap_detected'` (CHECK constraint impede valor custom)
-5. Notifica admins/managers via tabela `notifications`
-
-### 13b — Cron job `detect-kb-gaps-daily`
-Agendado para rodar diariamente às 8h UTC (`0 8 * * *`) usando anon key no gateway.
-
-### 13c — Workaround CHECK constraint
-`knowledge_candidates.status` só aceita `pending | approved | rejected`. Gaps usam `status: 'pending'` com tag `'gap_detected'` no array de tags para diferenciação.
-
----
-
-# FIX 14 ✅ — transition-conversation-state: State Machine centralizado (11/03/2026)
-
-## Problema
-Mudanças de estado de conversas (ai_mode, department, assigned_to, dispatch jobs) eram feitas em múltiplos pontos do código (auto-handoff, process-chat-flow, etc.), causando inconsistências como conversa sem departamento, ai_mode errado, ou dispatch job desatualizado.
-
-## Correções aplicadas
-
-### 14a — Edge function `transition-conversation-state`
-Nova edge function que é a ÚNICA fonte da verdade para transições de estado. Suporta 7 tipos:
-- `handoff_to_human`: autopilot → waiting_human + cria dispatch job
-- `assign_agent`: qualquer → copilot + atribui agente + fecha dispatch
-- `unassign_agent`: copilot → waiting_human + reabre dispatch
-- `engage_ai`: qualquer → autopilot + fecha dispatch
-- `set_copilot`: qualquer → copilot
-- `update_department`: atualiza dept + dispatch job
-- `close`: qualquer → closed + fecha dispatch
-
-Cada transição:
-1. Busca estado atual da conversa
-2. Aplica update atômico
-3. Gerencia dispatch jobs (create/close/reopen)
-4. Loga em `ai_events` como `state_transition_{tipo}`
-5. Fallback dinâmico para dept "Suporte"
-
-### 14b — auto-handoff refatorado
-Substituída toda lógica de update direto (fallback dept + update ai_mode) por chamada única:
-```typescript
-supabaseClient.functions.invoke('transition-conversation-state', {
-  body: { conversationId, transition: 'handoff_to_human', reason, metadata }
-});
-```
-
-### 14c — process-chat-flow: 5 blocos de transfer refatorados
-Todos os blocos de update direto de `conversations` em transfer nodes substituídos por `fetch()` para `transition-conversation-state`:
-1. Contract violation handler (~L726)
-2. Handoff sem próximo nó (~L2326)
-3. aiExitForced sem nó (~L2365)
-4. Transfer node principal (~L2808)
-5. Transfer node msg chain (~L3061)
