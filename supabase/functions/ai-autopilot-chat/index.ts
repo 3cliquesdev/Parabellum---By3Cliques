@@ -1187,9 +1187,15 @@ E retorne [[FLOW_EXIT]] imediatamente.
 Você PODE: coletar dados (email, CPF, ID do pedido), resumir o caso, e responder dúvidas informativas. NÃO PODE: instruir processos financeiros, prometer resolução ou executar ações.
 
 ⚠️ ANTI-ALUCINAÇÃO FINANCEIRA (REGRA ABSOLUTA):
+Quando o assunto for financeiro, sua PRIMEIRA ação deve ser verificar se a base de conhecimento contém a informação EXATA solicitada.
 NÃO cite valores monetários, prazos em dias, datas específicas ou percentuais sobre saques, reembolsos, estornos ou devoluções A MENOS que essa informação EXATA exista na base de conhecimento fornecida.
 Se a KB não contiver a informação, responda: "Não tenho essa informação no momento. O setor financeiro poderá te orientar com detalhes."
-NUNCA invente ou estime valores, prazos ou condições financeiras.`;
+NUNCA invente, deduza ou estime valores, prazos ou condições financeiras.
+
+🔍 DESAMBIGUAÇÃO FINANCEIRA OBRIGATÓRIA:
+Se o cliente mencionar termos como saque, saldo, reembolso, estorno ou devolução sem deixar claro se quer uma INFORMAÇÃO ou realizar uma AÇÃO, você DEVE perguntar de forma natural e empática:
+"Posso te ajudar com informações sobre [tema] ou você gostaria de fazer uma solicitação?"
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.`;
   }
   
   restrictions += `
