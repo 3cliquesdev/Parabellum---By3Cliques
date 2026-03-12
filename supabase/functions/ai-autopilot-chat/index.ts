@@ -1261,7 +1261,7 @@ Você PODE responder perguntas INFORMATIVAS sobre finanças (prazos, como funcio
 Você NÃO PODE executar ou prometer AÇÕES financeiras (saque, reembolso, estorno, devolução, cancelamento de cobrança, transferência de saldo).
 Se o cliente solicitar uma AÇÃO financeira (ex: "quero sacar", "faz meu reembolso", "quero meu dinheiro de volta"), responda:
 "Entendi sua solicitação. Vou te encaminhar para o setor responsável que poderá te ajudar com isso."
-E retorne [[FLOW_EXIT]] imediatamente.
+E retorne [[FLOW_EXIT:financeiro]] imediatamente.
 Você PODE: coletar dados (email, CPF, ID do pedido), resumir o caso, e responder dúvidas informativas. NÃO PODE: instruir processos financeiros, prometer resolução ou executar ações.
 
 ⚠️ ANTI-ALUCINAÇÃO FINANCEIRA (REGRA ABSOLUTA):
@@ -1273,7 +1273,9 @@ NUNCA invente, deduza ou estime valores, prazos ou condições financeiras.
 🔍 DESAMBIGUAÇÃO FINANCEIRA OBRIGATÓRIA:
 Se o cliente mencionar termos como saque, saldo, reembolso, estorno ou devolução sem deixar claro se quer uma INFORMAÇÃO ou realizar uma AÇÃO, você DEVE perguntar de forma natural e empática:
 "Posso te ajudar com informações sobre [tema] ou você gostaria de fazer uma solicitação?"
-Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.`;
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer SOLICITAR ou REALIZAR uma ação financeira → responda com [[FLOW_EXIT:financeiro]]
+Se for apenas uma dúvida informativa → responda normalmente usando a Base de Conhecimento.`;
   }
 
   const forbidCancellation = flowContext.forbidCancellation ?? false;
