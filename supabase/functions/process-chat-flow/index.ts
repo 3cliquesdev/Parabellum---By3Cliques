@@ -2380,6 +2380,9 @@ serve(async (req) => {
           } else if (commercialIntentMatch) {
             path = 'comercial';
             console.log('[process-chat-flow] 🎯 commercialIntentMatch → path set to "comercial"');
+          } else if (supportIntentMatch) {
+            path = 'suporte';
+            console.log('[process-chat-flow] 🎯 supportIntentMatch → path set to "suporte"');
           } else if (keywordMatch || aiExitForced) {
             path = 'suporte';
             collectedData.ai_exit_intent = 'suporte';
