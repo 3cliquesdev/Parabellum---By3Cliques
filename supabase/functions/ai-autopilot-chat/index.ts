@@ -6135,7 +6135,7 @@ Por favor, **digite o código** que você recebeu para continuar com o saque.`;
         console.error('[ai-autopilot-chat] ❌ Erro ao disparar OTP financeiro:', error);
         // Se falhar, continua para IA tentar lidar
       }
-      } // 🆕 Fim do guard: if (!forbidFinancial || isWithdrawalActionClear)
+      
     }
     
     // Cliente identificado sem solicitação financeira - atendimento normal (não precisa OTP)
