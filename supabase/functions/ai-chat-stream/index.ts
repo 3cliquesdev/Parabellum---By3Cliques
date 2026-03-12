@@ -211,7 +211,7 @@ serve(async (req) => {
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error('[ai-chat-stream] AI Gateway error:', aiResponse.status, errorText);
+      console.error('[ai-chat-stream] OpenAI API error:', aiResponse.status, errorText);
       
       // Handle rate limits
       if (aiResponse.status === 429) {
