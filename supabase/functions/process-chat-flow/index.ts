@@ -2162,31 +2162,176 @@ serve(async (req) => {
           if (afterVC) nextNode = afterVC;
         }
 
+        // 🆕 BUG 4 FIX: verify_customer_otp inicialização no ask_* genérico
+        if (nextNode?.type === 'verify_customer_otp') {
+          console.log('[process-chat-flow] 🔐 [generic] Entering verify_customer_otp after ask_*');
+          collectedData.__otp_step = 'ask_email';
+          collectedData.__otp_attempts = 0;
+          await supabaseClient.from('chat_flow_states').update({
+            collected_data: collectedData, current_node_id: nextNode.id, status: 'waiting_input', updated_at: new Date().toISOString(),
+          }).eq('id', activeState.id);
+          const askEmailMsg = nextNode.data?.message_ask_email || "Para verificar sua identidade, me informe seu email cadastrado:";
+          return new Response(JSON.stringify({ useAI: false, response: askEmailMsg, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
         // Update state and deliver next node
         if (nextNode) {
+          // 🆕 BUG 9 FIX: Auto-avanço de message no ask_* genérico
+          const genExtraMessages: string[] = [];
+          while (nextNode && (nextNode.type === 'message' || nextNode.type === 'create_ticket' || nextNode.type === 'validate_customer' || nextNode.type === 'fetch_order')) {
+            if (nextNode.type === 'create_ticket') {
+              const subject = replaceVariables(nextNode.data?.subject_template || 'Ticket do Fluxo', variablesContext);
+              const description = replaceVariables(nextNode.data?.description_template || '', variablesContext);
+              const internalNote = nextNode.data?.internal_note ? replaceVariables(nextNode.data.internal_note, variablesContext) : null;
+              const ticket = await createTicketFromFlow(supabaseClient, {
+                conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
+                contactId: activeState.conversations?.contact_id || null, subject, description,
+                category: nextNode.data?.ticket_category || 'outro', priority: nextNode.data?.ticket_priority || 'medium',
+                departmentId: nextNode.data?.department_id || null, internalNote,
+                useCollectedData: nextNode.data?.use_collected_data || false, collectedData,
+              });
+              if (ticket) collectedData.__last_ticket_id = ticket.id;
+              console.log(`[process-chat-flow] 🎫 [generic] Auto-advancing past create_ticket ${nextNode.id}`);
+            } else if (nextNode.type === 'validate_customer') {
+              // BUG 8 FIX: validate_customer inline no auto-avanço
+              console.log('[process-chat-flow] 🛡️ [generic-autoadvance] validate_customer inline');
+              const vcUrl2 = Deno.env.get('SUPABASE_URL')!;
+              const vcKey2 = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+              const { data: vcConv2 } = await supabaseClient.from('conversations').select('contact_id').eq('id', conversationId).maybeSingle();
+              let vcContact2: any = null;
+              if (vcConv2?.contact_id) {
+                const { data: cg2 } = await supabaseClient.from('contacts').select('phone, email, document, whatsapp_id, first_name, last_name, kiwify_validated').eq('id', vcConv2.contact_id).maybeSingle();
+                vcContact2 = cg2;
+              }
+              const vKey2 = nextNode.data?.save_validated_as || 'customer_validated';
+              const nKey2 = nextNode.data?.save_customer_name_as || 'customer_name_found';
+              const eKey2 = nextNode.data?.save_customer_email_as || 'customer_email_found';
+              let vFound2 = false, vName2 = '', vEmail2 = '';
+              if (vcContact2 && !vcContact2.kiwify_validated) {
+                const vPromises2: Promise<any>[] = [];
+                if (nextNode.data?.validate_phone !== false && (vcContact2.phone || vcContact2.whatsapp_id)) {
+                  vPromises2.push(fetch(`${vcUrl2}/functions/v1/validate-by-kiwify-phone`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKey2}` }, body: JSON.stringify({ phone: vcContact2.phone, whatsapp_id: vcContact2.whatsapp_id, contact_id: vcConv2?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+                }
+                if (nextNode.data?.validate_email !== false && vcContact2.email) {
+                  vPromises2.push(fetch(`${vcUrl2}/functions/v1/verify-customer-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKey2}` }, body: JSON.stringify({ email: vcContact2.email, contact_id: vcConv2?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+                }
+                if (nextNode.data?.validate_cpf === true && vcContact2.document) {
+                  vPromises2.push(fetch(`${vcUrl2}/functions/v1/validate-by-cpf`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKey2}` }, body: JSON.stringify({ cpf: vcContact2.document, contact_id: vcConv2?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+                }
+                if (vPromises2.length > 0) {
+                  const vResults2 = await Promise.allSettled(vPromises2);
+                  for (const vr of vResults2) { if (vr.status === 'fulfilled' && vr.value?.found) { vFound2 = true; if (vr.value.customer?.name) vName2 = vr.value.customer.name; if (vr.value.customer?.email) vEmail2 = vr.value.customer.email; } }
+                }
+                if (vFound2 && vcConv2?.contact_id) {
+                  await supabaseClient.from('contacts').update({ kiwify_validated: true, status: 'customer' }).eq('id', vcConv2.contact_id);
+                }
+              } else if (vcContact2?.kiwify_validated) {
+                vFound2 = true; vName2 = [vcContact2.first_name, vcContact2.last_name].filter(Boolean).join(' '); vEmail2 = vcContact2.email || '';
+              }
+              collectedData[vKey2] = vFound2; collectedData[nKey2] = vName2; collectedData[eKey2] = vEmail2;
+            } else if (nextNode.type === 'fetch_order') {
+              // BUG 8 FIX: fetch_order inline no auto-avanço
+              console.log('[process-chat-flow] 📦 [generic-autoadvance] fetch_order inline');
+              collectedData = await handleFetchOrderNode(nextNode, collectedData, userMessage);
+            } else {
+              // message node
+              const msgText = replaceVariables(nextNode.data?.message || "", variablesContext);
+              if (msgText) genExtraMessages.push(msgText);
+              console.log(`[process-chat-flow] 📨 [generic] Auto-advancing past message ${nextNode.id}`);
+            }
+            const afterMsg = findNextNode(flowDef, nextNode);
+            if (!afterMsg) { nextNode = null; break; }
+            if (afterMsg.type === 'condition') {
+              const cp = evaluateConditionPath(afterMsg.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+              nextNode = findNextNode(flowDef, afterMsg, cp) || null;
+            } else if (afterMsg.type === 'condition_v2') {
+              const cp = evaluateConditionV2Path(afterMsg.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || []);
+              nextNode = findNextNode(flowDef, afterMsg, cp) || null;
+            } else if (afterMsg.type === 'input' || afterMsg.type === 'start') {
+              nextNode = findNextNode(flowDef, afterMsg);
+            } else {
+              nextNode = afterMsg;
+            }
+          }
+
+          if (!nextNode) {
+            await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, status: 'completed', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', activeState.id);
+            const lastMsg = genExtraMessages.length > 0 ? genExtraMessages.join('\n\n') : 'Fluxo finalizado.';
+            return new Response(JSON.stringify({ useAI: false, response: lastMsg, flowCompleted: true, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+
           const genStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition' || nextNode.type === 'condition_v2' || nextNode.type === 'verify_customer_otp' ? 'waiting_input' : 'active';
           await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: genStatus, updated_at: new Date().toISOString() }).eq('id', activeState.id);
 
+          // 🆕 BUG 7 FIX: end_actions no end genérico
           if (nextNode.type === 'end') {
-            const endActions = nextNode.data?.end_actions || [];
             await supabaseClient.from('chat_flow_states').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', activeState.id);
+            // Execute end_action: create_ticket
+            if (nextNode.data?.end_action === 'create_ticket') {
+              const actionData = nextNode.data.action_data || {};
+              const subject = replaceVariables(actionData.subject || nextNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+              const description = replaceVariables(actionData.description || nextNode.data.description_template || '', variablesContext);
+              const internalNote = (actionData.internal_note || nextNode.data.internal_note) ? replaceVariables(actionData.internal_note || nextNode.data.internal_note, variablesContext) : null;
+              const ticket = await createTicketFromFlow(supabaseClient, {
+                conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
+                contactId: activeState.conversations?.contact_id || null, subject, description,
+                category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
+                priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
+                departmentId: actionData.department_id || nextNode.data.department_id || null,
+                internalNote, useCollectedData: actionData.use_collected_data || nextNode.data.use_collected_data || false, collectedData,
+              });
+              if (ticket) collectedData.__last_ticket_id = ticket.id;
+            }
+            // Execute end_action: add_tag
+            if (nextNode.data?.end_action === 'add_tag') {
+              const tagId = nextNode.data.action_data?.tag_id;
+              const tagScope = nextNode.data.action_data?.tag_scope || 'contact';
+              if (tagId) {
+                if (tagScope === 'conversation') {
+                  await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+                } else if (activeState.conversations?.contact_id) {
+                  await supabaseClient.from('contact_tags').upsert({ contact_id: activeState.conversations.contact_id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                }
+              }
+            }
             const endMsg = replaceVariables(nextNode.data?.message || "Atendimento encerrado. Obrigado!", variablesContext);
-            return new Response(JSON.stringify({ useAI: false, response: endMsg, flowCompleted: true, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            const allEndMsgs = [...genExtraMessages, endMsg].filter(Boolean).join('\n\n');
+            return new Response(JSON.stringify({ useAI: false, response: allEndMsgs, flowCompleted: true, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
+          // 🆕 BUG 6 FIX: Transfer genérico chama transition-conversation-state
           if (nextNode.type === 'transfer') {
             await supabaseClient.from('chat_flow_states').update({ status: 'transferred', completed_at: new Date().toISOString() }).eq('id', activeState.id);
+            const transferDeptId = nextNode.data?.department_id || null;
+            const transferAiMode = nextNode.data?.ai_mode || 'waiting_human';
+            const transitionType = transferAiMode === 'copilot' ? 'set_copilot' : transferAiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
+            await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+              body: JSON.stringify({ conversationId, transition: transitionType, departmentId: transferDeptId, reason: 'flow_transfer_generic_ask', metadata: { node_id: nextNode.id, flow_id: activeState.flow_id, ai_mode: transferAiMode } }),
+            });
             const transferMsg = replaceVariables(nextNode.data?.message || "Transferindo...", variablesContext);
-            return new Response(JSON.stringify({ useAI: false, response: transferMsg, transfer: true, departmentId: nextNode.data?.department_id, agentId: nextNode.data?.agent_id, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            const allTransferMsgs = [...genExtraMessages, transferMsg].filter(Boolean).join('\n\n');
+            return new Response(JSON.stringify({ useAI: false, response: allTransferMsgs, transfer: true, departmentId: transferDeptId, agentId: nextNode.data?.agent_id, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
           if (nextNode.type === 'ai_response') {
             collectedData.__ai = { interaction_count: 0 };
             await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'active', updated_at: new Date().toISOString() }).eq('id', activeState.id);
             return new Response(JSON.stringify({ useAI: true, aiNodeActive: true, nodeId: nextNode.id, flowId: activeState.flow_id, contextPrompt: nextNode.data?.context_prompt, useKnowledgeBase: nextNode.data?.use_knowledge_base !== false, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
+          // 🆕 BUG 4 FIX (2nd check): verify_customer_otp after auto-advance
+          if (nextNode.type === 'verify_customer_otp') {
+            collectedData.__otp_step = 'ask_email';
+            collectedData.__otp_attempts = 0;
+            await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'waiting_input', updated_at: new Date().toISOString() }).eq('id', activeState.id);
+            const askEmailMsg = nextNode.data?.message_ask_email || "Para verificar sua identidade, me informe seu email cadastrado:";
+            const allOtpMsgs = [...genExtraMessages, askEmailMsg].filter(Boolean).join('\n\n');
+            return new Response(JSON.stringify({ useAI: false, response: allOtpMsgs, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
           // Default: deliver message
           const genMsg = replaceVariables(nextNode.data?.message || "", variablesContext);
+          const allGenMsgs = [...genExtraMessages, genMsg].filter(Boolean);
           const genOpts = nextNode.type === 'ask_options' ? (nextNode.data?.options || []).map((o: any) => ({ label: o.label, value: o.value })) : null;
-          return new Response(JSON.stringify({ useAI: false, response: genMsg, options: genOpts, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          return new Response(JSON.stringify({ useAI: false, response: allGenMsgs.join('\n\n'), options: genOpts, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
         // No next node → complete flow
         await supabaseClient.from('chat_flow_states').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', activeState.id);
