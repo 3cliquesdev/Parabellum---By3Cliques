@@ -131,7 +131,7 @@ const ReportBuilder = lazy(() => import("./pages/ReportBuilder"));
 const DashboardsList = lazy(() => import("./pages/DashboardsList"));
 const InboxTimeReport = lazy(() => import("./pages/InboxTimeReport"));
 const DashboardView = lazy(() => import("./pages/DashboardView"));
-const AITelemetry = lazy(() => import("./pages/AITelemetry"));
+// AITelemetry moved into Dashboard as tab — redirect handled inline
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
