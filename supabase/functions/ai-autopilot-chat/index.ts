@@ -116,6 +116,25 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
   }
 }
 
+// Sanitize legacy gateway model names to real OpenAI model names
+function sanitizeModelName(model: string): string {
+  const MODEL_MAP: Record<string, string> = {
+    'openai/gpt-5-mini': 'gpt-4o-mini',
+    'openai/gpt-5': 'gpt-4o',
+    'openai/gpt-5-nano': 'gpt-4o-mini',
+    'openai/gpt-5.2': 'gpt-4o',
+    'google/gemini-2.5-flash': 'gpt-4o-mini',
+    'google/gemini-2.5-flash-lite': 'gpt-4o-mini',
+    'google/gemini-2.5-pro': 'gpt-4o',
+    'google/gemini-3-pro-preview': 'gpt-4o',
+    'google/gemini-3-pro-image-preview': 'gpt-4o',
+    'google/gemini-3-flash-preview': 'gpt-4o-mini',
+    'google/gemini-3.1-pro-preview': 'gpt-4o',
+    'google/gemini-3.1-flash-image-preview': 'gpt-4o-mini',
+  };
+  return MODEL_MAP[model] || model;
+}
+
 // Helper: Buscar modelo AI configurado no banco (mantido para compatibilidade)
 async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
   const config = await getRAGConfig(supabaseClient);
