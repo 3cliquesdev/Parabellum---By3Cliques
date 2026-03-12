@@ -3766,8 +3766,8 @@ serve(async (req) => {
     const configuredAIModel = ragConfig.model;
     console.log(`[ai-autopilot-chat] Using AI model: ${configuredAIModel}`);
     
-    if (!OPENAI_API_KEY && !LOVABLE_API_KEY) {
-      throw new Error('Nenhuma API key configurada (OPENAI_API_KEY ou LOVABLE_API_KEY)');
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY não configurada');
     }
     
     // Helper: Fetch com timeout de 60 segundos
