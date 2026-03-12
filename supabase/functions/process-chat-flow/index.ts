@@ -1386,11 +1386,13 @@ serve(async (req) => {
           }).eq('id', newState.id);
 
           // Enviar código OTP
-          await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+          const otpSendResZ1 = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
-            body: JSON.stringify({ email: preEmail }),
+            body: JSON.stringify({ email: preEmail, type: 'customer' }),
           });
+          const otpSendBodyZ1 = await otpSendResZ1.text();
+          if (!otpSendResZ1.ok) { console.error('[process-chat-flow] ⚠️ Failed to send OTP [manual]:', otpSendBodyZ1); }
 
           const otpSentMsg = contentNode.data?.message_otp_sent
             ? contentNode.data.message_otp_sent.replace(/\{\{email\}\}/g, preEmail)
