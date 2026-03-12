@@ -1802,6 +1802,56 @@ serve(async (req) => {
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
+                // 🛡️ BUG P FIX: OTP not_customer → end executa end_actions
+                if (resolvedNode.type === 'end') {
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    current_node_id: resolvedNode.id,
+                    status: 'completed',
+                    completed_at: new Date().toISOString(),
+                  }).eq('id', activeState.id);
+
+                  // end_actions
+                  if (resolvedNode.data?.end_action === 'create_ticket') {
+                    variablesContext = await rebuildCtx();
+                    const actionData = resolvedNode.data.action_data || {};
+                    const subject = replaceVariables(actionData.subject || resolvedNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+                    const description = replaceVariables(actionData.description || resolvedNode.data.description_template || '', variablesContext);
+                    const internalNote = (actionData.internal_note || resolvedNode.data.internal_note)
+                      ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
+                    await createTicketFromFlow(supabaseClient, {
+                      conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
+                      contactId: contactData?.id || null,
+                      subject, description,
+                      category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                      priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
+                      departmentId: actionData.department_id || resolvedNode.data.department_id || null,
+                      internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
+                      collectedData,
+                    });
+                  }
+                  if (resolvedNode.data?.end_action === 'add_tag') {
+                    const tagId = resolvedNode.data.action_data?.tag_id;
+                    const tagScope = resolvedNode.data.action_data?.tag_scope || 'contact';
+                    if (tagId) {
+                      if (tagScope === 'conversation') {
+                        await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+                      } else if (contactData?.id) {
+                        await supabaseClient.from('contact_tags').upsert({ contact_id: contactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                      }
+                    }
+                  }
+
+                  const endMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext || await rebuildCtx());
+                  return new Response(JSON.stringify({
+                    useAI: false,
+                    response: [notCustomerMsg, endMsg].filter(Boolean).join('\n\n'),
+                    flowCompleted: true,
+                    flowId: activeState.flow_id,
+                    collectedData,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
                 variablesContext = await rebuildCtx();
                 const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
                 return new Response(JSON.stringify({
@@ -1940,6 +1990,55 @@ serve(async (req) => {
                     departmentId: otpOkDeptId,
                     collectedData,
                     flowId: activeState.flow_id,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                // 🛡️ BUG Q FIX: OTP success → end executa end_actions
+                if (resolvedNode.type === 'end') {
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    current_node_id: resolvedNode.id,
+                    status: 'completed',
+                    completed_at: new Date().toISOString(),
+                  }).eq('id', activeState.id);
+
+                  if (resolvedNode.data?.end_action === 'create_ticket') {
+                    variablesContext = await rebuildCtx();
+                    const actionData = resolvedNode.data.action_data || {};
+                    const subject = replaceVariables(actionData.subject || resolvedNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+                    const description = replaceVariables(actionData.description || resolvedNode.data.description_template || '', variablesContext);
+                    const internalNote = (actionData.internal_note || resolvedNode.data.internal_note)
+                      ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
+                    await createTicketFromFlow(supabaseClient, {
+                      conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
+                      contactId: contactData?.id || null,
+                      subject, description,
+                      category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                      priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
+                      departmentId: actionData.department_id || resolvedNode.data.department_id || null,
+                      internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
+                      collectedData,
+                    });
+                  }
+                  if (resolvedNode.data?.end_action === 'add_tag') {
+                    const tagId = resolvedNode.data.action_data?.tag_id;
+                    const tagScope = resolvedNode.data.action_data?.tag_scope || 'contact';
+                    if (tagId) {
+                      if (tagScope === 'conversation') {
+                        await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+                      } else if (contactData?.id) {
+                        await supabaseClient.from('contact_tags').upsert({ contact_id: contactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                      }
+                    }
+                  }
+
+                  const endMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext || await rebuildCtx());
+                  return new Response(JSON.stringify({
+                    useAI: false,
+                    response: "✅ Identidade verificada!\n\n" + (endMsg || ''),
+                    flowCompleted: true,
+                    flowId: activeState.flow_id,
+                    collectedData,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
@@ -4661,7 +4760,7 @@ serve(async (req) => {
               ? replaceVariables(actionData.internal_note || node.data.internal_note, masterVariablesContext) : null;
             await createTicketFromFlow(supabaseClient, {
               conversationId, flowStateId: stateId, nodeId: node.id,
-              contactId: masterContactData?.id || null,
+              contactId: contactData?.id || null,
               subject, description,
               category: actionData.ticket_category || node.data.ticket_category || 'outro',
               priority: actionData.ticket_priority || node.data.ticket_priority || 'medium',
@@ -4676,8 +4775,8 @@ serve(async (req) => {
             if (tagId) {
               if (tagScope === 'conversation') {
                 await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
-              } else if (masterContactData?.id) {
-                await supabaseClient.from('contact_tags').upsert({ contact_id: masterContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+              } else if (contactData?.id) {
+                await supabaseClient.from('contact_tags').upsert({ contact_id: contactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
               }
             }
           }
