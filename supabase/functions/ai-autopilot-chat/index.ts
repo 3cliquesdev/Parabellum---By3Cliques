@@ -1281,12 +1281,14 @@ Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguida
     restrictions += `\n\n🚫 TRAVA CANCELAMENTO ATIVA:
 Se o cliente solicitar CANCELAR claramente (ex: "quero cancelar meu plano"), responda:
 "Entendi sua solicitação de cancelamento. Vou te encaminhar para o setor responsável."
-E retorne [[FLOW_EXIT]] imediatamente.
+E retorne [[FLOW_EXIT:cancelamento]] imediatamente.
 
 🔍 DESAMBIGUAÇÃO CANCELAMENTO OBRIGATÓRIA:
 Se o cliente mencionar termos como cancelar, cancelamento, desistir ou encerrar sem deixar claro se quer uma INFORMAÇÃO ou realizar uma AÇÃO, você DEVE perguntar:
 "Você tem dúvidas sobre cancelamento ou deseja cancelar um produto/serviço?"
-Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.`;
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
   }
 
   const forbidCommercial = flowContext.forbidCommercial ?? false;
@@ -1487,6 +1489,7 @@ serve(async (req) => {
     const flowForbidQuestions: boolean = flow_context?.forbidQuestions ?? true;
     const flowForbidOptions: boolean = flow_context?.forbidOptions ?? true;
     const flowForbidFinancial: boolean = flow_context?.forbidFinancial ?? false;
+    const flowForbidCancellation: boolean = flow_context?.forbidCancellation ?? false;
     
     // 🆕 FASE 1: Flag para usar prompt restritivo
     const useRestrictedPrompt = !!(flow_context && (flowObjective || flowForbidQuestions || flowForbidOptions || flowForbidFinancial));
@@ -1522,6 +1525,15 @@ serve(async (req) => {
     // 🆕 TRAVA CANCELAMENTO — Separada do financeiro para roteamento independente
     const cancellationActionPattern = /cancelar\s*(minha\s*)?(assinatura|cobran[çc]a|pagamento|plano|conta|servi[çc]o)|quero\s+cancelar|desistir\s*(do|da|de)\s*(plano|assinatura|servi[çc]o|conta)|n[ãa]o\s+quero\s+mais\s*(o\s*)?(plano|assinatura|servi[çc]o)|encerrar\s*(minha\s*)?(conta|assinatura|plano)/i;
     const isCancellationAction = cancellationActionPattern.test(customerMessage || '');
+    // 🆕 Regex para termos de cancelamento AMBÍGUOS (palavra isolada, sem verbo de ação nem contexto informativo)
+    const cancellationAmbiguousPattern = /\b(cancelar|cancelamento|desistir|encerrar|rescindir|rescis[ãa]o)\b/i;
+    const isCancellationAmbiguous = !isCancellationAction && !isFinancialInfo && cancellationAmbiguousPattern.test(customerMessage || '');
+    
+    // Flag para injetar instrução de desambiguação de cancelamento no prompt quando termo é ambíguo
+    const ambiguousCancellationDetected = flowForbidCancellation && isCancellationAmbiguous;
+    if (ambiguousCancellationDetected) {
+      console.log('[ai-autopilot-chat] 🔍 DESAMBIGUAÇÃO CANCELAMENTO: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
+    }
     
     // Só bloquear AÇÕES financeiras. Info passa para LLM responder via KB. Ambíguo → IA pergunta.
     if (ragConfig.blockFinancial && flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && isFinancialAction && !isFinancialInfo) {
@@ -1611,7 +1623,7 @@ serve(async (req) => {
     }
 
     // 🆕 TRAVA CANCELAMENTO — Interceptação na ENTRADA (antes de chamar LLM)
-    if (flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && isCancellationAction && !isFinancialInfo) {
+    if (flowForbidCancellation && customerMessage && customerMessage.trim().length > 0 && isCancellationAction && !isFinancialInfo) {
       console.warn('[ai-autopilot-chat] 🚫 TRAVA CANCELAMENTO (ENTRADA): Intenção de cancelamento detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
       const cancelMsg = 'Entendi que você deseja cancelar. Vou te direcionar para o processo de cancelamento.';
@@ -6344,7 +6356,23 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
-    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}
+    // 🚫 TRAVA CANCELAMENTO: Injetar instruções diretamente no prompt da LLM
+    const cancellationGuardInstruction = flowForbidCancellation ? `
+
+🚫 TRAVA CANCELAMENTO ATIVA — REGRAS OBRIGATÓRIAS:
+- Responda perguntas INFORMATIVAS sobre cancelamento usando APENAS dados da base de conhecimento.
+- Se o cliente pedir uma AÇÃO de cancelamento (cancelar plano, encerrar conta, desistir), responda: "Entendi sua solicitação de cancelamento. Vou te encaminhar para o setor responsável." e retorne [[FLOW_EXIT:cancelamento]].
+- Se não encontrar a informação na KB, responda: "Não tenho essa informação no momento. O setor responsável poderá te orientar."
+${ambiguousCancellationDetected ? `
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo de cancelamento sem deixar claro se quer informação ou realizar a ação.
+Você DEVE perguntar de forma natural e empática: "Você tem dúvidas sobre cancelamento ou deseja cancelar um produto/serviço?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
+` : ''}
+` : '';
+
+    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}
 
 **🚫 REGRA DE HANDOFF (SÓ QUANDO CLIENTE PEDIR):**
 Transferência para humano SÓ acontece quando:

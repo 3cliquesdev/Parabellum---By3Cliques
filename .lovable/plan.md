@@ -1,106 +1,178 @@
 
+# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-# Auditoria: Saída de Cancelamento — Bugs Encontrados
+## Arquivo: `supabase/functions/process-chat-flow/index.ts`
 
-## Resultado da Auditoria
+### FIX 1 ✅ — Proteção contra loop flow-to-flow
+### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
+### FIX 3 ✅ — Auto-traverse cobre condition_v2
+### FIX 4 ✅ — Transfer node atualiza conversations.department
+### FIX 5 ✅ — startMessage com replaceVariables
+### FIX 6 ✅ — financialIntentPattern simplificado
 
-### ✅ CORRETO — `process-chat-flow`
-| Ponto | Status |
-|---|---|
-| `cancellationActionPattern` com regex completa (L3142) | ✅ |
-| `cancellationAmbiguousPattern` para termos isolados (L3144) | ✅ |
-| `forbidCancellation` lido do nó (L3094) | ✅ |
-| `cancellationIntentMatch` depende de `forbidCancellation` (L3152) | ✅ |
-| Desambiguação logada quando ambíguo + forbidCancellation (L3148) | ✅ |
-| Path selection → `cancelamento` (L3468-3470) | ✅ |
-| `intentData.ai_exit_intent='cancelamento'` → `cancellationIntentMatch=true` (L3382) | ✅ |
-| Auto-detect → `collectedData.ai_exit_intent='cancelamento'` (L3394-3396) | ✅ |
+---
 
-### 🔴 BUG CRÍTICO 1: Trava de cancelamento usa `flowForbidFinancial` em vez de `forbidCancellation`
+# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
 
-**Arquivo:** `ai-autopilot-chat/index.ts`, linha 1614
+## Problema
+Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
 
+## Correções aplicadas
+
+### 7a — Fallback edge default (process-chat-flow ~L2273)
+Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
+
+### 7b — Guard final sem nó (process-chat-flow ~L2336)
+Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
+
+### 7c — Safety net IA falha (process-buffered-messages ~L383)
+Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
+
+### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
+Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
+
+---
+
+# FIX 8 ✅ — pg_cron matando flows prematuramente (11/03/2026)
+
+## Problema
+O pg_cron `cleanup-stuck-flow-states` usava `started_at < now() - 3 min`, mas `started_at` é imutável. Flows com múltiplos passos (>3min) eram mortos antes de chegar ao nó de transfer.
+
+## Correções aplicadas
+
+### 8a — Coluna `updated_at` em `chat_flow_states`
+Nova coluna `updated_at timestamptz DEFAULT now()` adicionada via migration. Registros existentes backfilled com `COALESCE(completed_at, started_at)`.
+
+### 8b — `updated_at` em todos os `.update()` do process-chat-flow
+21 pontos de atualização no `process-chat-flow/index.ts` agora incluem `updated_at: new Date().toISOString()`, renovando o timestamp a cada interação.
+
+### 8c — pg_cron atualizado
+Cron usa `updated_at < now() - INTERVAL '15 minutes'` em vez de `started_at < now() - 3 min`.
+
+---
+
+# FIX 9 ✅ — IA não responde: safety net mata flow em quota error (11/03/2026)
+
+## Problema
+O `process-buffered-messages` tratava erros 429/503 (quota/rate limit) como falha fatal, disparando `forceAIExit` e matando o flow antes da IA ter chance de responder.
+
+## Correções aplicadas
+
+### 9a — Distinguir quota error de erro técnico real
+Na safety net do `process-buffered-messages`, erros 429/503 com `quota_error` ou `retry_suggested: true` NÃO disparam `forceAIExit`. Buffer fica como `processed=false` para retry no próximo ciclo.
+
+### 9b — Refresh `updated_at` do flow state após buffer processing com sucesso
+Após `ai-autopilot-chat` retornar OK via buffer, o `updated_at` do `chat_flow_states` é atualizado para evitar morte prematura pelo cron de 15 min.
+
+### 9c — Anti-retry infinito (3 ciclos)
+Buffers que falham por quota por 3+ ciclos de cron (~3 min) enviam mensagem de "alta demanda" ao contato e são marcados como processed.
+
+---
+
+# FIX 10 ✅ — Auditoria IA Semana 1: Quick wins (11/03/2026)
+
+## Correções aplicadas
+
+### 10a — auto-handoff: UUID dinâmico
+Substituído UUID hardcoded `36ce66cd-...` por busca dinâmica do departamento "Suporte" via `departments.ilike('name', '%suporte%')`. Se não encontrado, loga warning e aplica handoff sem forçar departamento.
+
+### 10b — auto-handoff: Markdown removido das notas internas
+Removido `**bold**` de todas as notas internas (linhas 78, 97, 174-181). Notas agora usam texto plano com emojis para compatibilidade cross-canal (WhatsApp).
+
+### 10c — ai-autopilot-chat: Memória cross-session
+Busca últimas 3 conversas fechadas do mesmo contact_id e injeta última mensagem de agente/sistema no system prompt. IA agora lembra conversas anteriores do mesmo cliente.
+
+### 10d — ai-autopilot-chat: Persona contextual
+Tom da IA varia automaticamente baseado no status do contato:
+- VIP/assinante → tom premium e proativo
+- Churn risk/inativo → tom empático e acolhedor
+- Lead quente (score ≥ 80) → tom entusiasmado e consultivo
+
+---
+
+# FIX 11 ✅ — Passive Learning ativado + Cron Job (11/03/2026)
+
+## O que foi feito
+
+### 11a — Flag `ai_passive_learning_enabled` = true
+Inserido na tabela `system_configurations` com categoria `ai`.
+
+### 11b — Cron job `passive-learning-hourly`
+pg_cron agendado para rodar a cada hora (`0 * * * *`), invocando a edge function `passive-learning-cron` via `net.http_post`.
+
+### Estado confirmado
+- `ai_global_enabled` = true
+- `ai_shadow_mode` = false
+- `ai_passive_learning_enabled` = true
+
+---
+
+# FIX 12 ✅ — Cron job corrigido: anon key no gateway (11/03/2026)
+
+## Problema
+`current_setting('supabase.service_role_key', true)` retorna NULL neste projeto → cron enviava `Authorization: Bearer null` → edge function não autenticava.
+
+## Correção
+Recriado cron job `passive-learning-hourly` (jobid 13) usando anon key no header Authorization. A anon key é suficiente para passar pelo API gateway; a função internamente usa `SUPABASE_SERVICE_ROLE_KEY` do ambiente Deno para operações admin.
+
+---
+
+# FIX 13 ✅ — Auto-KB Gap Detection (11/03/2026)
+
+## O que foi feito
+
+### 13a — Edge function `detect-kb-gaps`
+Criada edge function que:
+1. Busca eventos de IA das últimas 24h onde a IA fez handoff/exit (tipos: `ai_handoff_exit`, `contract_violation_blocked`, `flow_exit_clean`, `ai_exit_intent`)
+2. Clusteriza por similaridade textual (primeiras 3 palavras normalizadas)
+3. Filtra clusters com >= 2 ocorrências (gaps recorrentes)
+4. Cria `knowledge_candidates` com `status: 'pending'` + tag `'gap_detected'` (CHECK constraint impede valor custom)
+5. Notifica admins/managers via tabela `notifications`
+
+### 13b — Cron job `detect-kb-gaps-daily`
+Agendado para rodar diariamente às 8h UTC (`0 8 * * *`) usando anon key no gateway.
+
+### 13c — Workaround CHECK constraint
+`knowledge_candidates.status` só aceita `pending | approved | rejected`. Gaps usam `status: 'pending'` com tag `'gap_detected'` no array de tags para diferenciação.
+
+---
+
+# FIX 14 ✅ — transition-conversation-state: State Machine centralizado (11/03/2026)
+
+## Problema
+Mudanças de estado de conversas (ai_mode, department, assigned_to, dispatch jobs) eram feitas em múltiplos pontos do código (auto-handoff, process-chat-flow, etc.), causando inconsistências como conversa sem departamento, ai_mode errado, ou dispatch job desatualizado.
+
+## Correções aplicadas
+
+### 14a — Edge function `transition-conversation-state`
+Nova edge function que é a ÚNICA fonte da verdade para transições de estado. Suporta 7 tipos:
+- `handoff_to_human`: autopilot → waiting_human + cria dispatch job
+- `assign_agent`: qualquer → copilot + atribui agente + fecha dispatch
+- `unassign_agent`: copilot → waiting_human + reabre dispatch
+- `engage_ai`: qualquer → autopilot + fecha dispatch
+- `set_copilot`: qualquer → copilot
+- `update_department`: atualiza dept + dispatch job
+- `close`: qualquer → closed + fecha dispatch
+
+Cada transição:
+1. Busca estado atual da conversa
+2. Aplica update atômico
+3. Gerencia dispatch jobs (create/close/reopen)
+4. Loga em `ai_events` como `state_transition_{tipo}`
+5. Fallback dinâmico para dept "Suporte"
+
+### 14b — auto-handoff refatorado
+Substituída toda lógica de update direto (fallback dept + update ai_mode) por chamada única:
 ```typescript
-if (flowForbidFinancial && customerMessage && ... && isCancellationAction && !isFinancialInfo) {
+supabaseClient.functions.invoke('transition-conversation-state', {
+  body: { conversationId, transition: 'handoff_to_human', reason, metadata }
+});
 ```
 
-Deveria ser:
-```typescript
-if (forbidCancellation && customerMessage && ... && isCancellationAction && !isFinancialInfo) {
-```
-
-**Impacto:** A interceptação de cancelamento na entrada do autopilot **só funciona se `forbidFinancial` estiver ativo**. Se o nó AI tem `forbid_cancellation=true` mas `forbid_financial=false`, a trava de cancelamento **NÃO dispara** e a IA responde normalmente em vez de devolver ao fluxo.
-
-### 🔴 BUG CRÍTICO 2: Prompt de cancelamento retorna `[[FLOW_EXIT]]` em vez de `[[FLOW_EXIT:cancelamento]]`
-
-**Arquivo:** `ai-autopilot-chat/index.ts`, linhas 1282-1284 e 1286-1289
-
-O prompt instrui a IA a retornar `[[FLOW_EXIT]]` (sem intent), mas o sistema precisa de `[[FLOW_EXIT:cancelamento]]` para que o `intentData.ai_exit_intent` seja propagado e o `process-chat-flow` roteia para o path `cancelamento`.
-
-Com `[[FLOW_EXIT]]` genérico, o parser extrai `aiExitIntent = undefined`, e o path de saída cai em `default` em vez de `cancelamento`.
-
-### 🔴 BUG CRÍTICO 3: Webhooks NÃO tratam `cancellationBlocked`
-
-**Arquivo:** `meta-whatsapp-webhook/index.ts` e `handle-whatsapp-event/index.ts`
-
-Quando o autopilot retorna `{ cancellationBlocked: true, hasFlowContext: true }`:
-- `meta-whatsapp-webhook` só verifica `autopilotData?.financialBlocked` (L1238) → **ignora cancellation**
-- `handle-whatsapp-event` verifica `cancellationBlocked` no `needsFlowAdvance` (L1353) → **MAS** no exitType mapping (L1358-1359), cancellation cai em `forceAIExit` genérico em vez de um exit type dedicado
-
-**Impacto:** Cancelamento bloqueado com flow context não re-invoca `process-chat-flow` corretamente no `meta-whatsapp-webhook`. No `handle-whatsapp-event`, re-invoca com `forceAIExit` genérico sem `intentData`, causando fallback para path `default`.
-
-### 🟡 BUG 4: Sem desambiguação de cancelamento no prompt do autopilot
-
-Diferente do financeiro (que tem `ambiguousFinancialDetected` + instrução de desambiguação injetada no prompt L6338-6344), o cancelamento **não tem** equivalente. A desambiguação de cancelamento está apenas no `generateRestrictedPrompt` (L1286-1289), mas sem a mesma estrutura de `[[FLOW_EXIT:cancelamento]]` na confirmação.
-
-## Plano de Correções
-
-### Fix 1 — Corrigir guard do cancelamento no autopilot (L1614)
-Criar variável `flowForbidCancellation` e usá-la no guard:
-```typescript
-const flowForbidCancellation: boolean = flow_context?.forbidCancellation ?? false;
-// ...
-if (flowForbidCancellation && customerMessage && ... && isCancellationAction && !isFinancialInfo) {
-```
-
-### Fix 2 — Atualizar prompt para usar `[[FLOW_EXIT:cancelamento]]`
-Na trava de cancelamento (L1282-1284):
-```
-E retorne [[FLOW_EXIT:cancelamento]] imediatamente.
-```
-Na desambiguação (L1286-1289), adicionar:
-```
-Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
-```
-
-### Fix 3 — `meta-whatsapp-webhook`: Tratar `cancellationBlocked`
-Após o bloco `if (autopilotData?.financialBlocked)` (L1238), adicionar bloco equivalente:
-```typescript
-else if (autopilotData?.cancellationBlocked) {
-  // Re-invocar process-chat-flow com intentData: { ai_exit_intent: 'cancelamento' }
-}
-```
-
-### Fix 4 — `handle-whatsapp-event`: Mapear `cancellationBlocked` corretamente
-No exitType mapping (L1358-1359), adicionar:
-```typescript
-const exitType = aiResponse.financialBlocked ? 'forceFinancialExit' : 
-                 aiResponse.commercialBlocked ? 'forceCommercialExit' :
-                 aiResponse.cancellationBlocked ? 'forceCancellationExit' : 'forceAIExit';
-```
-E na propagação do body (L1367-1370):
-```typescript
-...(aiResponse.cancellationBlocked ? { intentData: { ai_exit_intent: 'cancelamento' } } : {}),
-```
-
-### Fix 5 — Adicionar `ambiguousCancellationDetected` no prompt da LLM
-Paridade com financeiro — injetar instrução de desambiguação de cancelamento quando termo isolado detectado, com `[[FLOW_EXIT:cancelamento]]` na confirmação.
-
-## Arquivos Modificados
-
-| Arquivo | Mudanças |
-|---|---|
-| `supabase/functions/ai-autopilot-chat/index.ts` | Fix guard L1614, prompt `[[FLOW_EXIT:cancelamento]]`, desambiguação |
-| `supabase/functions/meta-whatsapp-webhook/index.ts` | Tratar `cancellationBlocked` na re-invocação |
-| `supabase/functions/handle-whatsapp-event/index.ts` | Mapear `cancellationBlocked` → `intentData` |
-
+### 14c — process-chat-flow: 5 blocos de transfer refatorados
+Todos os blocos de update direto de `conversations` em transfer nodes substituídos por `fetch()` para `transition-conversation-state`:
+1. Contract violation handler (~L726)
+2. Handoff sem próximo nó (~L2326)
+3. aiExitForced sem nó (~L2365)
+4. Transfer node principal (~L2808)
+5. Transfer node msg chain (~L3061)

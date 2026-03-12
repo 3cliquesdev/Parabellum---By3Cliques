@@ -1347,16 +1347,18 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
               hasFlowContext: aiResponse.hasFlowContext,
             }));
 
-            // 🆕 INTERCEPTAR: contractViolation, flowExit, financialBlocked, commercialBlocked, flow_advance_needed
+            // 🆕 INTERCEPTAR: contractViolation, flowExit, financialBlocked, commercialBlocked, cancellationBlocked, flow_advance_needed
             const needsFlowAdvance = aiResponse.contractViolation || 
                                      aiResponse.flowExit || 
                                      aiResponse.financialBlocked || 
                                      aiResponse.commercialBlocked ||
+                                     aiResponse.cancellationBlocked ||
                                      aiResponse.status === 'flow_advance_needed';
 
             if (needsFlowAdvance) {
               const exitType = aiResponse.financialBlocked ? 'forceFinancialExit' : 
-                               aiResponse.commercialBlocked ? 'forceCommercialExit' : 'forceAIExit';
+                               aiResponse.commercialBlocked ? 'forceCommercialExit' :
+                               aiResponse.cancellationBlocked ? 'forceCancellationExit' : 'forceAIExit';
               console.log(`[handle-whatsapp-event] 🔄 Re-invocando process-chat-flow com ${exitType}`);
 
               try {
@@ -1366,7 +1368,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
                     userMessage: messageText,
                     ...(aiResponse.financialBlocked ? { forceFinancialExit: true } : {}),
                     ...(aiResponse.commercialBlocked ? { forceCommercialExit: true } : {}),
-                    ...(!aiResponse.financialBlocked && !aiResponse.commercialBlocked ? { forceAIExit: true } : {}),
+                    ...(aiResponse.cancellationBlocked ? { forceCancellationExit: true, intentData: { ai_exit_intent: 'cancelamento' } } : {}),
+                    ...(!aiResponse.financialBlocked && !aiResponse.commercialBlocked && !aiResponse.cancellationBlocked ? { forceAIExit: true } : {}),
                     ...(aiResponse.ai_exit_intent ? { intentData: { ai_exit_intent: aiResponse.ai_exit_intent } } : {}),
                   }
                 });

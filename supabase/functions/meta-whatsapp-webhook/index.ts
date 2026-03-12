@@ -1224,6 +1224,7 @@ serve(async (req) => {
                             forbidOptions: (flowData as any).forbidOptions ?? true,
                           forbidFinancial: (flowData as any).forbidFinancial ?? false,
                           forbidCommercial: (flowData as any).forbidCommercial ?? false,
+                          forbidCancellation: (flowData as any).forbidCancellation ?? false,
                           },
                         }),
                       }
@@ -1609,6 +1610,192 @@ serve(async (req) => {
                             console.log("[meta-whatsapp-webhook] 🔄 Transfer applied (commercial block fallback) → dept:", DEPT_COMERCIAL_ID);
                           } catch (sendErr) {
                             console.error("[meta-whatsapp-webhook] ⚠️ Error sending commercial handoff msg:", sendErr);
+                          }
+                          
+                          continue;
+                        }
+                        
+                        // 🚫 TRAVA CANCELAMENTO: cancellationBlocked
+                        if (autopilotData?.cancellationBlocked) {
+                          if (autopilotData?.hasFlowContext) {
+                            console.log("[meta-whatsapp-webhook] 🚫 cancellationBlocked + hasFlowContext → re-invocando process-chat-flow com forceCancellationExit");
+                            
+                            try {
+                              const flowResponse = await fetch(
+                                `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                                  },
+                                  body: JSON.stringify({
+                                    conversationId: conversation.id,
+                                    userMessage: messageContent,
+                                    forceCancellationExit: true,
+                                    intentData: { ai_exit_intent: 'cancelamento' },
+                                  }),
+                                }
+                              );
+                              
+                              if (flowResponse.ok) {
+                                const flowData = await flowResponse.json();
+                                console.log("[meta-whatsapp-webhook] ✅ process-chat-flow re-invoked (forceCancellationExit):", JSON.stringify({
+                                  transfer: flowData.transfer,
+                                  hasResponse: !!flowData.response,
+                                  departmentId: flowData.departmentId,
+                                }));
+                                
+                                const flowMessageRaw = flowData.response || flowData.message;
+                                const flowMessage = flowMessageRaw
+                                  ? flowMessageRaw + formatOptionsAsText(flowData.options)
+                                  : null;
+                                if (flowMessage) {
+                                  await supabase.functions.invoke("send-meta-whatsapp", {
+                                    body: {
+                                      instance_id: instance.id,
+                                      phone_number: fromNumber,
+                                      message: flowMessage,
+                                      conversation_id: conversation.id,
+                                      skip_db_save: false,
+                                      is_bot_message: true,
+                                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                                    },
+                                  });
+                                  console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (cancellation exit)");
+                                }
+                                
+                                const transferDept = flowData.departmentId || flowData.department;
+                                if ((flowData.transfer === true || flowData.action === 'transfer') && transferDept) {
+                                  await supabase
+                                    .from('conversations')
+                                    .update({
+                                      ai_mode: 'waiting_human',
+                                      department: transferDept,
+                                      assigned_to: null,
+                                    })
+                                    .eq('id', conversation.id);
+                                  console.log("[meta-whatsapp-webhook] 🔄 Transfer applied from flow (cancellation exit) → dept:", transferDept);
+                                }
+                                
+                                continue;
+                              } else {
+                                console.error("[meta-whatsapp-webhook] ❌ process-chat-flow re-invoke failed (cancellation):", await flowResponse.text());
+                                
+                                // RETRY: Segunda tentativa
+                                console.log("[meta-whatsapp-webhook] 🔄 Retrying process-chat-flow (cancellation, attempt 2)...");
+                                try {
+                                  const retryResponse = await fetch(
+                                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
+                                    {
+                                      method: "POST",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                                      },
+                                      body: JSON.stringify({
+                                        conversationId: conversation.id,
+                                        userMessage: messageContent,
+                                        forceCancellationExit: true,
+                                        intentData: { ai_exit_intent: 'cancelamento' },
+                                      }),
+                                    }
+                                  );
+                                  if (retryResponse.ok) {
+                                    const retryData = await retryResponse.json();
+                                    console.log("[meta-whatsapp-webhook] ✅ Cancellation retry succeeded:", JSON.stringify({ transfer: retryData.transfer, hasResponse: !!retryData.response }));
+                                    const retryMessageRaw = retryData.response || retryData.message;
+                                    const retryMessage = retryMessageRaw
+                                      ? retryMessageRaw + formatOptionsAsText(retryData.options)
+                                      : null;
+                                    if (retryMessage) {
+                                      await supabase.functions.invoke("send-meta-whatsapp", {
+                                        body: {
+                                          instance_id: instance.id,
+                                          phone_number: fromNumber,
+                                          message: retryMessage,
+                                          conversation_id: conversation.id,
+                                          skip_db_save: false,
+                                          is_bot_message: true,
+                                          metadata: retryData.flowName ? { flow_id: retryData.flowId, flow_name: retryData.flowName } : undefined,
+                                        },
+                                      });
+                                    }
+                                    const retryDept = retryData.departmentId || retryData.department;
+                                    if ((retryData.transfer === true || retryData.action === 'transfer') && retryDept) {
+                                      await supabase.from('conversations').update({ ai_mode: 'waiting_human', department: retryDept, assigned_to: null }).eq('id', conversation.id);
+                                    }
+                                    continue;
+                                  } else {
+                                    console.error("[meta-whatsapp-webhook] ❌ Cancellation retry also failed:", await retryResponse.text());
+                                  }
+                                } catch (retryErr) {
+                                  console.error("[meta-whatsapp-webhook] ❌ Cancellation retry exception:", retryErr);
+                                }
+                              }
+                            } catch (flowErr) {
+                              console.error("[meta-whatsapp-webhook] ❌ Error re-invoking process-chat-flow (cancellation):", flowErr);
+                            }
+                            
+                            // Se hasFlowContext=true e ambas tentativas falharam, manter no fluxo
+                            if (autopilotData?.hasFlowContext) {
+                              console.log("[meta-whatsapp-webhook] ⚠️ cancellationBlocked + hasFlowContext=true mas flow re-invoke falhou 2x. Mantendo no fluxo sem handoff hardcoded.");
+                              continue;
+                            }
+                          }
+                          
+                          // Fallback: sem flow context → handoff genérico
+                          console.log("[meta-whatsapp-webhook] 🚫 cancellationBlocked=true + hasFlowContext=false → enviando handoff msg (fallback)");
+                          
+                          const cancelHandoffMsg = autopilotData.response || 'Entendi sua solicitação de cancelamento. Vou te encaminhar para o setor responsável.';
+                          
+                          try {
+                            const metaToken = instance.whatsapp_meta_token || Deno.env.get("WHATSAPP_META_TOKEN");
+                            const phoneNumberId = instance.whatsapp_meta_phone_id || Deno.env.get("WHATSAPP_META_PHONE_NUMBER_ID");
+                            
+                            if (metaToken && phoneNumberId) {
+                              await supabase.functions.invoke("send-meta-whatsapp", {
+                                body: {
+                                  instance_id: instance.id,
+                                  phone_number: fromNumber,
+                                  message: cancelHandoffMsg,
+                                  conversation_id: conversation.id,
+                                  skip_db_save: true,
+                                },
+                              });
+                              console.log("[meta-whatsapp-webhook] ✅ Handoff message sent (cancellation block fallback)");
+                              
+                              await supabase.from("messages").insert({
+                                conversation_id: conversation.id,
+                                content: cancelHandoffMsg,
+                                sender_type: "system",
+                                message_type: "text",
+                              });
+                            }
+                            
+                            // Atualizar conversa para waiting_human
+                            await supabase
+                              .from('conversations')
+                              .update({
+                                ai_mode: 'waiting_human',
+                                assigned_to: null,
+                              })
+                              .eq('id', conversation.id);
+                            console.log("[meta-whatsapp-webhook] ✅ Conversa atualizada para waiting_human (cancellation fallback)");
+
+                            // Completar flow state se existir
+                            try {
+                              await supabase
+                                .from('chat_flow_states')
+                                .update({ status: 'transferred', completed_at: new Date().toISOString() })
+                                .eq('conversation_id', conversation.id)
+                                .in('status', ['in_progress', 'active', 'waiting_input']);
+                              console.log("[meta-whatsapp-webhook] ✅ Flow state marcado como transferred (cancellation fallback)");
+                            } catch (flowStateErr) {
+                              console.error("[meta-whatsapp-webhook] ⚠️ Erro atualizando flow state:", flowStateErr);
+                            }
+                          } catch (sendErr) {
+                            console.error("[meta-whatsapp-webhook] ⚠️ Error sending cancellation handoff msg:", sendErr);
                           }
                           
                           continue;
