@@ -2351,7 +2351,7 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log commercial block event:', logErr);
           }
 
-          delete collectedData.__ai;
+          // delete redundante removido — confiamos no delete centralizado na linha de exit geral
         }
 
         if (consultorIntentMatch) {
