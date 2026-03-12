@@ -2528,7 +2528,7 @@ serve(async (req) => {
               const internalNote = nextNode.data?.internal_note ? replaceVariables(nextNode.data.internal_note, variablesContext) : null;
               const ticket = await createTicketFromFlow(supabaseClient, {
                 conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
-                contactId: activeState.conversations?.contact_id || null, subject, description,
+                contactId: activeContactData?.id || null, subject, description,
                 category: nextNode.data?.ticket_category || 'outro', priority: nextNode.data?.ticket_priority || 'medium',
                 departmentId: nextNode.data?.department_id || null, internalNote,
                 useCollectedData: nextNode.data?.use_collected_data || false, collectedData,
