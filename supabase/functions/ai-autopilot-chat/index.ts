@@ -79,8 +79,12 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       if (sourcesStr) sources = JSON.parse(sourcesStr);
     } catch {}
     
+    // Sanitize gateway model names to real OpenAI models
+    const rawModel = configMap.get('ai_default_model') || DEFAULT_RAG_CONFIG.model;
+    const sanitizedModel = sanitizeModelName(rawModel);
+    
     const config: RAGConfig = {
-      model: configMap.get('ai_default_model') || DEFAULT_RAG_CONFIG.model,
+      model: sanitizedModel,
       minThreshold: parseFloat(configMap.get('ai_rag_min_threshold') || String(DEFAULT_RAG_CONFIG.minThreshold)),
       directThreshold: parseFloat(configMap.get('ai_rag_direct_threshold') || String(DEFAULT_RAG_CONFIG.directThreshold)),
       sources,
