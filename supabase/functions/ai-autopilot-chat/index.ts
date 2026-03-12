@@ -5446,6 +5446,14 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           articles_found: knowledgeArticles.length,
           timestamp: new Date().toISOString()
         }));
+        supabaseClient.from('ai_events').insert({
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          event_type: 'ai_decision_confidence_flow_advance',
+          model: 'system',
+          score: confidenceResult.score,
+          output_json: { reason: 'confidence_flow_advance', exitType: 'flow_advance_needed', fallback_used: false, articles_found: knowledgeArticles.length, hasFlowContext: true },
+        }).then(() => {}).catch(() => {});
         
         return new Response(JSON.stringify({
           status: 'flow_advance_needed',
