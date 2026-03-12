@@ -1460,6 +1460,7 @@ serve(async (req) => {
                                     conversationId: conversation.id,
                                     userMessage: messageContent,
                                     forceCommercialExit: true,
+                                    intentData: { ai_exit_intent: 'comercial' },
                                   }),
                                 }
                               );
