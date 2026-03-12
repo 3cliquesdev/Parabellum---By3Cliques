@@ -1,28 +1,37 @@
 
 
-# Auditoria Final — Resultado: 100% Limpo
+# Bug: `edges is not defined` — process-chat-flow crashando na conversa #2D7EACE8
 
-Todas as 6 correções estão verificadas e não há código morto residual.
+## Diagnóstico
 
-| # | Item | Arquivo | Status |
-|---|---|---|---|
-| 1 | Guard `!flow_context` no bloco OTP | `ai-autopilot-chat` L6027 | ✅ OK |
-| 2 | `OTP_REQUIRED_KEYWORDS` sem `'saque'`/`'sacar'` isolados | `ai-autopilot-chat` L787-802 | ✅ OK |
-| 3 | Limpeza metadata OTP no `TestModeDropdown` | `TestModeDropdown` L57-58 | ✅ OK |
-| 4 | Limpeza metadata OTP no `FlowTestDialog` | `FlowTestDialog` L70-71 | ✅ OK |
-| 5 | Dead code `if (false)` removido | `ai-autopilot-chat` | ✅ Removido |
-| 6 | Inner guard redundante removido | `ai-autopilot-chat` L6032 agora é `maskEmail` direto | ✅ Removido |
+Nos logs do `process-chat-flow`, o erro é claro:
 
-## Validação dos cenários
-
-```text
-"sacar" sem fluxo         → não está em OTP_REQUIRED_KEYWORDS → IA desambigua         ✅
-"quero sacar" sem fluxo   → match em OTP_REQUIRED_KEYWORDS → OTP dispara              ✅
-Qualquer msg COM fluxo    → !flow_context=false → bloco OTP inteiro pulado             ✅
-Test mode ativado         → limpa awaiting_otp/otp_reason/otp_expires_at/claimant_email ✅
+```
+ReferenceError: edges is not defined
+  at ...index.ts:3595:29
 ```
 
-## Conclusão
+**Causa raiz:** Linhas 3100 e 3102 do `process-chat-flow/index.ts` usam variáveis `edges` e `nodes` sem qualificação — deveriam ser `flowDef.edges` e `flowDef.nodes`:
 
-Nenhuma alteração necessária. O código está 100% limpo e alinhado com o contrato. Pode seguir para a próxima melhoria.
+```typescript
+// L3100 — BUG: "edges" não existe neste escopo
+const nodeEdges = edges.filter((e: any) => e.source === currentNode.id);
+// L3102 — BUG: "nodes" não existe neste escopo  
+const targetNode = nodes.find((n: any) => n.id === edge.target);
+```
+
+Esse bloco é a "inferência automática de forbidFinancial" — quando o nó AI tem edge para um condition_v2 com regra `ai_exit_intent=financeiro`. Como crasha antes de chegar na chamada da IA, o fluxo inteiro falha e o webhook faz fallback para `waiting_human`, abandonando a conversa.
+
+## Impacto
+
+Toda mensagem processada por um nó `ai_response` no motor de fluxos crasha se `forbid_financial` não estiver explicitamente `true` no nó. Ou seja, **qualquer nó AI sem forbid_financial explícito crashava o fluxo inteiro**.
+
+## Plano de Correção
+
+| # | Arquivo | Mudança |
+|---|---|---|
+| 1 | `process-chat-flow/index.ts` L3100 | `edges` → `(flowDef.edges \|\| [])` |
+| 2 | `process-chat-flow/index.ts` L3102 | `nodes` → `(flowDef.nodes \|\| [])` |
+
+Fix de 2 linhas. Zero mudança de lógica, apenas corrige as referências para usar o objeto correto.
 
