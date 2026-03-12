@@ -8484,6 +8484,18 @@ Conversa: ${conversationId}`;
 
     if (isFallbackResponse) {
       console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO');
+      // 📊 FIX 4: Telemetria anti-alucinação — Fallback phrase detection
+      console.log(JSON.stringify({
+        event: 'ai_decision',
+        conversation_id: conversationId,
+        reason: 'fallback_phrase_detected',
+        score: 0,
+        hasFlowContext: !!flow_context,
+        exitType: flow_context ? 'stay_in_node' : 'handoff',
+        fallback_used: true,
+        articles_found: 0,
+        timestamp: new Date().toISOString()
+      }));
 
       // 🆕 FIX: Se flow_context existe, NÃO sair do nó — limpar fallback phrases e continuar
       if (flow_context) {
