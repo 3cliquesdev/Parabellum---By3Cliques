@@ -1296,12 +1296,14 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
     restrictions += `\n\n🛒 TRAVA COMERCIAL ATIVA:
 Se o cliente solicitar COMPRAR claramente (ex: "quero comprar", "quanto custa"), responda:
 "Ótimo interesse! Vou te conectar com nosso time comercial."
-E retorne [[FLOW_EXIT]] imediatamente.
+E retorne [[FLOW_EXIT:comercial]] imediatamente.
 
 🔍 DESAMBIGUAÇÃO COMERCIAL OBRIGATÓRIA:
 Se o cliente mencionar termos como plano, compra, preço ou assinatura sem deixar claro se quer uma INFORMAÇÃO ou realizar uma COMPRA, você DEVE perguntar:
 "Você deseja comprar algum plano ou tem dúvidas sobre seu plano atual?"
-Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.`;
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer COMPRAR → responda com [[FLOW_EXIT:comercial]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
   }
 
   const forbidConsultant = flowContext.forbidConsultant ?? false;
