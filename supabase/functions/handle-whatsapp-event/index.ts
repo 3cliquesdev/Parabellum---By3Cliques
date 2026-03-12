@@ -1367,6 +1367,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
                     ...(aiResponse.financialBlocked ? { forceFinancialExit: true } : {}),
                     ...(aiResponse.commercialBlocked ? { forceCommercialExit: true } : {}),
                     ...(!aiResponse.financialBlocked && !aiResponse.commercialBlocked ? { forceAIExit: true } : {}),
+                    ...(aiResponse.ai_exit_intent ? { ai_exit_intent: aiResponse.ai_exit_intent } : {}),
                   }
                 });
 

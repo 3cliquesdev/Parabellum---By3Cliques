@@ -1637,6 +1637,7 @@ serve(async (req) => {
                                   conversationId: conversation.id,
                                   userMessage: messageContent,
                                   forceAIExit: true,
+                                  ...(autopilotData?.ai_exit_intent ? { ai_exit_intent: autopilotData.ai_exit_intent } : {}),
                                 }),
                               }
                             );
