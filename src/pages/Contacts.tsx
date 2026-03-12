@@ -60,7 +60,7 @@ export default function Contacts() {
   
   const { isAdmin, isManager, isCSManager } = useUserRole();
   const canChangeConsultant = isAdmin || isManager || isCSManager;
-  const { data: profiles } = useProfiles();
+  const { data: consultants } = useConsultants(true);
   
   // Advanced filters state
   const [contactFilters, setContactFilters] = useState<ContactFilters & { search: string; tags: string[] }>({
