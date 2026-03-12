@@ -8387,7 +8387,7 @@ Conversa: ${conversationId}`;
           /encaminh(ar|ando|o)\s+(para|a|você)\s+\w+/gi,
           /passar\s+(para|a)\s+um\s+(especialista|atendente|humano|agente)/gi,
           /um\s+(especialista|atendente|humano|agente)\s+(vai|irá|poderá)\s+(te\s+)?(atender|ajudar)/gi,
-          /\[\[FLOW_EXIT\]\]/gi,
+          /\[\[FLOW_EXIT(:[a-zA-Z_]+)?\]\]/gi,
         ];
         
         let cleanedMessage = assistantMessage;
