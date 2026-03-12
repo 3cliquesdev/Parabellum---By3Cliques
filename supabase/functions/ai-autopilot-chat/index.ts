@@ -79,8 +79,12 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       if (sourcesStr) sources = JSON.parse(sourcesStr);
     } catch {}
     
+    // Sanitize gateway model names to real OpenAI models
+    const rawModel = configMap.get('ai_default_model') || DEFAULT_RAG_CONFIG.model;
+    const sanitizedModel = sanitizeModelName(rawModel);
+    
     const config: RAGConfig = {
-      model: configMap.get('ai_default_model') || DEFAULT_RAG_CONFIG.model,
+      model: sanitizedModel,
       minThreshold: parseFloat(configMap.get('ai_rag_min_threshold') || String(DEFAULT_RAG_CONFIG.minThreshold)),
       directThreshold: parseFloat(configMap.get('ai_rag_direct_threshold') || String(DEFAULT_RAG_CONFIG.directThreshold)),
       sources,
@@ -110,6 +114,25 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
     console.error('[getRAGConfig] Exception:', error);
     return DEFAULT_RAG_CONFIG;
   }
+}
+
+// Sanitize legacy gateway model names to real OpenAI model names
+function sanitizeModelName(model: string): string {
+  const MODEL_MAP: Record<string, string> = {
+    'openai/gpt-5-mini': 'gpt-4o-mini',
+    'openai/gpt-5': 'gpt-4o',
+    'openai/gpt-5-nano': 'gpt-4o-mini',
+    'openai/gpt-5.2': 'gpt-4o',
+    'google/gemini-2.5-flash': 'gpt-4o-mini',
+    'google/gemini-2.5-flash-lite': 'gpt-4o-mini',
+    'google/gemini-2.5-pro': 'gpt-4o',
+    'google/gemini-3-pro-preview': 'gpt-4o',
+    'google/gemini-3-pro-image-preview': 'gpt-4o',
+    'google/gemini-3-flash-preview': 'gpt-4o-mini',
+    'google/gemini-3.1-pro-preview': 'gpt-4o',
+    'google/gemini-3.1-flash-image-preview': 'gpt-4o-mini',
+  };
+  return MODEL_MAP[model] || model;
 }
 
 // Helper: Buscar modelo AI configurado no banco (mantido para compatibilidade)

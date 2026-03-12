@@ -158,7 +158,7 @@ export function RAGOrchestratorWidget() {
         .select('value')
         .eq('key', 'ai_default_model')
         .maybeSingle();
-      return data?.value || 'openai/gpt-5-mini';
+      return data?.value || 'gpt-4o-mini';
     },
     staleTime: 30000,
   });
