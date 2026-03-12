@@ -2175,7 +2175,7 @@ serve(async (req) => {
           const msgLower = (customerMessage || '').toLowerCase().trim();
           
           // Padrões flexíveis de SIM (keyword matching, não exige match exato)
-          const yesKeywords = /\b(sim|s|yes|pode|ok|claro|com certeza|isso|beleza|blz|valeu|vlw|pode fechar|encerra|encerrar|fechou|tá bom|ta bom|tá|ta|obrigad[oa]?|brigad[oa]?|top|perfeito|resolvido|resolveu|ajudou|foi sim|show|massa|ótimo|otimo|excelente|maravilha)\b/i;
+          const yesKeywords = /\b(sim|s|yes|pode|pode fechar|pode encerrar|encerra|encerrar|fechou|claro|com certeza|isso|tá bom|ta bom|foi sim)\b/i;
           // Padrões flexíveis de NÃO
           const noKeywords = /\b(n[aã]o|nao|n|não|nope|ainda n[aã]o|tenho sim|outra|mais uma|espera|perai|pera|n[aã]o foi|problema|d[uú]vida|continua|preciso)\b/i;
           // Padrões de ambiguidade (presença anula confirmação)
@@ -2184,10 +2184,11 @@ serve(async (req) => {
           const hasYes = yesKeywords.test(msgLower);
           const hasNo = noKeywords.test(msgLower);
           const hasAmbiguity = ambiguityKeywords.test(msgLower);
+          const hasQuestion = msgLower.includes('?');
           
-          console.log(`[ai-autopilot-chat] 🔍 Close confirmation check: msg="${msgLower}" hasYes=${hasYes} hasNo=${hasNo} hasAmbiguity=${hasAmbiguity}`);
+          console.log(`[ai-autopilot-chat] 🔍 Close confirmation check: msg="${msgLower}" hasYes=${hasYes} hasNo=${hasNo} hasAmbiguity=${hasAmbiguity} hasQuestion=${hasQuestion}`);
           
-          if (hasYes && !hasNo && !hasAmbiguity) {
+          if (hasYes && !hasNo && !hasAmbiguity && !hasQuestion) {
             console.log('[ai-autopilot-chat] ✅ Cliente CONFIRMOU encerramento');
             
             // Checar governança
