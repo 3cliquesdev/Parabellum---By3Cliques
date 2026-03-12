@@ -666,7 +666,7 @@ Deno.serve(async (req) => {
 
             // Limpar flag awaiting_close_confirmation do metadata
             const existingMeta = (conv as any).customer_metadata || {};
-            const { awaiting_close_confirmation, ...cleanMeta } = existingMeta;
+            const { awaiting_close_confirmation, close_reason, ...cleanMeta } = existingMeta;
             await supabase.from('conversations').update({
               customer_metadata: cleanMeta,
             }).eq('id', conv.id);
