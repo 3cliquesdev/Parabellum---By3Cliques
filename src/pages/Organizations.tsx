@@ -14,7 +14,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Building2, Plus, Users, TrendingUp, Pencil, Trash2, Phone } from "lucide-react";
+import { Plus, Users, TrendingUp, Pencil, Trash2, Phone } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+function getInitials(name: string): string {
+  return name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function stringToColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash % 360);
+  return `hsl(${h}, 55%, 45%)`;
+}
 import { useOrganizations, useDeleteOrganization } from "@/hooks/useOrganizations";
 import OrganizationDialog from "@/components/OrganizationDialog";
 import OrganizationContactsDialog from "@/components/OrganizationContactsDialog";
