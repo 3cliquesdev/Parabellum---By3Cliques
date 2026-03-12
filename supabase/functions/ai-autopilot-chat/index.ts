@@ -4058,7 +4058,7 @@ serve(async (req) => {
       contactName: string,
       openaiApiKey: string
     ): Promise<StrictRAGResult> {
-      console.log('[callStrictRAG] 🎯 Iniciando RAG Estrito com GPT-4o');
+      console.log('[callStrictRAG] 🎯 Iniciando RAG Estrito com GPT-5');
       
       // Filtrar apenas artigos com alta confiança (≥80%)
       const highConfidenceArticles = knowledgeArticles.filter(
