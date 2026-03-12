@@ -1370,9 +1370,10 @@ serve(async (req) => {
         const verifiedKey = contentNode.data?.save_verified_as || 'customer_verified';
 
         // 🆕 PRE-CHECK: Se validate_customer já rodou, usar dados existentes
-        if (collectedDataForState.customer_validated === true && collectedDataForState.customer_email_found) {
+        const preEmailZ1 = collectedDataForState.customer_email_found || manualContactData?.email;
+        if (collectedDataForState.customer_validated === true && preEmailZ1) {
           // Cliente já validado → enviar OTP direto para email de cadastro
-          const preEmail = collectedDataForState.customer_email_found;
+          const preEmail = preEmailZ1;
           console.log('[process-chat-flow] 🔐 OTP pre-check: customer already validated, sending OTP to:', preEmail);
 
           collectedDataForState.__otp_step = 'wait_code';
@@ -2586,8 +2587,9 @@ serve(async (req) => {
           const otpVerifiedKey = nextNode.data?.save_verified_as || 'customer_verified';
 
           // 🆕 PRE-CHECK: Se validate_customer já rodou
-          if (collectedData.customer_validated === true && collectedData.customer_email_found) {
-            const preEmail = collectedData.customer_email_found;
+          const preEmailZ2 = collectedData.customer_email_found || activeContactData?.email;
+          if (collectedData.customer_validated === true && preEmailZ2) {
+            const preEmail = preEmailZ2;
             console.log('[process-chat-flow] 🔐 OTP pre-check [generic]: customer validated, sending OTP to:', preEmail);
             collectedData.__otp_step = 'wait_code';
             collectedData.__otp_attempts = 0;
@@ -2596,8 +2598,8 @@ serve(async (req) => {
             await supabaseClient.from('chat_flow_states').update({
               collected_data: collectedData, current_node_id: nextNode.id, status: 'waiting_input', updated_at: new Date().toISOString(),
             }).eq('id', activeState.id);
-            await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+            await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
               body: JSON.stringify({ email: preEmail }),
             });
             const otpSentMsg = nextNode.data?.message_otp_sent
@@ -2785,16 +2787,17 @@ serve(async (req) => {
             const otpVerifiedKey2 = nextNode.data?.save_verified_as || 'customer_verified';
 
             // 🆕 PRE-CHECK: Se validate_customer já rodou
-            if (collectedData.customer_validated === true && collectedData.customer_email_found) {
-              const preEmail = collectedData.customer_email_found;
+            const preEmailZ3 = collectedData.customer_email_found || activeContactData?.email;
+            if (collectedData.customer_validated === true && preEmailZ3) {
+              const preEmail = preEmailZ3;
               console.log('[process-chat-flow] 🔐 OTP pre-check [auto-advance]: customer validated, sending OTP to:', preEmail);
               collectedData.__otp_step = 'wait_code';
               collectedData.__otp_attempts = 0;
               collectedData.__otp_email = preEmail;
               collectedData.__otp_customer_name = collectedData.customer_name_found || '';
               await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'waiting_input', updated_at: new Date().toISOString() }).eq('id', activeState.id);
-              await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+              await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
                 body: JSON.stringify({ email: preEmail }),
               });
               const otpSentMsg = nextNode.data?.message_otp_sent
@@ -3814,16 +3817,17 @@ serve(async (req) => {
         const otpVerifiedKey4 = nextNode.data?.save_verified_as || 'customer_verified';
 
         // 🆕 PRE-CHECK: Se validate_customer já rodou
-        if (collectedData.customer_validated === true && collectedData.customer_email_found) {
-          const preEmail = collectedData.customer_email_found;
+        const preEmailZ4 = collectedData.customer_email_found || activeContactData?.email;
+        if (collectedData.customer_validated === true && preEmailZ4) {
+          const preEmail = preEmailZ4;
           console.log('[process-chat-flow] 🔐 OTP pre-check [options handler]: customer validated, sending OTP to:', preEmail);
           collectedData.__otp_step = 'wait_code';
           collectedData.__otp_attempts = 0;
           collectedData.__otp_email = preEmail;
           collectedData.__otp_customer_name = collectedData.customer_name_found || '';
           await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'waiting_input' }).eq('id', activeState.id);
-          await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+          await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
             body: JSON.stringify({ email: preEmail }),
           });
           const otpSentMsg = nextNode.data?.message_otp_sent
@@ -5096,8 +5100,9 @@ serve(async (req) => {
           const otpVerifiedKeyMF = node.data?.save_verified_as || 'customer_verified';
 
           // 🆕 PRE-CHECK: Se validate_customer já rodou na travessia do master flow
-          if (collectedData.customer_validated === true && collectedData.customer_email_found) {
-            const preEmail = collectedData.customer_email_found;
+          const preEmailZ5 = collectedData.customer_email_found || contactData?.email;
+          if (collectedData.customer_validated === true && preEmailZ5) {
+            const preEmail = preEmailZ5;
             console.log('[process-chat-flow] 🔐 OTP pre-check [master]: customer validated, sending OTP to:', preEmail);
             const otpData = { ...collectedData, __otp_step: 'wait_code', __otp_attempts: 0, __otp_email: preEmail, __otp_customer_name: collectedData.customer_name_found || '' };
             await supabaseClient.from('chat_flow_states').update({ collected_data: otpData, status: 'waiting_input' }).eq('id', stateId);
