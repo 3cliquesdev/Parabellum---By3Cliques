@@ -76,6 +76,7 @@ export function BehaviorControlsSection({
   const forbidCommercial = selectedNode.data.forbid_commercial ?? false;
   const forbidCancellation = selectedNode.data.forbid_cancellation ?? false;
   const forbidSupport = selectedNode.data.forbid_support ?? false;
+  const forbidConsultant = selectedNode.data.forbid_consultant ?? false;
   const objective = selectedNode.data.objective || "";
 
   return (
