@@ -46,7 +46,7 @@ export function KPICard({
         </div>
         
         {/* Value */}
-        <div className="text-2xl font-semibold text-foreground truncate leading-relaxed">
+        <div className="text-2xl font-bold text-foreground truncate leading-relaxed">
           {value}
         </div>
         
