@@ -1660,7 +1660,9 @@ serve(async (req) => {
                // 🔧 FIX 3: Auto-traverse cobre condition_v2
               while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
                 if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
-                  const condPath = evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+                  const condPath = resolvedNode.type === 'condition_v2'
+                    ? evaluateConditionV2Path(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
+                    : evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
                   const afterCond = findNextNode(flowDef, resolvedNode, condPath);
                   if (!afterCond || !['condition', 'condition_v2', 'input', 'start'].includes(afterCond.type)) {
                     resolvedNode = afterCond;
