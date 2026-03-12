@@ -1979,7 +1979,109 @@ serve(async (req) => {
       let nextNode: any = null;
       let path: string | undefined;
 
-      if (currentNode.type === 'ask_options') {
+      // 🔧 FIX CRÍTICO: Nós genéricos ask_* (email, name, phone, cpf, text)
+      // Antes, esses nós não entravam em nenhum branch do if/else if chain,
+      // fazendo o motor cair no bloco de triggers e retornar "invalidOption".
+      // Agora tratamos eles ANTES do chain, encontrando o próximo nó diretamente.
+      if (['ask_name', 'ask_email', 'ask_phone', 'ask_cpf', 'ask_text'].includes(currentNode.type)) {
+        nextNode = findNextNode(flowDef, currentNode);
+        console.log(`[process-chat-flow] ➡️ Generic ask_* transition: ${currentNode.type}(${currentNode.id}) → ${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
+
+        // Auto-traverse conditions/inputs
+        let genSteps = 0;
+        while (nextNode && ['condition', 'condition_v2', 'input', 'start'].includes(nextNode.type) && genSteps < 20) {
+          genSteps++;
+          if (nextNode.type === 'condition') {
+            const cp = evaluateConditionPath(nextNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+            nextNode = findNextNode(flowDef, nextNode, cp);
+          } else if (nextNode.type === 'condition_v2') {
+            const cp = evaluateConditionV2Path(nextNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || []);
+            nextNode = findNextNode(flowDef, nextNode, cp);
+          } else {
+            nextNode = findNextNode(flowDef, nextNode);
+          }
+        }
+
+        // Handler: validate_customer (silencioso + auto-traverse)
+        if (nextNode?.type === 'validate_customer') {
+          console.log('[process-chat-flow] 🛡️ [generic] Processing validate_customer after ask_*');
+          const vcUrl = Deno.env.get('SUPABASE_URL')!;
+          const vcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          const { data: vcConvG } = await supabaseClient.from('conversations').select('contact_id').eq('id', conversationId).maybeSingle();
+          let vcContactG: any = null;
+          if (vcConvG?.contact_id) {
+            const { data: cg } = await supabaseClient.from('contacts').select('phone, email, document, whatsapp_id, first_name, last_name, kiwify_validated').eq('id', vcConvG.contact_id).maybeSingle();
+            vcContactG = cg;
+          }
+          const vKey = nextNode.data?.save_validated_as || 'customer_validated';
+          const nKey = nextNode.data?.save_customer_name_as || 'customer_name_found';
+          const eKey = nextNode.data?.save_customer_email_as || 'customer_email_found';
+          let vFound = false, vName = '', vEmail = '';
+          if (vcContactG && !vcContactG.kiwify_validated) {
+            const vPromises: Promise<any>[] = [];
+            if (nextNode.data?.validate_phone !== false && (vcContactG.phone || vcContactG.whatsapp_id)) {
+              vPromises.push(fetch(`${vcUrl}/functions/v1/validate-by-kiwify-phone`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKey}` }, body: JSON.stringify({ phone: vcContactG.phone, whatsapp_id: vcContactG.whatsapp_id, contact_id: vcConvG?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (nextNode.data?.validate_email !== false && vcContactG.email) {
+              vPromises.push(fetch(`${vcUrl}/functions/v1/verify-customer-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKey}` }, body: JSON.stringify({ email: vcContactG.email, contact_id: vcConvG?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (nextNode.data?.validate_cpf === true && vcContactG.document) {
+              vPromises.push(fetch(`${vcUrl}/functions/v1/validate-by-cpf`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKey}` }, body: JSON.stringify({ cpf: vcContactG.document, contact_id: vcConvG?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (vPromises.length > 0) {
+              const vResults = await Promise.allSettled(vPromises);
+              for (const vr of vResults) { if (vr.status === 'fulfilled' && vr.value?.found) { vFound = true; if (vr.value.customer?.name) vName = vr.value.customer.name; if (vr.value.customer?.email) vEmail = vr.value.customer.email; } }
+            }
+            if (vFound && vcConvG?.contact_id) {
+              await supabaseClient.from('contacts').update({ kiwify_validated: true, status: 'customer' }).eq('id', vcConvG.contact_id);
+              console.log('[process-chat-flow] ✅ [generic] Contact promoted to customer');
+            }
+          } else if (vcContactG?.kiwify_validated) {
+            vFound = true; vName = [vcContactG.first_name, vcContactG.last_name].filter(Boolean).join(' '); vEmail = vcContactG.email || '';
+          }
+          collectedData[vKey] = vFound; collectedData[nKey] = vName; collectedData[eKey] = vEmail;
+          console.log('[process-chat-flow] 🛡️ [generic] Validate result:', { vFound, vName, vEmail });
+          // Auto-traverse after validate_customer
+          let afterVC = findNextNode(flowDef, nextNode);
+          while (afterVC && ['condition', 'condition_v2', 'input', 'start'].includes(afterVC.type)) {
+            if (afterVC.type === 'condition' || afterVC.type === 'condition_v2') {
+              const cp2 = afterVC.type === 'condition_v2' ? evaluateConditionV2Path(afterVC.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || []) : evaluateConditionPath(afterVC.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+              afterVC = findNextNode(flowDef, afterVC, cp2);
+            } else { afterVC = findNextNode(flowDef, afterVC); }
+          }
+          if (afterVC) nextNode = afterVC;
+        }
+
+        // Update state and deliver next node
+        if (nextNode) {
+          const genStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition' || nextNode.type === 'condition_v2' || nextNode.type === 'verify_customer_otp' ? 'waiting_input' : 'active';
+          await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: genStatus, updated_at: new Date().toISOString() }).eq('id', activeState.id);
+
+          if (nextNode.type === 'end') {
+            const endActions = nextNode.data?.end_actions || [];
+            await supabaseClient.from('chat_flow_states').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', activeState.id);
+            const endMsg = replaceVariables(nextNode.data?.message || "Atendimento encerrado. Obrigado!", variablesContext);
+            return new Response(JSON.stringify({ useAI: false, response: endMsg, flowCompleted: true, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          if (nextNode.type === 'transfer') {
+            await supabaseClient.from('chat_flow_states').update({ status: 'transferred', completed_at: new Date().toISOString() }).eq('id', activeState.id);
+            const transferMsg = replaceVariables(nextNode.data?.message || "Transferindo...", variablesContext);
+            return new Response(JSON.stringify({ useAI: false, response: transferMsg, transfer: true, departmentId: nextNode.data?.department_id, agentId: nextNode.data?.agent_id, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          if (nextNode.type === 'ai_response') {
+            collectedData.__ai = { interaction_count: 0 };
+            await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'active', updated_at: new Date().toISOString() }).eq('id', activeState.id);
+            return new Response(JSON.stringify({ useAI: true, aiNodeActive: true, nodeId: nextNode.id, flowId: activeState.flow_id, contextPrompt: nextNode.data?.context_prompt, useKnowledgeBase: nextNode.data?.use_knowledge_base !== false, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          // Default: deliver message
+          const genMsg = replaceVariables(nextNode.data?.message || "", variablesContext);
+          const genOpts = nextNode.type === 'ask_options' ? (nextNode.data?.options || []).map((o: any) => ({ label: o.label, value: o.value })) : null;
+          return new Response(JSON.stringify({ useAI: false, response: genMsg, options: genOpts, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // No next node → complete flow
+        await supabaseClient.from('chat_flow_states').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', activeState.id);
+        return new Response(JSON.stringify({ useAI: true, reason: 'flow_completed_no_next_node' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      } else if (currentNode.type === 'ask_options') {
         // ============================================================
         // 🆕 VALIDAÇÃO ESTRITA (Contrato v2.3)
         // - Só aceita número válido OU texto exato
