@@ -199,7 +199,7 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
         });
       }
 
-      throw new Error(`AI Gateway error: ${response.status}`);
+      throw new Error(`OpenAI API error: ${response.status}`);
     }
 
     const data = await response.json();

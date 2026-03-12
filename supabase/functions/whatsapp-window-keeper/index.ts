@@ -314,7 +314,7 @@ Responda APENAS com o texto da mensagem, sem aspas nem prefixos.`,
   });
 
   if (!response.ok) {
-    throw new Error(`AI gateway error: ${response.status}`);
+    throw new Error(`OpenAI API error: ${response.status}`);
   }
 
   const data = await response.json();

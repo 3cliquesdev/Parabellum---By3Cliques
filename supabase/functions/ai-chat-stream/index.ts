@@ -227,7 +227,7 @@ serve(async (req) => {
         });
       }
       
-      return new Response(JSON.stringify({ error: 'AI Gateway error' }), {
+      return new Response(JSON.stringify({ error: 'OpenAI API error' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
