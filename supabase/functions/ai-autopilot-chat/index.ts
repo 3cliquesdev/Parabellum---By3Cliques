@@ -4778,6 +4778,19 @@ Responda APENAS: skip ou search`
           articles_count: knowledgeArticles.length
         });
         
+        // 📊 FIX 4: Telemetria anti-alucinação — Strict RAG handoff
+        console.log(JSON.stringify({
+          event: 'ai_decision',
+          conversation_id: conversationId,
+          reason: 'strict_rag_handoff',
+          score: 0,
+          hasFlowContext: !!flow_context,
+          exitType: 'handoff',
+          fallback_used: false,
+          articles_found: knowledgeArticles.length,
+          timestamp: new Date().toISOString()
+        }));
+        
         return new Response(JSON.stringify({
           status: 'strict_rag_handoff',
           message: strictHandoffMessage,
