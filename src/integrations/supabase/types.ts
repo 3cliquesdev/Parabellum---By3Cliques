@@ -9932,7 +9932,7 @@ export type Database = {
           emails_found: number
         }[]
       }
-      batch_validate_kiwify_contacts: { Args: never; Returns: number }
+      batch_validate_kiwify_contacts: { Args: never; Returns: Json }
       calculate_business_due_date: {
         Args: {
           p_start_date: string
