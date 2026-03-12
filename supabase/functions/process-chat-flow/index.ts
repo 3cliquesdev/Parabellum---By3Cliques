@@ -3836,7 +3836,7 @@ serve(async (req) => {
         // 4. Logs fortes para diagnóstico
         // ============================================================
         
-        const NO_CONTENT = new Set(['input', 'start', 'condition', 'condition_v2']);
+        const NO_CONTENT = new Set(['input', 'start', 'condition', 'condition_v2', 'validate_customer']);
         const MAX_TRAVERSAL = 12;
 
         // 1) Descobrir startNode
