@@ -2126,6 +2126,7 @@ serve(async (req) => {
         const forbidCommercial: boolean = currentNode.data?.forbid_commercial ?? false;
         const forbidCancellation: boolean = currentNode.data?.forbid_cancellation ?? false;
         const forbidSupport: boolean = currentNode.data?.forbid_support ?? false;
+        const forbidConsultant: boolean = currentNode.data?.forbid_consultant ?? false;
 
         // 🆕 INFERÊNCIA AUTOMÁTICA: Se o nó tem edge para condition_v2 com regra ai_exit_intent=financeiro, forçar forbidFinancial
         if (!forbidFinancial) {
