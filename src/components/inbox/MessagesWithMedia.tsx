@@ -137,7 +137,9 @@ export function MessagesWithMedia({
       {messages.map((message, index) => {
         const isCustomer = message.sender_type === 'contact';
         const isSystem = message.sender_type === 'system';
-        const isAI = message.is_ai_generated;
+        // 🆕 Mensagens com flow_id no metadata são do bot (mesmo sem is_ai_generated)
+        const hasFlowMetadata = !!(message.metadata?.flow_id || message.metadata?.flow_name);
+        const isAI = message.is_ai_generated || hasFlowMetadata;
         const isInternalNote = message.is_internal;
         const isInTestZone = testSeparatorIndex >= 0 && index > testSeparatorIndex;
         

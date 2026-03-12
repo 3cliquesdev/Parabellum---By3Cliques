@@ -1323,7 +1323,13 @@ Use apenas texto simples, sem formatação.
 Se não houver dados suficientes, responda exatamente:
 "No momento não tenho essa informação."
 
-A resposta deve ser curta, clara e objetiva.
+📦 CONSULTA DE PEDIDOS (REGRA ABSOLUTA):
+Para consultar pedidos, SEMPRE peça o NÚMERO DO PEDIDO ou CÓDIGO DE RASTREIO.
+NUNCA peça email, CPF ou telefone para consultar pedidos.
+Exemplo correto: "Por favor, me informe o número do pedido ou o código de rastreio."
+Exemplo PROIBIDO: "Me informe seu email para eu consultar."
+
+A resposta deve ser curta, clara e objetiva.`;
 
 Contexto do Cliente:
 Nome: ${contactName}
