@@ -308,7 +308,7 @@ Responda APENAS com o texto da mensagem, sem aspas nem prefixos.`,
           content: `Histórico da conversa:\n${context}`,
         },
       ],
-      max_tokens: 150,
+      max_completion_tokens: 150,
       temperature: 0.7,
     }),
   });

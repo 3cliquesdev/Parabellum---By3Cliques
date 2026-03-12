@@ -334,7 +334,7 @@ Analise e gere suas sugestões em JSON.`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini',
         max_completion_tokens: 500,
         response_format: { type: "json_object" },
         messages: [

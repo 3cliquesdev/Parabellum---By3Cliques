@@ -221,7 +221,7 @@ ${JSON.stringify(kbGaps || [], null, 2)}
           { role: "system", content: systemPrompt },
           { role: "user", content: dataContext },
         ],
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
         response_format: { type: "json_object" },
       }),
     });

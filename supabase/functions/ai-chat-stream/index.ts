@@ -20,7 +20,7 @@ interface StreamRequest {
 
 // Helper: Buscar modelo AI configurado
 async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
-  return 'gpt-4o-mini';
+  return 'gpt-5-mini';
 }
 
 // Helper: Buscar persona ativa

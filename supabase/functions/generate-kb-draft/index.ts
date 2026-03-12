@@ -128,7 +128,7 @@ Gere um artigo de base de conhecimento em JSON.`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-nano',
         max_completion_tokens: 800,
         response_format: { type: "json_object" },
         messages: [

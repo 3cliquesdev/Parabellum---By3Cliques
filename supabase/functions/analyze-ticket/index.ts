@@ -7,7 +7,7 @@ const corsHeaders = {
 
 // Helper: Buscar modelo AI configurado no banco
 // Modelo padrão OpenAI
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const DEFAULT_MODEL = 'gpt-5-mini';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

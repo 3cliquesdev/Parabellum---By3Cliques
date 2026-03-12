@@ -119,7 +119,7 @@ Responda APENAS com os insights, sem introdução ou conclusão.`;
               { role: 'user', content: prompt }
             ],
             temperature: 0.7,
-            max_tokens: 300,
+            max_completion_tokens: 300,
           }),
         });
 

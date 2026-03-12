@@ -51,7 +51,7 @@ async function extractKeywordsWithOpenAI(text: string, openaiApiKey: string): Pr
           },
           { role: 'user', content: text.substring(0, 2000) }
         ],
-        max_tokens: 200,
+        max_completion_tokens: 200,
         temperature: 0.1,
       }),
     });
