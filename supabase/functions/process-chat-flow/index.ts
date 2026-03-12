@@ -3149,10 +3149,15 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO CANCELAMENTO: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
         }
         
-        cancellationIntentMatch = forbidCancellation && msgLower.length > 0 && isCancellationAction;
+        cancellationIntentMatch =
+          (forceCancellationExit && forbidCancellation) ||
+          (forbidCancellation && msgLower.length > 0 && isCancellationAction);
+        if (forceCancellationExit) {
+          console.log('[process-chat-flow] 🚫 forceCancellationExit=true recebido do webhook, forçando exit do nó AI');
+        }
         
         if (cancellationIntentMatch) {
-          console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada | msg="${(userMessage || '').substring(0, 100)}"`);
+          console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada | msg="${(userMessage || '').substring(0, 100)}" | forceExit=${forceCancellationExit} | actionMatch=${isCancellationAction}`);
         }
 
         // 🧑 TRAVA SUPORTE: Detectar pedido de atendente humano como exit do nó AI
