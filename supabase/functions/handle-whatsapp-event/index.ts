@@ -1370,7 +1370,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
                   body: {
                     conversationId: conversationId,
                     userMessage: messageText,
-                    ...(aiResponse.financialBlocked ? { forceFinancialExit: true } : {}),
+                    ...(aiResponse.financialBlocked ? { forceFinancialExit: true, intentData: { ai_exit_intent: 'financeiro' } } : {}),
                     ...(aiResponse.commercialBlocked ? { forceCommercialExit: true, intentData: { ai_exit_intent: 'comercial' } } : {}),
                     ...(aiResponse.cancellationBlocked ? { forceCancellationExit: true, intentData: { ai_exit_intent: 'cancelamento' } } : {}),
                     ...(!aiResponse.financialBlocked && !aiResponse.commercialBlocked && !aiResponse.cancellationBlocked ? { forceAIExit: true } : {}),

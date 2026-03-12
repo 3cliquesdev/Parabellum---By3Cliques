@@ -1494,6 +1494,8 @@ serve(async (req) => {
     const flowForbidOptions: boolean = flow_context?.forbidOptions ?? true;
     const flowForbidFinancial: boolean = flow_context?.forbidFinancial ?? false;
     const flowForbidCancellation: boolean = flow_context?.forbidCancellation ?? false;
+    const flowForbidCommercialPrompt: boolean = flow_context?.forbidCommercial ?? false;
+    const flowForbidConsultantPrompt: boolean = flow_context?.forbidConsultant ?? false;
     
     // 🆕 FASE 1: Flag para usar prompt restritivo
     const useRestrictedPrompt = !!(flow_context && (flowObjective || flowForbidQuestions || flowForbidOptions || flowForbidFinancial));
