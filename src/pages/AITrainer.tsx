@@ -23,6 +23,9 @@ const AVAILABLE_MODELS = [
   { id: "gpt-4.1-nano", name: "GPT-4.1 Nano", provider: "OpenAI", description: "Mais barato - Tarefas simples", badge: "Econômico" },
   { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", provider: "OpenAI", description: "Ultra rápido - Alto volume", badge: "Rápido" },
   { id: "gpt-4.1", name: "GPT-4.1", provider: "OpenAI", description: "Última geração - Contexto longo", badge: "Novo" },
+  { id: "gpt-5-nano", name: "GPT-5 Nano", provider: "OpenAI", description: "Velocidade + economia máxima", badge: "Econômico" },
+  { id: "gpt-5-mini", name: "GPT-5 Mini", provider: "OpenAI", description: "Forte performance - Custo moderado", badge: "Balanceado" },
+  { id: "gpt-5", name: "GPT-5", provider: "OpenAI", description: "Máxima capacidade - Raciocínio + multimodal", badge: "Premium+" },
   // Reasoning
   { id: "o4-mini", name: "o4-mini", provider: "OpenAI", description: "Raciocínio avançado - Custo acessível", badge: "Smart" },
   { id: "o3", name: "o3", provider: "OpenAI", description: "Raciocínio máximo", badge: "Top" },
