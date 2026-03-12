@@ -6347,7 +6347,23 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
-    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}
+    // 🚫 TRAVA CANCELAMENTO: Injetar instruções diretamente no prompt da LLM
+    const cancellationGuardInstruction = flowForbidCancellation ? `
+
+🚫 TRAVA CANCELAMENTO ATIVA — REGRAS OBRIGATÓRIAS:
+- Responda perguntas INFORMATIVAS sobre cancelamento usando APENAS dados da base de conhecimento.
+- Se o cliente pedir uma AÇÃO de cancelamento (cancelar plano, encerrar conta, desistir), responda: "Entendi sua solicitação de cancelamento. Vou te encaminhar para o setor responsável." e retorne [[FLOW_EXIT:cancelamento]].
+- Se não encontrar a informação na KB, responda: "Não tenho essa informação no momento. O setor responsável poderá te orientar."
+${ambiguousCancellationDetected ? `
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo de cancelamento sem deixar claro se quer informação ou realizar a ação.
+Você DEVE perguntar de forma natural e empática: "Você tem dúvidas sobre cancelamento ou deseja cancelar um produto/serviço?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
+` : ''}
+` : '';
+
+    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}
 
 **🚫 REGRA DE HANDOFF (SÓ QUANDO CLIENTE PEDIR):**
 Transferência para humano SÓ acontece quando:

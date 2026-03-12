@@ -1224,6 +1224,7 @@ serve(async (req) => {
                             forbidOptions: (flowData as any).forbidOptions ?? true,
                           forbidFinancial: (flowData as any).forbidFinancial ?? false,
                           forbidCommercial: (flowData as any).forbidCommercial ?? false,
+                          forbidCancellation: (flowData as any).forbidCancellation ?? false,
                           },
                         }),
                       }
