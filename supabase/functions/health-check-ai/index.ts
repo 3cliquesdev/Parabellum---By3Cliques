@@ -15,8 +15,11 @@ serve(async (req) => {
     // Protect with service role key
     const authHeader = req.headers.get('Authorization');
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    if (!authHeader || !authHeader.includes(serviceKey!)) {
-      // Also allow anon key with valid JWT (for admin users)
+    if (!authHeader || authHeader !== `Bearer ${serviceKey}`) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const supabase = createClient(

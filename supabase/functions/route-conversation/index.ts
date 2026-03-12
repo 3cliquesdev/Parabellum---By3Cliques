@@ -794,7 +794,7 @@ serve(async (req) => {
       .is('assigned_at', null)
       .lte('priority', priority)
       .lte('queued_at', new Date().toISOString())
-      .neq('conversations.status', 'closed');
+      .not('conversations.status', 'in', '("closed","resolved","finished")');
 
     return new Response(
       JSON.stringify({
