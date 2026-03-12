@@ -1179,11 +1179,12 @@ Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;
 
   if (forbidFinancial) {
     restrictions += `\n\n🔒 TRAVA FINANCEIRA ATIVA:
-Você NÃO pode resolver assuntos financeiros (saque, reembolso, estorno, devolução, cancelamento, cobrança, pagamento).
-Se o cliente mencionar qualquer assunto financeiro, responda EXATAMENTE:
-"Esse tipo de solicitação precisa ser tratada por um atendente. Vou te transferir agora!"
-E use request_human_agent imediatamente.
-Você PODE: coletar dados (email, CPF, ID do pedido) e resumir o caso. NÃO PODE: instruir processos financeiros ou prometer resolução.`;
+Você PODE responder perguntas INFORMATIVAS sobre finanças (prazos, como funciona, onde consultar saldo, políticas).
+Você NÃO PODE executar ou prometer AÇÕES financeiras (saque, reembolso, estorno, devolução, cancelamento de cobrança, transferência de saldo).
+Se o cliente solicitar uma AÇÃO financeira (ex: "quero sacar", "faz meu reembolso", "quero meu dinheiro de volta"), responda:
+"Entendi sua solicitação. Vou te encaminhar para o setor responsável que poderá te ajudar com isso."
+E retorne [[FLOW_EXIT]] imediatamente.
+Você PODE: coletar dados (email, CPF, ID do pedido), resumir o caso, e responder dúvidas informativas. NÃO PODE: instruir processos financeiros, prometer resolução ou executar ações.`;
   }
   
   restrictions += `
