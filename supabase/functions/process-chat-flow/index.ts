@@ -2387,6 +2387,10 @@ serve(async (req) => {
             path = 'suporte';
             collectedData.ai_exit_intent = 'suporte';
             console.log(`[process-chat-flow] 🎯 keyword/aiExitForced → path set to "suporte" | keyword=${keywordMatch} aiExitForced=${aiExitForced}`);
+          } else {
+            // maxReached sem intent específico → saída pelo handle default
+            path = 'default';
+            console.log(`[process-chat-flow] 🎯 maxReached sem intent → path set to "default"`);
           }
 
           // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir
