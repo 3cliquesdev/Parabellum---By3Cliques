@@ -2516,7 +2516,7 @@ serve(async (req) => {
         if (forceAIExit) {
           console.log('[process-chat-flow] 🔄 forceAIExit=true recebido do webhook, forçando exit do nó AI (IA não conseguiu resolver)');
         }
-        const aiExitForced = !!forceAIExit;
+        aiExitForced = !!forceAIExit;
 
         // 🆕 INTENT DATA: Salvar ai_exit_intent no collectedData quando recebido do webhook
         if (intentData && intentData.ai_exit_intent) {
