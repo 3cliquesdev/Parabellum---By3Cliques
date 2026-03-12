@@ -937,7 +937,7 @@ serve(async (req) => {
       // até encontrar o primeiro nó executável (message/ask_options/ai_response/transfer)
       // Reutiliza a mesma lógica do Master Flow para consistência
       // ============================================================
-      const NO_CONTENT_MANUAL = new Set(['input', 'start', 'condition', 'condition_v2', 'validate_customer']);
+      const NO_CONTENT_MANUAL = new Set(['input', 'start', 'condition', 'condition_v2', 'validate_customer', 'fetch_order']);
       const MAX_TRAVERSAL_MANUAL = 12;
 
       // Carregar dados de contato/conversa para avaliação de condições
@@ -1152,6 +1152,17 @@ serve(async (req) => {
           const next = findNextNode(flowDef, contentNode);
           if (!next) {
             console.log('[process-chat-flow] ⚠️ Manual traversal: no next node after validate_customer');
+            break;
+          }
+          contentNode = next;
+        } else if (contentNode.type === 'fetch_order') {
+          // 📦 BUG C FIX: fetch_order inline during manual traversal
+          console.log('[process-chat-flow] 📦 Manual traverse: executing fetch_order inline');
+          manualCollectedData.__fetched = manualCollectedData.__fetched || {};
+          // During manual trigger we may not have full context, just advance
+          const next = findNextNode(flowDef, contentNode);
+          if (!next) {
+            console.log('[process-chat-flow] ⚠️ Manual traversal: no next node after fetch_order');
             break;
           }
           contentNode = next;
@@ -1764,11 +1775,27 @@ serve(async (req) => {
                     completed_at: new Date().toISOString(),
                   }).eq('id', activeState.id);
 
+                  // ✅ BUG E FIX: OTP not_customer transfer → transition-conversation-state
+                  const otpNcDeptId = resolvedNode.data?.department_id || null;
+                  const otpNcAiMode = resolvedNode.data?.ai_mode || 'waiting_human';
+                  const otpNcTransType =
+                    otpNcAiMode === 'copilot'   ? 'set_copilot' :
+                    otpNcAiMode === 'autopilot' ? 'engage_ai' :
+                    'handoff_to_human';
+                  await fetch(
+                    `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+                    {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+                      body: JSON.stringify({ conversationId, transition: otpNcTransType, departmentId: otpNcDeptId, reason: 'flow_transfer_otp_not_customer', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id, ai_mode: otpNcAiMode } })
+                    }
+                  );
+
                   return new Response(JSON.stringify({
                     useAI: false,
                     response: notCustomerMsg,
                     transfer: true,
-                    departmentId: resolvedNode.data?.department_id || null,
+                    departmentId: otpNcDeptId,
                     transferType: resolvedNode.data?.transfer_type,
                     collectedData,
                     flowId: activeState.flow_id,
@@ -1890,11 +1917,27 @@ serve(async (req) => {
                     completed_at: new Date().toISOString(),
                   }).eq('id', activeState.id);
 
+                  // ✅ BUG F FIX: OTP success transfer → transition-conversation-state
+                  const otpOkDeptId = resolvedNode.data?.department_id || null;
+                  const otpOkAiMode = resolvedNode.data?.ai_mode || 'waiting_human';
+                  const otpOkTransType =
+                    otpOkAiMode === 'copilot'   ? 'set_copilot' :
+                    otpOkAiMode === 'autopilot' ? 'engage_ai' :
+                    'handoff_to_human';
+                  await fetch(
+                    `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+                    {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+                      body: JSON.stringify({ conversationId, transition: otpOkTransType, departmentId: otpOkDeptId, reason: 'flow_transfer_otp_verified', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id, ai_mode: otpOkAiMode } })
+                    }
+                  );
+
                   return new Response(JSON.stringify({
                     useAI: false,
                     response: "✅ Identidade verificada!\n\n" + (nextMsg || "Transferindo..."),
                     transfer: true,
-                    departmentId: resolvedNode.data?.department_id || null,
+                    departmentId: otpOkDeptId,
                     collectedData,
                     flowId: activeState.flow_id,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -3585,7 +3628,7 @@ serve(async (req) => {
       // até encontrar um nó que colete input (ask_*, ai_response, transfer, end)
       const extraMessages: string[] = [];
       
-      while (nextNode && (nextNode.type === 'message' || nextNode.type === 'create_ticket')) {
+      while (nextNode && (nextNode.type === 'message' || nextNode.type === 'create_ticket' || nextNode.type === 'validate_customer' || nextNode.type === 'fetch_order')) {
         if (nextNode.type === 'create_ticket') {
           // 🎫 Mid-flow: criar ticket e auto-avançar
           const subject = replaceVariables(nextNode.data?.subject_template || 'Ticket do Fluxo', variablesContext);
@@ -3609,6 +3652,48 @@ serve(async (req) => {
           });
           if (ticket) collectedData.__last_ticket_id = ticket.id;
           console.log(`[process-chat-flow] 🎫 Auto-advancing past create_ticket node ${nextNode.id}`);
+        } else if (nextNode.type === 'validate_customer') {
+          // 🛡️ BUG A FIX: validate_customer inline no main auto-advance loop
+          console.log('[process-chat-flow] 🛡️ [main-autoadvance] validate_customer inline');
+          const vcUrlMain = Deno.env.get('SUPABASE_URL')!;
+          const vcKeyMain = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          const { data: vcConvMain } = await supabaseClient.from('conversations').select('contact_id').eq('id', conversationId).maybeSingle();
+          let vcContactMain: any = null;
+          if (vcConvMain?.contact_id) {
+            const { data: cgMain } = await supabaseClient.from('contacts').select('phone, email, document, whatsapp_id, first_name, last_name, kiwify_validated').eq('id', vcConvMain.contact_id).maybeSingle();
+            vcContactMain = cgMain;
+          }
+          const vKeyMain = nextNode.data?.save_validated_as || 'customer_validated';
+          const nKeyMain = nextNode.data?.save_customer_name_as || 'customer_name_found';
+          const eKeyMain = nextNode.data?.save_customer_email_as || 'customer_email_found';
+          let vFoundMain = false, vNameMain = '', vEmailMain = '';
+          if (vcContactMain && !vcContactMain.kiwify_validated) {
+            const vPromisesMain: Promise<any>[] = [];
+            if (nextNode.data?.validate_phone !== false && (vcContactMain.phone || vcContactMain.whatsapp_id)) {
+              vPromisesMain.push(fetch(`${vcUrlMain}/functions/v1/validate-by-kiwify-phone`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKeyMain}` }, body: JSON.stringify({ phone: vcContactMain.phone, whatsapp_id: vcContactMain.whatsapp_id, contact_id: vcConvMain?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (nextNode.data?.validate_email !== false && vcContactMain.email) {
+              vPromisesMain.push(fetch(`${vcUrlMain}/functions/v1/verify-customer-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKeyMain}` }, body: JSON.stringify({ email: vcContactMain.email, contact_id: vcConvMain?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (nextNode.data?.validate_cpf === true && vcContactMain.document) {
+              vPromisesMain.push(fetch(`${vcUrlMain}/functions/v1/validate-by-cpf`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKeyMain}` }, body: JSON.stringify({ cpf: vcContactMain.document, contact_id: vcConvMain?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (vPromisesMain.length > 0) {
+              const vResultsMain = await Promise.allSettled(vPromisesMain);
+              for (const vr of vResultsMain) { if (vr.status === 'fulfilled' && vr.value?.found) { vFoundMain = true; if (vr.value.customer?.name) vNameMain = vr.value.customer.name; if (vr.value.customer?.email) vEmailMain = vr.value.customer.email; } }
+            }
+            if (vFoundMain && vcConvMain?.contact_id) {
+              await supabaseClient.from('contacts').update({ kiwify_validated: true, status: 'customer' }).eq('id', vcConvMain.contact_id);
+            }
+          } else if (vcContactMain?.kiwify_validated) {
+            vFoundMain = true; vNameMain = [vcContactMain.first_name, vcContactMain.last_name].filter(Boolean).join(' '); vEmailMain = vcContactMain.email || '';
+          }
+          collectedData[vKeyMain] = vFoundMain; collectedData[nKeyMain] = vNameMain; collectedData[eKeyMain] = vEmailMain;
+          console.log('[process-chat-flow] 🛡️ [main-autoadvance] validate result:', { vFoundMain, vNameMain });
+        } else if (nextNode.type === 'fetch_order') {
+          // 📦 BUG A FIX: fetch_order inline no main auto-advance loop
+          console.log('[process-chat-flow] 📦 [main-autoadvance] fetch_order inline');
+          collectedData = await handleFetchOrderNode(nextNode, collectedData, userMessage);
         } else {
           const msgText = replaceVariables(nextNode.data?.message || "", variablesContext);
           extraMessages.push(msgText);
@@ -4091,7 +4176,7 @@ serve(async (req) => {
         // 4. Logs fortes para diagnóstico
         // ============================================================
         
-        const NO_CONTENT = new Set(['input', 'start', 'condition', 'condition_v2', 'validate_customer']);
+        const NO_CONTENT = new Set(['input', 'start', 'condition', 'condition_v2', 'validate_customer', 'fetch_order']);
         const MAX_TRAVERSAL = 12;
 
         // 1) Descobrir startNode
@@ -4286,6 +4371,16 @@ serve(async (req) => {
             const next = findNextNode(flowDef, node);
             if (!next) {
               console.log('[process-chat-flow] ⚠️ No next node after validate_customer');
+              break;
+            }
+            node = next;
+          } else if (node.type === 'fetch_order') {
+            // 📦 BUG B FIX: fetch_order inline during master flow traversal
+            console.log('[process-chat-flow] 📦 Master traverse: executing fetch_order inline');
+            collectedData = await handleFetchOrderNode(node, collectedData, userMessage);
+            const next = findNextNode(flowDef, node);
+            if (!next) {
+              console.log('[process-chat-flow] ⚠️ No next node after fetch_order');
               break;
             }
             node = next;
@@ -4510,7 +4605,7 @@ serve(async (req) => {
     let attempts = 0;
     const maxAttempts = 10; // Evitar loop infinito
     
-    while (attempts < maxAttempts && (trigCurrentNode.type === 'input' || trigCurrentNode.type === 'condition' || trigCurrentNode.type === 'condition_v2')) {
+    while (attempts < maxAttempts && (trigCurrentNode.type === 'input' || trigCurrentNode.type === 'condition' || trigCurrentNode.type === 'condition_v2' || trigCurrentNode.type === 'validate_customer' || trigCurrentNode.type === 'fetch_order')) {
       attempts++;
       console.log('[process-chat-flow] ⏩ Nó sem conteúdo (', trigCurrentNode.type, ') - avançando...');
       
@@ -4529,6 +4624,15 @@ serve(async (req) => {
         const v2Path = evaluateConditionV2Path(trigCurrentNode.data, {}, userMessage, undefined, undefined, undefined, trigFlowDef.edges || []);
         console.log('[process-chat-flow] 🔍 Condição V2 avaliada → path:', v2Path);
         trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, v2Path);
+      } else if (trigCurrentNode.type === 'validate_customer') {
+        // 🛡️ BUG D FIX: validate_customer inline no trigger match traversal
+        console.log('[process-chat-flow] 🛡️ [trigger-match] validate_customer inline — skipping validation (no state yet)');
+        // During trigger match traversal we don't have a flow state yet, just advance past it
+        trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, undefined);
+      } else if (trigCurrentNode.type === 'fetch_order') {
+        // 📦 BUG D FIX: fetch_order inline no trigger match traversal
+        console.log('[process-chat-flow] 📦 [trigger-match] fetch_order inline — skipping fetch (no state yet)');
+        trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, undefined);
       } else {
         // Para nó input, apenas seguir para o próximo
         trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, undefined);
