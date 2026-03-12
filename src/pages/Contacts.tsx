@@ -316,7 +316,7 @@ export default function Contacts() {
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       {(() => {
-                        const consultant = profiles?.find(p => p.id === contact.consultant_id);
+                        const consultant = consultants?.find(c => c.id === contact.consultant_id);
                         return consultant ? (
                           <div className="flex items-center gap-2">
                             {canChangeConsultant ? (
