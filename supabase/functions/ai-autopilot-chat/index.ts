@@ -3824,7 +3824,7 @@ serve(async (req) => {
       }
     };
 
-    // Helper: Chamar IA com OpenAI direta (usa modelo configurado)
+    // Helper: Chamar IA com OpenAI direta (usa modelo configurado + fallback automático)
     const callAIWithFallback = async (payload: any) => {
       const configuredModel = sanitizeModelName(ragConfig.model);
       
@@ -3835,23 +3835,72 @@ serve(async (req) => {
         delete finalPayload.max_tokens;
       }
       
-      const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model: configuredModel, ...finalPayload }),
-      }, 60000);
+      // Remove campos não suportados por modelos mais novos
+      delete finalPayload.stream;
       
-      if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error('QUOTA_ERROR: Erro de Saldo/Cota na IA.');
+      const tryModel = async (model: string, attempt: string) => {
+        const attemptPayload = { ...finalPayload };
+        // Reasoning models não suportam max_tokens
+        if (REASONING_MODELS.has(model) && attemptPayload.max_tokens) {
+          attemptPayload.max_completion_tokens = attemptPayload.max_tokens;
+          delete attemptPayload.max_tokens;
         }
-        throw new Error(`OpenAI error: ${response.status}`);
-      }
+        
+        console.log(`[callAIWithFallback] 🤖 ${attempt} com modelo: ${model}`);
+        
+        const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ model, ...attemptPayload }),
+        }, 60000);
+        
+        if (!response.ok) {
+          const errorBody = await response.text().catch(() => 'Unable to read error body');
+          console.error(`[callAIWithFallback] ❌ ${attempt} falhou: ${response.status}`, errorBody);
+          
+          if (response.status === 429) {
+            throw new Error('QUOTA_ERROR: Erro de Saldo/Cota na IA.');
+          }
+          throw new Error(`OpenAI error: ${response.status} | ${errorBody.substring(0, 200)}`);
+        }
+        
+        return await response.json();
+      };
       
-      return await response.json();
+      // Tentativa 1: modelo configurado
+      try {
+        return await tryModel(configuredModel, 'Tentativa principal');
+      } catch (primaryError) {
+        const errMsg = primaryError instanceof Error ? primaryError.message : String(primaryError);
+        
+        // Se é erro de quota, não tentar fallback
+        if (errMsg.includes('QUOTA_ERROR')) throw primaryError;
+        
+        // Se é erro 400/422 (payload inválido), tentar modelo de contingência seguro
+        if (errMsg.includes('400') || errMsg.includes('422')) {
+          console.warn(`[callAIWithFallback] ⚠️ Erro ${errMsg.includes('400') ? '400' : '422'} com ${configuredModel}, tentando fallback gpt-4o-mini`);
+          
+          try {
+            // Fallback: modelo mais estável e tolerante
+            const safeFallbackPayload = { ...finalPayload };
+            // Remover campos problemáticos para modelos antigos
+            delete safeFallbackPayload.max_completion_tokens;
+            if (!safeFallbackPayload.max_tokens) {
+              safeFallbackPayload.max_tokens = 1024;
+            }
+            
+            return await tryModel('gpt-4o-mini', 'Fallback técnico');
+          } catch (fallbackError) {
+            console.error('[callAIWithFallback] ❌ Fallback gpt-4o-mini também falhou:', fallbackError);
+            throw primaryError; // Propagar erro original
+          }
+        }
+        
+        throw primaryError;
+      }
     }
     
     // ============================================================
