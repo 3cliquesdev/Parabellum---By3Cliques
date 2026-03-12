@@ -6029,8 +6029,6 @@ Digite **"reenviar"** se precisar de um novo código.`;
       // O fluxo visual é soberano e tem seu próprio ramo financeiro com OTP nativo.
       // Ref: flow-sovereignty-principle
       
-      if (!flow_context?.forbidFinancial || WITHDRAWAL_ACTION_PATTERNS.some(p => p.test(customerMessage))) {
-      // 🔒 Bloco OTP: só executa se NÃO estamos em forbidFinancial OU se é ação clara de saque
       const maskedEmail = maskEmail(contactEmail);
       
       console.log('[ai-autopilot-chat] 🔐 OTP SAQUE - Solicitação de saque detectada:', {
@@ -6137,7 +6135,7 @@ Por favor, **digite o código** que você recebeu para continuar com o saque.`;
         console.error('[ai-autopilot-chat] ❌ Erro ao disparar OTP financeiro:', error);
         // Se falhar, continua para IA tentar lidar
       }
-      } // 🆕 Fim do guard: if (!forbidFinancial || isWithdrawalActionClear)
+      
     }
     
     // Cliente identificado sem solicitação financeira - atendimento normal (não precisa OTP)
