@@ -1,178 +1,107 @@
 
-# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-## Arquivo: `supabase/functions/process-chat-flow/index.ts`
+# Corrigir lógica financeira: Desambiguar + Seguir fluxo para ações
 
-### FIX 1 ✅ — Proteção contra loop flow-to-flow
-### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
-### FIX 3 ✅ — Auto-traverse cobre condition_v2
-### FIX 4 ✅ — Transfer node atualiza conversations.department
-### FIX 5 ✅ — startMessage com replaceVariables
-### FIX 6 ✅ — financialIntentPattern simplificado
+## Problema atual
 
----
+"Sacar!" é uma palavra isolada que **não** bate no `financialActionPattern` (que exige frases compostas), mas bate no `OTP_REQUIRED_KEYWORDS` (simples `includes('sacar')`). Isso causa bloqueio imediato sem desambiguação.
 
-# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
+A cadeia de falha:
+1. `process-chat-flow` envia para `ai-autopilot-chat` com `forbidFinancial=true`
+2. A interception precoce (linha 1527) NÃO pega "Sacar!" (não bate no `financialActionPattern`)
+3. Mas o check de OTP (linha 5543) pega "sacar" via `OTP_REQUIRED_KEYWORDS`
+4. Como `flow_context.forbidFinancial=true`, retorna `financialBlocked=true` direto, sem perguntar nada
 
-## Problema
-Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
+## Comportamento desejado
 
-## Correções aplicadas
+- **Dúvida** ("como funciona o saque?") → IA responde via KB, fica no nó
+- **Ação clara** ("quero sacar meu saldo") → Segue fluxo financeiro (OTP → ticket automático)
+- **Ambíguo** ("sacar", "saque", "reembolso") → IA pergunta: "Você quer informações sobre saque ou deseja solicitar um saque?"
+  - Se confirmar ação → Segue fluxo financeiro
+  - Se for dúvida → IA responde via KB
 
-### 7a — Fallback edge default (process-chat-flow ~L2273)
-Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
+## Alterações
 
-### 7b — Guard final sem nó (process-chat-flow ~L2336)
-Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
+### 1. `ai-autopilot-chat/index.ts` — Corrigir o check de OTP com flow context
 
-### 7c — Safety net IA falha (process-buffered-messages ~L383)
-Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
+No bloco de OTP (linha ~5986), quando `flow_context.forbidFinancial=true`:
+- **Antes de bloquear**, verificar se a mensagem é uma ação clara ou ambígua
+- Se **ambígua** (termo isolado como "sacar", "saque"), NÃO bloquear. Injetar instrução de desambiguação no prompt e deixar a IA perguntar
+- Se **ação clara** (frase composta como "quero sacar meu saldo"), manter o bloqueio e devolver ao fluxo
 
-### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
-Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
-
----
-
-# FIX 8 ✅ — pg_cron matando flows prematuramente (11/03/2026)
-
-## Problema
-O pg_cron `cleanup-stuck-flow-states` usava `started_at < now() - 3 min`, mas `started_at` é imutável. Flows com múltiplos passos (>3min) eram mortos antes de chegar ao nó de transfer.
-
-## Correções aplicadas
-
-### 8a — Coluna `updated_at` em `chat_flow_states`
-Nova coluna `updated_at timestamptz DEFAULT now()` adicionada via migration. Registros existentes backfilled com `COALESCE(completed_at, started_at)`.
-
-### 8b — `updated_at` em todos os `.update()` do process-chat-flow
-21 pontos de atualização no `process-chat-flow/index.ts` agora incluem `updated_at: new Date().toISOString()`, renovando o timestamp a cada interação.
-
-### 8c — pg_cron atualizado
-Cron usa `updated_at < now() - INTERVAL '15 minutes'` em vez de `started_at < now() - 3 min`.
-
----
-
-# FIX 9 ✅ — IA não responde: safety net mata flow em quota error (11/03/2026)
-
-## Problema
-O `process-buffered-messages` tratava erros 429/503 (quota/rate limit) como falha fatal, disparando `forceAIExit` e matando o flow antes da IA ter chance de responder.
-
-## Correções aplicadas
-
-### 9a — Distinguir quota error de erro técnico real
-Na safety net do `process-buffered-messages`, erros 429/503 com `quota_error` ou `retry_suggested: true` NÃO disparam `forceAIExit`. Buffer fica como `processed=false` para retry no próximo ciclo.
-
-### 9b — Refresh `updated_at` do flow state após buffer processing com sucesso
-Após `ai-autopilot-chat` retornar OK via buffer, o `updated_at` do `chat_flow_states` é atualizado para evitar morte prematura pelo cron de 15 min.
-
-### 9c — Anti-retry infinito (3 ciclos)
-Buffers que falham por quota por 3+ ciclos de cron (~3 min) enviam mensagem de "alta demanda" ao contato e são marcados como processed.
-
----
-
-# FIX 10 ✅ — Auditoria IA Semana 1: Quick wins (11/03/2026)
-
-## Correções aplicadas
-
-### 10a — auto-handoff: UUID dinâmico
-Substituído UUID hardcoded `36ce66cd-...` por busca dinâmica do departamento "Suporte" via `departments.ilike('name', '%suporte%')`. Se não encontrado, loga warning e aplica handoff sem forçar departamento.
-
-### 10b — auto-handoff: Markdown removido das notas internas
-Removido `**bold**` de todas as notas internas (linhas 78, 97, 174-181). Notas agora usam texto plano com emojis para compatibilidade cross-canal (WhatsApp).
-
-### 10c — ai-autopilot-chat: Memória cross-session
-Busca últimas 3 conversas fechadas do mesmo contact_id e injeta última mensagem de agente/sistema no system prompt. IA agora lembra conversas anteriores do mesmo cliente.
-
-### 10d — ai-autopilot-chat: Persona contextual
-Tom da IA varia automaticamente baseado no status do contato:
-- VIP/assinante → tom premium e proativo
-- Churn risk/inativo → tom empático e acolhedor
-- Lead quente (score ≥ 80) → tom entusiasmado e consultivo
-
----
-
-# FIX 11 ✅ — Passive Learning ativado + Cron Job (11/03/2026)
-
-## O que foi feito
-
-### 11a — Flag `ai_passive_learning_enabled` = true
-Inserido na tabela `system_configurations` com categoria `ai`.
-
-### 11b — Cron job `passive-learning-hourly`
-pg_cron agendado para rodar a cada hora (`0 * * * *`), invocando a edge function `passive-learning-cron` via `net.http_post`.
-
-### Estado confirmado
-- `ai_global_enabled` = true
-- `ai_shadow_mode` = false
-- `ai_passive_learning_enabled` = true
-
----
-
-# FIX 12 ✅ — Cron job corrigido: anon key no gateway (11/03/2026)
-
-## Problema
-`current_setting('supabase.service_role_key', true)` retorna NULL neste projeto → cron enviava `Authorization: Bearer null` → edge function não autenticava.
-
-## Correção
-Recriado cron job `passive-learning-hourly` (jobid 13) usando anon key no header Authorization. A anon key é suficiente para passar pelo API gateway; a função internamente usa `SUPABASE_SERVICE_ROLE_KEY` do ambiente Deno para operações admin.
-
----
-
-# FIX 13 ✅ — Auto-KB Gap Detection (11/03/2026)
-
-## O que foi feito
-
-### 13a — Edge function `detect-kb-gaps`
-Criada edge function que:
-1. Busca eventos de IA das últimas 24h onde a IA fez handoff/exit (tipos: `ai_handoff_exit`, `contract_violation_blocked`, `flow_exit_clean`, `ai_exit_intent`)
-2. Clusteriza por similaridade textual (primeiras 3 palavras normalizadas)
-3. Filtra clusters com >= 2 ocorrências (gaps recorrentes)
-4. Cria `knowledge_candidates` com `status: 'pending'` + tag `'gap_detected'` (CHECK constraint impede valor custom)
-5. Notifica admins/managers via tabela `notifications`
-
-### 13b — Cron job `detect-kb-gaps-daily`
-Agendado para rodar diariamente às 8h UTC (`0 8 * * *`) usando anon key no gateway.
-
-### 13c — Workaround CHECK constraint
-`knowledge_candidates.status` só aceita `pending | approved | rejected`. Gaps usam `status: 'pending'` com tag `'gap_detected'` no array de tags para diferenciação.
-
----
-
-# FIX 14 ✅ — transition-conversation-state: State Machine centralizado (11/03/2026)
-
-## Problema
-Mudanças de estado de conversas (ai_mode, department, assigned_to, dispatch jobs) eram feitas em múltiplos pontos do código (auto-handoff, process-chat-flow, etc.), causando inconsistências como conversa sem departamento, ai_mode errado, ou dispatch job desatualizado.
-
-## Correções aplicadas
-
-### 14a — Edge function `transition-conversation-state`
-Nova edge function que é a ÚNICA fonte da verdade para transições de estado. Suporta 7 tipos:
-- `handoff_to_human`: autopilot → waiting_human + cria dispatch job
-- `assign_agent`: qualquer → copilot + atribui agente + fecha dispatch
-- `unassign_agent`: copilot → waiting_human + reabre dispatch
-- `engage_ai`: qualquer → autopilot + fecha dispatch
-- `set_copilot`: qualquer → copilot
-- `update_department`: atualiza dept + dispatch job
-- `close`: qualquer → closed + fecha dispatch
-
-Cada transição:
-1. Busca estado atual da conversa
-2. Aplica update atômico
-3. Gerencia dispatch jobs (create/close/reopen)
-4. Loga em `ai_events` como `state_transition_{tipo}`
-5. Fallback dinâmico para dept "Suporte"
-
-### 14b — auto-handoff refatorado
-Substituída toda lógica de update direto (fallback dept + update ai_mode) por chamada única:
-```typescript
-supabaseClient.functions.invoke('transition-conversation-state', {
-  body: { conversationId, transition: 'handoff_to_human', reason, metadata }
-});
+Mudança concreta:
+```
+// Antes do check de OTP (linha ~5986):
+if (contactHasEmail && isWithdrawalRequest && !hasRecentOTPVerification) {
+  if (flow_context?.forbidFinancial) {
+    // 🆕 VERIFICAR se é ação clara ou termo ambíguo
+    const isAmbiguousWithdrawal = OTP_REQUIRED_KEYWORDS.some(k => 
+      customerMessage.toLowerCase().includes(k)
+    ) && !WITHDRAWAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
+    
+    if (isAmbiguousWithdrawal) {
+      // NÃO bloquear — deixar IA perguntar via desambiguação
+      console.log('[ai-autopilot-chat] 🔍 OTP SAQUE AMBÍGUO: termo isolado, IA vai desambiguar');
+      // Setar flag para injetar instrução no prompt
+      // (continua execução normal, não retorna aqui)
+    } else {
+      // Ação clara → devolver ao fluxo (comportamento atual)
+      return Response...financialBlocked
+    }
+  }
+}
 ```
 
-### 14c — process-chat-flow: 5 blocos de transfer refatorados
-Todos os blocos de update direto de `conversations` em transfer nodes substituídos por `fetch()` para `transition-conversation-state`:
-1. Contract violation handler (~L726)
-2. Handoff sem próximo nó (~L2326)
-3. aiExitForced sem nó (~L2365)
-4. Transfer node principal (~L2808)
-5. Transfer node msg chain (~L3061)
+### 2. `ai-autopilot-chat/index.ts` — Injetar instrução de desambiguação no prompt
+
+Na montagem do system prompt, quando `ambiguousFinancialDetected` ou o novo `ambiguousWithdrawalDetected` for true, adicionar instrução:
+```
+"O cliente mencionou um termo financeiro ambíguo. Pergunte educadamente:
+'Você gostaria de informações sobre [tema] ou deseja fazer uma solicitação de [tema]?'
+Se confirmar que quer SOLICITAR/FAZER a ação → responda com [[FLOW_EXIT:financeiro]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento."
+```
+
+### 3. `ai-autopilot-chat/index.ts` — Detectar confirmação de ação após desambiguação
+
+Quando a IA pergunta "quer solicitar?" e o cliente responde "sim, quero sacar":
+- Isso já vai bater no `financialActionPattern` ("quero sacar") → roteamento correto para o fluxo
+- Ou se responder só "sim" → verificar se a última mensagem da IA foi uma desambiguação financeira e tratar como confirmação de ação
+
+### 4. `process-chat-flow/index.ts` — Mesma lógica espelhada
+
+No `process-chat-flow` (linha ~3130), a desambiguação para termos ambíguos já existe. Precisa garantir que o `financialAmbiguousPattern` inclua "sacar" (atualmente só tem "saque"):
+
+```
+const financialAmbiguousPattern = /\b(saque|sacar|saldo|reembolso|estorno|devolu[çc][ãa]o|ressarcimento|cobran[çc]a)\b/i;
+```
+
+### 5. Ambos os arquivos — Adicionar "sacar" ao padrão ambíguo
+
+Tanto em `ai-autopilot-chat` quanto em `process-chat-flow`, o `financialAmbiguousPattern` precisa incluir "sacar" para que o termo isolado seja tratado como ambíguo (e não ignorado nem bloqueado).
+
+## Resumo do fluxo corrigido
+
+```text
+Cliente diz "Sacar!"
+  ↓
+financialActionPattern? NÃO (termo isolado)
+financialAmbiguousPattern? SIM ("sacar" agora incluído)
+  ↓
+IA pergunta: "Você quer informações sobre saque ou deseja solicitar um saque?"
+  ↓
+Cliente: "quero sacar meu saldo"     Cliente: "como funciona?"
+  ↓                                    ↓
+financialActionPattern? SIM          financialInfoPattern? SIM
+  ↓                                    ↓
+Segue fluxo financeiro               IA responde via KB
+(OTP → coleta PIX → ticket)          (fica no nó)
+```
+
+## Arquivos modificados
+
+| Arquivo | Mudança |
+|---|---|
+| `supabase/functions/ai-autopilot-chat/index.ts` | Adicionar check ambíguo no bloco OTP, injetar desambiguação no prompt, adicionar "sacar" ao pattern |
+| `supabase/functions/process-chat-flow/index.ts` | Adicionar "sacar" ao `financialAmbiguousPattern` |
+
