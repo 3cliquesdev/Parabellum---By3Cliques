@@ -136,7 +136,7 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
 
     if (!response || !response.ok) {
       if (!response) {
-        throw new Error('Failed to get response from AI Gateway');
+        throw new Error('Failed to get response from OpenAI');
       }
       
       const errorText = await response.text();
