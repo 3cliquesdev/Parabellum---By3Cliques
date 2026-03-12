@@ -4649,15 +4649,45 @@ serve(async (req) => {
         if (node.type === 'end') {
           await supabaseClient
             .from('chat_flow_states')
-            .update({ status: 'completed', completed_at: new Date().toISOString() , updated_at: new Date().toISOString() })
+            .update({ status: 'completed', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
             .eq('id', stateId);
-            
+
+          // 🛡️ BUG K FIX: Master Flow end → executa end_actions
+          if (node.data?.end_action === 'create_ticket') {
+            const actionData = node.data.action_data || {};
+            const subject = replaceVariables(actionData.subject || node.data.subject_template || 'Ticket do Fluxo', masterVariablesContext);
+            const description = replaceVariables(actionData.description || node.data.description_template || '', masterVariablesContext);
+            const internalNote = (actionData.internal_note || node.data.internal_note)
+              ? replaceVariables(actionData.internal_note || node.data.internal_note, masterVariablesContext) : null;
+            await createTicketFromFlow(supabaseClient, {
+              conversationId, flowStateId: stateId, nodeId: node.id,
+              contactId: masterContactData?.id || null,
+              subject, description,
+              category: actionData.ticket_category || node.data.ticket_category || 'outro',
+              priority: actionData.ticket_priority || node.data.ticket_priority || 'medium',
+              departmentId: actionData.department_id || node.data.department_id || null,
+              internalNote, useCollectedData: actionData.use_collected_data || node.data.use_collected_data || false,
+              collectedData: {},
+            });
+          }
+          if (node.data?.end_action === 'add_tag') {
+            const tagId = node.data.action_data?.tag_id;
+            const tagScope = node.data.action_data?.tag_scope || 'contact';
+            if (tagId) {
+              if (tagScope === 'conversation') {
+                await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+              } else if (masterContactData?.id) {
+                await supabaseClient.from('contact_tags').upsert({ contact_id: masterContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+              }
+            }
+          }
+
           const endMsg = replaceVariables(node.data?.message || '', masterVariablesContext);
           const msg = (endMsg || '').trim();
           return new Response(
             JSON.stringify({ 
               useAI: false, 
-              response: msg.length ? msg : null,  // ✅ null quando vazio
+              response: msg.length ? msg : null,
               flowCompleted: true, 
               flowId: masterFlow.id,
               isMasterFlow: true,
