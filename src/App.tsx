@@ -120,7 +120,7 @@ const IntegrationsCentralPage = lazy(() => import("./pages/IntegrationsCentralPa
 const ChatFlows = lazy(() => import("./pages/ChatFlows"));
 const ChatFlowEditorPage = lazy(() => import("./pages/ChatFlowEditorPage"));
 const WhatsAppMetaSettings = lazy(() => import("./pages/WhatsAppMetaSettings"));
-const SupportDashboard = lazy(() => import("./pages/SupportDashboard"));
+// SupportDashboard removed — now inline redirect
 const CommercialConversationsReport = lazy(() => import("./pages/CommercialConversationsReport"));
 const TicketsExportReport = lazy(() => import("./pages/TicketsExportReport"));
 const ConversationsReport = lazy(() => import("./pages/ConversationsReport"));
