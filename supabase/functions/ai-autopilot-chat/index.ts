@@ -6028,50 +6028,6 @@ Digite **"reenviar"** se precisar de um novo código.`;
       // 🆕 GUARD: Se existe flow_context (qualquer), PULAR o bloco OTP inteiro.
       // O fluxo visual é soberano e tem seu próprio ramo financeiro com OTP nativo.
       // Ref: flow-sovereignty-principle
-      if (false) { // guard desativado — flow_context já é filtrado na linha acima
-        // 🆕 DESAMBIGUAÇÃO: Verificar se é AÇÃO CLARA (padrão composto) ou TERMO AMBÍGUO (palavra isolada)
-        const isWithdrawalActionClear = WITHDRAWAL_ACTION_PATTERNS.some(pattern =>
-          pattern.test(customerMessage)
-        );
-        
-        if (isWithdrawalActionClear) {
-          // ✅ Ação clara (ex: "quero sacar meu saldo") → devolver ao fluxo financeiro
-          console.log('[ai-autopilot-chat] 🔒 OTP SAQUE BLOQUEADO: Ação clara + forbidFinancial → devolvendo ao fluxo financeiro', {
-            is_withdrawal_action_clear: true,
-            has_flow_context: true,
-            forbid_financial: true,
-            action: 'flow_advance_needed_financeiro'
-          });
-          
-          return new Response(JSON.stringify({
-            ok: true,
-            financialBlocked: true,
-            exitKeywordDetected: true,
-            flow_advance_needed: true,
-            hasFlowContext: true,
-            ai_exit_intent: 'financeiro',
-            response: 'Entendi sua solicitação de saque. Vou te encaminhar para o setor responsável.',
-            message: 'Entendi sua solicitação de saque. Vou te encaminhar para o setor responsável.',
-            aiResponse: 'Entendi sua solicitação de saque. Vou te encaminhar para o setor responsável.',
-          }), {
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        } else {
-          // 🔍 Termo ambíguo (ex: "sacar", "saque") → NÃO bloquear, NÃO enviar OTP, deixar IA desambiguar
-          console.log('[ai-autopilot-chat] 🔍 OTP SAQUE AMBÍGUO: Termo isolado detectado, IA vai desambiguar em vez de bloquear/enviar OTP', {
-            is_withdrawal_action_clear: false,
-            message_preview: customerMessage.substring(0, 80),
-            action: 'disambiguation_via_ai_prompt',
-            skipping_otp: true
-          });
-          // NÃO retorna — continua execução normal, a flag ambiguousFinancialDetected
-          // já foi setada na linha ~1517 e vai injetar instrução de desambiguação no prompt
-          // 🆕 SKIP: Pular TODO o bloco OTP abaixo — ir direto para a IA
-        }
-        // 🆕 FIX BUG CRÍTICO: Se forbidFinancial e NÃO é ação clara, PULAR o bloco OTP inteiro
-        // Sem isso, o código continuava para enviar OTP mesmo em termos ambíguos
-      }
       
       if (!flow_context?.forbidFinancial || WITHDRAWAL_ACTION_PATTERNS.some(p => p.test(customerMessage))) {
       // 🔒 Bloco OTP: só executa se NÃO estamos em forbidFinancial OU se é ação clara de saque
