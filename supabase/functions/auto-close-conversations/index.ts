@@ -565,17 +565,10 @@ Deno.serve(async (req) => {
           if (closedIds.includes(conv.id)) continue;
 
           try {
-            // Verificar última mensagem - só fechar se IA/sistema respondeu e cliente não
-            const { data: lastMsg } = await supabase
-              .from('messages')
-              .select('sender_type')
-              .eq('conversation_id', conv.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
-
-            if (!lastMsg || lastMsg.sender_type === 'contact') {
-              console.log(`[Auto-Close] No-dept skip ${conv.id} - last msg from contact`);
+            // Verificar se o contato enviou mensagem recente (últimas 3 msgs)
+            const contactActive = await isContactRecentlyActive(supabase, conv.id, noDeptThreshold);
+            if (contactActive) {
+              console.log(`[Auto-Close] No-dept skip ${conv.id} - contact recently active (last 3 msgs check)`);
               continue;
             }
 
