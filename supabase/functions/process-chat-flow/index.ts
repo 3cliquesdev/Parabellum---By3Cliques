@@ -257,15 +257,32 @@ function findNextNode(flowDef: any, currentNode: any, path?: string): any {
     // Fallback: buscar edge sem handle específico
   }
   
-  // 🆕 FIX: Para ai_response com path (ex: 'ai_exit'), priorizar edge com sourceHandle
+  // 🆕 FIX: Para ai_response com path, priorizar edge com sourceHandle
+  // Fallback hierárquico: path específico → ai_exit → default → any
   if (currentNode.type === 'ai_response' && path) {
     const handleEdge = edges.find((e: any) => e.source === currentNode.id && e.sourceHandle === path);
     if (handleEdge) {
       console.log(`[findNextNode] ✅ ai_response: found edge with handle "${path}" → ${handleEdge.target}`);
       return flowDef.nodes.find((n: any) => n.id === handleEdge.target);
     }
-    console.log(`[findNextNode] ⚠️ ai_response: no edge with handle "${path}", falling back to default`);
-    // Se não achou edge com handle, cai no fallback abaixo
+    // Fallback 1: tentar ai_exit genérico (compatibilidade com fluxos antigos)
+    if (path !== 'ai_exit' && path !== 'default') {
+      const aiExitEdge = edges.find((e: any) => e.source === currentNode.id && e.sourceHandle === 'ai_exit');
+      if (aiExitEdge) {
+        console.log(`[findNextNode] ⚠️ ai_response: no edge for "${path}", falling back to "ai_exit" → ${aiExitEdge.target}`);
+        return flowDef.nodes.find((n: any) => n.id === aiExitEdge.target);
+      }
+    }
+    // Fallback 2: tentar default
+    if (path !== 'default') {
+      const defaultEdge = edges.find((e: any) => e.source === currentNode.id && e.sourceHandle === 'default');
+      if (defaultEdge) {
+        console.log(`[findNextNode] ⚠️ ai_response: no edge for "${path}", falling back to "default" → ${defaultEdge.target}`);
+        return flowDef.nodes.find((n: any) => n.id === defaultEdge.target);
+      }
+    }
+    console.log(`[findNextNode] ⚠️ ai_response: no edge with handle "${path}", falling back to generic`);
+    // Se não achou nenhum handle, cai no fallback genérico abaixo
   }
 
   // Para outros nós, buscar edge simples
