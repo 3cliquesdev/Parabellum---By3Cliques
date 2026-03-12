@@ -1329,7 +1329,7 @@ NUNCA peça email, CPF ou telefone para consultar pedidos.
 Exemplo correto: "Por favor, me informe o número do pedido ou o código de rastreio."
 Exemplo PROIBIDO: "Me informe seu email para eu consultar."
 
-A resposta deve ser curta, clara e objetiva.`;
+A resposta deve ser curta, clara e objetiva.
 
 Contexto do Cliente:
 Nome: ${contactName}
