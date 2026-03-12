@@ -1323,7 +1323,13 @@ Use apenas texto simples, sem formatação.
 Se não houver dados suficientes, responda exatamente:
 "No momento não tenho essa informação."
 
-A resposta deve ser curta, clara e objetiva.
+📦 CONSULTA DE PEDIDOS (REGRA ABSOLUTA):
+Para consultar pedidos, SEMPRE peça o NÚMERO DO PEDIDO ou CÓDIGO DE RASTREIO.
+NUNCA peça email, CPF ou telefone para consultar pedidos.
+Exemplo correto: "Por favor, me informe o número do pedido ou o código de rastreio."
+Exemplo PROIBIDO: "Me informe seu email para eu consultar."
+
+A resposta deve ser curta, clara e objetiva.`;
 
 Contexto do Cliente:
 Nome: ${contactName}
@@ -5932,6 +5938,32 @@ Digite **"reenviar"** se precisar de um novo código.`;
     // - Qualquer outra coisa → Conversa normal (sem OTP)
     // ============================================================
     if (contactHasEmail && isWithdrawalRequest && !hasRecentOTPVerification) {
+      // 🆕 GUARD: Se forbidFinancial + flow_context → devolver ao fluxo (soberania do motor de fluxos)
+      // O ramo Financeiro do fluxo tem seu próprio nó OTP nativo — NÃO duplicar aqui
+      if (flow_context?.forbidFinancial) {
+        console.log('[ai-autopilot-chat] 🔒 OTP SAQUE BLOQUEADO: forbidFinancial + flow_context → devolvendo ao fluxo financeiro', {
+          is_withdrawal_request: isWithdrawalRequest,
+          has_flow_context: true,
+          forbid_financial: true,
+          action: 'flow_advance_needed_financeiro'
+        });
+        
+        return new Response(JSON.stringify({
+          ok: true,
+          financialBlocked: true,
+          exitKeywordDetected: true,
+          flow_advance_needed: true,
+          hasFlowContext: true,
+          ai_exit_intent: 'financeiro',
+          response: 'Entendi sua solicitação de saque. Vou te encaminhar para o setor responsável.',
+          message: 'Entendi sua solicitação de saque. Vou te encaminhar para o setor responsável.',
+          aiResponse: 'Entendi sua solicitação de saque. Vou te encaminhar para o setor responsável.',
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
       const maskedEmail = maskEmail(contactEmail);
       
       console.log('[ai-autopilot-chat] 🔐 OTP SAQUE - Solicitação de saque detectada:', {
