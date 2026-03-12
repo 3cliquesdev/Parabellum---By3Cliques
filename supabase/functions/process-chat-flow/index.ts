@@ -2229,7 +2229,7 @@ serve(async (req) => {
                         ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
                       const ticket = await createTicketFromFlow(supabaseClient, {
                         conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
-                        contactId: activeState.conversations?.contact_id || null,
+                contactId: activeContactData?.id || null,
                         subject, description,
                         category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
                         priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
@@ -2245,8 +2245,8 @@ serve(async (req) => {
                       if (tagId) {
                         if (tagScope === 'conversation') {
                           await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
-                        } else if (activeState.conversations?.contact_id) {
-                          await supabaseClient.from('contact_tags').upsert({ contact_id: activeState.conversations.contact_id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                        } else if (activeContactData?.id) {
+                          await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
                         }
                       }
                     }
@@ -2262,6 +2262,46 @@ serve(async (req) => {
                     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                   }
 
+                  // Bug V fix: OTP max_attempts → ai_response must initialize __ai and update state
+                  if (resolvedNode.type === 'ai_response') {
+                    collectedData.__ai = { interaction_count: 0 };
+                    await supabaseClient.from('chat_flow_states').update({
+                      collected_data: collectedData,
+                      current_node_id: resolvedNode.id,
+                      status: 'active',
+                      updated_at: new Date().toISOString(),
+                    }).eq('id', activeState.id);
+
+                    variablesContext = await rebuildCtx();
+                    const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
+                    return new Response(JSON.stringify({
+                      useAI: true,
+                      aiNodeActive: true,
+                      nodeId: resolvedNode.id,
+                      response: "❌ Máximo de tentativas excedido.\n\n" + nextMsg,
+                      flowId: activeState.flow_id,
+                      flowName: activeState.chat_flows?.name || null,
+                      contextPrompt: resolvedNode.data?.context_prompt,
+                      useKnowledgeBase: resolvedNode.data?.use_knowledge_base !== false,
+                      collectedData,
+                      allowedSources: buildAllowedSources(resolvedNode.data),
+                      responseFormat: 'text_only',
+                      personaId: resolvedNode.data?.persona_id || null,
+                      personaName: resolvedNode.data?.persona_name || null,
+                      kbCategories: resolvedNode.data?.kb_categories || null,
+                      fallbackMessage: resolvedNode.data?.fallback_message || null,
+                      objective: resolvedNode.data?.objective || null,
+                      maxSentences: resolvedNode.data?.max_sentences ?? 3,
+                      forbidQuestions: resolvedNode.data?.forbid_questions ?? true,
+                      forbidOptions: resolvedNode.data?.forbid_options ?? true,
+                      forbidFinancial: resolvedNode.data?.forbid_financial ?? false,
+                      forbidCommercial: resolvedNode.data?.forbid_commercial ?? false,
+                      forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
+                      forbidSupport: resolvedNode.data?.forbid_support ?? false,
+                      forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
                   const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2' || resolvedNode.type === 'verify_customer_otp'
                     ? 'waiting_input' : 'active';
                   await supabaseClient.from('chat_flow_states').update({
@@ -2273,8 +2313,7 @@ serve(async (req) => {
                   variablesContext = await rebuildCtx();
                   const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
                   return new Response(JSON.stringify({
-                    useAI: resolvedNode.type === 'ai_response',
-                    aiNodeActive: resolvedNode.type === 'ai_response',
+                    useAI: false,
                     response: "❌ Máximo de tentativas excedido.\n\n" + nextMsg,
                     flowId: activeState.flow_id,
                     collectedData,
@@ -2489,7 +2528,7 @@ serve(async (req) => {
               const internalNote = nextNode.data?.internal_note ? replaceVariables(nextNode.data.internal_note, variablesContext) : null;
               const ticket = await createTicketFromFlow(supabaseClient, {
                 conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
-                contactId: activeState.conversations?.contact_id || null, subject, description,
+                contactId: activeContactData?.id || null, subject, description,
                 category: nextNode.data?.ticket_category || 'outro', priority: nextNode.data?.ticket_priority || 'medium',
                 departmentId: nextNode.data?.department_id || null, internalNote,
                 useCollectedData: nextNode.data?.use_collected_data || false, collectedData,
@@ -2578,7 +2617,7 @@ serve(async (req) => {
               const internalNote = (actionData.internal_note || nextNode.data.internal_note) ? replaceVariables(actionData.internal_note || nextNode.data.internal_note, variablesContext) : null;
               const ticket = await createTicketFromFlow(supabaseClient, {
                 conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
-                contactId: activeState.conversations?.contact_id || null, subject, description,
+                contactId: activeContactData?.id || null, subject, description,
                 category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
                 priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
                 departmentId: actionData.department_id || nextNode.data.department_id || null,
@@ -2593,8 +2632,8 @@ serve(async (req) => {
               if (tagId) {
                 if (tagScope === 'conversation') {
                   await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
-                } else if (activeState.conversations?.contact_id) {
-                  await supabaseClient.from('contact_tags').upsert({ contact_id: activeState.conversations.contact_id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                } else if (activeContactData?.id) {
+                  await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
                 }
               }
             }
@@ -3670,7 +3709,7 @@ serve(async (req) => {
             conversationId: conversationId,
             flowStateId: activeState.id,
             nodeId: nextNode.id,
-            contactId: activeState.conversations?.contact_id || null,
+            contactId: activeContactData?.id || null,
             subject,
             description,
             category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
@@ -3699,8 +3738,8 @@ serve(async (req) => {
               } else {
                 console.log(`[process-chat-flow] ✅ Tag ${tagName} added to conversation`);
               }
-            } else if (activeState.conversations?.contact_id) {
-              const contactId = activeState.conversations.contact_id;
+            } else if (activeContactData?.id) {
+              const contactId = activeContactData.id;
               console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to contact ${contactId}`);
               const { error: tagError } = await supabaseClient
                 .from('contact_tags')
@@ -3892,7 +3931,7 @@ serve(async (req) => {
             conversationId: conversationId,
             flowStateId: activeState.id,
             nodeId: nextNode.id,
-            contactId: activeState.conversations?.contact_id || null,
+            contactId: activeContactData?.id || null,
             subject,
             description,
             category: nextNode.data?.ticket_category || 'outro',
@@ -4024,7 +4063,7 @@ serve(async (req) => {
             conversationId: conversationId,
             flowStateId: activeState.id,
             nodeId: nextNode.id,
-            contactId: activeState.conversations?.contact_id || null,
+            contactId: activeContactData?.id || null,
             subject,
             description,
             category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
@@ -4046,9 +4085,9 @@ serve(async (req) => {
             if (tagScope === 'conversation') {
               console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to conversation ${conversationId} (after msg chain)`);
               await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
-            } else if (activeState.conversations?.contact_id) {
-              console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to contact ${activeState.conversations.contact_id} (after msg chain)`);
-              await supabaseClient.from('contact_tags').upsert({ contact_id: activeState.conversations.contact_id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+            } else if (activeContactData?.id) {
+              console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to contact ${activeContactData.id} (after msg chain)`);
+              await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
             }
           }
         }
