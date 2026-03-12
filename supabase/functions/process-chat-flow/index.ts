@@ -2083,16 +2083,38 @@ serve(async (req) => {
 
         const exitKeywords: string[] = currentNode.data?.exit_keywords || [];
         const maxInteractions: number = currentNode.data?.max_ai_interactions ?? 0;
-        const forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
+        let forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
         const forbidCommercial: boolean = currentNode.data?.forbid_commercial ?? false;
 
+        // 🆕 INFERÊNCIA AUTOMÁTICA: Se o nó tem edge para condition_v2 com regra ai_exit_intent=financeiro, forçar forbidFinancial
+        if (!forbidFinancial) {
+          const nodeEdges = edges.filter((e: any) => e.source === currentNode.id);
+          for (const edge of nodeEdges) {
+            const targetNode = nodes.find((n: any) => n.id === edge.target);
+            if (targetNode?.type === 'condition_v2' && targetNode.data?.rules) {
+              const rules = targetNode.data.rules as any[];
+              const hasFinancialRule = rules.some((r: any) => 
+                r.field === 'ai_exit_intent' && (r.keywords || '').toLowerCase().includes('financeiro')
+              );
+              if (hasFinancialRule) {
+                forbidFinancial = true;
+                console.log(`[process-chat-flow] 🔒 AUTO-INFERENCE: forbid_financial=true inferido de edge para condition_v2 com regra financeiro (nó ${currentNode.id})`);
+                break;
+              }
+            }
+          }
+        }
+
         // 🔒 TRAVA FINANCEIRA: Detectar intenção financeira como exit do nó AI
-        // 🔧 FIX 6: Regex simplificada sem lookbehind complexo
-        const financialPositive = /saque|sacar|reembolso|estorno|cancelar.*assinatura|meu dinheiro|ressarcimento|pix|saldo|retirar|retirada|devolv[eê]r?|devolu[çc][ãa]o|caixa|carteira|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|(fazer|realizar|efetuar|cancelar|estornar)\s*pagamento|(cancelar|contestar|cobran[çc]a\s*indevida)/i;
+        // 🆕 SEPARAÇÃO: Apenas AÇÕES financeiras disparam exit. Perguntas informativas passam para a LLM.
+        const financialActionPattern = /quero\s*(sacar|retirar|meu\s*(reembolso|dinheiro|estorno|saldo))|fa(z|ça)\s*(meu\s*)?(reembolso|estorno|saque|devolu[çc][ãa]o)|(sacar|retirar|tirar)\s*(meu\s*)?(saldo|dinheiro|valor)|(solicitar|pedir|fazer|realizar|efetuar|cancelar|estornar)\s*(saque|reembolso|estorno|devolu[çc][ãa]o|pagamento)|(quero|preciso|necessito)\s*(meu\s+dinheiro|devolu[çc][ãa]o|reembolso|estorno|ressarcimento)|cancelar\s*(minha\s*)?(assinatura|cobran[çc]a|pagamento)|transferir\s*(meu\s*)?saldo|devolver\s*(meu\s*)?dinheiro|cobran[çc]a\s*indevida|contestar\s*(cobran[çc]a|pagamento)/i;
+        const financialInfoPattern = /qual\s*(o\s*)?(prazo|tempo|data)|como\s*(funciona|fa[çc]o|solicito|pe[çc]o)|onde\s*(vejo|consulto|acompanho)|quando\s*(posso|vou|ser[áa])|pol[ií]tica\s*de\s*(reembolso|devolu[çc][ãa]o|estorno|saque|cancelamento)|regras?\s*(de|para|do)\s*(saque|reembolso|estorno|devolu[çc][ãa]o)/i;
         const financialContext = /endere[çc]o\s+de|local\s+de\s+entrega|forma\s+de\s+pagamento/i;
+        const isFinancialAction = financialActionPattern.test(userMessage || '') && !financialContext.test(userMessage || '');
+        const isFinancialInfo = financialInfoPattern.test(userMessage || '');
         const financialIntentMatch =
           (forceFinancialExit && forbidFinancial) ||
-          (forbidFinancial && msgLower.length > 0 && financialPositive.test(userMessage || '') && !financialContext.test(userMessage || ''));
+          (forbidFinancial && msgLower.length > 0 && isFinancialAction && !isFinancialInfo);
         if (forceFinancialExit) {
           console.log('[process-chat-flow] 🔒 forceFinancialExit=true recebido do webhook, forçando exit do nó AI');
         }
