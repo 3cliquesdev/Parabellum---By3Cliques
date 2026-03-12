@@ -3585,7 +3585,7 @@ serve(async (req) => {
       // até encontrar um nó que colete input (ask_*, ai_response, transfer, end)
       const extraMessages: string[] = [];
       
-      while (nextNode && (nextNode.type === 'message' || nextNode.type === 'create_ticket')) {
+      while (nextNode && (nextNode.type === 'message' || nextNode.type === 'create_ticket' || nextNode.type === 'validate_customer' || nextNode.type === 'fetch_order')) {
         if (nextNode.type === 'create_ticket') {
           // 🎫 Mid-flow: criar ticket e auto-avançar
           const subject = replaceVariables(nextNode.data?.subject_template || 'Ticket do Fluxo', variablesContext);
@@ -3609,6 +3609,48 @@ serve(async (req) => {
           });
           if (ticket) collectedData.__last_ticket_id = ticket.id;
           console.log(`[process-chat-flow] 🎫 Auto-advancing past create_ticket node ${nextNode.id}`);
+        } else if (nextNode.type === 'validate_customer') {
+          // 🛡️ BUG A FIX: validate_customer inline no main auto-advance loop
+          console.log('[process-chat-flow] 🛡️ [main-autoadvance] validate_customer inline');
+          const vcUrlMain = Deno.env.get('SUPABASE_URL')!;
+          const vcKeyMain = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          const { data: vcConvMain } = await supabaseClient.from('conversations').select('contact_id').eq('id', conversationId).maybeSingle();
+          let vcContactMain: any = null;
+          if (vcConvMain?.contact_id) {
+            const { data: cgMain } = await supabaseClient.from('contacts').select('phone, email, document, whatsapp_id, first_name, last_name, kiwify_validated').eq('id', vcConvMain.contact_id).maybeSingle();
+            vcContactMain = cgMain;
+          }
+          const vKeyMain = nextNode.data?.save_validated_as || 'customer_validated';
+          const nKeyMain = nextNode.data?.save_customer_name_as || 'customer_name_found';
+          const eKeyMain = nextNode.data?.save_customer_email_as || 'customer_email_found';
+          let vFoundMain = false, vNameMain = '', vEmailMain = '';
+          if (vcContactMain && !vcContactMain.kiwify_validated) {
+            const vPromisesMain: Promise<any>[] = [];
+            if (nextNode.data?.validate_phone !== false && (vcContactMain.phone || vcContactMain.whatsapp_id)) {
+              vPromisesMain.push(fetch(`${vcUrlMain}/functions/v1/validate-by-kiwify-phone`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKeyMain}` }, body: JSON.stringify({ phone: vcContactMain.phone, whatsapp_id: vcContactMain.whatsapp_id, contact_id: vcConvMain?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (nextNode.data?.validate_email !== false && vcContactMain.email) {
+              vPromisesMain.push(fetch(`${vcUrlMain}/functions/v1/verify-customer-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKeyMain}` }, body: JSON.stringify({ email: vcContactMain.email, contact_id: vcConvMain?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (nextNode.data?.validate_cpf === true && vcContactMain.document) {
+              vPromisesMain.push(fetch(`${vcUrlMain}/functions/v1/validate-by-cpf`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKeyMain}` }, body: JSON.stringify({ cpf: vcContactMain.document, contact_id: vcConvMain?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (vPromisesMain.length > 0) {
+              const vResultsMain = await Promise.allSettled(vPromisesMain);
+              for (const vr of vResultsMain) { if (vr.status === 'fulfilled' && vr.value?.found) { vFoundMain = true; if (vr.value.customer?.name) vNameMain = vr.value.customer.name; if (vr.value.customer?.email) vEmailMain = vr.value.customer.email; } }
+            }
+            if (vFoundMain && vcConvMain?.contact_id) {
+              await supabaseClient.from('contacts').update({ kiwify_validated: true, status: 'customer' }).eq('id', vcConvMain.contact_id);
+            }
+          } else if (vcContactMain?.kiwify_validated) {
+            vFoundMain = true; vNameMain = [vcContactMain.first_name, vcContactMain.last_name].filter(Boolean).join(' '); vEmailMain = vcContactMain.email || '';
+          }
+          collectedData[vKeyMain] = vFoundMain; collectedData[nKeyMain] = vNameMain; collectedData[eKeyMain] = vEmailMain;
+          console.log('[process-chat-flow] 🛡️ [main-autoadvance] validate result:', { vFoundMain, vNameMain });
+        } else if (nextNode.type === 'fetch_order') {
+          // 📦 BUG A FIX: fetch_order inline no main auto-advance loop
+          console.log('[process-chat-flow] 📦 [main-autoadvance] fetch_order inline');
+          collectedData = await handleFetchOrderNode(nextNode, collectedData, userMessage);
         } else {
           const msgText = replaceVariables(nextNode.data?.message || "", variablesContext);
           extraMessages.push(msgText);
