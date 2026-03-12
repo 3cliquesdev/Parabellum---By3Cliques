@@ -1,77 +1,178 @@
 
+# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-# Plano: 4 Saídas Dedicadas no Nó IA — Financeiro / Cancelamento / Comercial / Suporte
+## Arquivo: `supabase/functions/process-chat-flow/index.ts`
 
-## Situação Atual
+### FIX 1 ✅ — Proteção contra loop flow-to-flow
+### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
+### FIX 3 ✅ — Auto-traverse cobre condition_v2
+### FIX 4 ✅ — Transfer node atualiza conversations.department
+### FIX 5 ✅ — startMessage com replaceVariables
+### FIX 6 ✅ — financialIntentPattern simplificado
 
-O nó IA tem apenas **2 handles**: `default` (padrão) e `ai_exit` (saída IA única). Todas as intenções (financeiro, cancelamento, comercial, suporte) saem pelo mesmo handle `ai_exit` e dependem de um nó `condition_v2` externo para separar os ramos via `ai_exit_intent`.
+---
 
-**Problema**: Isso adiciona complexidade desnecessária (nó extra de roteamento) e dificulta a leitura visual. Além disso, `keywordMatch` (suporte/humano) NÃO seta `ai_exit_intent`, então o ramo "Suporte" nunca é distinguido.
+# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
 
-## Proposta: 4 Handles de Saída Dedicados
+## Problema
+Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
 
-Cada intenção ganha seu próprio handle no nó IA, eliminando a necessidade do nó "Roteamento de Intenção":
+## Correções aplicadas
 
-```text
-                    ┌─── default ────→ (próximo nó normal / max_interactions / fallback)
-[IA Suporte] ──────┼─── financeiro ──→ [Segurança → OTP → PIX → Ticket]
-                    ├─── cancelamento → [Motivo → Ticket Cancelamento]
-                    ├─── comercial ───→ [Transferir → Comercial]
-                    └─── suporte ─────→ [Transferir → Atendimento Humano]
+### 7a — Fallback edge default (process-chat-flow ~L2273)
+Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
+
+### 7b — Guard final sem nó (process-chat-flow ~L2336)
+Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
+
+### 7c — Safety net IA falha (process-buffered-messages ~L383)
+Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
+
+### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
+Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
+
+---
+
+# FIX 8 ✅ — pg_cron matando flows prematuramente (11/03/2026)
+
+## Problema
+O pg_cron `cleanup-stuck-flow-states` usava `started_at < now() - 3 min`, mas `started_at` é imutável. Flows com múltiplos passos (>3min) eram mortos antes de chegar ao nó de transfer.
+
+## Correções aplicadas
+
+### 8a — Coluna `updated_at` em `chat_flow_states`
+Nova coluna `updated_at timestamptz DEFAULT now()` adicionada via migration. Registros existentes backfilled com `COALESCE(completed_at, started_at)`.
+
+### 8b — `updated_at` em todos os `.update()` do process-chat-flow
+21 pontos de atualização no `process-chat-flow/index.ts` agora incluem `updated_at: new Date().toISOString()`, renovando o timestamp a cada interação.
+
+### 8c — pg_cron atualizado
+Cron usa `updated_at < now() - INTERVAL '15 minutes'` em vez de `started_at < now() - 3 min`.
+
+---
+
+# FIX 9 ✅ — IA não responde: safety net mata flow em quota error (11/03/2026)
+
+## Problema
+O `process-buffered-messages` tratava erros 429/503 (quota/rate limit) como falha fatal, disparando `forceAIExit` e matando o flow antes da IA ter chance de responder.
+
+## Correções aplicadas
+
+### 9a — Distinguir quota error de erro técnico real
+Na safety net do `process-buffered-messages`, erros 429/503 com `quota_error` ou `retry_suggested: true` NÃO disparam `forceAIExit`. Buffer fica como `processed=false` para retry no próximo ciclo.
+
+### 9b — Refresh `updated_at` do flow state após buffer processing com sucesso
+Após `ai-autopilot-chat` retornar OK via buffer, o `updated_at` do `chat_flow_states` é atualizado para evitar morte prematura pelo cron de 15 min.
+
+### 9c — Anti-retry infinito (3 ciclos)
+Buffers que falham por quota por 3+ ciclos de cron (~3 min) enviam mensagem de "alta demanda" ao contato e são marcados como processed.
+
+---
+
+# FIX 10 ✅ — Auditoria IA Semana 1: Quick wins (11/03/2026)
+
+## Correções aplicadas
+
+### 10a — auto-handoff: UUID dinâmico
+Substituído UUID hardcoded `36ce66cd-...` por busca dinâmica do departamento "Suporte" via `departments.ilike('name', '%suporte%')`. Se não encontrado, loga warning e aplica handoff sem forçar departamento.
+
+### 10b — auto-handoff: Markdown removido das notas internas
+Removido `**bold**` de todas as notas internas (linhas 78, 97, 174-181). Notas agora usam texto plano com emojis para compatibilidade cross-canal (WhatsApp).
+
+### 10c — ai-autopilot-chat: Memória cross-session
+Busca últimas 3 conversas fechadas do mesmo contact_id e injeta última mensagem de agente/sistema no system prompt. IA agora lembra conversas anteriores do mesmo cliente.
+
+### 10d — ai-autopilot-chat: Persona contextual
+Tom da IA varia automaticamente baseado no status do contato:
+- VIP/assinante → tom premium e proativo
+- Churn risk/inativo → tom empático e acolhedor
+- Lead quente (score ≥ 80) → tom entusiasmado e consultivo
+
+---
+
+# FIX 11 ✅ — Passive Learning ativado + Cron Job (11/03/2026)
+
+## O que foi feito
+
+### 11a — Flag `ai_passive_learning_enabled` = true
+Inserido na tabela `system_configurations` com categoria `ai`.
+
+### 11b — Cron job `passive-learning-hourly`
+pg_cron agendado para rodar a cada hora (`0 * * * *`), invocando a edge function `passive-learning-cron` via `net.http_post`.
+
+### Estado confirmado
+- `ai_global_enabled` = true
+- `ai_shadow_mode` = false
+- `ai_passive_learning_enabled` = true
+
+---
+
+# FIX 12 ✅ — Cron job corrigido: anon key no gateway (11/03/2026)
+
+## Problema
+`current_setting('supabase.service_role_key', true)` retorna NULL neste projeto → cron enviava `Authorization: Bearer null` → edge function não autenticava.
+
+## Correção
+Recriado cron job `passive-learning-hourly` (jobid 13) usando anon key no header Authorization. A anon key é suficiente para passar pelo API gateway; a função internamente usa `SUPABASE_SERVICE_ROLE_KEY` do ambiente Deno para operações admin.
+
+---
+
+# FIX 13 ✅ — Auto-KB Gap Detection (11/03/2026)
+
+## O que foi feito
+
+### 13a — Edge function `detect-kb-gaps`
+Criada edge function que:
+1. Busca eventos de IA das últimas 24h onde a IA fez handoff/exit (tipos: `ai_handoff_exit`, `contract_violation_blocked`, `flow_exit_clean`, `ai_exit_intent`)
+2. Clusteriza por similaridade textual (primeiras 3 palavras normalizadas)
+3. Filtra clusters com >= 2 ocorrências (gaps recorrentes)
+4. Cria `knowledge_candidates` com `status: 'pending'` + tag `'gap_detected'` (CHECK constraint impede valor custom)
+5. Notifica admins/managers via tabela `notifications`
+
+### 13b — Cron job `detect-kb-gaps-daily`
+Agendado para rodar diariamente às 8h UTC (`0 8 * * *`) usando anon key no gateway.
+
+### 13c — Workaround CHECK constraint
+`knowledge_candidates.status` só aceita `pending | approved | rejected`. Gaps usam `status: 'pending'` com tag `'gap_detected'` no array de tags para diferenciação.
+
+---
+
+# FIX 14 ✅ — transition-conversation-state: State Machine centralizado (11/03/2026)
+
+## Problema
+Mudanças de estado de conversas (ai_mode, department, assigned_to, dispatch jobs) eram feitas em múltiplos pontos do código (auto-handoff, process-chat-flow, etc.), causando inconsistências como conversa sem departamento, ai_mode errado, ou dispatch job desatualizado.
+
+## Correções aplicadas
+
+### 14a — Edge function `transition-conversation-state`
+Nova edge function que é a ÚNICA fonte da verdade para transições de estado. Suporta 7 tipos:
+- `handoff_to_human`: autopilot → waiting_human + cria dispatch job
+- `assign_agent`: qualquer → copilot + atribui agente + fecha dispatch
+- `unassign_agent`: copilot → waiting_human + reabre dispatch
+- `engage_ai`: qualquer → autopilot + fecha dispatch
+- `set_copilot`: qualquer → copilot
+- `update_department`: atualiza dept + dispatch job
+- `close`: qualquer → closed + fecha dispatch
+
+Cada transição:
+1. Busca estado atual da conversa
+2. Aplica update atômico
+3. Gerencia dispatch jobs (create/close/reopen)
+4. Loga em `ai_events` como `state_transition_{tipo}`
+5. Fallback dinâmico para dept "Suporte"
+
+### 14b — auto-handoff refatorado
+Substituída toda lógica de update direto (fallback dept + update ai_mode) por chamada única:
+```typescript
+supabaseClient.functions.invoke('transition-conversation-state', {
+  body: { conversationId, transition: 'handoff_to_human', reason, metadata }
+});
 ```
 
-## Alterações
-
-### 1. AIResponseNode.tsx — 5 handles visuais
-
-Substituir os 2 handles atuais por 5:
-- **Target** (esquerda): entrada
-- **default** (direita, topo): saída normal (max_interactions, fallback, próximo nó)
-- **financeiro** (direita): cor amarela, label "💰 Financeiro"
-- **cancelamento** (direita): cor vermelha, label "❌ Cancelamento"
-- **comercial** (direita): cor verde, label "🛒 Comercial"
-- **suporte** (direita): cor azul, label "🧑 Suporte"
-
-Posicionados verticalmente espaçados (20%, 35%, 50%, 65%, 80%).
-
-### 2. process-chat-flow/index.ts — path por intenção
-
-Atualmente tudo seta `path = 'ai_exit'`. Mudar para paths específicos:
-
-| Cenário | path atual | path novo |
-|---|---|---|
-| `financialIntentMatch` | `ai_exit` | `financeiro` |
-| `cancellationIntentMatch` | `ai_exit` | `cancelamento` |
-| `commercialIntentMatch` | `ai_exit` | `comercial` |
-| `keywordMatch` (atendente/humano) | `undefined` | `suporte` |
-| `aiExitForced` (IA pede handoff) | `ai_exit` | `suporte` |
-| `maxReached` | `undefined` | `default` (sem mudança) |
-
-Também setar `ai_exit_intent = 'suporte'` quando `keywordMatch` ou `aiExitForced`.
-
-Manter fallback: se `path='financeiro'` e não achar edge, tentar `ai_exit`, depois `default`.
-
-### 3. ai-autopilot-chat/index.ts — mesma lógica de intent
-
-Alinhar os mesmos paths quando opera fora de fluxo (autopilot global).
-
-### 4. Remover necessidade do nó "Roteamento de Intenção"
-
-Com handles dedicados, o condition_v2 "Roteamento de Intenção" se torna opcional. O usuário conecta cada handle diretamente ao ramo correto no canvas. Mais limpo, mais visual, mais fácil de auditar.
-
-### 5. findNextNode — suporte a fallback hierárquico
-
-Atualizar `findNextNode` para tentar fallback quando não encontra edge para o path específico:
-```
-financeiro → ai_exit → default → null
-cancelamento → ai_exit → default → null
-comercial → ai_exit → default → null  
-suporte → ai_exit → default → null
-```
-
-Isso mantém compatibilidade com fluxos existentes que usam `ai_exit` genérico.
-
-## Resultado Visual no Canvas
-
-O nó IA ficará com 5 pontos de saída coloridos no lado direito, cada um rotulado. O usuário arrasta edges de cada ponto para o destino correto. Qualquer pessoa que olhar o fluxo entende imediatamente o roteamento sem precisar abrir configurações de nós.
-
+### 14c — process-chat-flow: 5 blocos de transfer refatorados
+Todos os blocos de update direto de `conversations` em transfer nodes substituídos por `fetch()` para `transition-conversation-state`:
+1. Contract violation handler (~L726)
+2. Handoff sem próximo nó (~L2326)
+3. aiExitForced sem nó (~L2365)
+4. Transfer node principal (~L2808)
+5. Transfer node msg chain (~L3061)

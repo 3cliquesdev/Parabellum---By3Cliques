@@ -257,15 +257,32 @@ function findNextNode(flowDef: any, currentNode: any, path?: string): any {
     // Fallback: buscar edge sem handle específico
   }
   
-  // 🆕 FIX: Para ai_response com path (ex: 'ai_exit'), priorizar edge com sourceHandle
+  // 🆕 FIX: Para ai_response com path, priorizar edge com sourceHandle
+  // Fallback hierárquico: path específico → ai_exit → default → any
   if (currentNode.type === 'ai_response' && path) {
     const handleEdge = edges.find((e: any) => e.source === currentNode.id && e.sourceHandle === path);
     if (handleEdge) {
       console.log(`[findNextNode] ✅ ai_response: found edge with handle "${path}" → ${handleEdge.target}`);
       return flowDef.nodes.find((n: any) => n.id === handleEdge.target);
     }
-    console.log(`[findNextNode] ⚠️ ai_response: no edge with handle "${path}", falling back to default`);
-    // Se não achou edge com handle, cai no fallback abaixo
+    // Fallback 1: tentar ai_exit genérico (compatibilidade com fluxos antigos)
+    if (path !== 'ai_exit' && path !== 'default') {
+      const aiExitEdge = edges.find((e: any) => e.source === currentNode.id && e.sourceHandle === 'ai_exit');
+      if (aiExitEdge) {
+        console.log(`[findNextNode] ⚠️ ai_response: no edge for "${path}", falling back to "ai_exit" → ${aiExitEdge.target}`);
+        return flowDef.nodes.find((n: any) => n.id === aiExitEdge.target);
+      }
+    }
+    // Fallback 2: tentar default
+    if (path !== 'default') {
+      const defaultEdge = edges.find((e: any) => e.source === currentNode.id && e.sourceHandle === 'default');
+      if (defaultEdge) {
+        console.log(`[findNextNode] ⚠️ ai_response: no edge for "${path}", falling back to "default" → ${defaultEdge.target}`);
+        return flowDef.nodes.find((n: any) => n.id === defaultEdge.target);
+      }
+    }
+    console.log(`[findNextNode] ⚠️ ai_response: no edge with handle "${path}", falling back to generic`);
+    // Se não achou nenhum handle, cai no fallback genérico abaixo
   }
 
   // Para outros nós, buscar edge simples
@@ -2340,16 +2357,20 @@ serve(async (req) => {
             console.log(`[process-chat-flow] 🔄 AI exit: reason=${aiExitForced ? 'ai_handoff_exit' : 'max_interactions'} (${aiCount}/${maxInteractions}) - advancing to next node`);
           }
 
-          // 🆕 FIX: Quando aiExitForced, setar path='ai_exit' para findNextNode priorizar edge com handle ai_exit
-          if (aiExitForced) {
-            path = 'ai_exit';
-            console.log('[process-chat-flow] 🎯 aiExitForced → path set to "ai_exit" for findNextNode');
-          }
-
-          // 🆕 FIX CRÍTICO: financialIntentMatch/cancellationIntentMatch/commercialIntentMatch também devem seguir edge ai_exit
-          if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch) {
-            path = 'ai_exit';
-            console.log(`[process-chat-flow] 🎯 financial/cancellation/commercial exit → path set to "ai_exit" | financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch}`);
+          // 🆕 Paths dedicados por intenção (handles separados no nó IA)
+          if (financialIntentMatch) {
+            path = 'financeiro';
+            console.log('[process-chat-flow] 🎯 financialIntentMatch → path set to "financeiro"');
+          } else if (cancellationIntentMatch) {
+            path = 'cancelamento';
+            console.log('[process-chat-flow] 🎯 cancellationIntentMatch → path set to "cancelamento"');
+          } else if (commercialIntentMatch) {
+            path = 'comercial';
+            console.log('[process-chat-flow] 🎯 commercialIntentMatch → path set to "comercial"');
+          } else if (keywordMatch || aiExitForced) {
+            path = 'suporte';
+            collectedData.ai_exit_intent = 'suporte';
+            console.log(`[process-chat-flow] 🎯 keyword/aiExitForced → path set to "suporte" | keyword=${keywordMatch} aiExitForced=${aiExitForced}`);
           }
 
           // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir
@@ -2404,11 +2425,7 @@ serve(async (req) => {
       }
 
       nextNode = findNextNode(flowDef, currentNode, path);
-      // 🆕 FIX: Se aiExitForced e não achou edge 'ai_exit', tentar edge default (próximo nó do canvas)
-      if (!nextNode && aiExitForced && path === 'ai_exit') {
-        console.log('[process-chat-flow] ⚠️ aiExitForced: sem edge ai_exit, tentando edge default');
-        nextNode = findNextNode(flowDef, currentNode, undefined);
-      }
+      // findNextNode já tem fallback hierárquico (path → ai_exit → default → any)
       console.log(`[process-chat-flow] ➡️ Transition: from=${currentNode.type}(${currentNode.id}) path=${path || 'default'} → next=${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
 
       // 🔒 FIX: Financial/Commercial exit SEM próximo nó → forçar handoff

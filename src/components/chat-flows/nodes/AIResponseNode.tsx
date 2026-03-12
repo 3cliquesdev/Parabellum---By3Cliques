@@ -51,7 +51,7 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
   const maxSentences = data.max_sentences ?? 3;
   const hasRestrictions = forbidQuestions || forbidOptions;
 
-  // 🆕 Custom handles: target (left) + source default (right top) + source ai_exit (right bottom)
+  // 🆕 Custom handles: target (left) + 5 source handles (right) por intenção
   const customHandles = (
     <>
       {/* Target handle (entrada) */}
@@ -60,28 +60,61 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
         position={Position.Left}
         className="!w-4 !h-4 !bg-primary !border-2 !border-background"
       />
-      {/* Source handle padrão (saída normal) */}
+      {/* Source handle padrão (saída normal / max_interactions / fallback) */}
       <Handle
         type="source"
         position={Position.Right}
         id="default"
         className="!w-4 !h-4 !bg-primary !border-2 !border-background"
-        style={{ top: '35%' }}
+        style={{ top: '15%' }}
       />
-      {/* Source handle ai_exit (saída por intenção detectada) */}
+      {/* Source handle financeiro */}
       <Handle
         type="source"
         position={Position.Right}
-        id="ai_exit"
+        id="financeiro"
+        className="!w-4 !h-4 !bg-amber-500 !border-2 !border-background"
+        style={{ top: '33%' }}
+      />
+      {/* Source handle cancelamento */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="cancelamento"
+        className="!w-4 !h-4 !bg-red-500 !border-2 !border-background"
+        style={{ top: '51%' }}
+      />
+      {/* Source handle comercial */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="comercial"
         className="!w-4 !h-4 !bg-emerald-500 !border-2 !border-background"
-        style={{ top: '65%' }}
+        style={{ top: '69%' }}
+      />
+      {/* Source handle suporte (humano) */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="suporte"
+        className="!w-4 !h-4 !bg-blue-500 !border-2 !border-background"
+        style={{ top: '87%' }}
       />
       {/* Labels visuais para os handles */}
-      <div className="absolute right-[-4px] text-[8px] text-muted-foreground font-medium" style={{ top: '25%' }}>
+      <div className="absolute right-[-4px] text-[8px] text-muted-foreground font-medium" style={{ top: '8%' }}>
         padrão
       </div>
-      <div className="absolute right-[-4px] text-[8px] text-emerald-600 font-medium" style={{ top: '72%' }}>
-        saída IA
+      <div className="absolute right-[-4px] text-[8px] text-amber-600 font-medium" style={{ top: '26%' }}>
+        💰 financeiro
+      </div>
+      <div className="absolute right-[-4px] text-[8px] text-red-600 font-medium" style={{ top: '44%' }}>
+        ❌ cancelamento
+      </div>
+      <div className="absolute right-[-4px] text-[8px] text-emerald-600 font-medium" style={{ top: '62%' }}>
+        🛒 comercial
+      </div>
+      <div className="absolute right-[-4px] text-[8px] text-blue-600 font-medium" style={{ top: '80%' }}>
+        🧑 suporte
       </div>
     </>
   );
