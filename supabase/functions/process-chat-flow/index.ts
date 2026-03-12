@@ -3097,9 +3097,9 @@ serve(async (req) => {
 
         // 🆕 INFERÊNCIA AUTOMÁTICA: Se o nó tem edge para condition_v2 com regra ai_exit_intent=financeiro, forçar forbidFinancial
         if (!forbidFinancial) {
-          const nodeEdges = edges.filter((e: any) => e.source === currentNode.id);
+          const nodeEdges = (flowDef.edges || []).filter((e: any) => e.source === currentNode.id);
           for (const edge of nodeEdges) {
-            const targetNode = nodes.find((n: any) => n.id === edge.target);
+            const targetNode = (flowDef.nodes || []).find((n: any) => n.id === edge.target);
             if (targetNode?.type === 'condition_v2' && targetNode.data?.rules) {
               const rules = targetNode.data.rules as any[];
               const hasFinancialRule = rules.some((r: any) => 
