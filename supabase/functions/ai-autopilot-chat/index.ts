@@ -8683,7 +8683,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             entity_type: 'conversation',
             entity_id: conversationId,
             event_type: 'flow_exit_clean',
-            model: configuredAIModel || 'gpt-4o-mini',
+            model: configuredAIModel || 'gpt-5-mini',
             output_json: {
               blocked_preview: assistantMessage.substring(0, 150),
               flow_id: flow_context.flow_id,
