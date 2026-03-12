@@ -127,7 +127,7 @@ const ConversationsReport = lazy(() => import("./pages/ConversationsReport"));
 const PlaybookEmailSequenceReport = lazy(() => import("./pages/PlaybookEmailSequenceReport"));
 const FormLeadsConversionReport = lazy(() => import("./pages/FormLeadsConversionReport"));
 const ReportBuilder = lazy(() => import("./pages/ReportBuilder"));
-const AnalyticsPremium = lazy(() => import("./pages/AnalyticsPremium"));
+// AnalyticsPremium removed — now inline redirect
 const DashboardsList = lazy(() => import("./pages/DashboardsList"));
 const InboxTimeReport = lazy(() => import("./pages/InboxTimeReport"));
 const DashboardView = lazy(() => import("./pages/DashboardView"));
