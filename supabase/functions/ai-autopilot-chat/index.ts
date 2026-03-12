@@ -4021,10 +4021,10 @@ serve(async (req) => {
           try {
             // Fallback: modelo mais estável e tolerante
             const safeFallbackPayload = { ...finalPayload };
-            // Remover campos problemáticos para modelos antigos
-            delete safeFallbackPayload.max_completion_tokens;
-            if (!safeFallbackPayload.max_tokens) {
-              safeFallbackPayload.max_tokens = 1024;
+            // gpt-5-nano usa max_completion_tokens
+            delete safeFallbackPayload.max_tokens;
+            if (!safeFallbackPayload.max_completion_tokens) {
+              safeFallbackPayload.max_completion_tokens = 1024;
             }
             
             return await tryModel('gpt-5-nano', 'Fallback técnico', safeFallbackPayload);
