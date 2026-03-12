@@ -158,6 +158,28 @@ serve(async (req) => {
       console.log(`[transition] ✅ Dispatch job criado/reativado para ${conversationId.substring(0, 8)}`);
     }
 
+    // 🔒 FIX 2: Guarantee block — toda conversa waiting_human DEVE ter dispatch job ativo
+    if (transition === 'handoff_to_human' && deptForDispatch) {
+      const { data: existingJob } = await supabase
+        .from('conversation_dispatch_jobs')
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .in('status', ['pending', 'escalated'])
+        .maybeSingle();
+
+      if (!existingJob) {
+        await supabase.from('conversation_dispatch_jobs').insert({
+          conversation_id: conversationId,
+          department_id: deptForDispatch,
+          priority: 1,
+          status: 'pending',
+          next_attempt_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+        console.log(`[transition] 🔒 GUARANTEE: Dispatch job criado para órfã ${conversationId.substring(0, 8)}`);
+      }
+    }
+
     if (shouldCloseDispatch) {
       await supabase.from('conversation_dispatch_jobs')
         .update({ status: 'completed', updated_at: new Date().toISOString() })

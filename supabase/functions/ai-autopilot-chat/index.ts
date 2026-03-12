@@ -1457,6 +1457,18 @@ serve(async (req) => {
     );
 
     const { conversationId, customerMessage, maxHistory = 50, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
+
+    // 🔒 FIX 1: Hard validation — customerMessage obrigatório (exceto warmup)
+    if (!customerMessage || typeof customerMessage !== 'string' || customerMessage.trim() === '') {
+      console.error('[ai-autopilot-chat] ❌ BAD_REQUEST: customerMessage ausente ou vazio');
+      return new Response(JSON.stringify({ 
+        error: 'BAD_REQUEST', 
+        detail: 'customerMessage is required and must be a non-empty string' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     // 🆕 Carregar RAGConfig uma única vez para todo o handler
     const ragConfig = await getRAGConfig(supabaseClient);
