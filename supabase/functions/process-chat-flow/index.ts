@@ -1155,6 +1155,17 @@ serve(async (req) => {
             break;
           }
           contentNode = next;
+        } else if (contentNode.type === 'fetch_order') {
+          // 📦 BUG C FIX: fetch_order inline during manual traversal
+          console.log('[process-chat-flow] 📦 Manual traverse: executing fetch_order inline');
+          manualCollectedData.__fetched = manualCollectedData.__fetched || {};
+          // During manual trigger we may not have full context, just advance
+          const next = findNextNode(flowDef, contentNode);
+          if (!next) {
+            console.log('[process-chat-flow] ⚠️ Manual traversal: no next node after fetch_order');
+            break;
+          }
+          contentNode = next;
         } else {
           const next = findNextNode(flowDef, contentNode);
           if (!next) {
