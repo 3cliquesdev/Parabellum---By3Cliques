@@ -187,6 +187,10 @@ export default function Dashboard() {
               <Sparkles className="h-4 w-4" />
               Avançado
             </TabsTrigger>
+            <TabsTrigger value="ai-telemetry" className="gap-2">
+              <Activity className="h-4 w-4" />
+              AI Telemetria
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="overview">
