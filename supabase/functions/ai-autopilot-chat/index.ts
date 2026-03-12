@@ -5417,6 +5417,19 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           articles_count: knowledgeArticles.length
         });
         
+        // 📊 FIX 4: Telemetria anti-alucinação — Confidence handoff (flow_advance_needed)
+        console.log(JSON.stringify({
+          event: 'ai_decision',
+          conversation_id: conversationId,
+          reason: 'confidence_flow_advance',
+          score: confidenceResult.score,
+          hasFlowContext: true,
+          exitType: 'flow_advance_needed',
+          fallback_used: false,
+          articles_found: knowledgeArticles.length,
+          timestamp: new Date().toISOString()
+        }));
+        
         return new Response(JSON.stringify({
           status: 'flow_advance_needed',
           reason: confidenceResult.reason,
