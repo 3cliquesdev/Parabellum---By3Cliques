@@ -1178,6 +1178,8 @@ serve(async (req) => {
                           forbidOptions: (flowData as any).forbidOptions,
                           forbidFinancial: (flowData as any).forbidFinancial,
                           forbidCommercial: (flowData as any).forbidCommercial,
+                          forbidCancellation: (flowData as any).forbidCancellation,
+                          forbidConsultant: (flowData as any).forbidConsultant,
                         },
                       });
                     } catch (bufferErr) {
