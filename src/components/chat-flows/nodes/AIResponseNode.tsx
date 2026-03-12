@@ -102,20 +102,20 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
         className="!w-4 !h-4 !bg-blue-500 !border-2 !border-background"
         style={{ top: '87%' }}
       />
-      {/* Labels visuais para os handles */}
-      <div className="absolute right-[-4px] text-[8px] text-muted-foreground font-medium" style={{ top: '8%' }}>
+      {/* Labels visuais para os handles — pointer-events-none para não bloquear cliques */}
+      <div className="absolute right-[-55px] text-[8px] text-muted-foreground font-medium pointer-events-none" style={{ top: '8%' }}>
         padrão
       </div>
-      <div className="absolute right-[-4px] text-[8px] text-amber-600 font-medium" style={{ top: '26%' }}>
+      <div className="absolute right-[-70px] text-[8px] text-amber-600 font-medium pointer-events-none" style={{ top: '26%' }}>
         💰 financeiro
       </div>
-      <div className="absolute right-[-4px] text-[8px] text-red-600 font-medium" style={{ top: '44%' }}>
+      <div className="absolute right-[-80px] text-[8px] text-red-600 font-medium pointer-events-none" style={{ top: '44%' }}>
         ❌ cancelamento
       </div>
-      <div className="absolute right-[-4px] text-[8px] text-emerald-600 font-medium" style={{ top: '62%' }}>
+      <div className="absolute right-[-65px] text-[8px] text-emerald-600 font-medium pointer-events-none" style={{ top: '62%' }}>
         🛒 comercial
       </div>
-      <div className="absolute right-[-4px] text-[8px] text-blue-600 font-medium" style={{ top: '80%' }}>
+      <div className="absolute right-[-60px] text-[8px] text-blue-600 font-medium pointer-events-none" style={{ top: '80%' }}>
         🧑 suporte
       </div>
     </>
