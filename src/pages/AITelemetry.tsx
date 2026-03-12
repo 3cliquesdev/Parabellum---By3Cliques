@@ -340,11 +340,11 @@ export default function AITelemetry() {
                           <TableRow key={evt.id} className="hover:bg-muted/50">
                             <TableCell>
                               <button
-                                onClick={() => copyToClipboard(evt.entity_id)}
+                              onClick={() => copyToClipboard(evt.entity_id ?? "")}
                                 className="font-mono text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors cursor-pointer"
-                                title={evt.entity_id}
+                                title={evt.entity_id ?? "—"}
                               >
-                                …{evt.entity_id?.slice(-8)}
+                                {evt.entity_id ? `…${evt.entity_id.slice(-8)}` : "—"}
                                 <Copy className="h-3 w-3 opacity-40" />
                               </button>
                             </TableCell>

@@ -1,4 +1,5 @@
 import {
+  Activity,
   LayoutDashboard, 
   Inbox,
   Users, 
@@ -101,7 +102,7 @@ export const universalMenuGroups: MenuGroup[] = [
       { title: "AI Studio", href: "/ai-studio/personas", icon: Brain, permission: "ai.manage_personas" },
       { title: "AI Messages", href: "/settings/ai-messages", icon: MessageCircle, permission: "ai.manage_personas" },
       { title: "AI Trainer", href: "/settings/ai-trainer", icon: Brain, permission: "ai.train" },
-      { title: "AI Telemetria", href: "/ai-telemetry", icon: BarChart3, permission: "ai.manage_personas" },
+      { title: "AI Telemetria", href: "/ai-telemetry", icon: Activity, permission: "ai.manage_personas" },
       { title: "Templates de Email", href: "/email-templates", icon: Mail, permission: "email.view_templates" },
       { title: "Formulários", href: "/forms", icon: FileText, permission: "forms.view" },
     ]
