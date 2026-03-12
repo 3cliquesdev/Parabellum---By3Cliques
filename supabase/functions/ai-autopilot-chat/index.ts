@@ -121,8 +121,12 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
 const VALID_OPENAI_MODELS = new Set([
   'gpt-4o', 'gpt-4o-mini',
   'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
+  'gpt-5', 'gpt-5-mini', 'gpt-5-nano',
   'o3', 'o3-mini', 'o4-mini',
 ]);
+
+// Reasoning models use max_completion_tokens instead of max_tokens
+const REASONING_MODELS = new Set(['o3', 'o3-mini', 'o4-mini']);
 
 function sanitizeModelName(model: string): string {
   // If it's already a valid OpenAI model, pass through
