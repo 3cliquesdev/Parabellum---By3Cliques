@@ -3586,9 +3586,11 @@ serve(async (req) => {
       );
 
 
+    } // end if (activeState)
 
     // 🧪 MODO TESTE: Bloquear triggers e Master Flow automáticos
     // Em modo teste, APENAS fluxos iniciados manualmente devem rodar
+    // 🔧 FIX: Movido para FORA do if(activeState) — antes estava como código morto (unreachable)
     if (isTestMode && !manualTrigger) {
       console.log('[process-chat-flow] 🧪 TEST MODE: Bloqueando auto-triggers e Master Flow');
       return new Response(JSON.stringify({
@@ -3601,8 +3603,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-
-    } // end if (activeState)
 
     // 3. Detectar se mensagem dispara um fluxo
     if (!userMessage) {
