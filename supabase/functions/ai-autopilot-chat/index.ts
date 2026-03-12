@@ -135,22 +135,22 @@ function sanitizeModelName(model: string): string {
   // If it's already a valid OpenAI model, pass through
   if (VALID_OPENAI_MODELS.has(model)) return model;
   
-  // Legacy gateway names → fallback to gpt-4o-mini
+  // Gateway names → correct OpenAI equivalents
   const MODEL_MAP: Record<string, string> = {
-    'openai/gpt-5-mini': 'gpt-4o-mini',
-    'openai/gpt-5': 'gpt-4o',
-    'openai/gpt-5-nano': 'gpt-4o-mini',
-    'openai/gpt-5.2': 'gpt-4o',
-    'google/gemini-2.5-flash': 'gpt-4o-mini',
-    'google/gemini-2.5-flash-lite': 'gpt-4o-mini',
-    'google/gemini-2.5-pro': 'gpt-4o',
-    'google/gemini-3-pro-preview': 'gpt-4o',
-    'google/gemini-3-pro-image-preview': 'gpt-4o',
-    'google/gemini-3-flash-preview': 'gpt-4o-mini',
-    'google/gemini-3.1-pro-preview': 'gpt-4o',
-    'google/gemini-3.1-flash-image-preview': 'gpt-4o-mini',
+    'openai/gpt-5-mini': 'gpt-5-mini',
+    'openai/gpt-5': 'gpt-5',
+    'openai/gpt-5-nano': 'gpt-5-nano',
+    'openai/gpt-5.2': 'gpt-5.2',
+    'google/gemini-2.5-flash': 'gpt-5-mini',
+    'google/gemini-2.5-flash-lite': 'gpt-5-nano',
+    'google/gemini-2.5-pro': 'gpt-5',
+    'google/gemini-3-pro-preview': 'gpt-5',
+    'google/gemini-3-pro-image-preview': 'gpt-5',
+    'google/gemini-3-flash-preview': 'gpt-5-mini',
+    'google/gemini-3.1-pro-preview': 'gpt-5',
+    'google/gemini-3.1-flash-image-preview': 'gpt-5-mini',
   };
-  return MODEL_MAP[model] || 'gpt-4o-mini';
+  return MODEL_MAP[model] || 'gpt-5-nano';
 }
 
 // Helper: Buscar modelo AI configurado no banco (mantido para compatibilidade)
