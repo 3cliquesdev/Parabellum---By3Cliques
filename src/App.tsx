@@ -43,7 +43,7 @@ const ChatLinksSettings = lazy(() => import("./pages/ChatLinksSettings"));
 const WidgetBuilder = lazy(() => import("./pages/WidgetBuilder"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Automations = lazy(() => import("./pages/Automations"));
-const Analytics = lazy(() => import("./pages/Analytics"));
+// Analytics removed — now inline redirect
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
 const TVMode = lazy(() => import("./pages/TVMode"));
 const SetupPassword = lazy(() => import("./pages/SetupPassword"));
