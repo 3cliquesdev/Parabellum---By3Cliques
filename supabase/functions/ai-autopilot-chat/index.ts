@@ -6016,17 +6016,23 @@ Digite **"reenviar"** se precisar de um novo código.`;
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         } else {
-          // 🔍 Termo ambíguo (ex: "sacar", "saque") → NÃO bloquear, deixar IA desambiguar
-          console.log('[ai-autopilot-chat] 🔍 OTP SAQUE AMBÍGUO: Termo isolado detectado, IA vai desambiguar em vez de bloquear', {
+          // 🔍 Termo ambíguo (ex: "sacar", "saque") → NÃO bloquear, NÃO enviar OTP, deixar IA desambiguar
+          console.log('[ai-autopilot-chat] 🔍 OTP SAQUE AMBÍGUO: Termo isolado detectado, IA vai desambiguar em vez de bloquear/enviar OTP', {
             is_withdrawal_action_clear: false,
             message_preview: customerMessage.substring(0, 80),
-            action: 'disambiguation_via_ai_prompt'
+            action: 'disambiguation_via_ai_prompt',
+            skipping_otp: true
           });
           // NÃO retorna — continua execução normal, a flag ambiguousFinancialDetected
           // já foi setada na linha ~1517 e vai injetar instrução de desambiguação no prompt
+          // 🆕 SKIP: Pular TODO o bloco OTP abaixo — ir direto para a IA
         }
+        // 🆕 FIX BUG CRÍTICO: Se forbidFinancial e NÃO é ação clara, PULAR o bloco OTP inteiro
+        // Sem isso, o código continuava para enviar OTP mesmo em termos ambíguos
       }
       
+      if (!flow_context?.forbidFinancial || WITHDRAWAL_ACTION_PATTERNS.some(p => p.test(customerMessage))) {
+      // 🔒 Bloco OTP: só executa se NÃO estamos em forbidFinancial OU se é ação clara de saque
       const maskedEmail = maskEmail(contactEmail);
       
       console.log('[ai-autopilot-chat] 🔐 OTP SAQUE - Solicitação de saque detectada:', {
