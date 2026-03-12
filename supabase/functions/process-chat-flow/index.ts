@@ -2470,6 +2470,9 @@ serve(async (req) => {
           } else if (supportIntentMatch) {
             path = 'suporte';
             console.log('[process-chat-flow] 🎯 supportIntentMatch → path set to "suporte"');
+          } else if (consultorIntentMatch) {
+            path = 'consultor';
+            console.log('[process-chat-flow] 🎯 consultorIntentMatch → path set to "consultor"');
           } else if (keywordMatch) {
             path = 'suporte';
             collectedData.ai_exit_intent = 'suporte';
