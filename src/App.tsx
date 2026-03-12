@@ -208,8 +208,8 @@ const App = () => {
               <Route path="/email-templates/v2/builder/:id" element={<ProtectedRoute requiredPermission="email.manage_templates"><EmailBuilderV2Page /></ProtectedRoute>} />
               <Route path="/onboarding-builder" element={<ProtectedRoute requiredPermission="playbooks.view"><Layout><OnboardingBuilder /></Layout></ProtectedRoute>} />
               <Route path="/playbook-executions" element={<ProtectedRoute requiredPermission="playbooks.view_executions"><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
-              <Route path="/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Analytics /></Layout></ProtectedRoute>} />
-              <Route path="/analytics/premium" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><AnalyticsPremium /></Layout></ProtectedRoute>} />
+              <Route path="/analytics" element={<Navigate to="/" replace />} />
+              <Route path="/analytics/premium" element={<Navigate to="/?tab=overview" replace />} />
               <Route path="/dashboards" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><DashboardsList /></Layout></ProtectedRoute>} />
               <Route path="/dashboard/:id" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><DashboardView /></Layout></ProtectedRoute>} />
               <Route path="/subscriptions" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Subscriptions /></Layout></ProtectedRoute>} />
