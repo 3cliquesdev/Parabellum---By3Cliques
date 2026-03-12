@@ -520,7 +520,7 @@ serve(async (req) => {
       conversationsProcessed++;
       
       // 🆕 FASE 2: Só chama IA se passou nos guard-rails
-      const result = await mineSuccessConversation(supabase, conv.id, aiModel, LOVABLE_API_KEY, conv.department);
+      const result = await mineSuccessConversation(supabase, conv.id, aiModel, OPENAI_API_KEY, conv.department);
       
       if (result.skipped) {
         console.log(`[ai-auto-trainer] Conversa ${conv.id} pulada: ${result.reason}`);
