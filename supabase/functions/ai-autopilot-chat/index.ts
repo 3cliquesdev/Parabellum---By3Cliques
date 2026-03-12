@@ -1281,12 +1281,14 @@ Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguida
     restrictions += `\n\n🚫 TRAVA CANCELAMENTO ATIVA:
 Se o cliente solicitar CANCELAR claramente (ex: "quero cancelar meu plano"), responda:
 "Entendi sua solicitação de cancelamento. Vou te encaminhar para o setor responsável."
-E retorne [[FLOW_EXIT]] imediatamente.
+E retorne [[FLOW_EXIT:cancelamento]] imediatamente.
 
 🔍 DESAMBIGUAÇÃO CANCELAMENTO OBRIGATÓRIA:
 Se o cliente mencionar termos como cancelar, cancelamento, desistir ou encerrar sem deixar claro se quer uma INFORMAÇÃO ou realizar uma AÇÃO, você DEVE perguntar:
 "Você tem dúvidas sobre cancelamento ou deseja cancelar um produto/serviço?"
-Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.`;
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
   }
 
   const forbidCommercial = flowContext.forbidCommercial ?? false;
