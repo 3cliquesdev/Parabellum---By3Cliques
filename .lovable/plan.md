@@ -1,31 +1,45 @@
 
 
-# Auditoria Final — Resultado: 100% OK
+# Bug: Nó de condição não avança — cai no "Desculpe, não entendi"
 
-## Verificação Completa
+## Diagnóstico
 
-Auditei os 4 arquivos principais da migração e o fluxo de chamadas. **Não encontrei erros.**
+O motor de fluxos (`process-chat-flow`) tem um **bug de escopo de código**. Quando o nó ativo é do tipo `condition` (como o nó `1769459229369` do fluxo de teste), o motor:
 
-### Checklist de Verificação
+1. Avalia corretamente a condição → `path="else"` (logs confirmam)
+2. Mas **nunca resolve `nextNode`** porque a linha `nextNode = findNextNode(flowDef, currentNode, path)` (L2673) está **dentro** do bloco `else if (ai_response)`, e não **depois** da cadeia if/else
 
-| Componente | Status | Detalhes |
-|---|---|---|
-| `ai-autopilot-chat` — `callAIWithFallback` | OK | Usa `ragConfig.model` via `sanitizeModelName()`, não hardcoded |
-| `ai-autopilot-chat` — `VALID_OPENAI_MODELS` | OK | Inclui GPT-5 family + reasoning models |
-| `ai-autopilot-chat` — `REASONING_MODELS` | OK | `max_tokens` → `max_completion_tokens` para o3/o4 |
-| `sandbox-chat` — `getConfiguredAIModel()` | OK | Lê `ai_default_model` do banco, valida contra `VALID_OPENAI_MODELS` |
-| `sandbox-chat` — Intent classification | OK | Token param condicional (L163-165) |
-| `sandbox-chat` — Main AI call | OK | `isReasoningModel` controla `temperature` + token param (L422-430) |
-| `sandbox-chat` — Error messages | OK | 402 → "OpenAI", 429 → rate limit genérico |
-| `AIModelConfigCard.tsx` | OK | GPT-5 family presente |
-| `useRAGConfig.tsx` | OK | GPT-5 family presente |
-| `AITrainer.tsx` | OK | GPT-5 family presente (corrigido na última iteração) |
+O resultado: `path` é definido, mas `nextNode` permanece `null`. O código não retorna nenhuma resposta dentro do `if (activeState)`, cai no bloco de trigger matching (L3594+), encontra o estado ativo existente e retorna a mensagem genérica "Desculpe, não entendi sua resposta".
 
-### Fluxo não afetado ✅
+## Evidências nos logs
 
-Confirmado: `process-chat-flow` **não chama a OpenAI diretamente**. Os chamadores (`meta-whatsapp-webhook`, `message-listener`, `handle-whatsapp-event`, `create-public-conversation`) invocam `ai-autopilot-chat` via `supabase.functions.invoke()` ou `fetch()`. O `ai-autopilot-chat` é o único ponto de contato com a API OpenAI no fluxo principal, e está correto.
+```
+📌 Active flow found: node=1769459229369 status=waiting_input
+🔄 Processing node: type=condition → path="else"
+⚠️ Estado ativo encontrado - NÃO iniciar Master Flow   ← NUNCA deveria chegar aqui
+```
 
-### Resultado
+O log `➡️ Transition: from=condition(...)` da L2675 **NUNCA aparece**, confirmando que L2673 não é alcançada para nós de condição.
 
-**Nenhuma correção necessária.** Todos os arquivos estão sincronizados e consistentes. O sistema está pronto para teste.
+## Correção
+
+Mover a resolução de `nextNode` para **depois** da cadeia if/else completa, garantindo que `condition` e `condition_v2` também tenham seus paths resolvidos. Especificamente:
+
+1. **Extrair** `nextNode = findNextNode(flowDef, currentNode, path)` e todo o código de auto-travessia/delivery que segue (L2673-3575) para **fora** do bloco `else if (ai_response)`
+2. **Garantir** que o bloco `ai_response` EXIT (que faz `delete collectedData.__ai` e "cai no findNextNode") continue funcionando — ele já seta `path` implicitamente ou usa `findNextNode` com path adequado
+3. Adicionar um guard: se `path` está definido e `nextNode` ainda é null após a cadeia if/else, resolver via `findNextNode(flowDef, currentNode, path)`
+
+A correção estrutural: fechar o bloco `else if (ai_response)` **antes** da L2673, para que condition, condition_v2 e ai_response EXIT todos alcancem o `findNextNode`.
+
+## Impacto
+
+- Corrige o nó de condição (tipo `equals` com multi-regra) que fica travado em `waiting_input`
+- O caminho `else` → `welcome_ia` será seguido corretamente
+- Não afeta nós `ask_*` (já tratados separadamente com return) nem `ai_response` STAY (já retorna)
+
+## Teste de validação
+
+Após o deploy, enviar qualquer mensagem na conversa `#AC05E4D4` e verificar que:
+- A condição avalia `path="else"` → avança para `welcome_ia` (nó de mensagem "Oi! Sou o Cliker IA...")
+- A IA começa a responder em vez de repetir "Desculpe, não entendi"
 
