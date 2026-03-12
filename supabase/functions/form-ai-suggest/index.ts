@@ -112,7 +112,7 @@ serve(async (req) => {
       .eq('key', 'ai_model_sandbox')
       .single();
 
-    const model = 'gpt-4o-mini';
+    const model = 'gpt-5-mini';
 
     // Fetch persona if provided
     let personaPrompt = '';
