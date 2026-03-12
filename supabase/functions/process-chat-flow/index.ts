@@ -2193,6 +2193,33 @@ serve(async (req) => {
           delete collectedData.__ai;
         }
 
+        if (cancellationIntentMatch) {
+          console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada no nó AI, tratando como exit | msg="${(userMessage || '').substring(0, 100)}"`);
+          
+          try {
+            await supabaseClient
+              .from('ai_events')
+              .insert({
+                entity_type: 'conversation',
+                entity_id: conversationId,
+                event_type: 'ai_blocked_cancellation',
+                model: 'process-chat-flow',
+                output_json: {
+                  phase: 'flow_node_exit',
+                  node_id: currentNode.id,
+                  flow_id: activeState.flow_id,
+                  interaction_count: aiCount,
+                  message_preview: (userMessage || '').substring(0, 200),
+                },
+                input_summary: (userMessage || '').substring(0, 200),
+              });
+          } catch (logErr) {
+            console.error('[process-chat-flow] ⚠️ Failed to log cancellation block event:', logErr);
+          }
+
+          delete collectedData.__ai;
+        }
+
         if (commercialIntentMatch) {
           console.log(`[process-chat-flow] 🛒 TRAVA COMERCIAL: Intenção comercial detectada no nó AI, tratando como exit`);
           
@@ -2221,10 +2248,9 @@ serve(async (req) => {
         }
 
         // Verificar exit keyword (word-boundary match — evita falso positivo por substring)
-        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
+        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
           const kwClean = String(kw || '').toLowerCase().trim();
           if (!kwClean) return false;
-          // Usar word boundary para evitar match parcial (ex: "atendente" dentro de "não sou atendente")
           try {
             const kwRegex = new RegExp(`\\b${kwClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
             return kwRegex.test(msgLower);
@@ -2234,7 +2260,7 @@ serve(async (req) => {
         });
 
         // Verificar max interações
-        const maxReached = !financialIntentMatch && !commercialIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
+        const maxReached = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
 
         // 🆕 forceAIExit: IA detectou handoff (strict RAG ou confidence) e quer sair do nó
         if (forceAIExit) {
@@ -2247,19 +2273,23 @@ serve(async (req) => {
           collectedData.ai_exit_intent = intentData.ai_exit_intent;
           console.log(`[process-chat-flow] 🎯 ai_exit_intent salvo: "${intentData.ai_exit_intent}"`);
         }
-        // Salvar intent automático quando financialIntentMatch ou commercialIntentMatch
+        // Salvar intent automático quando financialIntentMatch, cancellationIntentMatch ou commercialIntentMatch
         if (financialIntentMatch && !collectedData.ai_exit_intent) {
           collectedData.ai_exit_intent = 'financeiro';
           console.log('[process-chat-flow] 🎯 ai_exit_intent=financeiro (auto-detect from financialIntentMatch)');
+        }
+        if (cancellationIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'cancelamento';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=cancelamento (auto-detect from cancellationIntentMatch)');
         }
         if (commercialIntentMatch && !collectedData.ai_exit_intent) {
           collectedData.ai_exit_intent = 'comercial';
           console.log('[process-chat-flow] 🎯 ai_exit_intent=comercial (auto-detect from commercialIntentMatch)');
         }
 
-        if (financialIntentMatch || commercialIntentMatch || keywordMatch || maxReached || aiExitForced) {
-          const exitReason = financialIntentMatch ? 'financial_blocked' : commercialIntentMatch ? 'commercial_blocked' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
-          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} commercial=${commercialIntentMatch} count=${aiCount}`);
+        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || keywordMatch || maxReached || aiExitForced) {
+          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
+          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} count=${aiCount}`);
 
           // Log de transferência estruturado em ai_events
           try {
