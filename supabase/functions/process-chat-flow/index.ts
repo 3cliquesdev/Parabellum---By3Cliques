@@ -2297,7 +2297,7 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO CANCELAMENTO: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
         }
         
-        const cancellationIntentMatch = forbidCancellation && msgLower.length > 0 && isCancellationAction;
+        cancellationIntentMatch = forbidCancellation && msgLower.length > 0 && isCancellationAction;
         
         if (cancellationIntentMatch) {
           console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada | msg="${(userMessage || '').substring(0, 100)}"`);
