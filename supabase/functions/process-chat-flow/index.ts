@@ -1365,8 +1365,83 @@ serve(async (req) => {
         );
       }
 
-      // verify_customer_otp: Inicializar estado OTP e pedir email
+      // verify_customer_otp: Inicializar estado OTP
       if (contentNode.type === 'verify_customer_otp') {
+        const verifiedKey = contentNode.data?.save_verified_as || 'customer_verified';
+
+        // 🆕 PRE-CHECK: Se validate_customer já rodou, usar dados existentes
+        if (collectedDataForState.customer_validated === true && collectedDataForState.customer_email_found) {
+          // Cliente já validado → enviar OTP direto para email de cadastro
+          const preEmail = collectedDataForState.customer_email_found;
+          console.log('[process-chat-flow] 🔐 OTP pre-check: customer already validated, sending OTP to:', preEmail);
+
+          collectedDataForState.__otp_step = 'wait_code';
+          collectedDataForState.__otp_attempts = 0;
+          collectedDataForState.__otp_email = preEmail;
+          collectedDataForState.__otp_customer_name = collectedDataForState.customer_name_found || '';
+
+          await supabaseClient.from('chat_flow_states').update({
+            collected_data: collectedDataForState,
+          }).eq('id', newState.id);
+
+          // Enviar código OTP
+          await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+            body: JSON.stringify({ email: preEmail }),
+          });
+
+          const otpSentMsg = contentNode.data?.message_otp_sent
+            ? contentNode.data.message_otp_sent.replace(/\{\{email\}\}/g, preEmail)
+            : `Enviamos um código de verificação para seu email de cadastro. Digite o código:`;
+          await deliverManualMessage(otpSentMsg);
+
+          return new Response(JSON.stringify({
+            useAI: false,
+            response: otpSentMsg,
+            flowId: flow.id,
+            flowStarted: true,
+            manualTrigger: true,
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+        } else if (collectedDataForState.customer_validated === false) {
+          // Não é cliente → setar resultado e avançar
+          console.log('[process-chat-flow] 🔐 OTP pre-check: not a customer, skipping OTP');
+          collectedDataForState[verifiedKey] = false;
+          collectedDataForState.__otp_result = 'not_customer';
+          collectedDataForState.customer_verified_email = '';
+          collectedDataForState.customer_verified_name = '';
+
+          const notCustomerMsg = contentNode.data?.message_not_customer || "Você não foi identificado como cliente. Vou encaminhar para nosso time comercial.";
+          await deliverManualMessage(notCustomerMsg);
+
+          // Avançar para próximo nó
+          const flowDef = flow.flow_definition as any;
+          const nextAfterOtp = findNextNode(flowDef, contentNode);
+          if (nextAfterOtp) {
+            await supabaseClient.from('chat_flow_states').update({
+              collected_data: collectedDataForState,
+              current_node_id: nextAfterOtp.id,
+              status: nextAfterOtp.type.startsWith('ask_') || nextAfterOtp.type === 'condition' || nextAfterOtp.type === 'condition_v2' || nextAfterOtp.type === 'verify_customer_otp' ? 'waiting_input' : 'active',
+            }).eq('id', newState.id);
+          } else {
+            await supabaseClient.from('chat_flow_states').update({
+              collected_data: collectedDataForState,
+              status: 'completed',
+              completed_at: new Date().toISOString(),
+            }).eq('id', newState.id);
+          }
+
+          return new Response(JSON.stringify({
+            useAI: false,
+            response: notCustomerMsg,
+            flowId: flow.id,
+            flowStarted: true,
+            manualTrigger: true,
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        // Fallback: sem validate_customer → pedir email normalmente
         collectedDataForState.__otp_step = 'ask_email';
         collectedDataForState.__otp_attempts = 0;
         await supabaseClient.from('chat_flow_states').update({
