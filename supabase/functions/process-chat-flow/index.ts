@@ -937,7 +937,7 @@ serve(async (req) => {
       // até encontrar o primeiro nó executável (message/ask_options/ai_response/transfer)
       // Reutiliza a mesma lógica do Master Flow para consistência
       // ============================================================
-      const NO_CONTENT_MANUAL = new Set(['input', 'start', 'condition', 'condition_v2']);
+      const NO_CONTENT_MANUAL = new Set(['input', 'start', 'condition', 'condition_v2', 'validate_customer']);
       const MAX_TRAVERSAL_MANUAL = 12;
 
       // Carregar dados de contato/conversa para avaliação de condições
