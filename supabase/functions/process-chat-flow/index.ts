@@ -2444,7 +2444,6 @@ serve(async (req) => {
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-      }
 
       nextNode = findNextNode(flowDef, currentNode, path);
       // findNextNode já tem fallback hierárquico (path → ai_exit → default → any)
