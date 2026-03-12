@@ -1,11 +1,13 @@
 import {
   Activity,
-  LayoutDashboard, 
+  LayoutDashboard,
+  LayoutGrid,
   Inbox,
   Users, 
   Building2, 
   TrendingUp, 
   FileText,
+  FileBarChart,
   Settings,
   UserCog,
   Zap,
@@ -25,7 +27,7 @@ import {
   Receipt,
   RefreshCw,
   CheckCircle2,
-  
+  CreditCard,
   AlertTriangle,
   Crown,
   ClipboardList,
