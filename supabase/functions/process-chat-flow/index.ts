@@ -3248,6 +3248,10 @@ serve(async (req) => {
           const condPath = evaluateConditionPath(afterMessage.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
           const afterCond = findNextNode(flowDef, afterMessage, condPath);
           nextNode = afterCond || null;
+        } else if (afterMessage.type === 'condition_v2') {
+          const condV2Path = evaluateConditionV2Path(afterMessage.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || []);
+          const afterCond = findNextNode(flowDef, afterMessage, condV2Path);
+          nextNode = afterCond || null;
         } else if (afterMessage.type === 'input' || afterMessage.type === 'start') {
           nextNode = findNextNode(flowDef, afterMessage);
         } else {
