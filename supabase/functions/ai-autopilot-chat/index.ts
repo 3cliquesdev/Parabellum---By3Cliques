@@ -6977,15 +6977,74 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 
     const aiData = await callAIWithFallback(aiPayload);
     // ✅ FIX 2: Fallback não usa 'Desculpe' que está na lista de frases proibidas (auto-loop).
-    const rawAIContent = aiData.choices?.[0]?.message?.content;
-    if (!rawAIContent && !aiData.choices?.[0]?.message?.tool_calls?.length) {
-      console.error('[ai-autopilot-chat] ❌ AI returned empty content, no tool calls either');
-    }
-    let assistantMessage = rawAIContent || 'Pode repetir sua mensagem? Não consegui processar corretamente.';
+    let rawAIContent = aiData.choices?.[0]?.message?.content;
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
 
-    // 🎯 PREFIXO DE RESPOSTA CAUTELOSA (confiança média)
-    if (confidenceResult.action === 'cautious' && !toolCalls.length) {
+    // 🆕 FIX B: RETRY — Se IA retornou vazio sem tool_calls, tentar com prompt reduzido
+    if (!rawAIContent && !toolCalls.length) {
+      console.warn('[ai-autopilot-chat] ⚠️ IA retornou vazio — tentando retry com prompt reduzido');
+      try {
+        const retryMessages = [
+          { role: 'system' as const, content: contextualizedSystemPrompt.substring(0, 4000) },
+          ...messagesForAI.slice(-5),
+          { role: 'user' as const, content: customerMessage }
+        ];
+        const retryPayload: any = {
+          model: selectedModel,
+          messages: retryMessages,
+          temperature: 0.7,
+          max_tokens: 300,
+        };
+        const retryData = await callAIWithFallback(retryPayload);
+        rawAIContent = retryData.choices?.[0]?.message?.content;
+        if (rawAIContent) {
+          console.log('[ai-autopilot-chat] ✅ Retry bem-sucedido — resposta recuperada');
+        } else {
+          console.error('[ai-autopilot-chat] ❌ Retry também retornou vazio');
+        }
+      } catch (retryErr) {
+        console.error('[ai-autopilot-chat] ❌ Retry falhou:', retryErr);
+      }
+    }
+
+    // 🆕 FIX C: Se AINDA vazio + intent financeiro + flow_context → FLOW_EXIT:financeiro
+    if (!rawAIContent && !toolCalls.length && flow_context) {
+      const financialTerms = /\b(saque|sacar|reembolso|estorno|devolução|dinheiro|pix|saldo|transferir|transferência|retirar|retirada)\b/i;
+      const cancellationTerms = /\b(cancelar|cancelamento|cancela|desistir|desistência)\b/i;
+      const commercialTerms = /\b(comprar|contratar|assinar|upgrade|plano|preço|valor)\b/i;
+
+      let autoExitIntent: string | null = null;
+      if (financialTerms.test(customerMessage) && flowForbidFinancial) {
+        autoExitIntent = 'financeiro';
+      } else if (cancellationTerms.test(customerMessage) && flowForbidCancellation) {
+        autoExitIntent = 'cancelamento';
+      } else if (commercialTerms.test(customerMessage) && flowForbidCommercialPrompt) {
+        autoExitIntent = 'comercial';
+      }
+
+      if (autoExitIntent) {
+        console.log(`[ai-autopilot-chat] 🎯 Fallback vazio + intent ${autoExitIntent} → FLOW_EXIT:${autoExitIntent}`);
+        return new Response(JSON.stringify({
+          flowExit: true,
+          reason: `ai_empty_response_${autoExitIntent}_intent`,
+          ai_exit_intent: autoExitIntent,
+          hasFlowContext: true,
+          flow_context: { flow_id: flow_context.flow_id, node_id: flow_context.node_id }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    if (!rawAIContent && !toolCalls.length) {
+      console.error('[ai-autopilot-chat] ❌ AI returned empty content after all retries, no tool calls');
+    }
+
+    let assistantMessage = rawAIContent || 'Pode repetir sua mensagem? Não consegui processar corretamente.';
+    const isEmptyAIResponse = !rawAIContent;
+
+    // 🎯 FIX A: PREFIXO DE RESPOSTA CAUTELOSA — SÓ se a IA realmente gerou conteúdo
+    if (confidenceResult.action === 'cautious' && !toolCalls.length && !isEmptyAIResponse) {
       const cautiousPrefix = generateResponsePrefix('cautious');
       if (cautiousPrefix && !assistantMessage.startsWith('Baseado nas informações')) {
         assistantMessage = cautiousPrefix + assistantMessage;
