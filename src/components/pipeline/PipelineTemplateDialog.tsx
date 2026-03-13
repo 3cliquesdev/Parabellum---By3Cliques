@@ -34,6 +34,7 @@ export function PipelineTemplateDialog({
   contactId,
   contactPhone,
   contactName,
+  dealId,
   onConversationCreated,
 }: PipelineTemplateDialogProps) {
   const { user } = useAuth();
