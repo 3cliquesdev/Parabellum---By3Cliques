@@ -372,6 +372,13 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
 
       setMessage("");
     }
+    
+    // UX: Show typing indicator after sending (not for internal notes or emails)
+    if (!isInternal && !isEmailMode) {
+      setIsWaitingResponse(true);
+      if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+      waitingTimeoutRef.current = setTimeout(() => setIsWaitingResponse(false), 60_000);
+    }
   };
 
   // Abre o diálogo de confirmação capturando os IDs imediatamente
