@@ -23,8 +23,8 @@ interface CustomerInfoCardProps {
 }
 
 export function CustomerInfoCard({ customer }: CustomerInfoCardProps) {
-  const fullName = `${customer.first_name} ${customer.last_name}`.trim();
-  const initials = `${customer.first_name?.[0] || ''}${customer.last_name?.[0] || ''}`.toUpperCase();
+  const fullName = displayName(customer.first_name, customer.last_name);
+  const initials = displayInitials(customer.first_name, customer.last_name);
 
   return (
     <Card>

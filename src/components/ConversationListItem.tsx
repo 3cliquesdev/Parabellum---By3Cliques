@@ -278,7 +278,7 @@ function ConversationListItemComponent({
         {/* Linha 1: Nome + Tempo SLA */}
         <div className="flex items-center justify-between mb-0.5">
           <p className="font-medium truncate text-foreground text-sm">
-            {conversation.contacts?.first_name || 'Cliente'}
+            {displayName(conversation.contacts?.first_name, conversation.contacts?.last_name)}
           </p>
           <div className="flex items-center gap-1.5">
             <span className={cn(
