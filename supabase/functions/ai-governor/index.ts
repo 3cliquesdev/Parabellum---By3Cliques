@@ -481,6 +481,7 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
     .from('deals')
     .select('assigned_to, gross_value')
     .eq('status', 'won')
+    .eq('is_returning_customer', false)
     .gte('closed_at', firstDayOfMonth)
     .not('assigned_to', 'is', null);
 
