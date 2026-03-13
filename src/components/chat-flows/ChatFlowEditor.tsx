@@ -196,7 +196,16 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
   }, [initialFlow?.nodes]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlow?.edges || []);
+  const normalizedEdges = useMemo(() => {
+    return (initialFlow?.edges || []).map(edge => ({
+      ...edge,
+      type: edge.type || 'buttonEdge',
+      style: edge.style || { strokeWidth: 2, stroke: 'hsl(var(--primary))' },
+      markerEnd: edge.markerEnd || { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
+    }));
+  }, [initialFlow?.edges]);
+
+  const [edges, setEdges, onEdgesChange] = useEdgesState(normalizedEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
