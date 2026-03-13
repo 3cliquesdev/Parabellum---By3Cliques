@@ -165,15 +165,10 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const prevMsgCount = useRef(messages.length);
   useEffect(() => {
     if (messages.length > prevMsgCount.current) {
-      // New message arrived — check if it's NOT from the current user
       const lastMsg = messages[messages.length - 1];
       if (lastMsg && (lastMsg.sender_type !== 'user' || lastMsg.sender_id !== user?.id)) {
         setIsWaitingResponse(false);
         if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
-      }
-      // Badge for new message while scrolled up
-      if (!shouldStickToBottom) {
-        setHasNewMessageBelow(true);
       }
     }
     prevMsgCount.current = messages.length;
@@ -185,11 +180,6 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     setHasNewMessageBelow(false);
     if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
   }, [conversation?.id]);
-
-  // Clear badge when user scrolls to bottom
-  useEffect(() => {
-    if (shouldStickToBottom) setHasNewMessageBelow(false);
-  }, [shouldStickToBottom]);
 
   // ========== SMART SCROLL (WhatsApp-like) ==========
   const scrollRef = useRef<HTMLDivElement>(null);
