@@ -29,7 +29,6 @@ export function useActiveFlowState(conversationId: string | undefined) {
         .from("chat_flow_states")
         .select("id, flow_id, current_node_id, started_at, status, chat_flows(name, is_active)")
         .eq("conversation_id", conversationId)
-        .in("status", ["in_progress", "active", "waiting_input"])
         .order("started_at", { ascending: false })
         .limit(1)
         .maybeSingle();
