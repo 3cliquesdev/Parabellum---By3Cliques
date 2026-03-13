@@ -5639,6 +5639,36 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       ).join('\n\n---\n\n')}`;
     }
     
+    // 🆕 SANDBOX TRAINING: Buscar artigos de treinamento do sandbox quando fonte habilitada
+    let sandboxTrainingContext = '';
+    let sandboxUsedFlag = false;
+    if (ragConfig.sources?.sandbox) {
+      try {
+        const { data: sandboxArticles } = await supabaseClient
+          .from('knowledge_articles')
+          .select('id, title, content')
+          .eq('source', 'sandbox_training')
+          .eq('is_published', true)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        
+        if (sandboxArticles && sandboxArticles.length > 0) {
+          sandboxUsedFlag = true;
+          sandboxTrainingContext = `\n\n**🧪 EXEMPLOS DE TREINAMENTO (Sandbox):**\nOs exemplos abaixo são pares de pergunta-resposta validados manualmente. Use-os como referência de tom, estilo e precisão para suas respostas.\n${sandboxArticles.map((a: any) => 
+            `**${a.title}**\n${a.content}`
+          ).join('\n\n---\n\n')}`;
+          
+          console.log(`[ai-autopilot-chat] 🧪 Sandbox training: ${sandboxArticles.length} artigos carregados`);
+        } else {
+          console.log('[ai-autopilot-chat] 🧪 Sandbox training: nenhum artigo encontrado');
+        }
+      } catch (sandboxErr) {
+        console.error('[ai-autopilot-chat] ❌ Erro ao buscar sandbox training:', sandboxErr);
+      }
+    } else {
+      console.log('[ai-autopilot-chat] 🧪 Sandbox training: fonte desabilitada nas configurações');
+    }
+    
     // FASE 2: Preparar contexto financeiro (CPF mascarado)
     const contactCPF = contact.document || ''; // CPF completo
     const maskedCPF = contactCPF.length >= 4 ? `***.***.***-${contactCPF.slice(-2)}` : 'Não cadastrado';
