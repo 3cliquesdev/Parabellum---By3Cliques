@@ -3528,7 +3528,8 @@ serve(async (req) => {
             if (intent === 'financeiro') { financialIntentMatch = true; }
             else if (intent === 'cancelamento') { cancellationIntentMatch = true; }
             else if (intent === 'comercial' || intent === 'comercial_nacional') { commercialIntentMatch = true; }
-            else if (intent === 'suporte' || intent === 'suporte_pedidos') { pedidosIntentMatch = true; }
+            else if (intent === 'suporte_pedidos') { pedidosIntentMatch = true; }
+            else if (intent === 'suporte') { supportIntentMatch = true; }
             else if (intent === 'suporte_sistema') { sistemaIntentMatch = true; }
             else if (intent === 'consultor') { consultorIntentMatch = true; }
             else if (intent === 'pedidos') { pedidosIntentMatch = true; }
