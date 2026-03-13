@@ -43,7 +43,7 @@ export function VariableAutocomplete({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const cursorPosRef = useRef<number>(0);
 
-  const { flowVars, contactVars, conversationVars, orderVars } = useMemo(
+  const { flowVars, contactVars, conversationVars, orderVars, collectionVars } = useMemo(
     () => getAvailableVariables(nodes, edges, selectedNodeId),
     [nodes, edges, selectedNodeId]
   );
