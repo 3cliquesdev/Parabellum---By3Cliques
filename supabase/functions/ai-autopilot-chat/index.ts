@@ -8863,14 +8863,14 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           articles_found: 0,
           timestamp: new Date().toISOString()
         }));
-        supabaseClient.from('ai_events').insert({
+        Promise.resolve(supabaseClient.from('ai_events').insert({
           entity_type: 'conversation',
           entity_id: conversationId,
           event_type: 'ai_decision_restriction_violation_' + restrictionCheck.violation,
           model: 'system',
           score: 0,
           output_json: { reason: 'restriction_violation_' + restrictionCheck.violation, exitType: 'stay_in_node', fallback_used: true, articles_found: 0, hasFlowContext: true },
-        }).then(() => {}).catch(() => {});
+        })).catch(() => {});
         
         // 🆕 FIX: Substituir mensagem pelo fallback e FICAR no nó (não retornar flow_advance_needed)
         console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇÃO + flow_context → substituindo mensagem e permanecendo no nó');
