@@ -34,6 +34,10 @@ const COLLECTION_FIELDS = [
   { key: 'phone', label: 'Telefone', icon: Phone },
   { key: 'cpf', label: 'CPF', icon: CreditCard },
   { key: 'address', label: 'Endereço', icon: MapPin },
+  { key: 'pix_key', label: 'Chave PIX', icon: Key },
+  { key: 'bank', label: 'Banco', icon: Building2 },
+  { key: 'reason', label: 'Motivo', icon: MessageSquare },
+  { key: 'amount', label: 'Valor', icon: DollarSign },
 ];
 
 export function SmartCollectionSection({
