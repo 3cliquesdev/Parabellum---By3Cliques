@@ -709,6 +709,11 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
             </div>
           </div>
 
+          {/* Linked Deal Panel */}
+          {(conversation as any).deal_id && (
+            <LinkedDealPanel dealId={(conversation as any).deal_id} />
+          )}
+
           {/* Active Flow Indicator - fixed in header */}
           <ActiveFlowIndicator conversationId={conversation.id} />
 
