@@ -55,7 +55,9 @@ export default function KanbanCard({
   const navigate = useNavigate();
   const { toast } = useToast();
   const deleteDeal = useDeleteDeal();
-  
+  const createConversation = useCreateConversation();
+  const [isNavigatingToInbox, setIsNavigatingToInbox] = useState(false);
+
   // Format WhatsApp number with country code
   const formatWhatsAppNumber = (phone: string) => {
     const cleanPhone = phone.replace(/\D/g, '');
