@@ -486,6 +486,7 @@ export default function KanbanCard({
           contactId={deal.contact_id}
           contactPhone={deal.contacts.phone}
           contactName={`${deal.contacts.first_name} ${deal.contacts.last_name}`}
+          dealId={deal.id}
           onConversationCreated={(conversationId) => {
             navigate(`/inbox?conversation=${conversationId}`);
           }}
