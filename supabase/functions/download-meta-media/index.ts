@@ -18,6 +18,7 @@ interface DownloadRequest {
   message_id: string;
   media_type: string;
   instance_id: string;
+  conversation_id?: string;
 }
 
 serve(async (req) => {
