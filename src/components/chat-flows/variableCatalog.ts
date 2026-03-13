@@ -145,6 +145,7 @@ export function getAvailableVariables(
   contactVars: VariableItem[];
   conversationVars: VariableItem[];
   orderVars: VariableItem[];
+  collectionVars: VariableItem[];
   all: VariableItem[];
 } {
   let flowVars: VariableItem[] = [];
