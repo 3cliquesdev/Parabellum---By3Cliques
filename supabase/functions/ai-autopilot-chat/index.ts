@@ -1875,6 +1875,8 @@ serve(async (req) => {
 
         const enrichResults = await Promise.all(enrichPromises);
 
+        let onboardingInfo: { status: string; progress: string; nextStep: string; playbookName: string; resumeLink: string } | null = null;
+
         for (const result of enrichResults) {
           if (result.type === 'org' && result.data?.name) contactOrgName = result.data.name;
           if (result.type === 'consultant' && result.data?.full_name) contactConsultantName = result.data.full_name;
@@ -1882,13 +1884,35 @@ serve(async (req) => {
           if (result.type === 'tags' && result.data) {
             contactTagsList = result.data.map((t: any) => t.tags?.name).filter(Boolean);
           }
+          if (result.type === 'onboarding_execution' && result.data?.length > 0) {
+            const exec = result.data[0];
+            onboardingInfo = {
+              status: 'in_progress',
+              progress: '',
+              nextStep: '',
+              playbookName: exec.playbook?.name || 'Onboarding',
+              resumeLink: `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || ''}/public-onboarding/${exec.id}`,
+            };
+          }
+          if (result.type === 'onboarding_steps' && result.data && onboardingInfo) {
+            const steps = result.data;
+            const completed = steps.filter((s: any) => s.completed).length;
+            const total = steps.length;
+            const nextPending = steps.find((s: any) => !s.completed);
+            onboardingInfo.progress = `${completed}/${total} etapas`;
+            onboardingInfo.nextStep = nextPending?.step_name || 'Todas concluídas';
+            if (completed >= total) {
+              onboardingInfo = null;
+            }
+          }
         }
 
-        console.log('[ai-autopilot-chat] ðŸ·ï¸ Contexto enriquecido:', {
+        console.log('[ai-autopilot-chat] 🏷️ Contexto enriquecido:', {
           org: contactOrgName,
           consultant: contactConsultantName,
           seller: contactSellerName,
-          tags: contactTagsList
+          tags: contactTagsList,
+          onboarding: onboardingInfo ? `${onboardingInfo.progress} - next: ${onboardingInfo.nextStep}` : 'N/A',
         });
       } catch (enrichErr) {
         console.error('[ai-autopilot-chat] âš ï¸ Erro ao enriquecer contexto do contato:', enrichErr);
