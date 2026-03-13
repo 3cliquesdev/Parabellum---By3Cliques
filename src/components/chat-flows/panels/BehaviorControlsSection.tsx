@@ -77,6 +77,11 @@ export function BehaviorControlsSection({
   const forbidCancellation = selectedNode.data.forbid_cancellation ?? false;
   const forbidSupport = selectedNode.data.forbid_support ?? false;
   const forbidConsultant = selectedNode.data.forbid_consultant ?? false;
+  const forbidPedidos = selectedNode.data.forbid_pedidos ?? false;
+  const forbidDevolucao = selectedNode.data.forbid_devolucao ?? false;
+  const forbidSaque = selectedNode.data.forbid_saque ?? false;
+  const forbidSistema = selectedNode.data.forbid_sistema ?? false;
+  const forbidInternacional = selectedNode.data.forbid_internacional ?? false;
   const objective = selectedNode.data.objective || "";
 
   return (
