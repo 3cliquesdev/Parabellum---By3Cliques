@@ -774,11 +774,38 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                       isAdmin={isAdmin}
                       isManager={isManager}
                       messagesEndRef={messagesEndRef}
+                      tickCounter={tickCounter}
                     />
+
+                    {/* Typing indicator */}
+                    {isWaitingResponse && (
+                      <div className="flex justify-start gap-2 mt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                        <div className="flex items-center gap-1 px-4 py-3 bg-muted rounded-2xl rounded-tl-sm w-fit">
+                          <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce [animation-delay:0ms]" />
+                          <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce [animation-delay:150ms]" />
+                          <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce [animation-delay:300ms]" />
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
             </div>
+
+            {/* "Nova mensagem ↓" floating badge */}
+            {hasNewMessageBelow && (
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="shadow-lg gap-1.5 rounded-full px-4 h-8 text-xs font-medium"
+                  onClick={scrollToBottom}
+                >
+                  Nova mensagem
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </div>
 
           {isCopilot && conversation && (
