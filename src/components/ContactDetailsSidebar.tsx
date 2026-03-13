@@ -8,20 +8,34 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket, MessageSquare, ExternalLink, Loader2, AlertTriangle, ChevronRight } from "lucide-react";
+import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket, MessageSquare, ExternalLink, Loader2, AlertTriangle, ChevronRight, Pencil, Trophy, XCircle, ArrowRightLeft, MoreHorizontal } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ContactTagsSection from "./inbox/ContactTagsSection";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useContactTickets } from "@/hooks/useContactTickets";
 import { useUnifiedTimeline } from "@/hooks/useUnifiedTimeline";
 import DealDialog from "./DealDialog";
+import LostReasonDialog from "./LostReasonDialog";
 import { SLABadge } from "./SLABadge";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 import { useActiveTicketStatuses } from "@/hooks/useTicketStatuses";
 import { getStatusIcon } from "@/lib/ticketStatusIcons";
+import { useUpdateDeal, useUpdateDealStage } from "@/hooks/useDeals";
+import { useStages } from "@/hooks/useStages";
+import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 type Conversation = Tables<"conversations"> & {
   contacts: Tables<"contacts"> & {
@@ -35,9 +49,17 @@ interface ContactDetailsSidebarProps {
 
 export default function ContactDetailsSidebar({ conversation }: ContactDetailsSidebarProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [selectedConversationMeta, setSelectedConversationMeta] = useState<any>(null);
+  const [editingDeal, setEditingDeal] = useState<any>(null);
+  const [lostDeal, setLostDeal] = useState<{ id: string; title: string } | null>(null);
   const contactId = conversation?.contacts?.id || null;
+
+  const updateDeal = useUpdateDeal();
+  const updateDealStage = useUpdateDealStage();
+  const { data: stages = [] } = useStages();
 
   const { data: contactDeals = [] } = useQuery({
     queryKey: ["contact-deals", contactId],
@@ -50,6 +72,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
           *,
           contacts (first_name, last_name),
           organizations (name),
+          stages (id, name),
           assigned_user:profiles!deals_assigned_to_fkey (id, full_name, avatar_url)
         `)
         .eq("contact_id", contactId)
@@ -343,43 +366,134 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
                         Criar
                       </Button>
                     }
-                    onOpenChange={(open) => {}}
+                    onOpenChange={(open) => {
+                      if (!open) {
+                        queryClient.invalidateQueries({ queryKey: ["contact-deals", contactId] });
+                      }
+                    }}
                   />
                 </div>
                 {contactDeals && contactDeals.length > 0 ? (
                   <div className="space-y-1.5">
-                    {contactDeals.map((deal) => (
-                      <div
-                        key={deal.id}
-                        className="p-2 rounded-md bg-muted hover:bg-muted/80 transition-colors"
-                      >
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="text-xs font-medium text-foreground truncate flex-1">
-                            {deal.title}
-                          </p>
-                          <Badge
-                            variant={
-                              deal.status === "won"
-                                ? "default"
-                                : deal.status === "lost"
-                                ? "destructive"
-                                : "secondary"
-                            }
-                            className="text-[9px] px-1 py-0"
-                          >
-                            {deal.status === "open" ? "Aberto" : deal.status === "won" ? "Ganho" : "Perdido"}
-                          </Badge>
+                    {contactDeals.map((deal) => {
+                      const dealStages = stages.filter((s: any) => s.pipeline_id === deal.pipeline_id);
+                      return (
+                        <div
+                          key={deal.id}
+                          className="p-2 rounded-md border border-border bg-card hover:bg-accent/50 transition-colors group"
+                        >
+                          {/* Row 1: Title + Actions Menu */}
+                          <div className="flex items-center justify-between gap-1">
+                            <p
+                              className="text-xs font-medium text-foreground truncate flex-1 cursor-pointer hover:text-primary transition-colors"
+                              onClick={() => setEditingDeal(deal)}
+                            >
+                              {deal.title}
+                            </p>
+                            <div className="flex items-center gap-0.5">
+                              <Badge
+                                variant={
+                                  deal.status === "won"
+                                    ? "default"
+                                    : deal.status === "lost"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                                className="text-[9px] px-1 py-0"
+                              >
+                                {deal.status === "open" ? "Aberto" : deal.status === "won" ? "Ganho" : "Perdido"}
+                              </Badge>
+                              {deal.status === "open" && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="xs" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <MoreHorizontal className="h-3 w-3" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-44">
+                                    <DropdownMenuItem onClick={() => setEditingDeal(deal)}>
+                                      <Pencil className="h-3 w-3 mr-2" />
+                                      Editar
+                                    </DropdownMenuItem>
+                                    {dealStages.length > 0 && (
+                                      <DropdownMenuSub>
+                                        <DropdownMenuSubTrigger>
+                                          <ArrowRightLeft className="h-3 w-3 mr-2" />
+                                          Mudar Etapa
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent>
+                                          {dealStages.map((stage: any) => (
+                                            <DropdownMenuItem
+                                              key={stage.id}
+                                              disabled={stage.id === deal.stage_id}
+                                              onClick={() => {
+                                                updateDealStage.mutate(
+                                                  { id: deal.id, stage_id: stage.id },
+                                                  {
+                                                    onSuccess: () => {
+                                                      queryClient.invalidateQueries({ queryKey: ["contact-deals", contactId] });
+                                                      toast({ title: `Etapa alterada para "${stage.name}"` });
+                                                    },
+                                                  }
+                                                );
+                                              }}
+                                            >
+                                              {stage.name}
+                                              {stage.id === deal.stage_id && " ✓"}
+                                            </DropdownMenuItem>
+                                          ))}
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
+                                    )}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        updateDeal.mutate(
+                                          { id: deal.id, updates: { status: "won" } },
+                                          {
+                                            onSuccess: () => {
+                                              queryClient.invalidateQueries({ queryKey: ["contact-deals", contactId] });
+                                              toast({ title: "🏆 Negócio marcado como ganho!" });
+                                            },
+                                          }
+                                        );
+                                      }}
+                                      className="text-success"
+                                    >
+                                      <Trophy className="h-3 w-3 mr-2" />
+                                      Marcar como Ganho
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => setLostDeal({ id: deal.id, title: deal.title })}
+                                      className="text-destructive"
+                                    >
+                                      <XCircle className="h-3 w-3 mr-2" />
+                                      Marcar como Perdido
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </div>
+                          </div>
+                          {/* Row 2: Stage + Value */}
+                          <div className="flex items-center justify-between mt-1">
+                            {(deal as any).stages?.name && (
+                              <span className="text-[10px] text-muted-foreground truncate">
+                                📌 {(deal as any).stages.name}
+                              </span>
+                            )}
+                            {deal.value && (
+                              <p className="text-xs font-bold text-success">
+                                {new Intl.NumberFormat("pt-BR", {
+                                  style: "currency",
+                                  currency: deal.currency || "BRL",
+                                }).format(deal.value)}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        {deal.value && (
-                          <p className="text-xs font-bold text-success mt-0.5">
-                            {new Intl.NumberFormat("pt-BR", {
-                              style: "currency",
-                              currency: deal.currency || "BRL",
-                            }).format(deal.value)}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground text-center py-3">
@@ -590,6 +704,47 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Deal Dialog */}
+      {editingDeal && (
+        <DealDialog
+          deal={editingDeal}
+          trigger={<></>}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingDeal(null);
+              queryClient.invalidateQueries({ queryKey: ["contact-deals", contactId] });
+            }
+          }}
+        />
+      )}
+
+      {/* Lost Reason Dialog */}
+      <LostReasonDialog
+        open={!!lostDeal}
+        onClose={() => setLostDeal(null)}
+        dealTitle={lostDeal?.title || ""}
+        onConfirm={(reason, notes) => {
+          if (!lostDeal) return;
+          updateDeal.mutate(
+            {
+              id: lostDeal.id,
+              updates: {
+                status: "lost",
+                lost_reason: reason,
+              },
+            },
+            {
+              onSuccess: () => {
+                queryClient.invalidateQueries({ queryKey: ["contact-deals", contactId] });
+                toast({ title: "Negócio marcado como perdido", variant: "destructive" });
+                setLostDeal(null);
+              },
+            }
+          );
+        }}
+      />
     </div>
   );
 }
