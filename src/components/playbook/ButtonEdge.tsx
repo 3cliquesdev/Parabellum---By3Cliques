@@ -13,6 +13,7 @@ export const ButtonEdge = memo(({
   targetPosition,
   style = {},
   markerEnd,
+  label,
 }: EdgeProps) => {
   const { setEdges } = useReactFlow();
   const [hovered, setHovered] = useState(false);

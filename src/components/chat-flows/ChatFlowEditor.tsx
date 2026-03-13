@@ -199,7 +199,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
   const normalizedEdges = useMemo(() => {
     return (initialFlow?.edges || []).map(edge => ({
       ...edge,
-      type: edge.type || 'buttonEdge',
+      type: 'buttonEdge',
       style: edge.style || { strokeWidth: 2, stroke: 'hsl(var(--primary))' },
       markerEnd: edge.markerEnd || { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
     }));
