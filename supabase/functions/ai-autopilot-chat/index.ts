@@ -8513,14 +8513,14 @@ Conversa: ${conversationId}`;
         articles_found: 0,
         timestamp: new Date().toISOString()
       }));
-      supabaseClient.from('ai_events').insert({
+      Promise.resolve(supabaseClient.from('ai_events').insert({
         entity_type: 'conversation',
         entity_id: conversationId,
         event_type: 'ai_decision_fallback_phrase_detected',
         model: 'system',
         score: 0,
         output_json: { reason: 'fallback_phrase_detected', exitType: flow_context ? 'stay_in_node' : 'handoff', fallback_used: true, articles_found: 0, hasFlowContext: !!flow_context },
-      }).then(() => {}).catch(() => {});
+      })).catch(() => {});
 
       // 🆕 FIX: Se flow_context existe, NÃO sair do nó — limpar fallback phrases e continuar
       if (flow_context) {
