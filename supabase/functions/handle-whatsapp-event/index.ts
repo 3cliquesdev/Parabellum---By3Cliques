@@ -974,7 +974,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       if (!kiwifyErr && kiwifyMatches && kiwifyMatches.length > 0) {
         // Cliente tem compra Kiwify - confirma que vai para Suporte
         targetDepartmentId = SUPORTE_DEPT_ID;
-        const products = [...new Set(kiwifyMatches.map(e => e.payload?.Product?.product_name || 'Produto'))];
+        const products = [...new Set(kiwifyMatches.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
         const customerData = kiwifyMatches[0].payload?.Customer || {};
         console.log(`[handle-whatsapp-event] ✅ Cliente Kiwify confirmado (inline) - Suporte. Produtos: ${products.join(', ')}`);
 
