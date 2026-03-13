@@ -48,6 +48,8 @@ export function useActiveFlowState(conversationId: string | undefined) {
         flowIsActive: flow?.is_active ?? true,
         currentNodeId: data.current_node_id,
         startedAt: data.started_at,
+        status: data.status || "unknown",
+        completedAt: (data as any).completed_at || null,
       };
     },
     enabled: !!conversationId,
