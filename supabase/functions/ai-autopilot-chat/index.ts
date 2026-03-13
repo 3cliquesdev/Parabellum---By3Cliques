@@ -4777,7 +4777,7 @@ Responda APENAS: skip ou search`
           model: 'system',
           score: 0,
           output_json: { reason: 'strict_rag_handoff', exitType: 'handoff', fallback_used: false, articles_found: knowledgeArticles.length, hasFlowContext: !!flow_context },
-        }).then(() => {}).catch(() => {});
+        }).then(() => {}).catch!(() => {});
         
         return new Response(JSON.stringify({
           status: 'strict_rag_handoff',
