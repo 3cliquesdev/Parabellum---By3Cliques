@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Pencil, MessageSquare, Phone, FileText, ArrowRightLeft, Trash2, Star, Calendar } from "lucide-react";
+import { Pencil, MessageSquare, Phone, FileText, ArrowRightLeft, Trash2, Star, Calendar, Inbox } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -22,6 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useDeleteDeal } from "@/hooks/useDeals";
+import { useCreateConversation } from "@/hooks/useConversations";
 import { differenceInDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import DealDialog from "./DealDialog";
@@ -54,7 +55,9 @@ export default function KanbanCard({
   const navigate = useNavigate();
   const { toast } = useToast();
   const deleteDeal = useDeleteDeal();
-  
+  const createConversation = useCreateConversation();
+  const [isNavigatingToInbox, setIsNavigatingToInbox] = useState(false);
+
   // Format WhatsApp number with country code
   const formatWhatsAppNumber = (phone: string) => {
     const cleanPhone = phone.replace(/\D/g, '');
@@ -74,6 +77,35 @@ export default function KanbanCard({
       });
     } catch (error) {
       console.error('Erro ao copiar telefone:', error);
+    }
+  };
+
+  const handleStartInboxConversation = async () => {
+    if (!deal.contact_id) {
+      toast({ title: "Sem contato", description: "Este deal não tem um contato vinculado.", variant: "destructive" });
+      return;
+    }
+    setIsNavigatingToInbox(true);
+    try {
+      // Check for existing open conversation
+      const { data: existing } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("contact_id", deal.contact_id)
+        .eq("status", "open")
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        navigate(`/inbox?conversation=${existing.id}`);
+      } else {
+        const newConversation = await createConversation.mutateAsync(deal.contact_id);
+        navigate(`/inbox?conversation=${newConversation.id}`);
+      }
+    } catch (error) {
+      console.error("Erro ao iniciar conversa:", error);
+    } finally {
+      setIsNavigatingToInbox(false);
     }
   };
   
@@ -316,6 +348,30 @@ export default function KanbanCard({
               <TooltipContent>Criar Proposta</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          {/* Inbox - Iniciar Conversa */}
+          {deal.contact_id && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-primary"
+                    disabled={isNavigatingToInbox}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartInboxConversation();
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <Inbox className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Abrir no Inbox</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
 
           {deal.contacts?.phone && (
             <>
