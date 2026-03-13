@@ -2873,6 +2873,62 @@ serve(async (req) => {
       console.log('[ai-autopilot-chat] ✅ Contato já validado (kiwify_validated=true), pulando triagem');
     }
 
+    // 🆕 BUSCAR PRODUTOS KIWIFY DO CONTATO (para injetar no contexto da IA)
+    let customerProducts: string[] = [];
+    try {
+      const phoneForProducts = contact.phone || contact.whatsapp_id || '';
+      const digitsForProducts = phoneForProducts.replace(/\D/g, '');
+      let last9ForProducts = '';
+      if (digitsForProducts.length >= 9) {
+        last9ForProducts = digitsForProducts.slice(-9);
+      }
+
+      // Buscar por telefone OU email
+      const productQueries: PromiseLike<any>[] = [];
+
+      if (last9ForProducts) {
+        productQueries.push(
+          supabaseClient
+            .from('kiwify_events')
+            .select('payload')
+            .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
+            .filter('payload->Customer->>mobile', 'ilike', `%${last9ForProducts}`)
+            .order('created_at', { ascending: false })
+            .limit(50)
+            .then(({ data }) => data || [])
+        );
+      }
+
+      if (contact.email && contact.email.trim() !== '') {
+        productQueries.push(
+          supabaseClient
+            .from('kiwify_events')
+            .select('payload')
+            .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
+            .eq('customer_email', contact.email.toLowerCase().trim())
+            .order('created_at', { ascending: false })
+            .limit(50)
+            .then(({ data }) => data || [])
+        );
+      }
+
+      if (productQueries.length > 0) {
+        const productResults = await Promise.all(productQueries);
+        const allEvents = productResults.flat();
+        const productNames = new Set<string>();
+        for (const evt of allEvents) {
+          const name = evt.payload?.Product?.product_name || evt.payload?.Subscription?.plan?.name;
+          if (name) productNames.add(name);
+        }
+        customerProducts = [...productNames];
+        if (customerProducts.length > 0) {
+          console.log(`[ai-autopilot-chat] 📦 Produtos do contato: ${customerProducts.join(', ')}`);
+        }
+      }
+    } catch (prodErr) {
+      console.warn('[ai-autopilot-chat] ⚠️ Erro ao buscar produtos Kiwify (não crítico):', prodErr);
+    }
+
     // FASE 1: Verificar se deve pular cache para experiência personalizada
     const contactHasEmailForCache = contact.email && contact.email.trim() !== '';
     const isFinancialForCache = FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
