@@ -11,6 +11,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RAGSourcesSection } from "./panels/RAGSourcesSection";
 import { SmartCollectionSection } from "./panels/SmartCollectionSection";
 import { BehaviorControlsSection } from "./panels/BehaviorControlsSection";
+import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
 
 interface AIResponsePropertiesPanelProps {
   selectedNode: Node;
