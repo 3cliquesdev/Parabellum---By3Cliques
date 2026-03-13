@@ -154,11 +154,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     }
   }, [conversation?.id]);
 
-  // ========== TICK COUNTER for relative timestamps (every 60s) ==========
-  useEffect(() => {
-    const interval = setInterval(() => setTickCounter(c => c + 1), 60_000);
-    return () => clearInterval(interval);
-  }, []);
+  // ========== TYPING INDICATOR: clear when new message arrives ==========
 
   // ========== TYPING INDICATOR: clear when new message arrives ==========
   const prevMsgCount = useRef(messages.length);
