@@ -161,7 +161,7 @@ export function RAGSourcesSection({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShoppingCart className="h-4 w-4 text-purple-500" />
-            <Label className="text-sm font-medium">Kiwify (Vendas)</Label>
+            <Label className="text-sm font-medium">Kiwify (Produtos e Serviços)</Label>
             <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-purple-500/40 text-purple-600 dark:text-purple-400 bg-purple-500/10">
               Kiwify
             </Badge>
