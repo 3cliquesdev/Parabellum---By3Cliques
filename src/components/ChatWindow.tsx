@@ -95,6 +95,12 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const [isWaitingResponse, setIsWaitingResponse] = useState(false);
   const waitingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasNewMessageBelow, setHasNewMessageBelow] = useState(false);
+  // Single 60s tick counter for relative timestamps (instead of N intervals per bubble)
+  const [tickCounter, setTickCounter] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTickCounter(t => t + 1), 60_000);
+    return () => clearInterval(interval);
+  }, []);
   const { user } = useAuth();
   const { isAdmin, isManager, isSalesRep, role } = useUserRole();
   const { hasPermission } = useRolePermissions();
