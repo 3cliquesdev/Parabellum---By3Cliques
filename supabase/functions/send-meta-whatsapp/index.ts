@@ -266,6 +266,18 @@ serve(async (req) => {
       );
     }
 
+    // 🛡️ EMPTY MESSAGE GUARD: Bloquear mensagens de texto vazias
+    if (body.message && !body.template && !body.media && !body.interactive && body.message.trim().length === 0) {
+      console.error("[send-meta-whatsapp] ⚠️ EMPTY MESSAGE BLOCKED: Tentativa de enviar mensagem vazia", {
+        conversation_id: body.conversation_id,
+        instance_id: body.instance_id
+      });
+      return new Response(
+        JSON.stringify({ error: "Empty message content is not allowed" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Buscar instância Meta
     const { data: instance, error: instanceError } = await supabase
       .from("whatsapp_meta_instances")

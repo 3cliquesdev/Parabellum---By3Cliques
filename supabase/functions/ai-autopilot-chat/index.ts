@@ -9182,6 +9182,12 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
       }
     }
 
+    // 🛡️ EMPTY RESPONSE GUARD FINAL: Última verificação antes de salvar
+    if (!assistantMessage || assistantMessage.trim().length === 0) {
+      assistantMessage = 'Olá! Como posso te ajudar hoje?';
+      console.warn('[ai-autopilot-chat] ⚠️ EMPTY RESPONSE GUARD (pre-save): mensagem vazia substituída');
+    }
+
     // 7. Salvar resposta da IA como mensagem (PRIMEIRO salvar para visibilidade interna)
     const { data: savedMessage, error: saveError } = await supabaseClient
       .from('messages')
