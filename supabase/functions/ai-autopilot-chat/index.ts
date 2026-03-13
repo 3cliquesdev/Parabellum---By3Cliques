@@ -6860,6 +6860,9 @@ ${contactConsultantName ? `- Consultor responsÃ¡vel: ${contactConsultantName}`
 ${contactSellerName ? `- Vendedor responsÃ¡vel: ${contactSellerName}` : ''}
 ${contactTagsList.length > 0 ? `- Tags: ${contactTagsList.join(', ')}` : ''}
 ${customerProducts.length > 0 ? `- Produtos/ServiÃ§os contratados: ${customerProducts.join(', ')}` : '- Produtos/ServiÃ§os contratados: Nenhum identificado'}
+${onboardingInfo ? `- Onboarding: Incompleto (${onboardingInfo.progress})
+- Próxima etapa pendente: "${onboardingInfo.nextStep}"
+- Link para continuar: ${onboardingInfo.resumeLink}` : ''}
 
 Os "Produtos/ServiÃ§os contratados" sÃ£o produtos DIGITAIS (cursos online, mentorias, assinaturas, comunidades) que o cliente COMPROU na plataforma. Use essa informaÃ§Ã£o para personalizar o atendimento e contextualizar respostas sobre acesso, conteÃºdo e suporte dos produtos especÃ­ficos do cliente. NÃ£o confunda com produtos fÃ­sicos.
 ${crossSessionContext}${personaToneInstruction}
