@@ -8876,7 +8876,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇÃO + flow_context → substituindo mensagem e permanecendo no nó');
         assistantMessage = fallbackMessage;
         
-        supabaseClient.from('ai_quality_logs').insert({
+        Promise.resolve(supabaseClient.from('ai_quality_logs').insert({
           conversation_id: conversationId,
           contact_id: contact.id,
           customer_message: customerMessage,
@@ -8885,7 +8885,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           handoff_reason: `restriction_violation_${restrictionCheck.violation}`,
           confidence_score: 0,
           articles_count: knowledgeArticles.length
-        }).catch((e: any) => console.error('[ai-autopilot-chat] ⚠️ Falha ao logar restriction_violation:', e));
+        })).catch((e: any) => console.error('[ai-autopilot-chat] ⚠️ Falha ao logar restriction_violation:', e));
         
         // Continua execução — mensagem será persistida abaixo
       } else if (forbidFinancial) {
