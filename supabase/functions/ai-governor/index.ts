@@ -728,11 +728,11 @@ async function sendEmailReport(
     branding = brandingRes.data;
   } catch {}
 
+  const brandName = branding?.name || 'Parabellum by 3Cliques';
   const fromName = sender?.from_name || brandName || 'Parabellum by 3Cliques';
   const fromEmail = sender?.from_email || 'contato@mail.3cliques.net';
   const headerColor = branding?.header_color || '#0f172a';
   const headerColorEnd = headerColor + 'dd';
-  const brandName = branding?.name || 'Parabellum by 3Cliques';
   const logoUrl = branding?.logo_url;
   const footerText = branding?.footer_text || 'Parabellum by 3Cliques • Gerado automaticamente';
   const footerLogoUrl = branding?.footer_logo_url;

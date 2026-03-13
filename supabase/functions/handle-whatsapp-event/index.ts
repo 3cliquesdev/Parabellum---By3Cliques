@@ -1371,7 +1371,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
                       to: targetNumber,
                       message: safetyMsg,
                       conversationId: conversationId,
-                      instanceId: instanceId,
+                      instanceId: instance,
                       is_bot_message: true,
                     }
                   });
