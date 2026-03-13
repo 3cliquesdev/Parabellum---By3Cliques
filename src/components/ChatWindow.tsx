@@ -91,6 +91,11 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   // Captura os IDs antes de abrir o diálogo de confirmação (fix: conversation pode mudar para null)
   const [pendingTakeControl, setPendingTakeControl] = useState<{ conversationId: string; contactId: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // UX: Typing indicator + new message badge + relative timestamps
+  const [isWaitingResponse, setIsWaitingResponse] = useState(false);
+  const waitingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [hasNewMessageBelow, setHasNewMessageBelow] = useState(false);
+  const [tickCounter, setTickCounter] = useState(0);
   const { user } = useAuth();
   const { isAdmin, isManager, isSalesRep, role } = useUserRole();
   const { hasPermission } = useRolePermissions();
