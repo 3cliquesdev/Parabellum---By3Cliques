@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings, Users, Search, Trophy, TrendingDown, CheckSquare, BarChart3 } from "lucide-react";
+import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings, Users, Search, Trophy, TrendingDown, CheckSquare, BarChart3, Upload } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDeals, useUpdateDeal, useUpdateDealStage, DealFilters } from "@/hooks/useDeals";
 import { useDealsMetrics } from "@/hooks/useDealsMetrics";
@@ -546,6 +546,14 @@ export default function Deals() {
               </Button>
             )}
             {canManagePipelines && <PipelineDialog />}
+            {canManagePipelines && (
+              <Button variant="outline" asChild className="gap-2">
+                <Link to="/import-deals">
+                  <Upload className="h-4 w-4" />
+                  Importar
+                </Link>
+              </Button>
+            )}
             <DealDialog
               trigger={
                 <Button className="gap-2">

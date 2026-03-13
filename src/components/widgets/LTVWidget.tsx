@@ -4,8 +4,13 @@ import { useLTVStats } from "@/hooks/useLTVStats";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-export function LTVWidget() {
-  const { data: stats, isLoading } = useLTVStats();
+interface LTVWidgetProps {
+  startDate?: Date;
+  endDate?: Date;
+}
+
+export function LTVWidget({ startDate, endDate }: LTVWidgetProps) {
+  const { data: stats, isLoading } = useLTVStats(startDate, endDate);
 
   if (isLoading) {
     return (

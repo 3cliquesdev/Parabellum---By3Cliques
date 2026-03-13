@@ -58,6 +58,8 @@ import { VerifyCustomerOTPPropertiesPanel } from "./VerifyCustomerOTPPropertiesP
 import { VariableAutocomplete } from "./VariableAutocomplete";
 import { CONDITION_CONTACT_FIELDS, CONDITION_CONVERSATION_FIELDS, getAncestorNodeIds } from "./variableCatalog";
 import { useTicketCategories } from "@/hooks/useTicketCategories";
+import { useTags } from "@/hooks/useTags";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 // Tipos de nós para chat flows
 export const chatFlowNodeTypes = {
@@ -147,8 +149,44 @@ const createStartNode = (): Node => ({
   }
 });
 
+// Slugify helper for auto-generating option values
+const slugify = (text: string) =>
+  text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+
+// Save-as suggestions per node type
+const SAVE_AS_SUGGESTIONS: Record<string, { value: string; label: string }[]> = {
+  ask_name: [
+    { value: "name", label: "Nome do contato" },
+    { value: "full_name", label: "Nome completo" },
+    { value: "customer_name", label: "Nome do cliente" },
+  ],
+  ask_email: [
+    { value: "email", label: "E-mail do contato" },
+    { value: "customer_email", label: "E-mail do cliente" },
+  ],
+  ask_phone: [
+    { value: "phone", label: "Telefone do contato" },
+    { value: "customer_phone", label: "Telefone do cliente" },
+  ],
+  ask_cpf: [
+    { value: "cpf", label: "CPF do contato" },
+    { value: "document", label: "Documento (genérico)" },
+  ],
+  ask_text: [
+    { value: "response", label: "Resposta do usuário" },
+    { value: "feedback", label: "Feedback / Opinião" },
+    { value: "description", label: "Descrição / Detalhes" },
+  ],
+  ask_options: [
+    { value: "choice", label: "Escolha do usuário" },
+    { value: "option_selected", label: "Opção selecionada" },
+    { value: "menu_choice", label: "Escolha do menu" },
+  ],
+};
+
 function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSaving }: ChatFlowEditorProps) {
   const { data: ticketCategories = [] } = useTicketCategories();
+  const { data: allTags = [] } = useTags();
   // Criar nó de início se não houver nós
   const initialNodes = useMemo(() => {
     if (initialFlow?.nodes && initialFlow.nodes.length > 0) {
@@ -209,6 +247,10 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         forbid_questions: true,
         forbid_options: true,
         forbid_financial: false,
+        forbid_commercial: false,
+        forbid_cancellation: false,
+        forbid_support: false,
+        forbid_consultant: false,
         objective: ""
       },
       transfer: { label: "Transferir", message: "Transferindo para atendimento humano...", transfer_type: "department" },
@@ -462,6 +504,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         </div>
         <ScrollArea className="flex-1 p-4">
           <div className="space-y-6">
+             <TooltipProvider delayDuration={300}>
             {/* Coleta de Dados */}
             <div className="space-y-2">
               <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 flex items-center gap-1">
@@ -469,10 +512,10 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 Coleta de Dados
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                <DraggableBlock type="ask_name" icon={User} label="Nome" color={blockColors.ask_name} />
-                <DraggableBlock type="ask_email" icon={Mail} label="Email" color={blockColors.ask_email} />
-                <DraggableBlock type="ask_phone" icon={Phone} label="Telefone" color={blockColors.ask_phone} />
-                <DraggableBlock type="ask_cpf" icon={CreditCard} label="CPF" color={blockColors.ask_cpf} />
+                <DraggableBlock type="ask_name" icon={User} label="Nome" color={blockColors.ask_name} tooltip="Pede o nome completo do cliente e salva como variável" />
+                <DraggableBlock type="ask_email" icon={Mail} label="Email" color={blockColors.ask_email} tooltip="Pede o email e valida o formato automaticamente" />
+                <DraggableBlock type="ask_phone" icon={Phone} label="Telefone" color={blockColors.ask_phone} tooltip="Pede o telefone e valida o formato" />
+                <DraggableBlock type="ask_cpf" icon={CreditCard} label="CPF" color={blockColors.ask_cpf} tooltip="Pede o CPF e valida se é válido" />
               </div>
             </div>
 
@@ -483,9 +526,9 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 Interação
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                <DraggableBlock type="message" icon={MessageSquare} label="Mensagem" color={blockColors.message} />
-                <DraggableBlock type="ask_options" icon={ListChecks} label="Opções" color={blockColors.ask_options} />
-                <DraggableBlock type="ask_text" icon={MessageCircle} label="Texto" color={blockColors.ask_text} />
+                <DraggableBlock type="message" icon={MessageSquare} label="Mensagem" color={blockColors.message} tooltip="Envia uma mensagem fixa para o cliente" />
+                <DraggableBlock type="ask_options" icon={ListChecks} label="Opções" color={blockColors.ask_options} tooltip="Menu de opções numeradas (1, 2, 3...) para o cliente escolher" />
+                <DraggableBlock type="ask_text" icon={MessageCircle} label="Texto" color={blockColors.ask_text} tooltip="Pergunta aberta — o cliente responde livremente" />
               </div>
             </div>
 
@@ -496,13 +539,13 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 Lógica
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                <DraggableBlock type="condition" icon={GitBranch} label="Condição" color={blockColors.condition} />
-                <DraggableBlock type="condition_v2" icon={GitMerge} label="Condição V2" color={blockColors.condition_v2} />
-                <DraggableBlock type="ai_response" icon={Sparkles} label="IA" color={blockColors.ai_response} />
-                <DraggableBlock type="fetch_order" icon={Package} label="Pedido" color={blockColors.fetch_order} />
-                <DraggableBlock type="validate_customer" icon={ShieldCheck} label="Validar Cliente" color={blockColors.validate_customer} />
-                <DraggableBlock type="verify_customer_otp" icon={KeyRound} label="OTP Cliente" color={blockColors.verify_customer_otp} />
-                <DraggableBlock type="create_ticket" icon={Ticket} label="Ticket" color={blockColors.create_ticket} />
+                <DraggableBlock type="condition" icon={GitBranch} label="Condição" color={blockColors.condition} tooltip="Cria caminhos diferentes baseado em dados do cliente ou variáveis do fluxo" />
+                <DraggableBlock type="condition_v2" icon={GitMerge} label="Condição V2" color={blockColors.condition_v2} tooltip="Condição avançada com múltiplas regras Sim/Não independentes" />
+                <DraggableBlock type="ai_response" icon={Sparkles} label="IA" color={blockColors.ai_response} tooltip="A IA responde usando a base de conhecimento configurada" />
+                <DraggableBlock type="fetch_order" icon={Package} label="Pedido" color={blockColors.fetch_order} tooltip="Busca um pedido pelo código de rastreio ou número" />
+                <DraggableBlock type="validate_customer" icon={ShieldCheck} label="Validar Cliente" color={blockColors.validate_customer} tooltip="Verifica se o contato é cliente na base Kiwify" />
+                <DraggableBlock type="verify_customer_otp" icon={KeyRound} label="OTP Cliente" color={blockColors.verify_customer_otp} tooltip="Verifica identidade do cliente com código OTP por email" />
+                <DraggableBlock type="create_ticket" icon={Ticket} label="Ticket" color={blockColors.create_ticket} tooltip="Cria um ticket de suporte automaticamente" />
               </div>
             </div>
 
@@ -513,10 +556,11 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 Ações Finais
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                <DraggableBlock type="transfer" icon={UserPlus} label="Transferir" color={blockColors.transfer} />
-                <DraggableBlock type="end" icon={CheckCircle} label="Fim" color={blockColors.end} />
+                <DraggableBlock type="transfer" icon={UserPlus} label="Transferir" color={blockColors.transfer} tooltip="Transfere a conversa para atendente humano ou departamento" />
+                <DraggableBlock type="end" icon={CheckCircle} label="Fim" color={blockColors.end} tooltip="Finaliza o fluxo e opcionalmente cria lead, ticket ou adiciona tag" />
               </div>
             </div>
+            </TooltipProvider>
           </div>
         </ScrollArea>
 
@@ -617,16 +661,57 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
               )}
 
               {/* save_as para campos de coleta */}
-              {["ask_name", "ask_email", "ask_phone", "ask_cpf", "ask_text", "ask_options"].includes(selectedNode.type || "") && (
+              {["ask_name", "ask_email", "ask_phone", "ask_cpf", "ask_text", "ask_options"].includes(selectedNode.type || "") && (() => {
+                const nodeType = selectedNode.type || "";
+                const suggestions = SAVE_AS_SUGGESTIONS[nodeType] || [];
+                const currentVal = selectedNode.data.save_as || "";
+                const isCustom = currentVal && !suggestions.some(s => s.value === currentVal);
+                
+                return (
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Salvar como variável</Label>
-                  <Input
-                    value={selectedNode.data.save_as || ""}
-                    onChange={(e) => updateNodeData("save_as", e.target.value)}
-                    placeholder="nome_variavel"
-                  />
+                  <Label className="text-xs font-medium">Salvar resposta como</Label>
+                  <p className="text-[10px] text-muted-foreground -mt-1">
+                    A resposta será guardada nesta variável para uso em nós seguintes.
+                  </p>
+                  <Select
+                    value={isCustom ? "__custom__" : (currentVal || suggestions[0]?.value || "")}
+                    onValueChange={(v) => {
+                      if (v === "__custom__") {
+                        updateNodeData("save_as", "");
+                      } else {
+                        updateNodeData("save_as", v);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a variável" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {suggestions.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          <span className="flex items-center gap-1.5">
+                            <span>💾 {s.label}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">({s.value})</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">✏️ Nome personalizado...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {isCustom && (
+                    <Input
+                      value={currentVal}
+                      onChange={(e) => updateNodeData("save_as", e.target.value)}
+                      placeholder="nome_da_variavel"
+                      className="text-sm"
+                    />
+                  )}
+                  <p className="text-[10px] text-muted-foreground">
+                    Use nos próximos nós com <code className="font-mono text-primary">{`{{${currentVal || "variável"}}}`}</code>
+                  </p>
                 </div>
-              )}
+                );
+              })()}
 
               {/* Validação toggle */}
               {["ask_email", "ask_phone", "ask_cpf"].includes(selectedNode.type || "") && (
@@ -643,21 +728,23 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
               {selectedNode.type === "ask_options" && (
                 <div className="space-y-3">
                   <Label className="text-xs">Opções de resposta</Label>
+                  <p className="text-[10px] text-muted-foreground">
+                    O cliente escolhe digitando o número (1, 2, 3...). Preencha apenas o rótulo.
+                  </p>
                   {(selectedNode.data.options || []).map((opt: any, idx: number) => (
-                    <div key={opt.id} className="flex gap-2">
+                    <div key={opt.id} className="flex gap-2 items-center">
+                      <span className="text-xs font-bold text-muted-foreground w-5 text-center shrink-0">{idx + 1}</span>
                       <Input
                         value={opt.label}
-                        onChange={(e) => updateOption(idx, "label", e.target.value)}
-                        placeholder="Rótulo"
+                        onChange={(e) => {
+                          updateOption(idx, "label", e.target.value);
+                          // Auto-generate value from label
+                          updateOption(idx, "value", slugify(e.target.value));
+                        }}
+                        placeholder={`Opção ${idx + 1} (ex: Rastreio)`}
                         className="flex-1 text-sm"
                       />
-                      <Input
-                        value={opt.value}
-                        onChange={(e) => updateOption(idx, "value", e.target.value)}
-                        placeholder="Valor"
-                        className="flex-1 text-sm"
-                      />
-                      <Button variant="ghost" size="icon" onClick={() => removeOption(idx)} className="shrink-0">
+                      <Button variant="ghost" size="icon" onClick={() => removeOption(idx)} className="shrink-0 h-8 w-8">
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
@@ -913,9 +1000,29 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                           />
                         )}
                         {rule.field && (
-                          <p className="text-[10px] text-muted-foreground italic">
-                            ✅ Verifica se o campo tem dado — não precisa de keywords
-                          </p>
+                          <div className="space-y-1.5">
+                            <Select value={rule.check_type || 'has_data'} onValueChange={(val) => updateConditionRule(idx, 'check_type', val)}>
+                              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="has_data">✅ Tem dado</SelectItem>
+                                <SelectItem value="no_data">❌ Não tem dado</SelectItem>
+                                <SelectItem value="equals">🎯 É igual a</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {rule.check_type === 'equals' && (
+                              <Input
+                                value={rule.keywords || ''}
+                                onChange={(e) => updateConditionRule(idx, 'keywords', e.target.value)}
+                                placeholder="Valor esperado (ex: financeiro)"
+                                className="h-7 text-xs"
+                              />
+                            )}
+                            {rule.check_type !== 'equals' && (
+                              <p className="text-[10px] text-muted-foreground italic">
+                                ✅ Verifica se o campo tem dado — não precisa de keywords
+                              </p>
+                            )}
+                          </div>
                         )}
                       </div>
                     ))}
@@ -1006,9 +1113,29 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                         />
                       )}
                       {rule.field && (
-                        <p className="text-[10px] text-muted-foreground italic">
-                          ✅ Verifica se o campo tem dado — saída Sim/Não
-                        </p>
+                        <div className="space-y-1.5">
+                          <Select value={rule.check_type || 'has_data'} onValueChange={(val) => updateConditionRule(idx, 'check_type', val)}>
+                            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="has_data">✅ Tem dado</SelectItem>
+                              <SelectItem value="no_data">❌ Não tem dado</SelectItem>
+                              <SelectItem value="equals">🎯 É igual a</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {rule.check_type === 'equals' && (
+                            <Input
+                              value={rule.keywords || ''}
+                              onChange={(e) => updateConditionRule(idx, 'keywords', e.target.value)}
+                              placeholder="Valor esperado (ex: financeiro)"
+                              className="h-7 text-xs"
+                            />
+                          )}
+                          {rule.check_type !== 'equals' && (
+                            <p className="text-[10px] text-muted-foreground italic">
+                              ✅ Verifica se o campo tem dado — saída Sim/Não
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   ))}
@@ -1070,24 +1197,42 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs">Tag</Label>
-                        <Input
-                          value={selectedNode.data.action_data?.tag_name || ""}
-                          onChange={(e) => updateNodeData("action_data", { ...selectedNode.data.action_data, tag_name: e.target.value })}
-                          placeholder="Nome da tag (ex: 9.98)"
-                          className="text-sm"
-                        />
-                        <p className="text-[10px] text-muted-foreground">
-                          Digite o nome exato da tag cadastrada no sistema.
-                        </p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">ID da Tag</Label>
-                        <Input
-                          value={selectedNode.data.action_data?.tag_id || ""}
-                          onChange={(e) => updateNodeData("action_data", { ...selectedNode.data.action_data, tag_id: e.target.value })}
-                          placeholder="UUID da tag"
-                          className="text-sm font-mono"
-                        />
+                        {allTags.length > 0 ? (
+                          <Select
+                            value={selectedNode.data.action_data?.tag_id || ""}
+                            onValueChange={(tagId) => {
+                              const tag = allTags.find((t: any) => t.id === tagId);
+                              if (tag) {
+                                updateNodeData("action_data", {
+                                  ...selectedNode.data.action_data,
+                                  tag_id: tag.id,
+                                  tag_name: tag.name,
+                                });
+                              }
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione uma tag" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {allTags.map((tag: any) => (
+                                <SelectItem key={tag.id} value={tag.id}>
+                                  <span className="flex items-center gap-2">
+                                    <span
+                                      className="w-3 h-3 rounded-full shrink-0"
+                                      style={{ backgroundColor: tag.color || '#888' }}
+                                    />
+                                    {tag.name}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-[10px] text-muted-foreground p-2 bg-muted/50 rounded">
+                            Nenhuma tag cadastrada. Crie tags no menu Configurações → Tags.
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1180,6 +1325,8 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                 <FetchOrderPropertiesPanel
                   selectedNode={selectedNode}
                   updateNodeData={updateNodeData}
+                  nodes={nodes}
+                  edges={edges}
                 />
               )}
 

@@ -61,6 +61,60 @@ serve(async (req) => {
 
     console.log('[dispatch-conversations] Starting dispatch cycle (BATCH MODE)...');
 
+    // ==================== FIX 2: Reconcile orphan waiting_human conversations ====================
+    try {
+      const { data: orphans } = await supabase
+        .from('conversations')
+        .select('id, department')
+        .eq('ai_mode', 'waiting_human')
+        .eq('status', 'open')
+        .is('assigned_to', null);
+
+      let reconciled = 0;
+      for (const orphan of orphans ?? []) {
+        const { data: job } = await supabase
+          .from('conversation_dispatch_jobs')
+          .select('id')
+          .eq('conversation_id', orphan.id)
+          .in('status', ['pending', 'escalated'])
+          .maybeSingle();
+
+        if (!job && orphan.department) {
+          await supabase.from('conversation_dispatch_jobs').insert({
+            conversation_id: orphan.id,
+            department_id: orphan.department,
+            priority: 1,
+            status: 'pending',
+            next_attempt_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+          reconciled++;
+          console.log(`[RECONCILE] Created missing dispatch job for orphan conversation ${orphan.id.substring(0, 8)}`);
+        }
+      }
+      if (reconciled > 0) {
+        console.log(`[dispatch-conversations] 🔒 Reconciled ${reconciled} orphan conversations`);
+      }
+    } catch (reconcileErr) {
+      console.error('[dispatch-conversations] ⚠️ Reconciliation error (non-blocking):', reconcileErr);
+    }
+
+    // ==================== FIX 3: Queue hygiene — remove dead entries ====================
+    try {
+      const { data: closedConvs } = await supabase
+        .from('conversation_queue')
+        .select('id, conversation_id, conversations!inner(status)')
+        .in('conversations.status', ['closed', 'resolved', 'finished']);
+
+      if (closedConvs && closedConvs.length > 0) {
+        const ids = closedConvs.map((e: any) => e.id);
+        await supabase.from('conversation_queue').delete().in('id', ids);
+        console.log(`[QUEUE HYGIENE] Removed ${ids.length} stale queue entries for closed conversations`);
+      }
+    } catch (hygieneErr) {
+      console.error('[dispatch-conversations] ⚠️ Queue hygiene error (non-blocking):', hygieneErr);
+    }
+
     // ==================== NEW: Parse body for agent context ====================
     let agentDepartmentId: string | undefined;
     if (req.method === 'POST') {

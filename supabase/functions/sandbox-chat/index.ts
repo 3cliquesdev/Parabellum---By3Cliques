@@ -7,6 +7,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Valid OpenAI models
+const VALID_OPENAI_MODELS = new Set([
+  'gpt-4o', 'gpt-4o-mini',
+  'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano',
+  'gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2',
+  'o3', 'o3-mini', 'o4-mini', 'o4',
+]);
+
+const MAX_COMPLETION_TOKEN_MODELS = new Set([
+  'o3', 'o3-mini', 'o4-mini', 'o4',
+  'gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2',
+]);
+
 // Helper: Buscar modelo AI configurado no banco
 async function getConfiguredAIModel(supabase: any): Promise<string> {
   try {
@@ -16,10 +29,28 @@ async function getConfiguredAIModel(supabase: any): Promise<string> {
       .eq('key', 'ai_default_model')
       .maybeSingle();
     
-    return data?.value || 'openai/gpt-5-mini';
+    const model = data?.value || 'gpt-5-mini';
+    if (VALID_OPENAI_MODELS.has(model)) return model;
+    // Gateway names → correct OpenAI equivalents
+    const MODEL_MAP: Record<string, string> = {
+      'openai/gpt-5-mini': 'gpt-5-mini',
+      'openai/gpt-5': 'gpt-5',
+      'openai/gpt-5-nano': 'gpt-5-nano',
+      'openai/gpt-5.2': 'gpt-5.2',
+      'google/gemini-2.5-flash': 'gpt-5-mini',
+      'google/gemini-2.5-flash-lite': 'gpt-5-nano',
+      'google/gemini-2.5-pro': 'gpt-5',
+      'google/gemini-3-pro-preview': 'gpt-5',
+      'google/gemini-3-pro-image-preview': 'gpt-5',
+      'google/gemini-3-flash-preview': 'gpt-5-mini',
+      'google/gemini-3.1-pro-preview': 'gpt-5',
+      'google/gemini-3.1-flash-image-preview': 'gpt-5-mini',
+    };
+    if (MODEL_MAP[model]) return MODEL_MAP[model];
+    return model;
   } catch (error) {
     console.error('[sandbox-chat] Error fetching AI model config:', error);
-    return 'openai/gpt-5-mini';
+    return 'gpt-5-mini';
   }
 }
 
@@ -42,7 +73,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    // LOVABLE_API_KEY removida - usando OpenAI diretamente
     
     // Buscar modelo configurado dinamicamente
     const configuredModel = await getConfiguredAIModel(supabase);
@@ -148,24 +179,14 @@ Responda APENAS: skip ou search`
         };
 
         let intentResponse;
-        if (aiProvider === 'openai' && OPENAI_API_KEY) {
+        if (OPENAI_API_KEY) {
           const res = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${OPENAI_API_KEY}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ model: 'gpt-4o-mini', ...intentPayload }),
-          });
-          intentResponse = await res.json();
-        } else if (LOVABLE_API_KEY) {
-          const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ model: 'openai/gpt-5-mini', ...intentPayload }),
+            body: JSON.stringify({ model: configuredModel, ...intentPayload }),
           });
           intentResponse = await res.json();
         }
@@ -404,77 +425,35 @@ Você está conversando com um cliente identificado. Use essas informações par
     let actualProvider = aiProvider;
     let aiResponse: Response | null = null;
 
-    if (aiProvider === 'openai') {
+    if (aiProvider === 'openai' || !aiResponse) {
       if (!OPENAI_API_KEY) {
-        console.log('[sandbox-chat] OpenAI key not found, falling back to Lovable AI');
-        actualProvider = 'lovable';
-      } else {
-        console.log('[sandbox-chat] Calling OpenAI (gpt-4o-mini)');
-        
-        const openaiPayload: any = {
-          model: "gpt-4o-mini",
-          messages: aiMessages,
-          temperature: persona.temperature || 0.7,
-          max_completion_tokens: persona.max_tokens || 500,
-        };
-
-        if (tools.length > 0) {
-          openaiPayload.tools = tools;
-        }
-
-        aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(openaiPayload),
-        });
-
-        if (!aiResponse.ok) {
-          console.log('[sandbox-chat] OpenAI failed, falling back to Lovable AI');
-          actualProvider = 'lovable';
-        }
-      }
-    }
-
-    if (actualProvider === 'lovable' || !aiResponse) {
-      if (!LOVABLE_API_KEY) {
-        throw new Error('LOVABLE_API_KEY not configured');
+        throw new Error('OPENAI_API_KEY not configured');
       }
 
-      console.log(`[sandbox-chat] Calling Lovable AI (${configuredModel})`);
-
-      // Modelos OpenAI via Lovable AI não suportam temperature customizada
-      const isOpenAIModel = configuredModel.startsWith('openai/');
+      console.log('[sandbox-chat] Calling OpenAI with model:', configuredModel);
       
-      const aiPayload: any = {
+      const openaiPayload: any = {
         model: configuredModel,
         messages: aiMessages,
         max_completion_tokens: persona.max_tokens || 500,
       };
 
-      // Apenas adicionar temperature para modelos que suportam (Gemini)
-      if (!isOpenAIModel) {
-        aiPayload.temperature = persona.temperature ?? 0.7;
-      }
-
       if (tools.length > 0) {
-        aiPayload.tools = tools;
+        openaiPayload.tools = tools;
       }
 
-      aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(aiPayload),
+        body: JSON.stringify(openaiPayload),
       });
     }
 
     if (!aiResponse) {
-      throw new Error('No AI response received from any provider');
+      throw new Error('No AI response received');
     }
 
     if (!aiResponse.ok) {
@@ -490,7 +469,7 @@ Você está conversando com um cliente identificado. Use essas informações par
       
       if (aiResponse.status === 402) {
         return new Response(
-          JSON.stringify({ error: 'Payment required. Please add credits to your Lovable workspace.' }),
+          JSON.stringify({ error: 'Erro de billing na API OpenAI. Verifique sua conta OpenAI.' }),
           { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -520,7 +499,7 @@ Você está conversando com um cliente identificado. Use essas informações par
           temperature: persona.temperature,
         },
         debug: {
-          model: actualProvider === 'openai' ? 'gpt-4o-mini' : configuredModel,
+          model: configuredModel,
           ai_provider: actualProvider,
           intent_classification: intentType,
           queries_executed: queriesExecuted,

@@ -62,15 +62,15 @@ export function FinancialDashboardTab({ dateRange }: FinancialDashboardTabProps)
       
       {/* ROW 2: Financial Status */}
       <BentoCard span="full">
-        <FinancialStatusWidget />
+        <FinancialStatusWidget startDate={dateRange?.from} endDate={dateRange?.to} />
       </BentoCard>
       
       {/* ROW 3: LTV + Conversion */}
       <BentoCard span="2">
-        <LTVWidget />
+        <LTVWidget startDate={dateRange?.from} endDate={dateRange?.to} />
       </BentoCard>
       <BentoCard span="2">
-        <ConversionRateWidget />
+        <ConversionRateWidget startDate={dateRange?.from} endDate={dateRange?.to} />
       </BentoCard>
       
       {/* ROW 4: KPIs + Affiliates */}

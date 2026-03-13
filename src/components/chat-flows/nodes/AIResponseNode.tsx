@@ -1,6 +1,6 @@
 import { memo } from "react";
-import { NodeProps } from "reactflow";
-import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign, Store } from "lucide-react";
+import { Handle, Position, NodeProps } from "reactflow";
+import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign, Store, Briefcase } from "lucide-react";
 import { ChatFlowNodeWrapper } from "../ChatFlowNodeWrapper";
 import { Badge } from "@/components/ui/badge";
 
@@ -27,6 +27,9 @@ interface AIResponseNodeData {
   max_ai_interactions?: number;
   exit_keywords?: string[];
   forbid_commercial?: boolean;
+  forbid_cancellation?: boolean;
+  forbid_support?: boolean;
+  forbid_consultant?: boolean;
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
@@ -51,6 +54,85 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
   const maxSentences = data.max_sentences ?? 3;
   const hasRestrictions = forbidQuestions || forbidOptions;
 
+  // 🆕 Custom handles: target (left) + 6 source handles (right) por intenção
+  const customHandles = (
+    <>
+      {/* Target handle (entrada) */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!w-4 !h-4 !bg-primary !border-2 !border-background"
+      />
+      {/* Source handle padrão */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="default"
+        className="!w-4 !h-4 !bg-primary !border-2 !border-background"
+        style={{ top: '12%' }}
+      />
+      {/* Source handle financeiro */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="financeiro"
+        className="!w-4 !h-4 !bg-amber-500 !border-2 !border-background"
+        style={{ top: '27%' }}
+      />
+      {/* Source handle cancelamento */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="cancelamento"
+        className="!w-4 !h-4 !bg-red-500 !border-2 !border-background"
+        style={{ top: '42%' }}
+      />
+      {/* Source handle comercial */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="comercial"
+        className="!w-4 !h-4 !bg-emerald-500 !border-2 !border-background"
+        style={{ top: '57%' }}
+      />
+      {/* Source handle suporte */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="suporte"
+        className="!w-4 !h-4 !bg-blue-500 !border-2 !border-background"
+        style={{ top: '72%' }}
+      />
+      {/* Source handle consultor */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="consultor"
+        className="!w-4 !h-4 !bg-violet-500 !border-2 !border-background"
+        style={{ top: '87%' }}
+      />
+      {/* Labels visuais */}
+      <div className="absolute right-[-55px] text-[8px] text-muted-foreground font-medium pointer-events-none" style={{ top: '5%' }}>
+        padrão
+      </div>
+      <div className="absolute right-[-70px] text-[8px] text-amber-600 font-medium pointer-events-none" style={{ top: '20%' }}>
+        💰 financeiro
+      </div>
+      <div className="absolute right-[-80px] text-[8px] text-red-600 font-medium pointer-events-none" style={{ top: '35%' }}>
+        ❌ cancelamento
+      </div>
+      <div className="absolute right-[-65px] text-[8px] text-emerald-600 font-medium pointer-events-none" style={{ top: '50%' }}>
+        🛒 comercial
+      </div>
+      <div className="absolute right-[-60px] text-[8px] text-blue-600 font-medium pointer-events-none" style={{ top: '65%' }}>
+        🧑 suporte
+      </div>
+      <div className="absolute right-[-65px] text-[8px] text-violet-600 font-medium pointer-events-none" style={{ top: '80%' }}>
+        💼 consultor
+      </div>
+    </>
+  );
+
   return (
     <ChatFlowNodeWrapper
       type="ai_response"
@@ -58,6 +140,7 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
       title={data.label || "Resposta IA"}
       subtitle={getSubtitle()}
       selected={selected}
+      customHandles={customHandles}
     >
       <div className="flex items-center gap-1 mt-1 flex-wrap">
         {/* 🆕 Badge de Objetivo definido */}
@@ -161,6 +244,28 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
           <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-green-600/90">
             <Store className="h-2.5 w-2.5" />
             Comercial
+          </Badge>
+        )}
+
+        {/* Badge de Trava Cancelamento */}
+        {data.forbid_cancellation && (
+          <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 gap-0.5">
+            ❌ Cancelamento
+          </Badge>
+        )}
+
+        {/* Badge de Trava Suporte */}
+        {data.forbid_support && (
+          <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-blue-600/90">
+            🧑 Suporte
+          </Badge>
+        )}
+
+        {/* Badge de Trava Consultor */}
+        {data.forbid_consultant && (
+          <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-violet-600/90">
+            <Briefcase className="h-2.5 w-2.5" />
+            Consultor
           </Badge>
         )}
 

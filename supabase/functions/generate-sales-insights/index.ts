@@ -102,11 +102,10 @@ Responda APENAS com os insights, sem introdução ou conclusão.`;
     let insights = '';
     let aiProvider = 'fallback';
 
-    // TENTATIVA 1: OpenAI (prioridade por ter quota dedicada)
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (openaiApiKey) {
       try {
-        console.log('[generate-sales-insights] Tentando OpenAI...');
+        console.log('[generate-sales-insights] Chamando OpenAI...');
         const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -114,13 +113,13 @@ Responda APENAS com os insights, sem introdução ou conclusão.`;
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'gpt-4o-mini',
+            model: 'gpt-5-mini',
             messages: [
               { role: 'system', content: 'Você é um analista de vendas especializado em CRM.' },
               { role: 'user', content: prompt }
             ],
             temperature: 0.7,
-            max_tokens: 300,
+            max_completion_tokens: 300,
           }),
         });
 
@@ -138,44 +137,7 @@ Responda APENAS com os insights, sem introdução ou conclusão.`;
       }
     }
 
-    // TENTATIVA 2: Lovable AI (se OpenAI falhou)
-    if (!insights) {
-      const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-      if (lovableApiKey) {
-        try {
-          console.log('[generate-sales-insights] Tentando Lovable AI...');
-          const lovableResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${lovableApiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'openai/gpt-5-mini',
-              messages: [
-                { role: 'system', content: 'Você é um analista de vendas especializado em CRM.' },
-                { role: 'user', content: prompt }
-              ],
-              max_tokens: 300,
-            }),
-          });
-
-          if (lovableResponse.ok) {
-            const lovableData = await lovableResponse.json();
-            insights = lovableData.choices[0].message.content;
-            aiProvider = 'lovable';
-            console.log('[generate-sales-insights] ✅ Insights gerados via Lovable AI');
-          } else {
-            const errorText = await lovableResponse.text();
-            console.warn('[generate-sales-insights] Lovable AI falhou:', lovableResponse.status, errorText);
-          }
-        } catch (lovableError) {
-          console.warn('[generate-sales-insights] Erro ao chamar Lovable AI:', lovableError);
-        }
-      }
-    }
-
-    // TENTATIVA 3: Fallback baseado em métricas (se ambas as IAs falharam)
+    // Fallback baseado em métricas (se OpenAI falhou)
     if (!insights) {
       console.log('[generate-sales-insights] 📊 Usando fallback baseado em métricas');
       insights = `Performance de vendas no período: ${totalDeals} negócios totais, com ${wonDeals} ganhos (${conversionRate}% de conversão) gerando R$ ${totalValue.toLocaleString('pt-BR')} em receita. Ticket médio de R$ ${avgDealValue.toLocaleString('pt-BR')}. ${recentConversionTrend > 0 ? `Tendência positiva de +${recentConversionTrend}% nos últimos 30 dias` : recentConversionTrend < 0 ? `Atenção: tendência negativa de ${recentConversionTrend}% nos últimos 30 dias` : 'Conversão estável nos últimos 30 dias'}.`;

@@ -67,11 +67,12 @@ interface FetchOptions {
   channels?: string[];
   department?: string;
   assignedTo?: string;
+  tags?: string[];
 }
 
 // Função para buscar dados do inbox com filtros de role
 async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem[]> {
-  const { cursor, userId, role, departmentIds, scope = 'active', aiMode, dateRange, channels, department, assignedTo } = options;
+  const { cursor, userId, role, departmentIds, scope = 'active', aiMode, dateRange, channels, department, assignedTo, tags } = options;
 
   let query = supabase
     .from("inbox_view")
@@ -128,6 +129,25 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
     }
   }
 
+  // ✅ Filtro de tags no nível do banco (evita limite de 1000 do client-side)
+  if (tags && tags.length > 0) {
+    const { data: tagRows } = await supabase
+      .from('conversation_tags')
+      .select('conversation_id')
+      .in('tag_id', tags)
+      .limit(5000);
+
+    const tagConvIds = [...new Set(tagRows?.map(r => r.conversation_id) || [])];
+
+    if (tagConvIds.length === 0) {
+      console.log(`[InboxView] tag filter returned 0 conversation_ids — returning empty`);
+      return [];
+    }
+
+    // Supabase .in() supports up to ~2000 IDs; slice to be safe
+    query = query.in('conversation_id', tagConvIds.slice(0, 2000));
+  }
+
   const isArchivedScope = scope === 'archived';
   query = query
     .order("updated_at", { ascending: !isArchivedScope })
@@ -165,7 +185,7 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
 }
 
 // Função para aplicar filtros client-side (PURAMENTE SÍNCRONA)
-function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?: Set<string>, scope?: 'active' | 'archived'): InboxViewItem[] {
+function applyFilters(items: InboxViewItem[], filters?: InboxFilters, _tagIdsSet?: Set<string>, scope?: 'active' | 'archived'): InboxViewItem[] {
   if (!filters) return items;
 
   let result = [...items];
@@ -260,10 +280,7 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
     result = result.filter(item => item.department === filters.department);
   }
 
-  // Tag filter (usando Set pré-carregado)
-  if (filters.tags && filters.tags.length > 0 && tagIdsSet) {
-    result = result.filter(item => tagIdsSet.has(item.conversation_id));
-  }
+  // Tag filter — now handled at DB level in fetchInboxData (removed client-side)
 
   // Search filter
   if (hasActiveSearch) {
@@ -281,23 +298,7 @@ function applyFilters(items: InboxViewItem[], filters?: InboxFilters, tagIdsSet?
   return result;
 }
 
-// Mini-hook para carregar IDs de conversas com tags específicas (suporta múltiplas)
-function useTagConversationIds(tags?: string[]): Set<string> | undefined {
-  const tagKey = tags && tags.length > 0 ? [...tags].sort().join(',') : '';
-  const { data } = useQuery({
-    queryKey: ['tag-conversation-ids', tagKey],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('conversation_tags')
-        .select('conversation_id')
-        .in('tag_id', tags!);
-      return new Set(data?.map(t => t.conversation_id) || []);
-    },
-    enabled: !!tags && tags.length > 0,
-    staleTime: 30000,
-  });
-  return data;
-}
+// useTagConversationIds removed — tag filtering now happens at DB level in fetchInboxData
 
 // Função para fazer merge incremental por conversation_id
 function mergeInboxItems(existing: InboxViewItem[], incoming: InboxViewItem[]): InboxViewItem[] {
@@ -353,21 +354,24 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
     assignedTo: filters?.assignedTo,
   } : {};
 
+  const tagsKey = filters?.tags && filters.tags.length > 0 ? [...filters.tags].sort().join(',') : undefined;
+
   const fetchOptions = useMemo(() => ({
     userId: user?.id,
     role,
     departmentIds,
     scope,
+    tags: filters?.tags,
     ...archivedFilters,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [user?.id, role, departmentIds, scope, filters?.aiMode, filters?.dateRange, filters?.channels?.join(','), filters?.department, filters?.assignedTo]);
+  }), [user?.id, role, departmentIds, scope, filters?.aiMode, filters?.dateRange, filters?.channels?.join(','), filters?.department, filters?.assignedTo, tagsKey]);
 
   const fetchOptionsRef = useRef(fetchOptions);
   fetchOptionsRef.current = fetchOptions;
 
-  // ✅ queryKey inclui todos os filtros aplicados no banco para archived
+  // ✅ queryKey inclui todos os filtros aplicados no banco para archived + tags
   const query = useQuery({
-    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope,
+    queryKey: [...QUERY_KEY, user?.id, role, deptKey, scope, tagsKey,
       ...(scope === 'archived' ? [
         filters?.aiMode,
         filters?.dateRange?.from?.toISOString(),
@@ -395,13 +399,10 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
     enabled: !!user && !roleLoading && !deptLoading,
   });
 
-  // ✅ Tag lookup separado (async -> próprio hook/query)
-  const tagIdsSet = useTagConversationIds(filters?.tags);
-
   // ✅ Filtragem instantânea via useMemo (0ms, sem rede)
   const filteredData = useMemo(
-    () => applyFilters(query.data ?? [], filters, tagIdsSet, scope),
-    [query.data, filters, tagIdsSet, scope]
+    () => applyFilters(query.data ?? [], filters, undefined, scope),
+    [query.data, filters, scope]
   );
 
   // Realtime subscription com merge incremental e catch-up
@@ -725,27 +726,38 @@ export function useInboxCounts(userId?: string) {
     enabled: !!userId && isRoleReady && !deptLoading,
     queryFn: async (): Promise<InboxCounts> => {
       const { data, error } = await supabase.functions.invoke("get-inbox-counts");
-      if (error) throw error;
+      if (error) {
+        const status = (error as any)?.status;
+        const message = (error as any)?.message || "";
+        const isBootError = status === 503 || message.includes("BOOT_ERROR");
+        if (isBootError) {
+          console.warn("[useInboxCounts] BOOT_ERROR (cold start), retrying...");
+          return {
+            total: 0, mine: 0, aiQueue: 0, humanQueue: 0,
+            slaCritical: 0, slaWarning: 0, notResponded: 0, myNotResponded: 0,
+            unassigned: 0, unread: 0, closed: 0, byDepartment: [], byTag: [],
+          } as InboxCounts;
+        }
+        throw error;
+      }
       return (data?.counts || {
-        total: 0,
-        mine: 0,
-        aiQueue: 0,
-        humanQueue: 0,
-        slaCritical: 0,
-        slaWarning: 0,
-        notResponded: 0,
-        myNotResponded: 0,
-        unassigned: 0,
-        unread: 0,
-        closed: 0,
-        byDepartment: [],
-        byTag: [],
+        total: 0, mine: 0, aiQueue: 0, humanQueue: 0,
+        slaCritical: 0, slaWarning: 0, notResponded: 0, myNotResponded: 0,
+        unassigned: 0, unread: 0, closed: 0, byDepartment: [], byTag: [],
       }) as InboxCounts;
     },
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
-    retry: 2,
-    retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 3000),
+    retry: (failureCount, error: any) => {
+      const status = error?.status;
+      const message = error?.message || "";
+      const isBootError = status === 503 || String(message).includes("BOOT_ERROR");
+      return isBootError ? failureCount < 5 : failureCount < 2;
+    },
+    retryDelay: (attempt) => {
+      const base = Math.min(750 * 2 ** attempt, 6000);
+      return base + Math.floor(Math.random() * 250);
+    },
     placeholderData: {
       total: 0,
       mine: 0,

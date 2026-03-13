@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Mail, Phone, Building2, MapPin, Calendar, ExternalLink, User } from "lucide-react";
+import { displayName, displayInitials } from "@/lib/displayName";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
 
@@ -23,8 +24,8 @@ interface CustomerInfoCardProps {
 }
 
 export function CustomerInfoCard({ customer }: CustomerInfoCardProps) {
-  const fullName = `${customer.first_name} ${customer.last_name}`.trim();
-  const initials = `${customer.first_name?.[0] || ''}${customer.last_name?.[0] || ''}`.toUpperCase();
+  const fullName = displayName(customer.first_name, customer.last_name);
+  const initials = displayInitials(customer.first_name, customer.last_name);
 
   return (
     <Card>

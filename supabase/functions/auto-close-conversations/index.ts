@@ -57,6 +57,38 @@ interface ConversationToClose {
   whatsapp_provider: string | null;
 }
 
+/**
+ * Verifica se o contato enviou mensagem recente (dentro do threshold de inatividade).
+ * Busca as últimas 3 mensagens para evitar que mensagens automáticas de bot
+ * (ex: "Sua conversa já está na fila") mascarem a atividade real do cliente.
+ * 
+ * Retorna true se o contato está ativo (NÃO deve fechar).
+ */
+async function isContactRecentlyActive(
+  supabase: any,
+  conversationId: string,
+  inactivityThresholdISO: string
+): Promise<boolean> {
+  const { data: recentMsgs } = await supabase
+    .from('messages')
+    .select('sender_type, created_at')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false })
+    .limit(3);
+
+  if (!recentMsgs || recentMsgs.length === 0) return false;
+
+  // Se qualquer uma das últimas 3 mensagens for do contato E foi enviada
+  // DEPOIS do threshold de inatividade, o contato está ativo
+  for (const msg of recentMsgs) {
+    if (msg.sender_type === 'contact' && msg.created_at > inactivityThresholdISO) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -310,18 +342,10 @@ Deno.serve(async (req) => {
 
       for (const conversation of conversations as ConversationToClose[]) {
         try {
-          // 4. Verificar se a última mensagem foi da IA (user/system) e não do cliente
-          const { data: lastMessage } = await supabase
-            .from('messages')
-            .select('sender_type, created_at')
-            .eq('conversation_id', conversation.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          // Só fechar se a última mensagem foi da IA/sistema (cliente não respondeu)
-          if (!lastMessage || lastMessage.sender_type === 'contact') {
-            console.log(`[Auto-Close] Skipping ${conversation.id} - last message was from contact or no messages`);
+          // 4. Verificar se o contato enviou mensagem recente (últimas 3 msgs)
+          const contactActive = await isContactRecentlyActive(supabase, conversation.id, inactivityThreshold);
+          if (contactActive) {
+            console.log(`[Auto-Close] Skipping ${conversation.id} - contact recently active (last 3 msgs check)`);
             continue;
           }
 
@@ -447,17 +471,10 @@ Deno.serve(async (req) => {
           if (closedIds.includes(conv.id)) continue;
 
           try {
-            // Verificar última mensagem - só fechar se IA/sistema respondeu e cliente não
-            const { data: lastMsg } = await supabase
-              .from('messages')
-              .select('sender_type')
-              .eq('conversation_id', conv.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
-
-            if (!lastMsg || lastMsg.sender_type === 'contact') {
-              console.log(`[Auto-Close] AI skip ${conv.id} - last msg from contact`);
+            // Verificar se o contato enviou mensagem recente (últimas 3 msgs)
+            const contactActive = await isContactRecentlyActive(supabase, conv.id, aiThreshold);
+            if (contactActive) {
+              console.log(`[Auto-Close] AI skip ${conv.id} - contact recently active (last 3 msgs check)`);
               continue;
             }
 
@@ -548,17 +565,10 @@ Deno.serve(async (req) => {
           if (closedIds.includes(conv.id)) continue;
 
           try {
-            // Verificar última mensagem - só fechar se IA/sistema respondeu e cliente não
-            const { data: lastMsg } = await supabase
-              .from('messages')
-              .select('sender_type')
-              .eq('conversation_id', conv.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
-
-            if (!lastMsg || lastMsg.sender_type === 'contact') {
-              console.log(`[Auto-Close] No-dept skip ${conv.id} - last msg from contact`);
+            // Verificar se o contato enviou mensagem recente (últimas 3 msgs)
+            const contactActive = await isContactRecentlyActive(supabase, conv.id, noDeptThreshold);
+            if (contactActive) {
+              console.log(`[Auto-Close] No-dept skip ${conv.id} - contact recently active (last 3 msgs check)`);
               continue;
             }
 
@@ -608,6 +618,103 @@ Deno.serve(async (req) => {
     console.log(`[Auto-Close] ✅ Stage 3b complete - no-dept AI closed ${noDeptClosedCount} conversations`);
 
     // ============================
+    // ETAPA 3.5: Auto-close awaiting_close_confirmation sem resposta (5 min)
+    // ============================
+    console.log('[Auto-Close] Starting awaiting_close_confirmation check (Stage 3.5)...');
+
+    let awaitingCloseCount = 0;
+    const awaitingCloseThreshold = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    try {
+      // Buscar conversas abertas com awaiting_close_confirmation=true e inativas >5min
+      const { data: awaitingConvos, error: awaitingError } = await supabase
+        .from('conversations')
+        .select('id, contact_id, last_message_at, ai_mode, channel, department, whatsapp_instance_id, whatsapp_meta_instance_id, whatsapp_provider, customer_metadata')
+        .eq('status', 'open')
+        .lt('last_message_at', awaitingCloseThreshold);
+
+      if (awaitingError) {
+        console.error('[Auto-Close] Error fetching awaiting_close conversations:', awaitingError);
+      } else if (awaitingConvos && awaitingConvos.length > 0) {
+        // Filtrar apenas as que têm awaiting_close_confirmation=true no metadata
+        const confirming = awaitingConvos.filter((c: any) => {
+          const meta = c.customer_metadata;
+          return meta && (meta.awaiting_close_confirmation === true || meta.awaiting_close_confirmation === 'true');
+        });
+
+        console.log(`[Auto-Close] Found ${confirming.length} conversations awaiting close confirmation >5min`);
+
+        for (const conv of confirming) {
+          if (closedIds.includes(conv.id)) continue;
+
+          try {
+            // Verificar que a última mensagem NÃO é do contato (cliente não respondeu)
+            const { data: lastMsg } = await supabase
+              .from('messages')
+              .select('sender_type')
+              .eq('conversation_id', conv.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
+
+            if (lastMsg && lastMsg.sender_type === 'contact') {
+              console.log(`[Auto-Close] Stage 3.5 skip ${conv.id} - last message is from contact`);
+              continue;
+            }
+
+            const AWAITING_CLOSE_MESSAGE = 'Como não recebi resposta, estou encerrando o atendimento. Se precisar, é só nos chamar novamente! 😊';
+
+            // Limpar flag awaiting_close_confirmation do metadata
+            const existingMeta = (conv as any).customer_metadata || {};
+            const { awaiting_close_confirmation, close_reason, ...cleanMeta } = existingMeta;
+            await supabase.from('conversations').update({
+              customer_metadata: cleanMeta,
+            }).eq('id', conv.id);
+
+            // Inserir mensagem de encerramento
+            await supabase.from('messages').insert({
+              conversation_id: conv.id,
+              content: AWAITING_CLOSE_MESSAGE,
+              sender_type: 'user',
+            });
+
+            // Tag "9.98 Falta de Interação"
+            await supabase.from('conversation_tags').upsert({
+              conversation_id: conv.id,
+              tag_id: FALTA_INTERACAO_TAG_ID,
+            }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+
+            // Enviar via WhatsApp se necessário
+            if (conv.channel === 'whatsapp') {
+              await sendWhatsAppMessages(supabase, conv as ConversationToClose, AWAITING_CLOSE_MESSAGE, null);
+            }
+
+            // Fechar conversa
+            await supabase.from('conversations').update({
+              status: 'closed',
+              auto_closed: true,
+              closed_at: new Date().toISOString(),
+              closed_reason: 'awaiting_confirmation_timeout',
+              ai_mode: 'disabled',
+            }).eq('id', conv.id);
+
+            awaitingCloseCount++;
+            closedIds.push(conv.id);
+            console.log(`[Auto-Close] ✅ Stage 3.5 closed ${conv.id} - awaiting_confirmation_timeout`);
+          } catch (err) {
+            console.error(`[Auto-Close] Error in Stage 3.5 closing ${conv.id}:`, err);
+          }
+        }
+      } else {
+        console.log('[Auto-Close] No conversations awaiting close confirmation');
+      }
+    } catch (err) {
+      console.error('[Auto-Close] Error in Stage 3.5:', err);
+    }
+
+    console.log(`[Auto-Close] ✅ Stage 3.5 complete - closed ${awaitingCloseCount} awaiting-confirmation conversations`);
+
+    // ============================
     // ETAPA 4: Human inactivity auto-close (human_auto_close_minutes por departamento)
     // ============================
     console.log('[Auto-Close] Starting human inactivity check (Stage 4 - Human)...');
@@ -652,17 +759,10 @@ Deno.serve(async (req) => {
             if (closedIds.includes(conv.id)) continue;
 
             try {
-              // Verificar última mensagem - só fechar se agente humano respondeu e cliente não
-              const { data: lastMsg } = await supabase
-                .from('messages')
-                .select('sender_type')
-                .eq('conversation_id', conv.id)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single();
-
-              if (!lastMsg || lastMsg.sender_type === 'contact') {
-                console.log(`[Auto-Close] Human skip ${conv.id} - last msg from contact`);
+              // Verificar se o contato enviou mensagem recente (últimas 3 msgs)
+              const contactActive = await isContactRecentlyActive(supabase, conv.id, humanThreshold);
+              if (contactActive) {
+                console.log(`[Auto-Close] Human skip ${conv.id} - contact recently active (last 3 msgs check)`);
                 continue;
               }
 
@@ -790,21 +890,22 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[Auto-Close] ✅ Stage 5 complete - processed ${flowInactivityCount} flow inactivity timeouts`);
-    console.log(`[Auto-Close] ✅ All stages complete - total: ${totalClosedCount + aiClosedCount + noDeptClosedCount + humanClosedCount} inactivity + ${windowExpiredCount} expired + ${slaAlertCount} SLA alerts + ${flowInactivityCount} flow timeouts`);
+    console.log(`[Auto-Close] ✅ All stages complete - total: ${totalClosedCount + aiClosedCount + noDeptClosedCount + humanClosedCount + awaitingCloseCount} inactivity + ${windowExpiredCount} expired + ${slaAlertCount} SLA alerts + ${flowInactivityCount} flow timeouts`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        closed_count: totalClosedCount + aiClosedCount + noDeptClosedCount + humanClosedCount,
+        closed_count: totalClosedCount + aiClosedCount + noDeptClosedCount + humanClosedCount + awaitingCloseCount,
         whatsapp_window_expired_count: windowExpiredCount,
         ai_inactivity_closed_count: aiClosedCount,
         human_inactivity_closed_count: humanClosedCount,
         no_dept_closed_count: noDeptClosedCount,
+        awaiting_confirmation_closed_count: awaitingCloseCount,
         sla_alert_count: slaAlertCount,
         flow_inactivity_timeout_count: flowInactivityCount,
         closed_ids: closedIds,
         by_department: results,
-        message: `Closed ${totalClosedCount} by inactivity + ${aiClosedCount} AI + ${humanClosedCount} human + ${noDeptClosedCount} no-dept + ${windowExpiredCount} expired + ${slaAlertCount} SLA alerts + ${flowInactivityCount} flow timeouts` 
+        message: `Closed ${totalClosedCount} by inactivity + ${aiClosedCount} AI + ${humanClosedCount} human + ${noDeptClosedCount} no-dept + ${awaitingCloseCount} awaiting-confirm + ${windowExpiredCount} expired + ${slaAlertCount} SLA alerts + ${flowInactivityCount} flow timeouts` 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

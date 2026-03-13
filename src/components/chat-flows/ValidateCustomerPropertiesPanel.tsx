@@ -1,7 +1,7 @@
 import { Node } from "reactflow";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { ReadOnlyVariableBadge } from "./ReadOnlyVariableBadge";
 
 interface ValidateCustomerPropertiesPanelProps {
   selectedNode: Node;
@@ -43,47 +43,16 @@ export function ValidateCustomerPropertiesPanel({ selectedNode, updateNodeData }
         </div>
       </div>
 
-      {/* Variáveis de saída */}
-      <div className="pt-2 border-t">
-        <Label className="text-xs text-muted-foreground">Variáveis de saída</Label>
-        <div className="mt-2 space-y-2">
-          <div className="space-y-1">
-            <Label className="text-[10px]">É cliente validado?</Label>
-            <Input
-              value={selectedNode.data.save_validated_as || "customer_validated"}
-              onChange={(e) => updateNodeData("save_validated_as", e.target.value)}
-              placeholder="customer_validated"
-              className="h-8 text-sm"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[10px]">Nome encontrado</Label>
-            <Input
-              value={selectedNode.data.save_customer_name_as || "customer_name_found"}
-              onChange={(e) => updateNodeData("save_customer_name_as", e.target.value)}
-              placeholder="customer_name_found"
-              className="h-8 text-sm"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[10px]">Email encontrado</Label>
-            <Input
-              value={selectedNode.data.save_customer_email_as || "customer_email_found"}
-              onChange={(e) => updateNodeData("save_customer_email_as", e.target.value)}
-              placeholder="customer_email_found"
-              className="h-8 text-sm"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Preview de variáveis */}
-      <div className="p-3 bg-muted/50 rounded-lg space-y-1">
-        <p className="text-[10px] font-medium text-muted-foreground">Variáveis disponíveis após execução:</p>
-        <div className="space-y-0.5 font-mono text-[10px]">
-          <p><span className="text-green-600">{`{{${selectedNode.data.save_validated_as || "customer_validated"}}}`}</span> → true/false</p>
-          <p><span className="text-blue-600">{`{{${selectedNode.data.save_customer_name_as || "customer_name_found"}}}`}</span> → Nome do cliente</p>
-          <p><span className="text-purple-600">{`{{${selectedNode.data.save_customer_email_as || "customer_email_found"}}}`}</span> → Email do cliente</p>
+      {/* Variáveis de saída - READ ONLY */}
+      <div className="pt-2 border-t space-y-2">
+        <Label className="text-xs font-semibold">Variáveis geradas automaticamente</Label>
+        <p className="text-[10px] text-muted-foreground">
+          Clique para copiar e usar em nós seguintes
+        </p>
+        <div className="space-y-1.5">
+          <ReadOnlyVariableBadge variable="customer_validated" description="true/false — Cliente encontrado?" colorClass="text-green-600" />
+          <ReadOnlyVariableBadge variable="customer_name_found" description="Nome do cliente na base" colorClass="text-blue-600" />
+          <ReadOnlyVariableBadge variable="customer_email_found" description="Email do cliente na base" colorClass="text-purple-600" />
         </div>
       </div>
     </div>

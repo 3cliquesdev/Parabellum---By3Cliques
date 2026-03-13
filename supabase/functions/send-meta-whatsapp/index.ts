@@ -412,7 +412,7 @@ serve(async (req) => {
         .from("messages")
         .update({ 
           provider_message_id: messageId,
-          status: 'dispatched', // Novo status = enviado para Meta
+          status: 'sent', // Status válido do enum message_status
           external_id: messageId, // Manter compatibilidade com legacy
         })
         .eq("client_message_id", body.client_message_id);

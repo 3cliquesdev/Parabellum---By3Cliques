@@ -10,6 +10,8 @@ export interface ActiveFlow {
   flowIsActive: boolean;
   currentNodeId: string;
   startedAt: string | null;
+  status: string;
+  completedAt: string | null;
 }
 
 export function useActiveFlowState(conversationId: string | undefined) {
@@ -27,7 +29,6 @@ export function useActiveFlowState(conversationId: string | undefined) {
         .from("chat_flow_states")
         .select("id, flow_id, current_node_id, started_at, status, chat_flows(name, is_active)")
         .eq("conversation_id", conversationId)
-        .in("status", ["in_progress", "active", "waiting_input"])
         .order("started_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -47,6 +48,8 @@ export function useActiveFlowState(conversationId: string | undefined) {
         flowIsActive: flow?.is_active ?? true,
         currentNodeId: data.current_node_id,
         startedAt: data.started_at,
+        status: data.status || "unknown",
+        completedAt: (data as any).completed_at || null,
       };
     },
     enabled: !!conversationId,

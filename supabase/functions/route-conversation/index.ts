@@ -787,13 +787,14 @@ serve(async (req) => {
 
     console.log('[route-conversation] ℹ️ Conversa adicionada à fila - sem mensagem automática');
 
-    // Verificar posição na fila
+    // Verificar posição na fila (excluindo conversas fechadas)
     const { count: queuePosition } = await supabase
       .from('conversation_queue')
-      .select('*', { count: 'exact', head: true })
+      .select('*, conversations!inner(status)', { count: 'exact', head: true })
       .is('assigned_at', null)
       .lte('priority', priority)
-      .lte('queued_at', new Date().toISOString());
+      .lte('queued_at', new Date().toISOString())
+      .not('conversations.status', 'in', '("closed","resolved","finished")');
 
     return new Response(
       JSON.stringify({

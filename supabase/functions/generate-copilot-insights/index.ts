@@ -204,21 +204,24 @@ ${JSON.stringify(kbGaps || [], null, 2)}
       : INSIGHTS_PROMPT;
 
     // Call AI to generate insights
-    const aiGatewayUrl = Deno.env.get("AI_GATEWAY_URL") || "https://ai.lovable.dev/v1/chat/completions";
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY not configured");
+    }
 
-    const aiResponse = await fetch(aiGatewayUrl, {
+    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${Deno.env.get("LOVABLE_API_KEY") || ""}`,
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "openai/gpt-5-mini",
+        model: "gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: dataContext },
         ],
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
         response_format: { type: "json_object" },
       }),
     });

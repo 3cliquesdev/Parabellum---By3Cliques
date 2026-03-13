@@ -23,6 +23,7 @@
 
 - Master Flow e triggers automáticos são **bloqueados** em teste
 - Apenas o fluxo selecionado manualmente roda
+- **IA responde normalmente** quando não há fluxo ativo (useAI: true, reason: test_mode_ai_allowed)
 - Separador visual `"TESTE DE FLUXO INICIADO"` é inserido como mensagem de sistema
 - Mensagens de teste têm highlight amarelo (`border-amber-400`)
 - Metadata `flow_name` exibida nos bubbles de teste

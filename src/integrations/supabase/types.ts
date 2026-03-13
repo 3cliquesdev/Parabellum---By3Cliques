@@ -1903,6 +1903,7 @@ export type Database = {
           lead_score: number | null
           neighborhood: string | null
           next_payment_date: string | null
+          onboarding_completed: boolean | null
           onboarding_submission_id: string | null
           organization_id: string | null
           phone: string | null
@@ -1954,6 +1955,7 @@ export type Database = {
           lead_score?: number | null
           neighborhood?: string | null
           next_payment_date?: string | null
+          onboarding_completed?: boolean | null
           onboarding_submission_id?: string | null
           organization_id?: string | null
           phone?: string | null
@@ -2005,6 +2007,7 @@ export type Database = {
           lead_score?: number | null
           neighborhood?: string | null
           next_payment_date?: string | null
+          onboarding_completed?: boolean | null
           onboarding_submission_id?: string | null
           organization_id?: string | null
           phone?: string | null
@@ -4489,8 +4492,10 @@ export type Database = {
           contact_avatar: string | null
           contact_email: string | null
           contact_id: string
+          contact_kiwify_validated: boolean | null
           contact_name: string | null
           contact_phone: string | null
+          contact_status: string | null
           contact_whatsapp_id: string | null
           conversation_id: string
           created_at: string | null
@@ -4521,8 +4526,10 @@ export type Database = {
           contact_avatar?: string | null
           contact_email?: string | null
           contact_id: string
+          contact_kiwify_validated?: boolean | null
           contact_name?: string | null
           contact_phone?: string | null
+          contact_status?: string | null
           contact_whatsapp_id?: string | null
           conversation_id: string
           created_at?: string | null
@@ -4553,8 +4560,10 @@ export type Database = {
           contact_avatar?: string | null
           contact_email?: string | null
           contact_id?: string
+          contact_kiwify_validated?: boolean | null
           contact_name?: string | null
           contact_phone?: string | null
+          contact_status?: string | null
           contact_whatsapp_id?: string | null
           conversation_id?: string
           created_at?: string | null
@@ -9923,7 +9932,7 @@ export type Database = {
           emails_found: number
         }[]
       }
-      batch_validate_kiwify_contacts: { Args: never; Returns: number }
+      batch_validate_kiwify_contacts: { Args: never; Returns: Json }
       calculate_business_due_date: {
         Args: {
           p_start_date: string

@@ -105,7 +105,7 @@ serve(async (req) => {
         created_at
       `)
       .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
-      .filter("payload->Customer->>'mobile'", 'ilike', `%${last9Digits}`)
+      .filter("payload->Customer->>mobile", 'ilike', `%${last9Digits}`)
       .order('created_at', { ascending: false })
       .limit(50); // Limita a 50 eventos matching (suficiente para histórico)
 

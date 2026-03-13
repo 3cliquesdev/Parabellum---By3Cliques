@@ -273,7 +273,7 @@ export function AppSidebar() {
             to={item.href}
             end={item.href === "/"}
             className="flex items-center gap-3 px-3 py-2 rounded-md text-slate-700 dark:text-slate-300 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors relative"
-            activeClassName="bg-primary/10 text-primary font-medium border-l-2 border-primary hover:bg-primary/10 hover:text-primary"
+            activeClassName="bg-primary/15 text-primary font-medium border-l-[3px] border-primary hover:bg-primary/15 hover:text-primary"
             onMouseEnter={() => handlePrefetch(item.href)}
             onFocus={() => handlePrefetch(item.href)}
           >
@@ -355,9 +355,10 @@ export function AppSidebar() {
         ) : (
           <>
             {/* Render all menu groups dynamically based on permissions */}
-            {menuGroups.map((group) => (
+            {menuGroups.map((group, index) => (
               <SidebarGroup key={group.label}>
-                {!collapsed && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
+                {!collapsed && index > 0 && <div className="border-t border-border/50 mx-2 mb-1" />}
+                {!collapsed && <SidebarGroupLabel className="uppercase tracking-widest text-xs text-muted-foreground pt-4">{group.label}</SidebarGroupLabel>}
                 <SidebarGroupContent>
                   <SidebarMenu>
                     {group.items.map(renderMenuItem)}

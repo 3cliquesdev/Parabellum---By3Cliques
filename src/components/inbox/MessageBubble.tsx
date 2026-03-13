@@ -47,6 +47,18 @@ interface MessageBubbleProps {
   className?: string;
 }
 
+// Pure function — no per-bubble interval. Parent passes _tick to force re-render.
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  const diffMin = Math.floor(diffMs / 60_000);
+
+  if (diffMin < 1) return "agora";
+  if (diffMin < 60) return `há ${diffMin} min`;
+  return format(new Date(dateStr), "HH:mm");
+}
+
 export function MessageBubble({
   content,
   createdAt,
@@ -64,6 +76,7 @@ export function MessageBubble({
   attachments = [],
   className,
 }: MessageBubbleProps) {
+  const relativeTime = formatRelativeTime(createdAt);
   return (
     <div
       className={cn(
@@ -242,7 +255,7 @@ export function MessageBubble({
                 : "text-white opacity-70"
             )}
           >
-            <span>{format(new Date(createdAt), "HH:mm")}</span>
+            <span>{relativeTime}</span>
 
             {/* AI Debug for Admins */}
             {isAI && (isAdmin || isManager) && usedArticles.length > 0 && (

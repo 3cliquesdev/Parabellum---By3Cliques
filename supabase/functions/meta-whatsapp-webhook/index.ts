@@ -646,6 +646,7 @@ serve(async (req) => {
                         message_id: savedMessage.id,
                         media_type: mediaType,
                         instance_id: instance.id,
+                        conversation_id: conversation.id,
                       }),
                     }
                   ).then(res => {
@@ -734,7 +735,7 @@ serve(async (req) => {
                     },
                     body: JSON.stringify({
                       conversationId: conversation.id,
-                      userMessage: messageContent,
+                      customerMessage: messageContent,
                     }),
                   }
                 );
@@ -792,11 +793,6 @@ serve(async (req) => {
               if (flowData.skipAutoResponse) {
                 console.log("[AUTO-DECISION] [WhatsApp Meta] Flow skipAutoResponse → waiting_human, reason:", flowData.reason);
                 
-                // 🧪 TEST MODE: Silêncio total — sem mensagem de aguarde, sem mudar ai_mode
-                if (flowData.reason === 'test_mode_manual_only') {
-                  console.log("[meta-whatsapp-webhook] 🧪 TEST MODE: Ignorando - apenas fluxos manuais");
-                  continue;
-                }
                 
                 // 🆕 MENSAGEM DE AGUARDE: Enviar confirmação ao cliente na fila
                 // APENAS se reason indica que está esperando humano E NÃO TEM AGENTE ATRIBUÍDO
@@ -806,26 +802,61 @@ serve(async (req) => {
                 if (flowData.reason === 'ai_mode_waiting_human' && !hasAssignedAgent) {
                   console.log("[meta-whatsapp-webhook] 📨 Verificando rate limit para mensagem de aguarde...");
                   
-                  // 🛡️ ANTI-SPAM: Verificar última mensagem do sistema (bot)
-                  const { data: lastBotMsg } = await supabase
+                  // 🛡️ ANTI-SPAM: Verificar última mensagem de fila pelo CONTEÚDO (não por is_ai_generated)
+                  // FIX: send-meta-whatsapp salva com is_ai_generated=false, então filtrar por conteúdo
+                  const { data: lastQueueMsg } = await supabase
                     .from("messages")
                     .select("created_at, content")
                     .eq("conversation_id", conversation.id)
                     .eq("sender_type", "user") // "user" = bot/sistema no modelo atual
-                    .eq("is_ai_generated", true)
+                    .ilike("content", "%fila de atendimento%")
                     .order("created_at", { ascending: false })
                     .limit(1)
                     .maybeSingle();
                   
-                  // Só enviar se última mensagem do bot foi há mais de 2 minutos
+                  // Só enviar se última mensagem de fila foi há mais de 2 minutos
                   const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
-                  const lastMsgDate = lastBotMsg?.created_at ? new Date(lastBotMsg.created_at) : null;
+                  const lastMsgDate = lastQueueMsg?.created_at ? new Date(lastQueueMsg.created_at) : null;
                   const shouldSendQueueMsg = !lastMsgDate || lastMsgDate < twoMinutesAgo;
                   
                   if (shouldSendQueueMsg) {
                     console.log("[meta-whatsapp-webhook] ✅ Rate limit OK, enviando mensagem de aguarde...");
                     
-                    const queueMessage = "💬 Sua conversa já está na fila de atendimento.\n\nFique tranquilo, em breve um especialista irá te atender. 🙂";
+                    // 🆕 FIX #2: Verificar se há agentes ONLINE no departamento
+                    let queueMessage = "💬 Sua conversa já está na fila de atendimento.\n\nFique tranquilo, em breve um especialista irá te atender. 🙂";
+                    
+                    if (conversation.department_id) {
+                      const { data: onlineAgents } = await supabase
+                        .from("profiles")
+                        .select("id")
+                        .eq("availability_status", "online")
+                        .in("id", 
+                          supabase
+                            .from("agent_departments")
+                            .select("profile_id")
+                            .eq("department_id", conversation.department_id)
+                        );
+                      
+                      // Se query falhou ou retornou vazio, tentar contagem direta
+                      let hasOnlineAgents = (onlineAgents && onlineAgents.length > 0);
+                      
+                      if (!hasOnlineAgents) {
+                        // Fallback: query direta nos agent_departments + profiles
+                        const { data: deptAgents } = await supabase
+                          .from("agent_departments")
+                          .select("profile_id, profiles!inner(availability_status)")
+                          .eq("department_id", conversation.department_id)
+                          .eq("profiles.availability_status", "online")
+                          .limit(1);
+                        
+                        hasOnlineAgents = (deptAgents && deptAgents.length > 0);
+                      }
+                      
+                      if (!hasOnlineAgents) {
+                        console.log("[meta-whatsapp-webhook] ⚠️ Nenhum agente online no departamento:", conversation.department_id);
+                        queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";
+                      }
+                    }
                     
                     try {
                       await supabase.functions.invoke("send-meta-whatsapp", {
@@ -835,7 +866,7 @@ serve(async (req) => {
                           message: queueMessage,
                           conversation_id: conversation.id,
                           skip_db_save: false,
-                          is_bot_message: true, // 🆕 Mensagem automática - NÃO mudar ai_mode
+                          is_bot_message: true,
                         },
                       });
                       console.log("[meta-whatsapp-webhook] ✅ Mensagem de aguarde enviada");
@@ -843,7 +874,7 @@ serve(async (req) => {
                       console.error("[meta-whatsapp-webhook] ⚠️ Erro ao enviar mensagem de aguarde:", queueErr);
                     }
                   } else {
-                    console.log("[meta-whatsapp-webhook] ⏱️ Rate limit ativo, última msg do bot:", lastMsgDate?.toISOString());
+                    console.log("[meta-whatsapp-webhook] ⏱️ Rate limit ativo, última msg de fila:", lastMsgDate?.toISOString());
                   }
                 }
 
@@ -1110,7 +1141,12 @@ serve(async (req) => {
 
               // CASO 3: Fluxo ativou AIResponseNode → Chamar IA com flow_context
               if (flowData.useAI && flowData.aiNodeActive) {
-                if (conversation.ai_mode === "autopilot" && !conversation.awaiting_rating) {
+                // FIX: Se process-chat-flow retornou aiNodeActive=true, a soberania do fluxo
+                // já restaurou ai_mode para autopilot no DB. Confiar no fluxo em vez do objeto stale.
+                const effectiveAiMode = (flowData.useAI && flowData.aiNodeActive) 
+                  ? "autopilot" 
+                  : conversation.ai_mode;
+                if (effectiveAiMode === "autopilot" && !conversation.awaiting_rating) {
                   
                   // 📦 BATCHING: Se delay > 0, acumular mensagem no buffer em vez de chamar IA diretamente
                   if (batchDelaySeconds > 0) {
@@ -1138,6 +1174,8 @@ serve(async (req) => {
                           forbidOptions: (flowData as any).forbidOptions,
                           forbidFinancial: (flowData as any).forbidFinancial,
                           forbidCommercial: (flowData as any).forbidCommercial,
+                          forbidCancellation: (flowData as any).forbidCancellation,
+                          forbidConsultant: (flowData as any).forbidConsultant,
                         },
                       });
                     } catch (bufferErr) {
@@ -1184,6 +1222,8 @@ serve(async (req) => {
                             forbidOptions: (flowData as any).forbidOptions ?? true,
                           forbidFinancial: (flowData as any).forbidFinancial ?? false,
                           forbidCommercial: (flowData as any).forbidCommercial ?? false,
+                          forbidCancellation: (flowData as any).forbidCancellation ?? false,
+                          forbidConsultant: (flowData as any).forbidConsultant ?? false,
                           },
                         }),
                       }
@@ -1211,8 +1251,9 @@ serve(async (req) => {
                                   },
                                   body: JSON.stringify({
                                     conversationId: conversation.id,
-                                    userMessage: messageContent,
+                                    customerMessage: messageContent,
                                     forceFinancialExit: true,
+                                    intentData: { ai_exit_intent: 'financeiro' },
                                   }),
                                 }
                               );
@@ -1227,30 +1268,23 @@ serve(async (req) => {
                                 }));
                                 
                                 // Se o flow retornou mensagem, enviar via Meta API
-                                const flowMessage = flowData.response || flowData.message;
+                                const flowMessageRaw = flowData.response || flowData.message;
+                                const flowMessage = flowMessageRaw
+                                  ? flowMessageRaw + formatOptionsAsText(flowData.options)
+                                  : null;
                                 if (flowMessage) {
-                                  const metaToken = instance.whatsapp_meta_token || Deno.env.get("WHATSAPP_META_TOKEN");
-                                  const phoneNumberId = instance.whatsapp_meta_phone_id || Deno.env.get("WHATSAPP_META_PHONE_NUMBER_ID");
-                                  
-                                  if (metaToken && phoneNumberId) {
-                                    await supabase.functions.invoke("send-meta-whatsapp", {
-                                      body: {
-                                        instance_id: instance.id,
-                                        phone_number: fromNumber,
-                                        message: flowMessage,
-                                        conversation_id: conversation.id,
-                                        skip_db_save: true,
-                                      },
-                                    });
-                                    
-                                    await supabase.from("messages").insert({
+                                  await supabase.functions.invoke("send-meta-whatsapp", {
+                                    body: {
+                                      instance_id: instance.id,
+                                      phone_number: fromNumber,
+                                      message: flowMessage,
                                       conversation_id: conversation.id,
-                                      content: flowMessage,
-                                      sender_type: "system",
-                                      message_type: "text",
-                                    });
-                                    console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (financial exit)");
-                                  }
+                                      skip_db_save: false,
+                                      is_bot_message: true,
+                                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                                    },
+                                  });
+                                  console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (financial exit)");
                                 }
                                 
                                 // Se o flow retornou transfer, aplicar
@@ -1284,15 +1318,19 @@ serve(async (req) => {
                                       },
                                       body: JSON.stringify({
                                         conversationId: conversation.id,
-                                        userMessage: messageContent,
+                                        customerMessage: messageContent,
                                         forceFinancialExit: true,
+                                        intentData: { ai_exit_intent: 'financeiro' },
                                       }),
                                     }
                                   );
                                   if (retryResponse.ok) {
                                     const retryData = await retryResponse.json();
                                     console.log("[meta-whatsapp-webhook] ✅ Retry succeeded:", JSON.stringify({ transfer: retryData.transfer, hasResponse: !!retryData.response, nodeType: retryData.nodeType }));
-                                    const retryMessage = retryData.response || retryData.message;
+                                    const retryMessageRaw = retryData.response || retryData.message;
+                                    const retryMessage = retryMessageRaw
+                                      ? retryMessageRaw + formatOptionsAsText(retryData.options)
+                                      : null;
                                     if (retryMessage) {
                                       await supabase.functions.invoke("send-meta-whatsapp", {
                                         body: {
@@ -1300,10 +1338,11 @@ serve(async (req) => {
                                           phone_number: fromNumber,
                                           message: retryMessage,
                                           conversation_id: conversation.id,
-                                          skip_db_save: true,
+                                          skip_db_save: false,
+                                          is_bot_message: true,
+                                          metadata: retryData.flowName ? { flow_id: retryData.flowId, flow_name: retryData.flowName } : undefined,
                                         },
                                       });
-                                      await supabase.from("messages").insert({ conversation_id: conversation.id, content: retryMessage, sender_type: "system", message_type: "text" });
                                     }
                                     const retryDept = retryData.departmentId || retryData.department;
                                     if ((retryData.transfer === true || retryData.action === 'transfer') && retryDept) {
@@ -1420,8 +1459,9 @@ serve(async (req) => {
                                   },
                                   body: JSON.stringify({
                                     conversationId: conversation.id,
-                                    userMessage: messageContent,
+                                    customerMessage: messageContent,
                                     forceCommercialExit: true,
+                                    intentData: { ai_exit_intent: 'comercial' },
                                   }),
                                 }
                               );
@@ -1434,30 +1474,23 @@ serve(async (req) => {
                                   departmentId: flowData.departmentId,
                                 }));
                                 
-                                const flowMessage = flowData.response || flowData.message;
+                                const flowMessageRaw = flowData.response || flowData.message;
+                                const flowMessage = flowMessageRaw
+                                  ? flowMessageRaw + formatOptionsAsText(flowData.options)
+                                  : null;
                                 if (flowMessage) {
-                                  const metaToken = instance.whatsapp_meta_token || Deno.env.get("WHATSAPP_META_TOKEN");
-                                  const phoneNumberId = instance.whatsapp_meta_phone_id || Deno.env.get("WHATSAPP_META_PHONE_NUMBER_ID");
-                                  
-                                  if (metaToken && phoneNumberId) {
-                                    await supabase.functions.invoke("send-meta-whatsapp", {
-                                      body: {
-                                        instance_id: instance.id,
-                                        phone_number: fromNumber,
-                                        message: flowMessage,
-                                        conversation_id: conversation.id,
-                                        skip_db_save: true,
-                                      },
-                                    });
-                                    
-                                    await supabase.from("messages").insert({
+                                  await supabase.functions.invoke("send-meta-whatsapp", {
+                                    body: {
+                                      instance_id: instance.id,
+                                      phone_number: fromNumber,
+                                      message: flowMessage,
                                       conversation_id: conversation.id,
-                                      content: flowMessage,
-                                      sender_type: "system",
-                                      message_type: "text",
-                                    });
-                                    console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (commercial exit)");
-                                  }
+                                      skip_db_save: false,
+                                      is_bot_message: true,
+                                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                                    },
+                                  });
+                                  console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (commercial exit)");
                                 }
                                 
                                 const transferDept = flowData.departmentId || flowData.department || DEPT_COMERCIAL_ID;
@@ -1490,15 +1523,19 @@ serve(async (req) => {
                                       },
                                       body: JSON.stringify({
                                         conversationId: conversation.id,
-                                        userMessage: messageContent,
+                                        customerMessage: messageContent,
                                         forceCommercialExit: true,
+                                        intentData: { ai_exit_intent: 'comercial' },
                                       }),
                                     }
                                   );
                                   if (retryResponse.ok) {
                                     const retryData = await retryResponse.json();
                                     console.log("[meta-whatsapp-webhook] ✅ Commercial retry succeeded:", JSON.stringify({ transfer: retryData.transfer, hasResponse: !!retryData.response }));
-                                    const retryMessage = retryData.response || retryData.message;
+                                    const retryMessageRaw = retryData.response || retryData.message;
+                                    const retryMessage = retryMessageRaw
+                                      ? retryMessageRaw + formatOptionsAsText(retryData.options)
+                                      : null;
                                     if (retryMessage) {
                                       await supabase.functions.invoke("send-meta-whatsapp", {
                                         body: {
@@ -1506,10 +1543,11 @@ serve(async (req) => {
                                           phone_number: fromNumber,
                                           message: retryMessage,
                                           conversation_id: conversation.id,
-                                          skip_db_save: true,
+                                          skip_db_save: false,
+                                          is_bot_message: true,
+                                          metadata: retryData.flowName ? { flow_id: retryData.flowId, flow_name: retryData.flowName } : undefined,
                                         },
                                       });
-                                      await supabase.from("messages").insert({ conversation_id: conversation.id, content: retryMessage, sender_type: "system", message_type: "text" });
                                     }
                                     const retryDept = retryData.departmentId || retryData.department || DEPT_COMERCIAL_ID;
                                     if ((retryData.transfer === true || retryData.action === 'transfer') && retryDept) {
@@ -1580,6 +1618,192 @@ serve(async (req) => {
                           continue;
                         }
                         
+                        // 🚫 TRAVA CANCELAMENTO: cancellationBlocked
+                        if (autopilotData?.cancellationBlocked) {
+                          if (autopilotData?.hasFlowContext) {
+                            console.log("[meta-whatsapp-webhook] 🚫 cancellationBlocked + hasFlowContext → re-invocando process-chat-flow com forceCancellationExit");
+                            
+                            try {
+                              const flowResponse = await fetch(
+                                `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
+                                {
+                                  method: "POST",
+                                  headers: {
+                                    "Content-Type": "application/json",
+                                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                                  },
+                                  body: JSON.stringify({
+                                    conversationId: conversation.id,
+                                    customerMessage: messageContent,
+                                    forceCancellationExit: true,
+                                    intentData: { ai_exit_intent: 'cancelamento' },
+                                  }),
+                                }
+                              );
+                              
+                              if (flowResponse.ok) {
+                                const flowData = await flowResponse.json();
+                                console.log("[meta-whatsapp-webhook] ✅ process-chat-flow re-invoked (forceCancellationExit):", JSON.stringify({
+                                  transfer: flowData.transfer,
+                                  hasResponse: !!flowData.response,
+                                  departmentId: flowData.departmentId,
+                                }));
+                                
+                                const flowMessageRaw = flowData.response || flowData.message;
+                                const flowMessage = flowMessageRaw
+                                  ? flowMessageRaw + formatOptionsAsText(flowData.options)
+                                  : null;
+                                if (flowMessage) {
+                                  await supabase.functions.invoke("send-meta-whatsapp", {
+                                    body: {
+                                      instance_id: instance.id,
+                                      phone_number: fromNumber,
+                                      message: flowMessage,
+                                      conversation_id: conversation.id,
+                                      skip_db_save: false,
+                                      is_bot_message: true,
+                                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                                    },
+                                  });
+                                  console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (cancellation exit)");
+                                }
+                                
+                                const transferDept = flowData.departmentId || flowData.department;
+                                if ((flowData.transfer === true || flowData.action === 'transfer') && transferDept) {
+                                  await supabase
+                                    .from('conversations')
+                                    .update({
+                                      ai_mode: 'waiting_human',
+                                      department: transferDept,
+                                      assigned_to: null,
+                                    })
+                                    .eq('id', conversation.id);
+                                  console.log("[meta-whatsapp-webhook] 🔄 Transfer applied from flow (cancellation exit) → dept:", transferDept);
+                                }
+                                
+                                continue;
+                              } else {
+                                console.error("[meta-whatsapp-webhook] ❌ process-chat-flow re-invoke failed (cancellation):", await flowResponse.text());
+                                
+                                // RETRY: Segunda tentativa
+                                console.log("[meta-whatsapp-webhook] 🔄 Retrying process-chat-flow (cancellation, attempt 2)...");
+                                try {
+                                  const retryResponse = await fetch(
+                                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/process-chat-flow`,
+                                    {
+                                      method: "POST",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                                      },
+                                      body: JSON.stringify({
+                                        conversationId: conversation.id,
+                                        customerMessage: messageContent,
+                                        forceCancellationExit: true,
+                                        intentData: { ai_exit_intent: 'cancelamento' },
+                                      }),
+                                    }
+                                  );
+                                  if (retryResponse.ok) {
+                                    const retryData = await retryResponse.json();
+                                    console.log("[meta-whatsapp-webhook] ✅ Cancellation retry succeeded:", JSON.stringify({ transfer: retryData.transfer, hasResponse: !!retryData.response }));
+                                    const retryMessageRaw = retryData.response || retryData.message;
+                                    const retryMessage = retryMessageRaw
+                                      ? retryMessageRaw + formatOptionsAsText(retryData.options)
+                                      : null;
+                                    if (retryMessage) {
+                                      await supabase.functions.invoke("send-meta-whatsapp", {
+                                        body: {
+                                          instance_id: instance.id,
+                                          phone_number: fromNumber,
+                                          message: retryMessage,
+                                          conversation_id: conversation.id,
+                                          skip_db_save: false,
+                                          is_bot_message: true,
+                                          metadata: retryData.flowName ? { flow_id: retryData.flowId, flow_name: retryData.flowName } : undefined,
+                                        },
+                                      });
+                                    }
+                                    const retryDept = retryData.departmentId || retryData.department;
+                                    if ((retryData.transfer === true || retryData.action === 'transfer') && retryDept) {
+                                      await supabase.from('conversations').update({ ai_mode: 'waiting_human', department: retryDept, assigned_to: null }).eq('id', conversation.id);
+                                    }
+                                    continue;
+                                  } else {
+                                    console.error("[meta-whatsapp-webhook] ❌ Cancellation retry also failed:", await retryResponse.text());
+                                  }
+                                } catch (retryErr) {
+                                  console.error("[meta-whatsapp-webhook] ❌ Cancellation retry exception:", retryErr);
+                                }
+                              }
+                            } catch (flowErr) {
+                              console.error("[meta-whatsapp-webhook] ❌ Error re-invoking process-chat-flow (cancellation):", flowErr);
+                            }
+                            
+                            // Se hasFlowContext=true e ambas tentativas falharam, manter no fluxo
+                            if (autopilotData?.hasFlowContext) {
+                              console.log("[meta-whatsapp-webhook] ⚠️ cancellationBlocked + hasFlowContext=true mas flow re-invoke falhou 2x. Mantendo no fluxo sem handoff hardcoded.");
+                              continue;
+                            }
+                          }
+                          
+                          // Fallback: sem flow context → handoff genérico
+                          console.log("[meta-whatsapp-webhook] 🚫 cancellationBlocked=true + hasFlowContext=false → enviando handoff msg (fallback)");
+                          
+                          const cancelHandoffMsg = autopilotData.response || 'Entendi sua solicitação de cancelamento. Vou te encaminhar para o setor responsável.';
+                          
+                          try {
+                            const metaToken = instance.whatsapp_meta_token || Deno.env.get("WHATSAPP_META_TOKEN");
+                            const phoneNumberId = instance.whatsapp_meta_phone_id || Deno.env.get("WHATSAPP_META_PHONE_NUMBER_ID");
+                            
+                            if (metaToken && phoneNumberId) {
+                              await supabase.functions.invoke("send-meta-whatsapp", {
+                                body: {
+                                  instance_id: instance.id,
+                                  phone_number: fromNumber,
+                                  message: cancelHandoffMsg,
+                                  conversation_id: conversation.id,
+                                  skip_db_save: true,
+                                },
+                              });
+                              console.log("[meta-whatsapp-webhook] ✅ Handoff message sent (cancellation block fallback)");
+                              
+                              await supabase.from("messages").insert({
+                                conversation_id: conversation.id,
+                                content: cancelHandoffMsg,
+                                sender_type: "system",
+                                message_type: "text",
+                              });
+                            }
+                            
+                            // Atualizar conversa para waiting_human
+                            await supabase
+                              .from('conversations')
+                              .update({
+                                ai_mode: 'waiting_human',
+                                assigned_to: null,
+                              })
+                              .eq('id', conversation.id);
+                            console.log("[meta-whatsapp-webhook] ✅ Conversa atualizada para waiting_human (cancellation fallback)");
+
+                            // Completar flow state se existir
+                            try {
+                              await supabase
+                                .from('chat_flow_states')
+                                .update({ status: 'transferred', completed_at: new Date().toISOString() })
+                                .eq('conversation_id', conversation.id)
+                                .in('status', ['in_progress', 'active', 'waiting_input']);
+                              console.log("[meta-whatsapp-webhook] ✅ Flow state marcado como transferred (cancellation fallback)");
+                            } catch (flowStateErr) {
+                              console.error("[meta-whatsapp-webhook] ⚠️ Erro atualizando flow state:", flowStateErr);
+                            }
+                          } catch (sendErr) {
+                            console.error("[meta-whatsapp-webhook] ⚠️ Error sending cancellation handoff msg:", sendErr);
+                          }
+                          
+                          continue;
+                        }
+                        
                         // 🆕 CONTRACT VIOLATION / FLOW EXIT: IA fabricou transferência ou pediu [[FLOW_EXIT]]
                         // Re-invocar process-chat-flow para avançar ao próximo nó do fluxo
                         if ((autopilotData?.flowExit || autopilotData?.contractViolation) && autopilotData?.hasFlowContext && !flowExitHandledByConversation.has(conversation.id)) {
@@ -1601,8 +1825,9 @@ serve(async (req) => {
                                 },
                                 body: JSON.stringify({
                                   conversationId: conversation.id,
-                                  userMessage: messageContent,
+                                  customerMessage: messageContent,
                                   forceAIExit: true,
+                                  ...(autopilotData?.ai_exit_intent ? { intentData: { ai_exit_intent: autopilotData.ai_exit_intent } } : {}),
                                 }),
                               }
                             );
@@ -1634,7 +1859,7 @@ serve(async (req) => {
                                 console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (flowExit/contractViolation)");
                               }
                               
-                              // Transfer handling (reusing forceAIExit pattern)
+                              // Transfer handling — 🔧 BUG 2 FIX: Adicionar preferred transfer (paridade com CASO 2)
                               const DEPT_SUPORTE_FALLBACK_CV = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
                               const cvTransferDept = cvFlowResult.departmentId || cvFlowResult.department;
                               if (cvFlowResult.transfer === true || cvFlowResult.action === 'transfer') {
@@ -1646,15 +1871,65 @@ serve(async (req) => {
                                 };
                                 
                                 const isConsultantTransferCV = cvFlowResult.transferType === 'consultant';
+                                const isPreferredTransferCV = cvFlowResult.transferType === 'preferred';
+                                
                                 const { data: contactConsultantCV } = await supabase
                                   .from('contacts')
-                                  .select('consultant_id, consultant_manually_removed')
+                                  .select('consultant_id, consultant_manually_removed, preferred_agent_id, preferred_department_id, organization_id')
                                   .eq('id', contact.id)
                                   .maybeSingle();
-                                
-                                let consultantIdCV = (contactConsultantCV?.consultant_manually_removed && !isConsultantTransferCV)
-                                  ? null
-                                  : (contactConsultantCV?.consultant_id || null);
+
+                                // 🔧 BUG 2 FIX: Preferred transfer chain (paridade com CASO 2)
+                                if (isPreferredTransferCV && contactConsultantCV) {
+                                  let resolvedCV = false;
+                                  // 1. Atendente preferido
+                                  if (contactConsultantCV.preferred_agent_id) {
+                                    const { data: agentStatusCV } = await supabase
+                                      .from('profiles')
+                                      .select('id, availability_status')
+                                      .eq('id', contactConsultantCV.preferred_agent_id)
+                                      .maybeSingle();
+                                    if (agentStatusCV) {
+                                      cvUpdateData.assigned_to = agentStatusCV.id;
+                                      cvUpdateData.ai_mode = 'copilot';
+                                      console.log("[meta-whatsapp-webhook] 👤 Preferred (flowExit/CV): atendente preferido:", agentStatusCV.id);
+                                      resolvedCV = true;
+                                    }
+                                  }
+                                  // 2. Departamento preferido
+                                  if (!resolvedCV && contactConsultantCV.preferred_department_id) {
+                                    cvUpdateData.department = contactConsultantCV.preferred_department_id;
+                                    console.log("[meta-whatsapp-webhook] 🏢 Preferred (flowExit/CV): dept preferido:", contactConsultantCV.preferred_department_id);
+                                    resolvedCV = true;
+                                  }
+                                  // 3. Departamento padrão da organização
+                                  if (!resolvedCV && contactConsultantCV.organization_id) {
+                                    const { data: orgDataCV } = await supabase
+                                      .from('organizations')
+                                      .select('default_department_id')
+                                      .eq('id', contactConsultantCV.organization_id)
+                                      .maybeSingle();
+                                    if (orgDataCV?.default_department_id) {
+                                      cvUpdateData.department = orgDataCV.default_department_id;
+                                      console.log("[meta-whatsapp-webhook] 🏢 Preferred (flowExit/CV): org default dept:", orgDataCV.default_department_id);
+                                      resolvedCV = true;
+                                    }
+                                  }
+                                  if (!resolvedCV) {
+                                    console.log("[meta-whatsapp-webhook] 🔄 Preferred (flowExit/CV): usando fallback do nó:", cvUpdateData.department);
+                                  }
+                                }
+
+                                // 🛡️ consultantId só quando transfer_type=consultant
+                                let consultantIdCV: string | null = null;
+                                if (isConsultantTransferCV) {
+                                  consultantIdCV = (contactConsultantCV?.consultant_manually_removed)
+                                    ? null
+                                    : (contactConsultantCV?.consultant_id || null);
+                                } else if (!isPreferredTransferCV) {
+                                  // Nem consultant nem preferred: pool genérico
+                                  consultantIdCV = null;
+                                }
                                 
                                 if (consultantIdCV) {
                                   cvUpdateData.assigned_to = consultantIdCV;
@@ -1664,9 +1939,9 @@ serve(async (req) => {
                                 }
                                 
                                 await supabase.from('conversations').update(cvUpdateData).eq('id', conversation.id);
-                                console.log("[meta-whatsapp-webhook] ✅ Transfer (flowExit/contractViolation) → dept:", cvDeptToUse);
+                                console.log("[meta-whatsapp-webhook] ✅ Transfer (flowExit/contractViolation) → dept:", cvUpdateData.department, "type:", cvFlowResult.transferType);
                                 
-                                if (!consultantIdCV) {
+                                if (!consultantIdCV && !cvUpdateData.assigned_to) {
                                   try {
                                     await fetch(
                                       `${Deno.env.get("SUPABASE_URL")}/functions/v1/route-conversation`,
@@ -1682,6 +1957,22 @@ serve(async (req) => {
                                   } catch (routeErr) {
                                     console.error("[meta-whatsapp-webhook] ⚠️ route-conversation exception (flowExit/contractViolation):", routeErr);
                                   }
+                                }
+                              }
+                              
+                              // 🔧 BUG 3 FIX: Se flowExit/CV retornou aiNodeActive, chamar IA com novo contexto
+                              if (cvFlowResult.useAI && cvFlowResult.aiNodeActive && cvFlowResult.flow_context) {
+                                console.log("[meta-whatsapp-webhook] 🔄 flowExit/CV → new AI node detected, calling autopilot");
+                                try {
+                                  await supabase.functions.invoke("ai-autopilot-chat", {
+                                    body: {
+                                      conversationId: conversation.id,
+                                      customerMessage: messageContent,
+                                      flow_context: cvFlowResult.flow_context,
+                                    },
+                                  });
+                                } catch (aiErr) {
+                                  console.error("[meta-whatsapp-webhook] ❌ AI call after flowExit/CV AI node failed:", aiErr);
                                 }
                               }
                               
@@ -1712,7 +2003,7 @@ serve(async (req) => {
                                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
                                 body: JSON.stringify({
                                   conversationId: conversation.id,
-                                  userMessage: messageContent,
+                                  customerMessage: messageContent,
                                   forceAIExit: true,
                                   intentData: { ai_exit_intent: autopilotData.intentType },
                                 }),
@@ -1763,7 +2054,7 @@ serve(async (req) => {
                                 },
                                 body: JSON.stringify({
                                   conversationId: conversation.id,
-                                  userMessage: messageContent,
+                                  customerMessage: messageContent,
                                   forceAIExit: true,
                                 }),
                               }
@@ -1805,7 +2096,7 @@ serve(async (req) => {
                                 }
                               }
                               
-                              // Bug 3 fix: transfer com lógica completa de consultor (como CASO 2)
+                              // 🔧 BUG 2+3 FIX: transfer com lógica completa (consultant + preferred) como CASO 2
                               const DEPT_SUPORTE_FALLBACK_AIX = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
                               const transferDept = flowResult.departmentId || flowResult.department;
                               if (flowResult.transfer === true || flowResult.action === 'transfer') {
@@ -1817,20 +2108,62 @@ serve(async (req) => {
                                 };
                                 
                                 const isConsultantTransfer = flowResult.transferType === 'consultant';
+                                const isPreferredTransfer = flowResult.transferType === 'preferred';
                                 
                                 const { data: contactConsultantData } = await supabase
                                   .from('contacts')
-                                  .select('consultant_id, consultant_manually_removed')
+                                  .select('consultant_id, consultant_manually_removed, preferred_agent_id, preferred_department_id, organization_id')
                                   .eq('id', contact.id)
                                   .maybeSingle();
-                                
-                                if (contactConsultantData?.consultant_manually_removed && !isConsultantTransfer) {
-                                  console.log("[meta-whatsapp-webhook] 🚫 consultant_manually_removed=true (forceAIExit), pulando consultor");
+
+                                // 🔧 BUG 2 FIX: Preferred transfer chain (paridade com CASO 2)
+                                if (isPreferredTransfer && contactConsultantData) {
+                                  let resolvedPref = false;
+                                  if (contactConsultantData.preferred_agent_id) {
+                                    const { data: agentStatusPref } = await supabase
+                                      .from('profiles')
+                                      .select('id, availability_status')
+                                      .eq('id', contactConsultantData.preferred_agent_id)
+                                      .maybeSingle();
+                                    if (agentStatusPref) {
+                                      updateData.assigned_to = agentStatusPref.id;
+                                      updateData.ai_mode = 'copilot';
+                                      console.log("[meta-whatsapp-webhook] 👤 Preferred (forceAIExit): atendente preferido:", agentStatusPref.id);
+                                      resolvedPref = true;
+                                    }
+                                  }
+                                  if (!resolvedPref && contactConsultantData.preferred_department_id) {
+                                    updateData.department = contactConsultantData.preferred_department_id;
+                                    console.log("[meta-whatsapp-webhook] 🏢 Preferred (forceAIExit): dept preferido:", contactConsultantData.preferred_department_id);
+                                    resolvedPref = true;
+                                  }
+                                  if (!resolvedPref && contactConsultantData.organization_id) {
+                                    const { data: orgDataPref } = await supabase
+                                      .from('organizations')
+                                      .select('default_department_id')
+                                      .eq('id', contactConsultantData.organization_id)
+                                      .maybeSingle();
+                                    if (orgDataPref?.default_department_id) {
+                                      updateData.department = orgDataPref.default_department_id;
+                                      console.log("[meta-whatsapp-webhook] 🏢 Preferred (forceAIExit): org default dept:", orgDataPref.default_department_id);
+                                      resolvedPref = true;
+                                    }
+                                  }
+                                  if (!resolvedPref) {
+                                    console.log("[meta-whatsapp-webhook] 🔄 Preferred (forceAIExit): usando fallback do nó:", updateData.department);
+                                  }
                                 }
                                 
-                                let consultantId = (contactConsultantData?.consultant_manually_removed && !isConsultantTransfer)
-                                  ? null
-                                  : (contactConsultantData?.consultant_id || null);
+                                // 🛡️ consultantId só quando transfer_type=consultant
+                                let consultantId: string | null = null;
+                                if (isConsultantTransfer) {
+                                  if (contactConsultantData?.consultant_manually_removed) {
+                                    console.log("[meta-whatsapp-webhook] 🚫 consultant_manually_removed=true (forceAIExit), pulando consultor");
+                                  }
+                                  consultantId = (contactConsultantData?.consultant_manually_removed)
+                                    ? null
+                                    : (contactConsultantData?.consultant_id || null);
+                                }
                                 
                                 if (consultantId) {
                                   updateData.assigned_to = consultantId;
@@ -1851,9 +2184,9 @@ serve(async (req) => {
                                 if (updateError) {
                                   console.error("[meta-whatsapp-webhook] ❌ Transfer error (forceAIExit):", updateError);
                                 } else {
-                                  console.log("[meta-whatsapp-webhook] ✅ Transfer (forceAIExit) → dept:", deptToUse, "assigned:", consultantId || 'pool');
+                                  console.log("[meta-whatsapp-webhook] ✅ Transfer (forceAIExit) → dept:", updateData.department, "type:", flowResult.transferType, "assigned:", updateData.assigned_to || 'pool');
                                   
-                                  if (!consultantId) {
+                                  if (!consultantId && !updateData.assigned_to) {
                                     try {
                                       const routeResp = await fetch(
                                         `${Deno.env.get("SUPABASE_URL")}/functions/v1/route-conversation`,
@@ -1878,6 +2211,22 @@ serve(async (req) => {
                                 }
                               }
                               
+                              // 🔧 BUG 3 FIX: Se forceAIExit retornou aiNodeActive, chamar IA com novo contexto
+                              if (flowResult.useAI && flowResult.aiNodeActive && flowResult.flow_context) {
+                                console.log("[meta-whatsapp-webhook] 🔄 forceAIExit → new AI node detected, calling autopilot");
+                                try {
+                                  await supabase.functions.invoke("ai-autopilot-chat", {
+                                    body: {
+                                      conversationId: conversation.id,
+                                      customerMessage: messageContent,
+                                      flow_context: flowResult.flow_context,
+                                    },
+                                  });
+                                } catch (aiErr) {
+                                  console.error("[meta-whatsapp-webhook] ❌ AI call after forceAIExit AI node failed:", aiErr);
+                                }
+                              }
+                              
                               continue;
                             } else {
                               console.error("[meta-whatsapp-webhook] ❌ process-chat-flow re-invoke failed (forceAIExit):", await flowResponse.text());
@@ -1894,7 +2243,7 @@ serve(async (req) => {
                                     },
                                     body: JSON.stringify({
                                       conversationId: conversation.id,
-                                      userMessage: messageContent,
+                                      customerMessage: messageContent,
                                       forceAIExit: true,
                                     }),
                                   }
@@ -1902,12 +2251,30 @@ serve(async (req) => {
                                 if (retryResponse.ok) {
                                   const retryData = await retryResponse.json();
                                   console.log("[meta-whatsapp-webhook] ✅ forceAIExit retry succeeded");
-                                  const retryMessage = retryData.response || retryData.message;
+                                  // 🔧 BUG 1 FIX: Alinhar retry com primeira tentativa (skip_db_save: false, is_bot_message: true, formatOptionsAsText)
+                                  const retryMessageRaw = retryData.response || retryData.message;
+                                  const retryMessage = retryMessageRaw
+                                    ? retryMessageRaw + formatOptionsAsText(retryData.options)
+                                    : null;
                                   if (retryMessage) {
                                     await supabase.functions.invoke("send-meta-whatsapp", {
-                                      body: { instance_id: instance.id, phone_number: fromNumber, message: retryMessage, conversation_id: conversation.id, skip_db_save: true },
+                                      body: { instance_id: instance.id, phone_number: fromNumber, message: retryMessage, conversation_id: conversation.id, skip_db_save: false, is_bot_message: true },
                                     });
-                                    await supabase.from("messages").insert({ conversation_id: conversation.id, content: retryMessage, sender_type: "system", message_type: "text" });
+                                  }
+                                  // 🔧 BUG 3 FIX: Se retry retornou aiNodeActive, chamar IA com novo contexto
+                                  if (retryData.useAI && retryData.aiNodeActive && retryData.flow_context) {
+                                    console.log("[meta-whatsapp-webhook] 🔄 forceAIExit retry → new AI node detected, calling autopilot");
+                                    try {
+                                      await supabase.functions.invoke("ai-autopilot-chat", {
+                                        body: {
+                                          conversationId: conversation.id,
+                                          customerMessage: messageContent,
+                                          flow_context: retryData.flow_context,
+                                        },
+                                      });
+                                    } catch (aiErr) {
+                                      console.error("[meta-whatsapp-webhook] ❌ AI call after retry AI node failed:", aiErr);
+                                    }
                                   }
                                   const retryDept = retryData.departmentId || retryData.department;
                                   if ((retryData.transfer === true || retryData.action === 'transfer') && retryDept) {
@@ -1937,6 +2304,39 @@ serve(async (req) => {
                   } catch (err) {
                     console.error("[meta-whatsapp-webhook] ❌ Autopilot exception:", err);
                   }
+                }
+                continue;
+              }
+
+              // CASO 3.5: 🧪 TEST MODE - IA permitida sem fluxo ativo
+              // Quando process-chat-flow retorna test_mode_ai_allowed, chamar ai-autopilot-chat diretamente
+              if (flowData.useAI && !flowData.aiNodeActive && flowData.reason === 'test_mode_ai_allowed') {
+                console.log("[meta-whatsapp-webhook] 🧪 TEST MODE: Chamando ai-autopilot-chat sem flow context");
+                try {
+                  const autopilotResp = await fetch(
+                    `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-autopilot-chat`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                      },
+                      body: JSON.stringify({
+                        conversationId: conversation.id,
+                        customerMessage: messageContent,
+                        contact_id: contact.id,
+                        whatsapp_provider: "meta",
+                        whatsapp_meta_instance_id: instance.id,
+                      }),
+                    }
+                  );
+                  if (!autopilotResp.ok) {
+                    console.error("[meta-whatsapp-webhook] ❌ TEST MODE autopilot error:", await autopilotResp.text());
+                  } else {
+                    console.log("[meta-whatsapp-webhook] ✅ TEST MODE autopilot triggered successfully");
+                  }
+                } catch (aiErr) {
+                  console.error("[meta-whatsapp-webhook] ❌ TEST MODE autopilot exception:", aiErr);
                 }
                 continue;
               }

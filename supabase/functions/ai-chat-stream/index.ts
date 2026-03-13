@@ -20,16 +20,7 @@ interface StreamRequest {
 
 // Helper: Buscar modelo AI configurado
 async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
-  try {
-    const { data } = await supabaseClient
-      .from('system_configurations')
-      .select('value')
-      .eq('key', 'ai_default_model')
-      .maybeSingle();
-    return data?.value || 'google/gemini-3-flash-preview';
-  } catch {
-    return 'google/gemini-3-flash-preview';
-  }
+  return 'gpt-5-mini';
 }
 
 // Helper: Buscar persona ativa
@@ -74,14 +65,14 @@ async function searchKnowledgeBase(
   limit: number = 5
 ): Promise<Array<{ id: string; title: string; content: string; similarity: number }>> {
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) return [];
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) return [];
 
     // Gerar embedding da query
-    const embeddingResponse = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
+    const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -194,33 +185,32 @@ serve(async (req) => {
       payload: { isTyping: true, conversationId }
     });
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }), {
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) {
+      return new Response(JSON.stringify({ error: 'OPENAI_API_KEY not configured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Chamar Lovable AI Gateway com streaming
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // Chamar OpenAI com streaming
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model: aiModel,
         messages,
         stream: true,
-        temperature: 0.7,
-        max_tokens: 1024,
+        max_completion_tokens: 1024,
       }),
     });
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error('[ai-chat-stream] AI Gateway error:', aiResponse.status, errorText);
+      console.error('[ai-chat-stream] OpenAI API error:', aiResponse.status, errorText);
       
       // Handle rate limits
       if (aiResponse.status === 429) {
@@ -230,13 +220,13 @@ serve(async (req) => {
         });
       }
       if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: 'Payment required. Please add credits to your workspace.' }), {
+        return new Response(JSON.stringify({ error: 'OpenAI billing error. Please check your API account.' }), {
           status: 402,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       
-      return new Response(JSON.stringify({ error: 'AI Gateway error' }), {
+      return new Response(JSON.stringify({ error: 'OpenAI API error' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

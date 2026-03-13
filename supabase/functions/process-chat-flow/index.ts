@@ -13,6 +13,110 @@ const corsHeaders = {
 // 🆕 HELPER: Construir allowedSources a partir dos toggles individuais do nó
 // Fontes: use_knowledge_base, use_crm_data, use_kiwify_data, use_tracking, use_sandbox_data
 // ============================================================
+// ============================================================
+// 🆕 HELPER: Validação Kiwify inline (sem fetch HTTP)
+// Substitui chamada fetch → validate-by-kiwify-phone
+// ============================================================
+function normalizePhoneDigits(phone: string): string {
+  if (!phone) return '';
+  return phone.replace(/\D/g, '');
+}
+
+async function inlineKiwifyValidation(
+  supabaseClient: any,
+  phone: string | null,
+  whatsapp_id: string | null,
+  contact_id: string | null
+): Promise<{ found: boolean; customer?: { name: string; email: string; products: string[] } }> {
+  try {
+    const raw = phone || whatsapp_id || '';
+    const digits = normalizePhoneDigits(raw);
+    
+    // Normalizar para E.164
+    let normalized = '';
+    if (digits.startsWith('55') && digits.length >= 12 && digits.length <= 13) {
+      normalized = digits;
+    } else if (digits.length >= 10 && digits.length <= 11) {
+      normalized = '55' + digits;
+    } else if (digits.length >= 12) {
+      normalized = digits;
+    }
+    
+    if (!normalized || normalized.length < 10) {
+      console.log('[inlineKiwifyValidation] Telefone inválido:', raw);
+      return { found: false };
+    }
+
+    const last9 = normalized.slice(-9);
+    console.log(`[inlineKiwifyValidation] Buscando para: ${normalized} (last9: ${last9})`);
+
+    const { data: events, error } = await supabaseClient
+      .from('kiwify_events')
+      .select('id, event_type, customer_email, payload, created_at')
+      .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
+      .filter("payload->Customer->>mobile", 'ilike', `%${last9}`)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      console.error('[inlineKiwifyValidation] Query error:', error);
+      return { found: false };
+    }
+
+    // Validar normalização completa
+    const matching = (events || []).filter((e: any) => {
+      const mobile = e.payload?.Customer?.mobile || '';
+      const mDigits = normalizePhoneDigits(mobile);
+      return mDigits.slice(-9) === last9;
+    });
+
+    if (matching.length === 0) {
+      console.log(`[inlineKiwifyValidation] Nenhuma compra para: ${normalized}`);
+      return { found: false };
+    }
+
+    const first = matching[0];
+    const customer = first.payload?.Customer || {};
+    const products = [...new Set(matching.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
+
+    const result = {
+      found: true,
+      customer: {
+        name: customer.full_name || customer.first_name || 'Cliente',
+        email: customer.email || first.customer_email || '',
+        products,
+      },
+    };
+
+    console.log(`[inlineKiwifyValidation] ✅ Found:`, { name: result.customer.name, products: products.length });
+
+    // Update contact if provided
+    if (contact_id) {
+      const updateData: Record<string, any> = {
+        status: 'customer',
+        source: 'kiwify_validated',
+        kiwify_validated: true,
+        kiwify_validated_at: new Date().toISOString(),
+      };
+      if (result.customer.email) updateData.email = result.customer.email;
+      
+      await supabaseClient.from('contacts').update(updateData).eq('id', contact_id);
+      
+      await supabaseClient.from('interactions').insert({
+        customer_id: contact_id,
+        type: 'internal_note',
+        content: `✅ Cliente identificado via número Kiwify. ${result.customer.email ? `Email: ${result.customer.email}. ` : ''}Produtos: ${products.join(', ')}`,
+        channel: 'system'
+      });
+    }
+
+    return result;
+  } catch (err) {
+    console.error('[inlineKiwifyValidation] Error:', err);
+    return { found: false };
+  }
+}
+
 function buildAllowedSources(nodeData: any): string[] {
   const sources: string[] = [];
   if (nodeData?.use_knowledge_base !== false) sources.push('kb');
@@ -51,8 +155,27 @@ function matchAskOption(
     opt.label.toLowerCase() === normalized ||
     (opt.value && opt.value.toLowerCase() === normalized)
   );
-  
-  return exactMatch || null;
+  if (exactMatch) return exactMatch;
+
+  // 3️⃣ Resposta começa com o label da opção
+  // Ex: "Não sou cliente" → match "Não"
+  const startsWithMatch = options.find(opt => {
+    const label = opt.label.toLowerCase();
+    return normalized.startsWith(label + ' ') || normalized.startsWith(label + ',') || normalized.startsWith(label + '.');
+  });
+  if (startsWithMatch) return startsWithMatch;
+
+  // 4️⃣ Label contido na resposta como palavra (somente se unambíguo)
+  // Ex: "eu quero sim" → match "Sim" (mas só se 1 opção bate)
+  const containsMatches = options.filter(opt => {
+    const label = opt.label.toLowerCase();
+    if (label.length < 2) return false; // Evita match de labels muito curtos
+    const regex = new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    return regex.test(normalized);
+  });
+  if (containsMatches.length === 1) return containsMatches[0];
+
+  return null;
 }
 
 // Validadores
@@ -238,15 +361,32 @@ function findNextNode(flowDef: any, currentNode: any, path?: string): any {
     // Fallback: buscar edge sem handle específico
   }
   
-  // 🆕 FIX: Para ai_response com path (ex: 'ai_exit'), priorizar edge com sourceHandle
+  // 🆕 FIX: Para ai_response com path, priorizar edge com sourceHandle
+  // Fallback hierárquico: path específico → ai_exit → default → any
   if (currentNode.type === 'ai_response' && path) {
     const handleEdge = edges.find((e: any) => e.source === currentNode.id && e.sourceHandle === path);
     if (handleEdge) {
       console.log(`[findNextNode] ✅ ai_response: found edge with handle "${path}" → ${handleEdge.target}`);
       return flowDef.nodes.find((n: any) => n.id === handleEdge.target);
     }
-    console.log(`[findNextNode] ⚠️ ai_response: no edge with handle "${path}", falling back to default`);
-    // Se não achou edge com handle, cai no fallback abaixo
+    // Fallback 1: tentar ai_exit genérico (compatibilidade com fluxos antigos)
+    if (path !== 'ai_exit' && path !== 'default') {
+      const aiExitEdge = edges.find((e: any) => e.source === currentNode.id && e.sourceHandle === 'ai_exit');
+      if (aiExitEdge) {
+        console.log(`[findNextNode] ⚠️ ai_response: no edge for "${path}", falling back to "ai_exit" → ${aiExitEdge.target}`);
+        return flowDef.nodes.find((n: any) => n.id === aiExitEdge.target);
+      }
+    }
+    // Fallback 2: tentar default
+    if (path !== 'default') {
+      const defaultEdge = edges.find((e: any) => e.source === currentNode.id && e.sourceHandle === 'default');
+      if (defaultEdge) {
+        console.log(`[findNextNode] ⚠️ ai_response: no edge for "${path}", falling back to "default" → ${defaultEdge.target}`);
+        return flowDef.nodes.find((n: any) => n.id === defaultEdge.target);
+      }
+    }
+    console.log(`[findNextNode] ⚠️ ai_response: no edge with handle "${path}", falling back to generic`);
+    // Se não achou nenhum handle, cai no fallback genérico abaixo
   }
 
   // Para outros nós, buscar edge simples
@@ -282,7 +422,7 @@ async function buildVariablesContext(
 ): Promise<Record<string, any>> {
   const ctx: Record<string, any> = { ...collectedData };
   if (contactData) {
-    for (const f of ['name','email','phone','cpf','city','state','tags','lead_score','kiwify_validated','source','company','document','consultant_id','is_customer','preferred_agent_id','preferred_department_id']) {
+    for (const f of ['name','email','phone','cpf','city','state','tags','lead_score','kiwify_validated','source','company','document','consultant_id','is_customer','preferred_agent_id','preferred_department_id','onboarding_completed','organization_id']) {
       if (contactData[f] != null) ctx[`contact_${f}`] = contactData[f];
     }
     // Compose contact_name from first_name + last_name if not directly available
@@ -412,7 +552,7 @@ function evaluateCondition(condition: any, collectedData: Record<string, any>, u
       try {
         const regex = new RegExp(condition_value || "", "i");
         return regex.test(userMessage);
-      } catch {
+      } catch (_regexErr) {
         return false;
       }
     case "is_true":
@@ -442,9 +582,23 @@ function evaluateConditionPath(nodeData: any, collectedData: Record<string, any>
         const fieldValue = getVar(rule.field, collectedData, contactData, conversationData);
         const checkType = rule.check_type || 'has_data';
         const hasValue = fieldValue !== null && fieldValue !== undefined && fieldValue !== false && String(fieldValue).trim().length > 0;
-        console.log(`[process-chat-flow] 📋 Rule ${i + 1}/${rules.length}: "${rule.label}" (id: ${rule.id}) | field: ${rule.field} | check: ${checkType} | value: ${fieldValue} | has: ${hasValue}`);
-        if (checkType === 'has_data' && hasValue) {
-          console.log(`[process-chat-flow] 🎯 MATCH on Rule ${i + 1}: "${rule.label}" — field "${rule.field}" has data`);
+        let fieldMatch = false;
+        
+        if (checkType === 'equals') {
+          const expectedValues = (rule.keywords || rule.label || '').split(',').map((v: string) => v.trim().toLowerCase()).filter(Boolean);
+          const actualValue = String(fieldValue || '').toLowerCase().trim();
+          fieldMatch = expectedValues.some((ev: string) => actualValue === ev);
+          console.log(`[process-chat-flow] 📋 Rule ${i + 1}/${rules.length}: "${rule.label}" (id: ${rule.id}) | field: ${rule.field} | check: equals | actual: "${actualValue}" | expected: [${expectedValues.join(', ')}] | match: ${fieldMatch}`);
+        } else if (checkType === 'no_data' || checkType === 'not_has_data') {
+          fieldMatch = !hasValue;
+          console.log(`[process-chat-flow] 📋 Rule ${i + 1}/${rules.length}: "${rule.label}" (id: ${rule.id}) | field: ${rule.field} | check: ${checkType} | value: ${fieldValue} | match: ${fieldMatch}`);
+        } else {
+          fieldMatch = hasValue;
+          console.log(`[process-chat-flow] 📋 Rule ${i + 1}/${rules.length}: "${rule.label}" (id: ${rule.id}) | field: ${rule.field} | check: ${checkType} | value: ${fieldValue} | has: ${hasValue}`);
+        }
+        
+        if (fieldMatch) {
+          console.log(`[process-chat-flow] 🎯 MATCH on Rule ${i + 1}: "${rule.label}" — field "${rule.field}" matched (${checkType})`);
           return rule.id;
         }
         continue;
@@ -467,7 +621,7 @@ function evaluateConditionPath(nodeData: any, collectedData: Record<string, any>
   }
   
   // Modo clássico: true/false
-  const result = evaluateCondition(nodeData, collectedData, userMessage, extraFlags, undefined, undefined);
+  const result = evaluateCondition(nodeData, collectedData, userMessage, extraFlags, contactData, conversationData);
   return result ? 'true' : 'false';
 }
 
@@ -494,8 +648,16 @@ function evaluateConditionV2Path(nodeData: any, collectedData: Record<string, an
       const fieldValue = getVar(rule.field, collectedData, contactData, conversationData);
       const checkType = rule.check_type || 'has_data';
       const hasValue = fieldValue !== null && fieldValue !== undefined && fieldValue !== false && String(fieldValue).trim().length > 0;
-      isMatch = checkType === 'has_data' ? hasValue : !hasValue;
-      console.log(`[process-chat-flow] 📋 V2 Rule ${i + 1}/${rules.length}: "${rule.label}" (id: ${rule.id}) | field: ${rule.field} | check: ${checkType} | value: ${fieldValue} | match: ${isMatch}`);
+      
+      if (checkType === 'equals') {
+        const expectedValues = (rule.keywords || rule.label || '').split(',').map((v: string) => v.trim().toLowerCase()).filter(Boolean);
+        const actualValue = String(fieldValue || '').toLowerCase().trim();
+        isMatch = expectedValues.some((ev: string) => actualValue === ev);
+        console.log(`[process-chat-flow] 📋 V2 Rule ${i + 1}/${rules.length}: "${rule.label}" (id: ${rule.id}) | field: ${rule.field} | check: equals | actual: "${actualValue}" | expected: [${expectedValues.join(', ')}] | match: ${isMatch}`);
+      } else {
+        isMatch = checkType === 'has_data' ? hasValue : !hasValue;
+        console.log(`[process-chat-flow] 📋 V2 Rule ${i + 1}/${rules.length}: "${rule.label}" (id: ${rule.id}) | field: ${rule.field} | check: ${checkType} | value: ${fieldValue} | match: ${isMatch}`);
+      }
     } else {
       // Keyword-based rule
       const rawKw = (rule.keywords || "").trim() || (rule.label || "").trim();
@@ -611,7 +773,8 @@ serve(async (req) => {
     );
 
     const body = await req.json();
-    const { conversationId, userMessage, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck, inactivityTimeout, forceFinancialExit, forceCommercialExit, forceAIExit, intentData } = body;
+    const { conversationId, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck, inactivityTimeout, forceFinancialExit, forceCommercialExit, forceCancellationExit, forceAIExit, intentData } = body;
+    const userMessage = body.userMessage || body.customerMessage;
     
     if (!conversationId) {
       return new Response(
@@ -879,7 +1042,7 @@ serve(async (req) => {
       // até encontrar o primeiro nó executável (message/ask_options/ai_response/transfer)
       // Reutiliza a mesma lógica do Master Flow para consistência
       // ============================================================
-      const NO_CONTENT_MANUAL = new Set(['input', 'start', 'condition', 'condition_v2']);
+      const NO_CONTENT_MANUAL = new Set(['input', 'start', 'condition', 'condition_v2', 'validate_customer', 'fetch_order']);
       const MAX_TRAVERSAL_MANUAL = 12;
 
       // Carregar dados de contato/conversa para avaliação de condições
@@ -1019,6 +1182,88 @@ serve(async (req) => {
 
           if (!next) {
             console.log('[process-chat-flow] ⚠️ Manual traversal: no next node for condition');
+            break;
+          }
+          contentNode = next;
+        } else if (contentNode.type === 'validate_customer') {
+          // 🛡️ Execute Kiwify validation inline during manual traversal
+          console.log('[process-chat-flow] 🛡️ Manual traverse: executing validate_customer inline');
+          const vcSupabaseUrl = Deno.env.get('SUPABASE_URL')!;
+          const vcSupabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          
+          const vcValidatedKey = contentNode.data?.save_validated_as || 'customer_validated';
+          const vcNameKey = contentNode.data?.save_customer_name_as || 'customer_name_found';
+          const vcEmailKey = contentNode.data?.save_customer_email_as || 'customer_email_found';
+          
+          let vcFound = false;
+          let vcName = '';
+          let vcEmail = '';
+
+          if (manualContactData && !manualContactData.kiwify_validated) {
+            const vcPromises: Promise<any>[] = [];
+            if (contentNode.data?.validate_phone !== false && (manualContactData.phone || manualContactData.whatsapp_id)) {
+              vcPromises.push(
+                inlineKiwifyValidation(supabaseClient, manualContactData.phone, manualContactData.whatsapp_id, manualConversation?.contact_id)
+              );
+            }
+            if (contentNode.data?.validate_email !== false && manualContactData.email) {
+              vcPromises.push(
+                fetch(`${vcSupabaseUrl}/functions/v1/verify-customer-email`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcSupabaseKey}` },
+                  body: JSON.stringify({ email: manualContactData.email, contact_id: manualConversation?.contact_id })
+                }).then(r => r.json()).catch(() => ({ found: false }))
+              );
+            }
+            if (contentNode.data?.validate_cpf === true && manualContactData.document) {
+              vcPromises.push(
+                fetch(`${vcSupabaseUrl}/functions/v1/validate-by-cpf`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcSupabaseKey}` },
+                  body: JSON.stringify({ cpf: manualContactData.document, contact_id: manualConversation?.contact_id })
+                }).then(r => r.json()).catch(() => ({ found: false }))
+              );
+            }
+            if (vcPromises.length > 0) {
+              const results = await Promise.allSettled(vcPromises);
+              for (const r of results) {
+                if (r.status === 'fulfilled' && r.value?.found) {
+                  vcFound = true;
+                  if (r.value.customer?.name) vcName = r.value.customer.name;
+                  if (r.value.customer?.email) vcEmail = r.value.customer.email;
+                }
+              }
+            }
+            if (vcFound && manualConversation?.contact_id) {
+              await supabaseClient.from('contacts').update({ kiwify_validated: true, status: 'customer' }).eq('id', manualConversation.contact_id);
+              manualContactData.kiwify_validated = true;
+              console.log('[process-chat-flow] ✅ Manual traverse: contact promoted to customer');
+            }
+          } else if (manualContactData?.kiwify_validated) {
+            vcFound = true;
+            vcName = [manualContactData.first_name, manualContactData.last_name].filter(Boolean).join(' ');
+            vcEmail = manualContactData.email || '';
+          }
+
+          manualCollectedData[vcValidatedKey] = vcFound;
+          manualCollectedData[vcNameKey] = vcName;
+          manualCollectedData[vcEmailKey] = vcEmail;
+          console.log('[process-chat-flow] 🛡️ Manual validate result:', { vcFound, vcName, vcEmail });
+
+          const next = findNextNode(flowDef, contentNode);
+          if (!next) {
+            console.log('[process-chat-flow] ⚠️ Manual traversal: no next node after validate_customer');
+            break;
+          }
+          contentNode = next;
+        } else if (contentNode.type === 'fetch_order') {
+          // 📦 BUG C FIX: fetch_order inline during manual traversal
+          console.log('[process-chat-flow] 📦 Manual traverse: executing fetch_order inline');
+          manualCollectedData.__fetched = manualCollectedData.__fetched || {};
+          // During manual trigger we may not have full context, just advance
+          const next = findNextNode(flowDef, contentNode);
+          if (!next) {
+            console.log('[process-chat-flow] ⚠️ Manual traversal: no next node after fetch_order');
             break;
           }
           contentNode = next;
@@ -1221,8 +1466,86 @@ serve(async (req) => {
         );
       }
 
-      // verify_customer_otp: Inicializar estado OTP e pedir email
+      // verify_customer_otp: Inicializar estado OTP
       if (contentNode.type === 'verify_customer_otp') {
+        const verifiedKey = contentNode.data?.save_verified_as || 'customer_verified';
+
+        // 🆕 PRE-CHECK: Se validate_customer já rodou, usar dados existentes
+        const preEmailZ1 = collectedDataForState.customer_email_found || manualContactData?.email;
+        if (collectedDataForState.customer_validated === true && preEmailZ1) {
+          // Cliente já validado → enviar OTP direto para email de cadastro
+          const preEmail = preEmailZ1;
+          console.log('[process-chat-flow] 🔐 OTP pre-check: customer already validated, sending OTP to:', preEmail);
+
+          collectedDataForState.__otp_step = 'wait_code';
+          collectedDataForState.__otp_attempts = 0;
+          collectedDataForState.__otp_email = preEmail;
+          collectedDataForState.__otp_customer_name = collectedDataForState.customer_name_found || '';
+
+          await supabaseClient.from('chat_flow_states').update({
+            collected_data: collectedDataForState,
+          }).eq('id', newState.id);
+
+          // Enviar código OTP
+          const otpSendResZ1 = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+            body: JSON.stringify({ email: preEmail, type: 'customer' }),
+          });
+          const otpSendBodyZ1 = await otpSendResZ1.text();
+          if (!otpSendResZ1.ok) { console.error('[process-chat-flow] ⚠️ Failed to send OTP [manual]:', otpSendBodyZ1); }
+
+          const otpSentMsg = contentNode.data?.message_otp_sent
+            ? contentNode.data.message_otp_sent.replace(/\{\{email\}\}/g, preEmail)
+            : `Enviamos um código de verificação para seu email de cadastro. Digite o código:`;
+          await deliverManualMessage(otpSentMsg);
+
+          return new Response(JSON.stringify({
+            useAI: false,
+            response: otpSentMsg,
+            flowId: flow.id,
+            flowStarted: true,
+            manualTrigger: true,
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+        } else if (collectedDataForState.customer_validated === false) {
+          // Não é cliente → setar resultado e avançar
+          console.log('[process-chat-flow] 🔐 OTP pre-check: not a customer, skipping OTP');
+          collectedDataForState[verifiedKey] = false;
+          collectedDataForState.__otp_result = 'not_customer';
+          collectedDataForState.customer_verified_email = '';
+          collectedDataForState.customer_verified_name = '';
+
+          const notCustomerMsg = contentNode.data?.message_not_customer || "Você não foi identificado como cliente. Vou encaminhar para nosso time comercial.";
+          await deliverManualMessage(notCustomerMsg);
+
+          // Avançar para próximo nó
+          const flowDef = flow.flow_definition as any;
+          const nextAfterOtp = findNextNode(flowDef, contentNode);
+          if (nextAfterOtp) {
+            await supabaseClient.from('chat_flow_states').update({
+              collected_data: collectedDataForState,
+              current_node_id: nextAfterOtp.id,
+              status: nextAfterOtp.type.startsWith('ask_') || nextAfterOtp.type === 'condition' || nextAfterOtp.type === 'condition_v2' || nextAfterOtp.type === 'verify_customer_otp' ? 'waiting_input' : 'active',
+            }).eq('id', newState.id);
+          } else {
+            await supabaseClient.from('chat_flow_states').update({
+              collected_data: collectedDataForState,
+              status: 'completed',
+              completed_at: new Date().toISOString(),
+            }).eq('id', newState.id);
+          }
+
+          return new Response(JSON.stringify({
+            useAI: false,
+            response: notCustomerMsg,
+            flowId: flow.id,
+            flowStarted: true,
+            manualTrigger: true,
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        // Fallback: sem validate_customer → pedir email normalmente
         collectedDataForState.__otp_step = 'ask_email';
         collectedDataForState.__otp_attempts = 0;
         await supabaseClient.from('chat_flow_states').update({
@@ -1292,7 +1615,7 @@ serve(async (req) => {
               const v2Path = evaluateConditionV2Path(nextNode.data, manualCollectedData, '', undefined, manualContactData, manualConversation, flowDef.edges || []);
               condNext = findNextNode(flowDef, nextNode, v2Path);
             } else if (hasMultiRules) {
-              const path = evaluateConditionPath(nextNode.data, manualCollectedData, '');
+              const path = evaluateConditionPath(nextNode.data, manualCollectedData, '', undefined, manualContactData, manualConversation);
               condNext = findNextNode(flowDef, nextNode, path);
             } else {
               const result = manualEvalCond(nextNode.data);
@@ -1499,11 +1822,13 @@ serve(async (req) => {
               collectedData.__otp_customer_name = verifyData.customer?.name || '';
               collectedData.__otp_customer_id = verifyData.customer?.id || '';
 
-              await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
+              const otpSendResWC = await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                body: JSON.stringify({ email: emailInput }),
+                body: JSON.stringify({ email: emailInput, type: 'customer' }),
               });
+              const otpSendBodyWC = await otpSendResWC.text();
+              if (!otpSendResWC.ok) { console.error('[process-chat-flow] ⚠️ Failed to send OTP [wait_code]:', otpSendBodyWC); }
 
               collectedData.__otp_step = 'wait_code';
               collectedData.__otp_attempts = 0;
@@ -1602,7 +1927,9 @@ serve(async (req) => {
                // 🔧 FIX 3: Auto-traverse cobre condition_v2
               while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
                 if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
-                  const condPath = evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+                  const condPath = resolvedNode.type === 'condition_v2'
+                    ? evaluateConditionV2Path(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
+                    : evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
                   const afterCond = findNextNode(flowDef, resolvedNode, condPath);
                   if (!afterCond || !['condition', 'condition_v2', 'input', 'start'].includes(afterCond.type)) {
                     resolvedNode = afterCond;
@@ -1629,22 +1956,125 @@ serve(async (req) => {
                     completed_at: new Date().toISOString(),
                   }).eq('id', activeState.id);
 
+                  // ✅ BUG E FIX: OTP not_customer transfer → transition-conversation-state
+                  const otpNcDeptId = resolvedNode.data?.department_id || null;
+                  const otpNcAiMode = resolvedNode.data?.ai_mode || 'waiting_human';
+                  const otpNcTransType =
+                    otpNcAiMode === 'copilot'   ? 'set_copilot' :
+                    otpNcAiMode === 'autopilot' ? 'engage_ai' :
+                    'handoff_to_human';
+                  await fetch(
+                    `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+                    {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+                      body: JSON.stringify({ conversationId, transition: otpNcTransType, departmentId: otpNcDeptId, reason: 'flow_transfer_otp_not_customer', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id, ai_mode: otpNcAiMode } })
+                    }
+                  );
+
                   return new Response(JSON.stringify({
                     useAI: false,
                     response: notCustomerMsg,
                     transfer: true,
-                    departmentId: resolvedNode.data?.department_id || null,
+                    departmentId: otpNcDeptId,
                     transferType: resolvedNode.data?.transfer_type,
                     collectedData,
                     flowId: activeState.flow_id,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
+                // 🛡️ BUG P FIX: OTP not_customer → end executa end_actions
+                if (resolvedNode.type === 'end') {
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    current_node_id: resolvedNode.id,
+                    status: 'completed',
+                    completed_at: new Date().toISOString(),
+                  }).eq('id', activeState.id);
+
+                  // end_actions
+                  if (resolvedNode.data?.end_action === 'create_ticket') {
+                    variablesContext = await rebuildCtx();
+                    const actionData = resolvedNode.data.action_data || {};
+                    const subject = replaceVariables(actionData.subject || resolvedNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+                    const description = replaceVariables(actionData.description || resolvedNode.data.description_template || '', variablesContext);
+                    const internalNote = (actionData.internal_note || resolvedNode.data.internal_note)
+                      ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
+                    await createTicketFromFlow(supabaseClient, {
+                      conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
+                      contactId: activeContactData?.id || null,
+                      subject, description,
+                      category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                      priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
+                      departmentId: actionData.department_id || resolvedNode.data.department_id || null,
+                      internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
+                      collectedData,
+                    });
+                  }
+                  if (resolvedNode.data?.end_action === 'add_tag') {
+                    const tagId = resolvedNode.data.action_data?.tag_id;
+                    const tagScope = resolvedNode.data.action_data?.tag_scope || 'contact';
+                    if (tagId) {
+                      if (tagScope === 'conversation') {
+                        await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+                      } else if (activeContactData?.id) {
+                        await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                      }
+                    }
+                  }
+
+                  const endMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext || await rebuildCtx());
+                  return new Response(JSON.stringify({
+                    useAI: false,
+                    response: [notCustomerMsg, endMsg].filter(Boolean).join('\n\n'),
+                    flowCompleted: true,
+                    flowId: activeState.flow_id,
+                    collectedData,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                // Bug T fix: OTP not_customer → ai_response must initialize __ai and update state
+                if (resolvedNode.type === 'ai_response') {
+                  collectedData.__ai = { interaction_count: 0 };
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    current_node_id: resolvedNode.id,
+                    status: 'active',
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', activeState.id);
+
+                  return new Response(JSON.stringify({
+                    useAI: true,
+                    aiNodeActive: true,
+                    nodeId: resolvedNode.id,
+                    response: notCustomerMsg || '',
+                    flowId: activeState.flow_id,
+                    flowName: activeState.chat_flows?.name || null,
+                    contextPrompt: resolvedNode.data?.context_prompt,
+                    useKnowledgeBase: resolvedNode.data?.use_knowledge_base !== false,
+                    collectedData,
+                    allowedSources: buildAllowedSources(resolvedNode.data),
+                    responseFormat: 'text_only',
+                    personaId: resolvedNode.data?.persona_id || null,
+                    personaName: resolvedNode.data?.persona_name || null,
+                    kbCategories: resolvedNode.data?.kb_categories || null,
+                    fallbackMessage: resolvedNode.data?.fallback_message || null,
+                    objective: resolvedNode.data?.objective || null,
+                    maxSentences: resolvedNode.data?.max_sentences ?? 3,
+                    forbidQuestions: resolvedNode.data?.forbid_questions ?? true,
+                    forbidOptions: resolvedNode.data?.forbid_options ?? true,
+                    forbidFinancial: resolvedNode.data?.forbid_financial ?? false,
+                    forbidCommercial: resolvedNode.data?.forbid_commercial ?? false,
+                    forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
+                    forbidSupport: resolvedNode.data?.forbid_support ?? false,
+                    forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
                 variablesContext = await rebuildCtx();
                 const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
                 return new Response(JSON.stringify({
-                  useAI: resolvedNode.type === 'ai_response',
-                  aiNodeActive: resolvedNode.type === 'ai_response',
+                  useAI: false,
                   response: [notCustomerMsg, nextMsg].filter(Boolean).join('\n\n'),
                   flowId: activeState.flow_id,
                   collectedData,
@@ -1755,24 +2185,116 @@ serve(async (req) => {
                     completed_at: new Date().toISOString(),
                   }).eq('id', activeState.id);
 
+                  // ✅ BUG F FIX: OTP success transfer → transition-conversation-state
+                  const otpOkDeptId = resolvedNode.data?.department_id || null;
+                  const otpOkAiMode = resolvedNode.data?.ai_mode || 'waiting_human';
+                  const otpOkTransType =
+                    otpOkAiMode === 'copilot'   ? 'set_copilot' :
+                    otpOkAiMode === 'autopilot' ? 'engage_ai' :
+                    'handoff_to_human';
+                  await fetch(
+                    `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+                    {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+                      body: JSON.stringify({ conversationId, transition: otpOkTransType, departmentId: otpOkDeptId, reason: 'flow_transfer_otp_verified', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id, ai_mode: otpOkAiMode } })
+                    }
+                  );
+
                   return new Response(JSON.stringify({
                     useAI: false,
                     response: "✅ Identidade verificada!\n\n" + (nextMsg || "Transferindo..."),
                     transfer: true,
-                    departmentId: resolvedNode.data?.department_id || null,
+                    departmentId: otpOkDeptId,
                     collectedData,
                     flowId: activeState.flow_id,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
+                // 🛡️ BUG Q FIX: OTP success → end executa end_actions
+                if (resolvedNode.type === 'end') {
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    current_node_id: resolvedNode.id,
+                    status: 'completed',
+                    completed_at: new Date().toISOString(),
+                  }).eq('id', activeState.id);
+
+                  if (resolvedNode.data?.end_action === 'create_ticket') {
+                    variablesContext = await rebuildCtx();
+                    const actionData = resolvedNode.data.action_data || {};
+                    const subject = replaceVariables(actionData.subject || resolvedNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+                    const description = replaceVariables(actionData.description || resolvedNode.data.description_template || '', variablesContext);
+                    const internalNote = (actionData.internal_note || resolvedNode.data.internal_note)
+                      ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
+                    await createTicketFromFlow(supabaseClient, {
+                      conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
+                      contactId: activeContactData?.id || null,
+                      subject, description,
+                      category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                      priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
+                      departmentId: actionData.department_id || resolvedNode.data.department_id || null,
+                      internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
+                      collectedData,
+                    });
+                  }
+                  if (resolvedNode.data?.end_action === 'add_tag') {
+                    const tagId = resolvedNode.data.action_data?.tag_id;
+                    const tagScope = resolvedNode.data.action_data?.tag_scope || 'contact';
+                    if (tagId) {
+                      if (tagScope === 'conversation') {
+                        await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+                      } else if (activeContactData?.id) {
+                        await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                      }
+                    }
+                  }
+
+                  const endMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext || await rebuildCtx());
+                  return new Response(JSON.stringify({
+                    useAI: false,
+                    response: "✅ Identidade verificada!\n\n" + (endMsg || ''),
+                    flowCompleted: true,
+                    flowId: activeState.flow_id,
+                    collectedData,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                // Bug S fix: OTP success → ai_response must initialize __ai and update state
                 if (resolvedNode.type === 'ai_response') {
+                  collectedData.__ai = { interaction_count: 0 };
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    current_node_id: resolvedNode.id,
+                    status: 'active',
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', activeState.id);
+
                   return new Response(JSON.stringify({
                     useAI: true,
                     aiNodeActive: true,
+                    nodeId: resolvedNode.id,
                     response: "✅ Identidade verificada!",
                     flowId: activeState.flow_id,
+                    flowName: activeState.chat_flows?.name || null,
+                    contextPrompt: resolvedNode.data?.context_prompt,
+                    useKnowledgeBase: resolvedNode.data?.use_knowledge_base !== false,
                     collectedData,
-                    nodeId: resolvedNode.id,
+                    allowedSources: buildAllowedSources(resolvedNode.data),
+                    responseFormat: 'text_only',
+                    personaId: resolvedNode.data?.persona_id || null,
+                    personaName: resolvedNode.data?.persona_name || null,
+                    kbCategories: resolvedNode.data?.kb_categories || null,
+                    fallbackMessage: resolvedNode.data?.fallback_message || null,
+                    objective: resolvedNode.data?.objective || null,
+                    maxSentences: resolvedNode.data?.max_sentences ?? 3,
+                    forbidQuestions: resolvedNode.data?.forbid_questions ?? true,
+                    forbidOptions: resolvedNode.data?.forbid_options ?? true,
+                    forbidFinancial: resolvedNode.data?.forbid_financial ?? false,
+                    forbidCommercial: resolvedNode.data?.forbid_commercial ?? false,
+                    forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
+                    forbidSupport: resolvedNode.data?.forbid_support ?? false,
+                    forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
@@ -1808,10 +2330,19 @@ serve(async (req) => {
                 // Avançar para próximo nó com resultado failed
                 const nextAfterOtp = findNextNode(flowDef, currentNode);
                 let resolvedNode = nextAfterOtp;
+                // 🆕 BUG 2 FIX: Usar avaliador correto (V1 vs V2) no OTP max_attempts
                 while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
-                  if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
+                  if (resolvedNode.type === 'condition') {
                     const condPath = evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
                     const afterCond = findNextNode(flowDef, resolvedNode, condPath);
+                    if (!afterCond || !['condition', 'condition_v2', 'input', 'start'].includes(afterCond.type)) {
+                      resolvedNode = afterCond;
+                      break;
+                    }
+                    resolvedNode = afterCond;
+                  } else if (resolvedNode.type === 'condition_v2') {
+                    const v2Path = evaluateConditionV2Path(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || []);
+                    const afterCond = findNextNode(flowDef, resolvedNode, v2Path);
                     if (!afterCond || !['condition', 'condition_v2', 'input', 'start'].includes(afterCond.type)) {
                       resolvedNode = afterCond;
                       break;
@@ -1823,6 +2354,135 @@ serve(async (req) => {
                 }
 
                 if (resolvedNode) {
+                  // 🛡️ BUG G FIX: OTP max_attempts → transfer chama transition-conversation-state
+                  if (resolvedNode.type === 'transfer') {
+                    await supabaseClient.from('chat_flow_states').update({
+                      collected_data: collectedData,
+                      current_node_id: resolvedNode.id,
+                      status: 'transferred',
+                      completed_at: new Date().toISOString(),
+                    }).eq('id', activeState.id);
+
+                    const otpMaxDeptId = resolvedNode.data?.department_id || null;
+                    const otpMaxAiMode = resolvedNode.data?.ai_mode || 'waiting_human';
+                    const otpMaxTransType =
+                      otpMaxAiMode === 'copilot'   ? 'set_copilot' :
+                      otpMaxAiMode === 'autopilot' ? 'engage_ai' :
+                      'handoff_to_human';
+                    await fetch(
+                      `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+                      {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+                        body: JSON.stringify({ conversationId, transition: otpMaxTransType, departmentId: otpMaxDeptId, reason: 'flow_transfer_otp_max_attempts', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id, ai_mode: otpMaxAiMode } })
+                      }
+                    );
+
+                    variablesContext = await rebuildCtx();
+                    const transferMsg = replaceVariables(resolvedNode.data?.message || 'Transferindo para um atendente...', variablesContext);
+                    return new Response(JSON.stringify({
+                      useAI: false,
+                      response: "❌ Máximo de tentativas excedido.\n\n" + transferMsg,
+                      transfer: true,
+                      departmentId: otpMaxDeptId,
+                      transferType: resolvedNode.data?.transfer_type,
+                      collectedData,
+                      flowId: activeState.flow_id,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
+                  // 🛡️ BUG H FIX: OTP max_attempts → end executa end_actions
+                  if (resolvedNode.type === 'end') {
+                    await supabaseClient.from('chat_flow_states').update({
+                      collected_data: collectedData,
+                      current_node_id: resolvedNode.id,
+                      status: 'completed',
+                      completed_at: new Date().toISOString(),
+                    }).eq('id', activeState.id);
+
+                    // Execute end_actions
+                    if (resolvedNode.data?.end_action === 'create_ticket') {
+                      const actionData = resolvedNode.data.action_data || {};
+                      variablesContext = await rebuildCtx();
+                      const subject = replaceVariables(actionData.subject || resolvedNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+                      const description = replaceVariables(actionData.description || resolvedNode.data.description_template || '', variablesContext);
+                      const internalNote = (actionData.internal_note || resolvedNode.data.internal_note)
+                        ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
+                      const ticket = await createTicketFromFlow(supabaseClient, {
+                        conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
+                contactId: activeContactData?.id || null,
+                        subject, description,
+                        category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                        priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
+                        departmentId: actionData.department_id || resolvedNode.data.department_id || null,
+                        internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
+                        collectedData,
+                      });
+                      if (ticket) collectedData.__last_ticket_id = ticket.id;
+                    }
+                    if (resolvedNode.data?.end_action === 'add_tag') {
+                      const tagId = resolvedNode.data.action_data?.tag_id;
+                      const tagScope = resolvedNode.data.action_data?.tag_scope || 'contact';
+                      if (tagId) {
+                        if (tagScope === 'conversation') {
+                          await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+                        } else if (activeContactData?.id) {
+                          await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                        }
+                      }
+                    }
+
+                    variablesContext = await rebuildCtx();
+                    const endMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
+                    return new Response(JSON.stringify({
+                      useAI: false,
+                      response: "❌ Máximo de tentativas excedido.\n\n" + (endMsg || 'Atendimento finalizado.'),
+                      flowCompleted: true,
+                      collectedData,
+                      flowId: activeState.flow_id,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
+                  // Bug V fix: OTP max_attempts → ai_response must initialize __ai and update state
+                  if (resolvedNode.type === 'ai_response') {
+                    collectedData.__ai = { interaction_count: 0 };
+                    await supabaseClient.from('chat_flow_states').update({
+                      collected_data: collectedData,
+                      current_node_id: resolvedNode.id,
+                      status: 'active',
+                      updated_at: new Date().toISOString(),
+                    }).eq('id', activeState.id);
+
+                    variablesContext = await rebuildCtx();
+                    const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
+                    return new Response(JSON.stringify({
+                      useAI: true,
+                      aiNodeActive: true,
+                      nodeId: resolvedNode.id,
+                      response: "❌ Máximo de tentativas excedido.\n\n" + nextMsg,
+                      flowId: activeState.flow_id,
+                      flowName: activeState.chat_flows?.name || null,
+                      contextPrompt: resolvedNode.data?.context_prompt,
+                      useKnowledgeBase: resolvedNode.data?.use_knowledge_base !== false,
+                      collectedData,
+                      allowedSources: buildAllowedSources(resolvedNode.data),
+                      responseFormat: 'text_only',
+                      personaId: resolvedNode.data?.persona_id || null,
+                      personaName: resolvedNode.data?.persona_name || null,
+                      kbCategories: resolvedNode.data?.kb_categories || null,
+                      fallbackMessage: resolvedNode.data?.fallback_message || null,
+                      objective: resolvedNode.data?.objective || null,
+                      maxSentences: resolvedNode.data?.max_sentences ?? 3,
+                      forbidQuestions: resolvedNode.data?.forbid_questions ?? true,
+                      forbidOptions: resolvedNode.data?.forbid_options ?? true,
+                      forbidFinancial: resolvedNode.data?.forbid_financial ?? false,
+                      forbidCommercial: resolvedNode.data?.forbid_commercial ?? false,
+                      forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
+                      forbidSupport: resolvedNode.data?.forbid_support ?? false,
+                      forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
                   const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2' || resolvedNode.type === 'verify_customer_otp'
                     ? 'waiting_input' : 'active';
                   await supabaseClient.from('chat_flow_states').update({
@@ -1834,8 +2494,7 @@ serve(async (req) => {
                   variablesContext = await rebuildCtx();
                   const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
                   return new Response(JSON.stringify({
-                    useAI: resolvedNode.type === 'ai_response',
-                    aiNodeActive: resolvedNode.type === 'ai_response',
+                    useAI: false,
                     response: "❌ Máximo de tentativas excedido.\n\n" + nextMsg,
                     flowId: activeState.flow_id,
                     collectedData,
@@ -1893,8 +2552,9 @@ serve(async (req) => {
       else if (currentNode.type === 'ask_phone') validationType = 'phone';
       else if (currentNode.type === 'ask_cpf') validationType = 'cpf';
       
-      // Executar validação se necessário
-      if (currentNode.data?.validate !== false && validators[validationType]) {
+      // Executar validação APENAS para nós ask_* (não para condition, condition_v2, ask_options, ai_response)
+      const shouldValidate = ['ask_name', 'ask_email', 'ask_phone', 'ask_cpf', 'ask_text'].includes(currentNode.type);
+      if (shouldValidate && currentNode.data?.validate !== false && validators[validationType]) {
         const validation = validators[validationType](userMessage);
         if (!validation.valid) {
           console.log(`[process-chat-flow] ❌ Validation failed: type=${validationType} node=${currentNode.id} error="${validation.error}" input="${(userMessage || '').slice(0, 40)}"`);
@@ -1921,7 +2581,374 @@ serve(async (req) => {
       let nextNode: any = null;
       let path: string | undefined;
 
-      if (currentNode.type === 'ask_options') {
+      // 🔧 FIX: Variáveis de intent declaradas fora do bloco ai_response
+      // para que condition/condition_v2 também alcancem o código de delivery
+      let financialIntentMatch = false;
+      let cancellationIntentMatch = false;
+      let supportIntentMatch = false;
+      let commercialIntentMatch = false;
+      let consultorIntentMatch = false;
+      let consultorHasConsultant = false;
+      let aiExitForced = false;
+
+      // 🔧 FIX CRÍTICO: Nós genéricos ask_* (email, name, phone, cpf, text)
+      // Antes, esses nós não entravam em nenhum branch do if/else if chain,
+      // fazendo o motor cair no bloco de triggers e retornar "invalidOption".
+      // Agora tratamos eles ANTES do chain, encontrando o próximo nó diretamente.
+      if (['ask_name', 'ask_email', 'ask_phone', 'ask_cpf', 'ask_text'].includes(currentNode.type)) {
+        nextNode = findNextNode(flowDef, currentNode);
+        console.log(`[process-chat-flow] ➡️ Generic ask_* transition: ${currentNode.type}(${currentNode.id}) → ${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
+
+        // Auto-traverse conditions/inputs
+        let genSteps = 0;
+        while (nextNode && ['condition', 'condition_v2', 'input', 'start'].includes(nextNode.type) && genSteps < 20) {
+          genSteps++;
+          if (nextNode.type === 'condition') {
+            const cp = evaluateConditionPath(nextNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+            nextNode = findNextNode(flowDef, nextNode, cp);
+          } else if (nextNode.type === 'condition_v2') {
+            const cp = evaluateConditionV2Path(nextNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || []);
+            nextNode = findNextNode(flowDef, nextNode, cp);
+          } else {
+            nextNode = findNextNode(flowDef, nextNode);
+          }
+        }
+
+        // 🆕 BUG 3 FIX: Handler fetch_order inline no ask_* genérico
+        if (nextNode?.type === 'fetch_order') {
+          console.log('[process-chat-flow] 📦 [generic] Processing fetch_order after ask_*');
+          collectedData = await handleFetchOrderNode(nextNode, collectedData, userMessage);
+          await supabaseClient.from('chat_flow_states').update({
+            collected_data: collectedData, current_node_id: nextNode.id, updated_at: new Date().toISOString(),
+          }).eq('id', activeState.id);
+          // Auto-traverse after fetch_order
+          let afterFO = findNextNode(flowDef, nextNode);
+          let foSteps = 0;
+          while (afterFO && ['condition', 'condition_v2', 'input', 'start'].includes(afterFO.type) && foSteps < 20) {
+            foSteps++;
+            if (afterFO.type === 'condition' || afterFO.type === 'condition_v2') {
+              const cp2 = afterFO.type === 'condition_v2'
+                ? evaluateConditionV2Path(afterFO.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
+                : evaluateConditionPath(afterFO.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+              afterFO = findNextNode(flowDef, afterFO, cp2);
+            } else { afterFO = findNextNode(flowDef, afterFO); }
+          }
+          if (afterFO) nextNode = afterFO;
+        }
+
+        // Handler: validate_customer (silencioso + auto-traverse)
+        if (nextNode?.type === 'validate_customer') {
+          console.log('[process-chat-flow] 🛡️ [generic] Processing validate_customer after ask_*');
+          const vcUrl = Deno.env.get('SUPABASE_URL')!;
+          const vcKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          const { data: vcConvG } = await supabaseClient.from('conversations').select('contact_id').eq('id', conversationId).maybeSingle();
+          let vcContactG: any = null;
+          if (vcConvG?.contact_id) {
+            const { data: cg } = await supabaseClient.from('contacts').select('phone, email, document, whatsapp_id, first_name, last_name, kiwify_validated').eq('id', vcConvG.contact_id).maybeSingle();
+            vcContactG = cg;
+          }
+          const vKey = nextNode.data?.save_validated_as || 'customer_validated';
+          const nKey = nextNode.data?.save_customer_name_as || 'customer_name_found';
+          const eKey = nextNode.data?.save_customer_email_as || 'customer_email_found';
+          let vFound = false, vName = '', vEmail = '';
+          if (vcContactG && !vcContactG.kiwify_validated) {
+            const vPromises: Promise<any>[] = [];
+            if (nextNode.data?.validate_phone !== false && (vcContactG.phone || vcContactG.whatsapp_id)) {
+              vPromises.push(inlineKiwifyValidation(supabaseClient, vcContactG.phone, vcContactG.whatsapp_id, vcConvG?.contact_id));
+            }
+            if (nextNode.data?.validate_email !== false && vcContactG.email) {
+              vPromises.push(fetch(`${vcUrl}/functions/v1/verify-customer-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKey}` }, body: JSON.stringify({ email: vcContactG.email, contact_id: vcConvG?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (nextNode.data?.validate_cpf === true && vcContactG.document) {
+              vPromises.push(fetch(`${vcUrl}/functions/v1/validate-by-cpf`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKey}` }, body: JSON.stringify({ cpf: vcContactG.document, contact_id: vcConvG?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (vPromises.length > 0) {
+              const vResults = await Promise.allSettled(vPromises);
+              for (const vr of vResults) { if (vr.status === 'fulfilled' && vr.value?.found) { vFound = true; if (vr.value.customer?.name) vName = vr.value.customer.name; if (vr.value.customer?.email) vEmail = vr.value.customer.email; } }
+            }
+            if (vFound && vcConvG?.contact_id) {
+              await supabaseClient.from('contacts').update({ kiwify_validated: true, status: 'customer' }).eq('id', vcConvG.contact_id);
+              console.log('[process-chat-flow] ✅ [generic] Contact promoted to customer');
+            }
+          } else if (vcContactG?.kiwify_validated) {
+            vFound = true; vName = [vcContactG.first_name, vcContactG.last_name].filter(Boolean).join(' '); vEmail = vcContactG.email || '';
+          }
+          collectedData[vKey] = vFound; collectedData[nKey] = vName; collectedData[eKey] = vEmail;
+          console.log('[process-chat-flow] 🛡️ [generic] Validate result:', { vFound, vName, vEmail });
+          // Auto-traverse after validate_customer
+          let afterVC = findNextNode(flowDef, nextNode);
+          while (afterVC && ['condition', 'condition_v2', 'input', 'start'].includes(afterVC.type)) {
+            if (afterVC.type === 'condition' || afterVC.type === 'condition_v2') {
+              const cp2 = afterVC.type === 'condition_v2' ? evaluateConditionV2Path(afterVC.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || []) : evaluateConditionPath(afterVC.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+              afterVC = findNextNode(flowDef, afterVC, cp2);
+            } else { afterVC = findNextNode(flowDef, afterVC); }
+          }
+          if (afterVC) nextNode = afterVC;
+        }
+
+        // 🆕 BUG 4 FIX: verify_customer_otp inicialização no ask_* genérico
+        if (nextNode?.type === 'verify_customer_otp') {
+          console.log('[process-chat-flow] 🔐 [generic] Entering verify_customer_otp after ask_*');
+          const otpVerifiedKey = nextNode.data?.save_verified_as || 'customer_verified';
+
+          // 🆕 PRE-CHECK: Se validate_customer já rodou
+          const preEmailZ2 = collectedData.customer_email_found || activeContactData?.email;
+          if (collectedData.customer_validated === true && preEmailZ2) {
+            const preEmail = preEmailZ2;
+            console.log('[process-chat-flow] 🔐 OTP pre-check [generic]: customer validated, sending OTP to:', preEmail);
+            collectedData.__otp_step = 'wait_code';
+            collectedData.__otp_attempts = 0;
+            collectedData.__otp_email = preEmail;
+            collectedData.__otp_customer_name = collectedData.customer_name_found || '';
+            await supabaseClient.from('chat_flow_states').update({
+              collected_data: collectedData, current_node_id: nextNode.id, status: 'waiting_input', updated_at: new Date().toISOString(),
+            }).eq('id', activeState.id);
+            const otpSendResZ2 = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+              body: JSON.stringify({ email: preEmail, type: 'customer' }),
+            });
+            const otpSendBodyZ2 = await otpSendResZ2.text();
+            if (!otpSendResZ2.ok) { console.error('[process-chat-flow] ⚠️ Failed to send OTP [generic]:', otpSendBodyZ2); }
+            const otpSentMsg = nextNode.data?.message_otp_sent
+              ? nextNode.data.message_otp_sent.replace(/\{\{email\}\}/g, preEmail)
+              : `Enviamos um código de verificação para seu email de cadastro. Digite o código:`;
+            return new Response(JSON.stringify({ useAI: false, response: otpSentMsg, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          } else if (collectedData.customer_validated === false) {
+            console.log('[process-chat-flow] 🔐 OTP pre-check [generic]: not a customer, skipping OTP');
+            collectedData[otpVerifiedKey] = false;
+            collectedData.__otp_result = 'not_customer';
+            collectedData.customer_verified_email = '';
+            collectedData.customer_verified_name = '';
+            const notCustomerMsg = nextNode.data?.message_not_customer || "Você não foi identificado como cliente. Vou encaminhar para nosso time comercial.";
+            const afterOtp = findNextNode(flowDef, nextNode);
+            if (afterOtp) {
+              await supabaseClient.from('chat_flow_states').update({
+                collected_data: collectedData, current_node_id: afterOtp.id,
+                status: afterOtp.type.startsWith('ask_') || afterOtp.type === 'condition' || afterOtp.type === 'condition_v2' || afterOtp.type === 'verify_customer_otp' ? 'waiting_input' : 'active',
+                updated_at: new Date().toISOString(),
+              }).eq('id', activeState.id);
+            } else {
+              await supabaseClient.from('chat_flow_states').update({
+                collected_data: collectedData, status: 'completed', completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+              }).eq('id', activeState.id);
+            }
+            return new Response(JSON.stringify({ useAI: false, response: notCustomerMsg, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+
+          // Fallback: pedir email normalmente
+          collectedData.__otp_step = 'ask_email';
+          collectedData.__otp_attempts = 0;
+          await supabaseClient.from('chat_flow_states').update({
+            collected_data: collectedData, current_node_id: nextNode.id, status: 'waiting_input', updated_at: new Date().toISOString(),
+          }).eq('id', activeState.id);
+          const askEmailMsg = nextNode.data?.message_ask_email || "Para verificar sua identidade, me informe seu email cadastrado:";
+          return new Response(JSON.stringify({ useAI: false, response: askEmailMsg, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        // Update state and deliver next node
+        if (nextNode) {
+          // 🆕 BUG 9 FIX: Auto-avanço de message no ask_* genérico
+          const genExtraMessages: string[] = [];
+          while (nextNode && (nextNode.type === 'message' || nextNode.type === 'create_ticket' || nextNode.type === 'validate_customer' || nextNode.type === 'fetch_order')) {
+            if (nextNode.type === 'create_ticket') {
+              const subject = replaceVariables(nextNode.data?.subject_template || 'Ticket do Fluxo', variablesContext);
+              const description = replaceVariables(nextNode.data?.description_template || '', variablesContext);
+              const internalNote = nextNode.data?.internal_note ? replaceVariables(nextNode.data.internal_note, variablesContext) : null;
+              const ticket = await createTicketFromFlow(supabaseClient, {
+                conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
+                contactId: activeContactData?.id || null, subject, description,
+                category: nextNode.data?.ticket_category || 'outro', priority: nextNode.data?.ticket_priority || 'medium',
+                departmentId: nextNode.data?.department_id || null, internalNote,
+                useCollectedData: nextNode.data?.use_collected_data || false, collectedData,
+              });
+              if (ticket) collectedData.__last_ticket_id = ticket.id;
+              console.log(`[process-chat-flow] 🎫 [generic] Auto-advancing past create_ticket ${nextNode.id}`);
+            } else if (nextNode.type === 'validate_customer') {
+              // BUG 8 FIX: validate_customer inline no auto-avanço
+              console.log('[process-chat-flow] 🛡️ [generic-autoadvance] validate_customer inline');
+              const vcUrl2 = Deno.env.get('SUPABASE_URL')!;
+              const vcKey2 = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+              const { data: vcConv2 } = await supabaseClient.from('conversations').select('contact_id').eq('id', conversationId).maybeSingle();
+              let vcContact2: any = null;
+              if (vcConv2?.contact_id) {
+                const { data: cg2 } = await supabaseClient.from('contacts').select('phone, email, document, whatsapp_id, first_name, last_name, kiwify_validated').eq('id', vcConv2.contact_id).maybeSingle();
+                vcContact2 = cg2;
+              }
+              const vKey2 = nextNode.data?.save_validated_as || 'customer_validated';
+              const nKey2 = nextNode.data?.save_customer_name_as || 'customer_name_found';
+              const eKey2 = nextNode.data?.save_customer_email_as || 'customer_email_found';
+              let vFound2 = false, vName2 = '', vEmail2 = '';
+              if (vcContact2 && !vcContact2.kiwify_validated) {
+                const vPromises2: Promise<any>[] = [];
+                if (nextNode.data?.validate_phone !== false && (vcContact2.phone || vcContact2.whatsapp_id)) {
+                  vPromises2.push(inlineKiwifyValidation(supabaseClient, vcContact2.phone, vcContact2.whatsapp_id, vcConv2?.contact_id));
+                }
+                if (nextNode.data?.validate_email !== false && vcContact2.email) {
+                  vPromises2.push(fetch(`${vcUrl2}/functions/v1/verify-customer-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKey2}` }, body: JSON.stringify({ email: vcContact2.email, contact_id: vcConv2?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+                }
+                if (nextNode.data?.validate_cpf === true && vcContact2.document) {
+                  vPromises2.push(fetch(`${vcUrl2}/functions/v1/validate-by-cpf`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKey2}` }, body: JSON.stringify({ cpf: vcContact2.document, contact_id: vcConv2?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+                }
+                if (vPromises2.length > 0) {
+                  const vResults2 = await Promise.allSettled(vPromises2);
+                  for (const vr of vResults2) { if (vr.status === 'fulfilled' && vr.value?.found) { vFound2 = true; if (vr.value.customer?.name) vName2 = vr.value.customer.name; if (vr.value.customer?.email) vEmail2 = vr.value.customer.email; } }
+                }
+                if (vFound2 && vcConv2?.contact_id) {
+                  await supabaseClient.from('contacts').update({ kiwify_validated: true, status: 'customer' }).eq('id', vcConv2.contact_id);
+                }
+              } else if (vcContact2?.kiwify_validated) {
+                vFound2 = true; vName2 = [vcContact2.first_name, vcContact2.last_name].filter(Boolean).join(' '); vEmail2 = vcContact2.email || '';
+              }
+              collectedData[vKey2] = vFound2; collectedData[nKey2] = vName2; collectedData[eKey2] = vEmail2;
+            } else if (nextNode.type === 'fetch_order') {
+              // BUG 8 FIX: fetch_order inline no auto-avanço
+              console.log('[process-chat-flow] 📦 [generic-autoadvance] fetch_order inline');
+              collectedData = await handleFetchOrderNode(nextNode, collectedData, userMessage);
+            } else {
+              // message node
+              const msgText = replaceVariables(nextNode.data?.message || "", variablesContext);
+              if (msgText) genExtraMessages.push(msgText);
+              console.log(`[process-chat-flow] 📨 [generic] Auto-advancing past message ${nextNode.id}`);
+            }
+            const afterMsg = findNextNode(flowDef, nextNode);
+            if (!afterMsg) { nextNode = null; break; }
+            if (afterMsg.type === 'condition') {
+              const cp = evaluateConditionPath(afterMsg.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+              nextNode = findNextNode(flowDef, afterMsg, cp) || null;
+            } else if (afterMsg.type === 'condition_v2') {
+              const cp = evaluateConditionV2Path(afterMsg.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || []);
+              nextNode = findNextNode(flowDef, afterMsg, cp) || null;
+            } else if (afterMsg.type === 'input' || afterMsg.type === 'start') {
+              nextNode = findNextNode(flowDef, afterMsg);
+            } else {
+              nextNode = afterMsg;
+            }
+          }
+
+          if (!nextNode) {
+            await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, status: 'completed', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', activeState.id);
+            const lastMsg = genExtraMessages.length > 0 ? genExtraMessages.join('\n\n') : 'Fluxo finalizado.';
+            return new Response(JSON.stringify({ useAI: false, response: lastMsg, flowCompleted: true, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+
+          const genStatus = nextNode.type.startsWith('ask_') || nextNode.type === 'condition' || nextNode.type === 'condition_v2' || nextNode.type === 'verify_customer_otp' ? 'waiting_input' : 'active';
+          await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: genStatus, updated_at: new Date().toISOString() }).eq('id', activeState.id);
+
+          // 🆕 BUG 7 FIX: end_actions no end genérico
+          if (nextNode.type === 'end') {
+            await supabaseClient.from('chat_flow_states').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', activeState.id);
+            // Execute end_action: create_ticket
+            if (nextNode.data?.end_action === 'create_ticket') {
+              const actionData = nextNode.data.action_data || {};
+              const subject = replaceVariables(actionData.subject || nextNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+              const description = replaceVariables(actionData.description || nextNode.data.description_template || '', variablesContext);
+              const internalNote = (actionData.internal_note || nextNode.data.internal_note) ? replaceVariables(actionData.internal_note || nextNode.data.internal_note, variablesContext) : null;
+              const ticket = await createTicketFromFlow(supabaseClient, {
+                conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
+                contactId: activeContactData?.id || null, subject, description,
+                category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
+                priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
+                departmentId: actionData.department_id || nextNode.data.department_id || null,
+                internalNote, useCollectedData: actionData.use_collected_data || nextNode.data.use_collected_data || false, collectedData,
+              });
+              if (ticket) collectedData.__last_ticket_id = ticket.id;
+            }
+            // Execute end_action: add_tag
+            if (nextNode.data?.end_action === 'add_tag') {
+              const tagId = nextNode.data.action_data?.tag_id;
+              const tagScope = nextNode.data.action_data?.tag_scope || 'contact';
+              if (tagId) {
+                if (tagScope === 'conversation') {
+                  await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+                } else if (activeContactData?.id) {
+                  await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+                }
+              }
+            }
+            const endMsg = replaceVariables(nextNode.data?.message || "Atendimento encerrado. Obrigado!", variablesContext);
+            const allEndMsgs = [...genExtraMessages, endMsg].filter(Boolean).join('\n\n');
+            return new Response(JSON.stringify({ useAI: false, response: allEndMsgs, flowCompleted: true, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          // 🆕 BUG 6 FIX: Transfer genérico chama transition-conversation-state
+          if (nextNode.type === 'transfer') {
+            await supabaseClient.from('chat_flow_states').update({ status: 'transferred', completed_at: new Date().toISOString() }).eq('id', activeState.id);
+            const transferDeptId = nextNode.data?.department_id || null;
+            const transferAiMode = nextNode.data?.ai_mode || 'waiting_human';
+            const transitionType = transferAiMode === 'copilot' ? 'set_copilot' : transferAiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
+            await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+              body: JSON.stringify({ conversationId, transition: transitionType, departmentId: transferDeptId, reason: 'flow_transfer_generic_ask', metadata: { node_id: nextNode.id, flow_id: activeState.flow_id, ai_mode: transferAiMode } }),
+            });
+            const transferMsg = replaceVariables(nextNode.data?.message || "Transferindo...", variablesContext);
+            const allTransferMsgs = [...genExtraMessages, transferMsg].filter(Boolean).join('\n\n');
+            return new Response(JSON.stringify({ useAI: false, response: allTransferMsgs, transfer: true, departmentId: transferDeptId, agentId: nextNode.data?.agent_id, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          if (nextNode.type === 'ai_response') {
+            collectedData.__ai = { interaction_count: 0 };
+            await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'active', updated_at: new Date().toISOString() }).eq('id', activeState.id);
+            return new Response(JSON.stringify({ useAI: true, aiNodeActive: true, nodeId: nextNode.id, flowId: activeState.flow_id, contextPrompt: nextNode.data?.context_prompt, useKnowledgeBase: nextNode.data?.use_knowledge_base !== false, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          // 🆕 BUG 4 FIX (2nd check): verify_customer_otp after auto-advance
+          if (nextNode.type === 'verify_customer_otp') {
+            const otpVerifiedKey2 = nextNode.data?.save_verified_as || 'customer_verified';
+
+            // 🆕 PRE-CHECK: Se validate_customer já rodou
+            const preEmailZ3 = collectedData.customer_email_found || activeContactData?.email;
+            if (collectedData.customer_validated === true && preEmailZ3) {
+              const preEmail = preEmailZ3;
+              console.log('[process-chat-flow] 🔐 OTP pre-check [auto-advance]: customer validated, sending OTP to:', preEmail);
+              collectedData.__otp_step = 'wait_code';
+              collectedData.__otp_attempts = 0;
+              collectedData.__otp_email = preEmail;
+              collectedData.__otp_customer_name = collectedData.customer_name_found || '';
+              await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'waiting_input', updated_at: new Date().toISOString() }).eq('id', activeState.id);
+              const otpSendResZ3 = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+                body: JSON.stringify({ email: preEmail, type: 'customer' }),
+              });
+              const otpSendBodyZ3 = await otpSendResZ3.text();
+              if (!otpSendResZ3.ok) { console.error('[process-chat-flow] ⚠️ Failed to send OTP [auto-advance]:', otpSendBodyZ3); }
+              const otpSentMsg = nextNode.data?.message_otp_sent
+                ? nextNode.data.message_otp_sent.replace(/\{\{email\}\}/g, preEmail)
+                : `Enviamos um código de verificação para seu email de cadastro. Digite o código:`;
+              const allOtpMsgs = [...genExtraMessages, otpSentMsg].filter(Boolean).join('\n\n');
+              return new Response(JSON.stringify({ useAI: false, response: allOtpMsgs, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            } else if (collectedData.customer_validated === false) {
+              console.log('[process-chat-flow] 🔐 OTP pre-check [auto-advance]: not a customer, skipping OTP');
+              collectedData[otpVerifiedKey2] = false;
+              collectedData.__otp_result = 'not_customer';
+              collectedData.customer_verified_email = '';
+              collectedData.customer_verified_name = '';
+              const notCustomerMsg = nextNode.data?.message_not_customer || "Você não foi identificado como cliente. Vou encaminhar para nosso time comercial.";
+              const afterOtp = findNextNode(flowDef, nextNode);
+              if (afterOtp) {
+                await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: afterOtp.id, status: afterOtp.type.startsWith('ask_') || afterOtp.type === 'condition' || afterOtp.type === 'condition_v2' || afterOtp.type === 'verify_customer_otp' ? 'waiting_input' : 'active', updated_at: new Date().toISOString() }).eq('id', activeState.id);
+              } else {
+                await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, status: 'completed', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', activeState.id);
+              }
+              const allNotCustMsgs = [...genExtraMessages, notCustomerMsg].filter(Boolean).join('\n\n');
+              return new Response(JSON.stringify({ useAI: false, response: allNotCustMsgs, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+
+            // Fallback: pedir email normalmente
+            collectedData.__otp_step = 'ask_email';
+            collectedData.__otp_attempts = 0;
+            await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'waiting_input', updated_at: new Date().toISOString() }).eq('id', activeState.id);
+            const askEmailMsg = nextNode.data?.message_ask_email || "Para verificar sua identidade, me informe seu email cadastrado:";
+            const allOtpMsgs = [...genExtraMessages, askEmailMsg].filter(Boolean).join('\n\n');
+            return new Response(JSON.stringify({ useAI: false, response: allOtpMsgs, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+          // Default: deliver message
+          const genMsg = replaceVariables(nextNode.data?.message || "", variablesContext);
+          const allGenMsgs = [...genExtraMessages, genMsg].filter(Boolean);
+          const genOpts = nextNode.type === 'ask_options' ? (nextNode.data?.options || []).map((o: any) => ({ label: o.label, value: o.value })) : null;
+          return new Response(JSON.stringify({ useAI: false, response: allGenMsgs.join('\n\n'), options: genOpts, flowId: activeState.flow_id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        // No next node → complete flow
+        await supabaseClient.from('chat_flow_states').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', activeState.id);
+        return new Response(JSON.stringify({ useAI: true, reason: 'flow_completed_no_next_node' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      } else if (currentNode.type === 'ask_options') {
         // ============================================================
         // 🆕 VALIDAÇÃO ESTRITA (Contrato v2.3)
         // - Só aceita número válido OU texto exato
@@ -1993,9 +3020,8 @@ serve(async (req) => {
 
           if (validateFields.includes('phone') && (activeContactData.phone || activeContactData.whatsapp_id)) {
             validationPromises.push(
-              supabaseClient.functions.invoke('validate-by-kiwify-phone', {
-                body: { phone: activeContactData.phone, whatsapp_id: activeContactData.whatsapp_id, contact_id: activeContactData.id }
-              }).then(r => ({ type: 'phone', ...r })).catch(e => ({ type: 'phone', error: e }))
+              inlineKiwifyValidation(supabaseClient, activeContactData.phone, activeContactData.whatsapp_id, activeContactData.id)
+                .then(r => ({ type: 'phone', data: r })).catch(e => ({ type: 'phone', error: e }))
             );
           }
 
@@ -2064,29 +3090,164 @@ serve(async (req) => {
 
         const exitKeywords: string[] = currentNode.data?.exit_keywords || [];
         const maxInteractions: number = currentNode.data?.max_ai_interactions ?? 0;
-        const forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
+        let forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
         const forbidCommercial: boolean = currentNode.data?.forbid_commercial ?? false;
+        const forbidCancellation: boolean = currentNode.data?.forbid_cancellation ?? false;
+        const forbidSupport: boolean = currentNode.data?.forbid_support ?? false;
+        const forbidConsultant: boolean = currentNode.data?.forbid_consultant ?? false;
+
+        // 🆕 INFERÊNCIA AUTOMÁTICA: Se o nó tem edge para condition_v2 com regra ai_exit_intent=financeiro, forçar forbidFinancial
+        if (!forbidFinancial) {
+          const nodeEdges = (flowDef.edges || []).filter((e: any) => e.source === currentNode.id);
+          for (const edge of nodeEdges) {
+            const targetNode = (flowDef.nodes || []).find((n: any) => n.id === edge.target);
+            if (targetNode?.type === 'condition_v2' && targetNode.data?.rules) {
+              const rules = targetNode.data.rules as any[];
+              const hasFinancialRule = rules.some((r: any) => 
+                r.field === 'ai_exit_intent' && (r.keywords || '').toLowerCase().includes('financeiro')
+              );
+              if (hasFinancialRule) {
+                forbidFinancial = true;
+                console.log(`[process-chat-flow] 🔒 AUTO-INFERENCE: forbid_financial=true inferido de edge para condition_v2 com regra financeiro (nó ${currentNode.id})`);
+                break;
+              }
+            }
+          }
+        }
 
         // 🔒 TRAVA FINANCEIRA: Detectar intenção financeira como exit do nó AI
-        // 🔧 FIX 6: Regex simplificada sem lookbehind complexo
-        const financialPositive = /saque|sacar|reembolso|estorno|cancelar.*assinatura|meu dinheiro|ressarcimento|pix|saldo|retirar|retirada|devolv[eê]r?|devolu[çc][ãa]o|caixa|carteira|transferir\s*saldo|tirar\s*dinheiro|tirar\s*meu|valor\s*(que|da|do|em)|(fazer|realizar|efetuar|cancelar|estornar)\s*pagamento|(cancelar|contestar|cobran[çc]a\s*indevida)/i;
+        // 🆕 SEPARAÇÃO: Apenas AÇÕES financeiras disparam exit. Perguntas informativas passam para a LLM.
+        // 🆕 CORREÇÃO: Termos de cancelamento REMOVIDOS — tratados separadamente abaixo
+        const financialActionPattern = /quero\s*(sacar|retirar|meu\s*(reembolso|dinheiro|estorno|saldo))|fa(z|ça)\s*(meu\s*)?(reembolso|estorno|saque|devolu[çc][ãa]o)|(sacar|retirar|tirar)\s*(meu\s*)?(saldo|dinheiro|valor)|(solicitar|pedir|fazer|realizar|efetuar|estornar)\s*(saque|reembolso|estorno|devolu[çc][ãa]o|pagamento)|(quero|preciso|necessito)\s*(meu\s+dinheiro|devolu[çc][ãa]o|reembolso|estorno|ressarcimento)|transferir\s*(meu\s*)?saldo|devolver\s*(meu\s*)?dinheiro|cobran[çc]a\s*indevida|contestar\s*(cobran[çc]a|pagamento)|cad[êe]\s*(meu\s*)?(dinheiro|saldo|reembolso)|n[ãa]o\s+recebi\s*(meu\s*)?(reembolso|estorno|saque|pagamento|dinheiro)|me\s+(devolvam|reembolsem|paguem)|preciso\s+do\s+meu\s+(saque|reembolso|saldo)|quero\s+receber\s*(meu\s*)?(pagamento|dinheiro|saldo)/i;
+        const financialInfoPattern = /qual\s*(o\s*)?(prazo|tempo|data)|como\s*(funciona|fa[çc]o|solicito|pe[çc]o)|onde\s*(vejo|consulto|acompanho)|quando\s*(posso|vou|ser[áa])|pol[ií]tica\s*de\s*(reembolso|devolu[çc][ãa]o|estorno|saque|cancelamento)|regras?\s*(de|para|do)\s*(saque|reembolso|estorno|devolu[çc][ãa]o)|d[úu]vida\s+(sobre|com|de|do|da)\s+(saque|reembolso|estorno|devolu|financ|saldo|cobran)|saber\s+sobre|informar\s+sobre|informa[çc][ãa]o\s+(sobre|de|do|da)|perguntar\s+sobre|entender\s+(como|sobre|o\s+que)|explicar?\s+(como|sobre|o\s+que)|gostaria\s+de\s+(saber|entender|me\s+informar)|o\s+que\s+[ée]\s*(saque|reembolso|estorno|devolu[çc][ãa]o)|confirma[çc][ãa]o\s+de/i;
         const financialContext = /endere[çc]o\s+de|local\s+de\s+entrega|forma\s+de\s+pagamento/i;
-        const financialIntentMatch =
+        // 🆕 Regex ambígua — termos financeiros isolados que NÃO são ação nem info
+        const financialAmbiguousPattern = /\b(saque|sacar|saldo|reembolso|estorno|devolu[çc][ãa]o|ressarcimento|cobran[çc]a)\b/i;
+        const isFinancialAction = financialActionPattern.test(userMessage || '') && !financialContext.test(userMessage || '');
+        const isFinancialInfo = financialInfoPattern.test(userMessage || '');
+        const isFinancialAmbiguous = !isFinancialAction && !isFinancialInfo && financialAmbiguousPattern.test(userMessage || '');
+        
+        // Ambíguo NÃO dispara exit — a IA vai perguntar ao cliente via instrução no prompt
+        if (isFinancialAmbiguous && forbidFinancial) {
+          console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO FINANCEIRA: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
+        }
+        
+        financialIntentMatch =
           (forceFinancialExit && forbidFinancial) ||
-          (forbidFinancial && msgLower.length > 0 && financialPositive.test(userMessage || '') && !financialContext.test(userMessage || ''));
+          (forbidFinancial && msgLower.length > 0 && isFinancialAction && !isFinancialInfo);
         if (forceFinancialExit) {
           console.log('[process-chat-flow] 🔒 forceFinancialExit=true recebido do webhook, forçando exit do nó AI');
         }
 
+        // 🆕 TRAVA CANCELAMENTO: Separada do financeiro para roteamento independente
+        const cancellationActionPattern = /cancelar\s*(minha\s*)?(assinatura|cobran[çc]a|pagamento|plano|conta|servi[çc]o)|quero\s+cancelar|desistir\s*(do|da|de)\s*(plano|assinatura|servi[çc]o|conta)|n[ãa]o\s+quero\s+mais\s*(o\s*)?(plano|assinatura|servi[çc]o)|encerrar\s*(minha\s*)?(conta|assinatura|plano)/i;
+        // 🆕 Ambíguo de cancelamento — termos isolados
+        const cancellationAmbiguousPattern = /\b(cancelar|cancelamento|desistir|encerrar)\b/i;
+        const isCancellationAction = cancellationActionPattern.test(userMessage || '') && !isFinancialInfo;
+        const isCancellationAmbiguous = !isCancellationAction && cancellationAmbiguousPattern.test(userMessage || '');
+        
+        if (isCancellationAmbiguous && forbidCancellation) {
+          console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO CANCELAMENTO: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
+        }
+        
+        cancellationIntentMatch =
+          (forceCancellationExit && forbidCancellation) ||
+          (forbidCancellation && msgLower.length > 0 && isCancellationAction);
+        if (forceCancellationExit) {
+          console.log('[process-chat-flow] 🚫 forceCancellationExit=true recebido do webhook, forçando exit do nó AI');
+        }
+        
+        if (cancellationIntentMatch) {
+          console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada | msg="${(userMessage || '').substring(0, 100)}" | forceExit=${forceCancellationExit} | actionMatch=${isCancellationAction}`);
+        }
+
+        // 🧑 TRAVA SUPORTE: Detectar pedido de atendente humano como exit do nó AI
+        const supportIntentPattern = /falar\s+com\s*(um\s*)?(atendente|humano|pessoa|agente|operador)|quero\s+(atendente|humano|pessoa|suporte)|atendimento\s+humano|preciso\s+de\s+(ajuda\s+)?humana?|me\s+transfira|transferir\s+para\s+(atendente|humano|suporte)|chamar?\s+(atendente|humano|suporte)|n[ãa]o\s+quero\s+(falar\s+com\s+)?(rob[ôo]|bot|ia|intelig[êe]ncia)/i;
+        supportIntentMatch = forbidSupport && msgLower.length > 0 && supportIntentPattern.test(userMessage || '');
+        
+        if (supportIntentMatch) {
+          console.log(`[process-chat-flow] 🧑 TRAVA SUPORTE: Pedido de atendente detectado | msg="${(userMessage || '').substring(0, 100)}"`);
+          
+          // 🆕 FIX: Log ai_blocked_support (paridade com financeiro, cancelamento, comercial, consultor)
+          try {
+            await supabaseClient
+              .from('ai_events')
+              .insert({
+                entity_type: 'conversation',
+                entity_id: conversationId,
+                event_type: 'ai_blocked_support',
+                model: 'process-chat-flow',
+                output_json: {
+                  phase: 'flow_node_exit',
+                  node_id: currentNode.id,
+                  flow_id: activeState.flow_id,
+                  interaction_count: aiCount,
+                  message_preview: (userMessage || '').substring(0, 200),
+                },
+                input_summary: (userMessage || '').substring(0, 200),
+              });
+          } catch (logErr) {
+            console.error('[process-chat-flow] ⚠️ Failed to log support block event:', logErr);
+          }
+        }
+
         // 🛒 TRAVA COMERCIAL: Detectar intenção de compra como exit do nó AI
-        const commercialIntentPattern = /comprar|quero comprar|quanto custa|pre[çc]o|proposta|or[çc]amento|cat[aá]logo|assinar|plano|tabela de pre[çc]o|conhecer.*produto|demonstra[çc][aã]o|demo|trial|teste gr[aá]tis|upgrade|downgrade|mudar.*plano/i;
-        const commercialIntentMatch = (forceCommercialExit && forbidCommercial) || (forbidCommercial && msgLower.length > 0 && commercialIntentPattern.test(userMessage || ''));
+        const commercialActionPattern = /comprar|quero comprar|quanto custa|pre[çc]o|proposta|or[çc]amento|cat[aá]logo|assinar|tabela de pre[çc]o|conhecer.*produto|demonstra[çc][aã]o|demo|trial|teste gr[aá]tis|upgrade|downgrade|mudar.*plano/i;
+        // 🆕 Ambíguo de comercial — termos isolados
+        const commercialAmbiguousPattern = /\b(plano|compra|pre[çc]o|assinatura)\b/i;
+        const isCommercialAction = commercialActionPattern.test(userMessage || '');
+        const isCommercialAmbiguous = !isCommercialAction && commercialAmbiguousPattern.test(userMessage || '');
+        
+        if (isCommercialAmbiguous && forbidCommercial) {
+          console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO COMERCIAL: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
+        }
+        
+        commercialIntentMatch = (forceCommercialExit && forbidCommercial) || (forbidCommercial && msgLower.length > 0 && isCommercialAction);
         if (forceCommercialExit) {
           console.log('[process-chat-flow] 🛒 forceCommercialExit=true recebido do webhook, forçando exit do nó AI');
         }
 
+        // 💼 TRAVA CONSULTOR: Detectar pedido de falar com consultor
+        const consultorActionPattern = /falar\s+com\s*(meu\s*)?(consultor|assessor|gestor)|quero\s+(meu\s*)?(consultor|assessor)|cad[êe]\s*(meu\s*)?(consultor|assessor)|consultor\s+de\s+vendas|estrat[ée]gia\s+de\s+vendas|meu\s+consultor|chamar?\s+(meu\s*)?(consultor|assessor)/i;
+        const consultorAmbiguousPattern = /\b(consultor|assessor|gestor|estrat[ée]gia)\b/i;
+        const isConsultorAction = consultorActionPattern.test(userMessage || '');
+        const isConsultorAmbiguous = !isConsultorAction && consultorAmbiguousPattern.test(userMessage || '');
+        
+        if (isConsultorAmbiguous && forbidConsultant) {
+          console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO CONSULTOR: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
+        }
+        
+        consultorIntentMatch = forbidConsultant && msgLower.length > 0 && isConsultorAction;
+        consultorHasConsultant = false;
+        
+        // Verificar se contato tem consultant_id
+        if (consultorIntentMatch) {
+          try {
+            const { data: contactRow } = await supabaseClient
+              .from('contacts')
+              .select('consultant_id')
+              .eq('id', activeConversationData?.contact_id)
+              .maybeSingle();
+            consultorHasConsultant = !!(contactRow?.consultant_id);
+            if (!consultorHasConsultant) {
+              console.log(`[process-chat-flow] 💼 CONSULTOR: Intenção detectada mas contato não tem consultant_id → forçando roteamento para suporte`);
+              // Sem consultor → redireciona para suporte ao invés de consultor
+              consultorIntentMatch = false;
+              // 🆕 FIX: Forçar supportIntentMatch para não engolir o pedido silenciosamente
+              supportIntentMatch = true;
+              collectedData.ai_exit_intent = 'suporte';
+              console.log(`[process-chat-flow] 🧑 supportIntentMatch forçado=true (fallback de consultor sem consultant_id)`);
+            } else {
+              console.log(`[process-chat-flow] 💼 CONSULTOR: Intenção detectada e contato tem consultant_id → saída consultor`);
+            }
+          } catch (err) {
+            console.error('[process-chat-flow] ⚠️ Erro verificando consultant_id:', err);
+            consultorIntentMatch = false;
+          }
+        }
+
         if (financialIntentMatch) {
-          console.log(`[process-chat-flow] 🔒 TRAVA FINANCEIRA: Intenção financeira detectada no nó AI, tratando como exit`);
+          console.log(`[process-chat-flow] 🔒 TRAVA FINANCEIRA: Intenção financeira AÇÃO detectada no nó AI, tratando como exit | msg="${(userMessage || '').substring(0, 100)}" | forceExit=${forceFinancialExit} | actionMatch=${isFinancialAction} | infoMatch=${isFinancialInfo}`);
           
           try {
             await supabaseClient
@@ -2109,7 +3270,34 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log financial block event:', logErr);
           }
 
-          delete collectedData.__ai;
+          // delete redundante removido — confiamos no delete centralizado na linha de exit geral
+        }
+
+        if (cancellationIntentMatch) {
+          console.log(`[process-chat-flow] 🚫 TRAVA CANCELAMENTO: Intenção de cancelamento detectada no nó AI, tratando como exit | msg="${(userMessage || '').substring(0, 100)}"`);
+          
+          try {
+            await supabaseClient
+              .from('ai_events')
+              .insert({
+                entity_type: 'conversation',
+                entity_id: conversationId,
+                event_type: 'ai_blocked_cancellation',
+                model: 'process-chat-flow',
+                output_json: {
+                  phase: 'flow_node_exit',
+                  node_id: currentNode.id,
+                  flow_id: activeState.flow_id,
+                  interaction_count: aiCount,
+                  message_preview: (userMessage || '').substring(0, 200),
+                },
+                input_summary: (userMessage || '').substring(0, 200),
+              });
+          } catch (logErr) {
+            console.error('[process-chat-flow] ⚠️ Failed to log cancellation block event:', logErr);
+          }
+
+          // delete redundante removido — confiamos no delete centralizado na linha de exit geral
         }
 
         if (commercialIntentMatch) {
@@ -2136,41 +3324,99 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log commercial block event:', logErr);
           }
 
-          delete collectedData.__ai;
+          // delete redundante removido — confiamos no delete centralizado na linha de exit geral
         }
 
-        // Verificar exit keyword (case-insensitive includes)
-        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) =>
-          msgLower.includes(String(kw || '').toLowerCase().trim())
-        );
+        if (consultorIntentMatch) {
+          console.log(`[process-chat-flow] 💼 TRAVA CONSULTOR: Intenção de consultor detectada no nó AI, tratando como exit`);
+          
+          try {
+            await supabaseClient
+              .from('ai_events')
+              .insert({
+                entity_type: 'conversation',
+                entity_id: conversationId,
+                event_type: 'ai_blocked_consultant',
+                model: 'process-chat-flow',
+                output_json: {
+                  phase: 'flow_node_exit',
+                  node_id: currentNode.id,
+                  flow_id: activeState.flow_id,
+                  interaction_count: aiCount,
+                  has_consultant: consultorHasConsultant,
+                  message_preview: (userMessage || '').substring(0, 200),
+                },
+                input_summary: (userMessage || '').substring(0, 200),
+              });
+          } catch (logErr) {
+            console.error('[process-chat-flow] ⚠️ Failed to log consultant block event:', logErr);
+          }
+
+          // delete redundante removido — confiamos no delete centralizado na linha de exit geral
+        }
+
+        // Verificar exit keyword (word-boundary match — evita falso positivo por substring)
+        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && !supportIntentMatch && !consultorIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
+          const kwClean = String(kw || '').toLowerCase().trim();
+          if (!kwClean) return false;
+          try {
+            const kwRegex = new RegExp(`\\b${kwClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+            return kwRegex.test(msgLower);
+          } catch (_kwErr) {
+            return msgLower.includes(kwClean);
+          }
+        });
 
         // Verificar max interações
-        const maxReached = !financialIntentMatch && !commercialIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
+        const maxReached = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && !supportIntentMatch && !consultorIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
 
         // 🆕 forceAIExit: IA detectou handoff (strict RAG ou confidence) e quer sair do nó
         if (forceAIExit) {
           console.log('[process-chat-flow] 🔄 forceAIExit=true recebido do webhook, forçando exit do nó AI (IA não conseguiu resolver)');
         }
-        const aiExitForced = !!forceAIExit;
+        aiExitForced = !!forceAIExit;
 
         // 🆕 INTENT DATA: Salvar ai_exit_intent no collectedData quando recebido do webhook
         if (intentData && intentData.ai_exit_intent) {
           collectedData.ai_exit_intent = intentData.ai_exit_intent;
           console.log(`[process-chat-flow] 🎯 ai_exit_intent salvo: "${intentData.ai_exit_intent}"`);
+          
+          // 🔴 FIX: Mapear ai_exit_intent para os flags *IntentMatch
+          if (!financialIntentMatch && !cancellationIntentMatch && !commercialIntentMatch && !supportIntentMatch && !consultorIntentMatch) {
+            const intent = intentData.ai_exit_intent;
+            if (intent === 'financeiro') { financialIntentMatch = true; }
+            else if (intent === 'cancelamento') { cancellationIntentMatch = true; }
+            else if (intent === 'comercial') { commercialIntentMatch = true; }
+            else if (intent === 'suporte') { supportIntentMatch = true; }
+            else if (intent === 'consultor') { consultorIntentMatch = true; }
+            console.log(`[process-chat-flow] 🎯 intentData.ai_exit_intent="${intent}" → *IntentMatch forçado`);
+          }
         }
-        // Salvar intent automático quando financialIntentMatch ou commercialIntentMatch
+        // Salvar intent automático
         if (financialIntentMatch && !collectedData.ai_exit_intent) {
           collectedData.ai_exit_intent = 'financeiro';
           console.log('[process-chat-flow] 🎯 ai_exit_intent=financeiro (auto-detect from financialIntentMatch)');
+        }
+        if (cancellationIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'cancelamento';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=cancelamento (auto-detect from cancellationIntentMatch)');
         }
         if (commercialIntentMatch && !collectedData.ai_exit_intent) {
           collectedData.ai_exit_intent = 'comercial';
           console.log('[process-chat-flow] 🎯 ai_exit_intent=comercial (auto-detect from commercialIntentMatch)');
         }
+        if (supportIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'suporte';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=suporte (auto-detect from supportIntentMatch)');
+        }
+        if (consultorIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'consultor';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=consultor (auto-detect from consultorIntentMatch)');
+        }
 
-        if (financialIntentMatch || commercialIntentMatch || keywordMatch || maxReached || aiExitForced) {
-          const exitReason = financialIntentMatch ? 'financial_blocked' : commercialIntentMatch ? 'commercial_blocked' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
-          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} commercial=${commercialIntentMatch} count=${aiCount}`);
+        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || keywordMatch || maxReached || aiExitForced) {
+          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : supportIntentMatch ? 'support_requested' : consultorIntentMatch ? 'consultant_requested' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
+          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} support=${supportIntentMatch} consultant=${consultorIntentMatch} count=${aiCount}`);
 
           // Log de transferência estruturado em ai_events
           try {
@@ -2203,6 +3449,7 @@ serve(async (req) => {
             const fallbackMsg = currentNode.data?.fallback_message;
             if (fallbackMsg && String(fallbackMsg).trim().length > 0) {
               try {
+                // 🔧 RISK 2 FIX: Usar canal real da conversa em vez de 'web_chat' hardcoded
                 await supabaseClient.from('messages').insert({
                   conversation_id: conversationId,
                   content: String(fallbackMsg),
@@ -2210,7 +3457,7 @@ serve(async (req) => {
                   is_ai_generated: true,
                   is_internal: false,
                   status: 'sent',
-                  channel: 'web_chat',
+                  channel: activeConversationData?.channel || 'web_chat',
                 });
                 console.log('[process-chat-flow] ✅ fallback_message inserted on AI exit (will advance)');
               } catch (sendErr) {
@@ -2220,10 +3467,33 @@ serve(async (req) => {
             console.log(`[process-chat-flow] 🔄 AI exit: reason=${aiExitForced ? 'ai_handoff_exit' : 'max_interactions'} (${aiCount}/${maxInteractions}) - advancing to next node`);
           }
 
-          // 🆕 FIX: Quando aiExitForced, setar path='ai_exit' para findNextNode priorizar edge com handle ai_exit
-          if (aiExitForced) {
-            path = 'ai_exit';
-            console.log('[process-chat-flow] 🎯 aiExitForced → path set to "ai_exit" for findNextNode');
+          // 🆕 Paths dedicados por intenção (handles separados no nó IA)
+          if (financialIntentMatch) {
+            path = 'financeiro';
+            console.log('[process-chat-flow] 🎯 financialIntentMatch → path set to "financeiro"');
+          } else if (cancellationIntentMatch) {
+            path = 'cancelamento';
+            console.log('[process-chat-flow] 🎯 cancellationIntentMatch → path set to "cancelamento"');
+          } else if (commercialIntentMatch) {
+            path = 'comercial';
+            console.log('[process-chat-flow] 🎯 commercialIntentMatch → path set to "comercial"');
+          } else if (supportIntentMatch) {
+            path = 'suporte';
+            console.log('[process-chat-flow] 🎯 supportIntentMatch → path set to "suporte"');
+          } else if (consultorIntentMatch) {
+            path = 'consultor';
+            console.log('[process-chat-flow] 🎯 consultorIntentMatch → path set to "consultor"');
+          } else if (keywordMatch) {
+            path = 'suporte';
+            collectedData.ai_exit_intent = 'suporte';
+            console.log(`[process-chat-flow] 🎯 keywordMatch → path set to "suporte"`);
+          } else if (aiExitForced) {
+            path = 'default';
+            console.log(`[process-chat-flow] 🎯 aiExitForced → path set to "default"`);
+          } else {
+            // maxReached sem intent específico → saída pelo handle default
+            path = 'default';
+            console.log(`[process-chat-flow] 🎯 maxReached sem intent → path set to "default"`);
           }
 
           // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir
@@ -2233,7 +3503,7 @@ serve(async (req) => {
           // FICAR: atualizar state e retornar aiNodeActive
           // 🆕 DIAGNOSTIC: Log quando forbid_financial=true mas não detectou intent (ajuda diagnóstico)
           if (forbidFinancial && msgLower.length > 0) {
-            console.log(`[process-chat-flow] ⚠️ DIAGNOSTIC: forbid_financial=true mas financialIntentMatch=false. userMessage="${(userMessage || '').substring(0, 100)}" msgLower="${msgLower.substring(0, 100)}" regexTest=${financialIntentPattern.test(userMessage || '')}`);
+            console.log(`[process-chat-flow] ⚠️ DIAGNOSTIC: forbid_financial=true mas financialIntentMatch=false. isAction=${isFinancialAction} isInfo=${isFinancialInfo} userMessage="${(userMessage || '').substring(0, 100)}"`);
           }
           if (forbidCommercial && msgLower.length > 0) {
             console.log(`[process-chat-flow] ⚠️ DIAGNOSTIC: forbid_commercial=true mas commercialIntentMatch=false. userMessage="${(userMessage || '').substring(0, 100)}"`);
@@ -2271,28 +3541,28 @@ serve(async (req) => {
               forbidOptions: currentNode.data?.forbid_options ?? true,
               forbidFinancial: currentNode.data?.forbid_financial ?? false,
               forbidCommercial: currentNode.data?.forbid_commercial ?? false,
+              forbidCancellation: currentNode.data?.forbid_cancellation ?? false,
+              forbidSupport: currentNode.data?.forbid_support ?? false,
+              forbidConsultant: currentNode.data?.forbid_consultant ?? false,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-      }
+      } // end else if (ai_response)
 
+      // 🔧 FIX: findNextNode agora acessível para TODOS os tipos (condition, condition_v2, ai_response)
       nextNode = findNextNode(flowDef, currentNode, path);
-      // 🆕 FIX: Se aiExitForced e não achou edge 'ai_exit', tentar edge default (próximo nó do canvas)
-      if (!nextNode && aiExitForced && path === 'ai_exit') {
-        console.log('[process-chat-flow] ⚠️ aiExitForced: sem edge ai_exit, tentando edge default');
-        nextNode = findNextNode(flowDef, currentNode, undefined);
-      }
+      // findNextNode já tem fallback hierárquico (path → ai_exit → default → any)
       console.log(`[process-chat-flow] ➡️ Transition: from=${currentNode.type}(${currentNode.id}) path=${path || 'default'} → next=${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
 
-      // 🔒 FIX: Financial/Commercial exit SEM próximo nó → forçar handoff
-      if (!nextNode && (financialIntentMatch || commercialIntentMatch)) {
-        const exitType = financialIntentMatch ? 'financial' : 'commercial';
+      // 🔒 FIX: Financial/Commercial/Support/Cancellation exit SEM próximo nó → forçar handoff
+      if (!nextNode && (financialIntentMatch || commercialIntentMatch || cancellationIntentMatch || supportIntentMatch || consultorIntentMatch)) {
+        const exitType = financialIntentMatch ? 'financial' : cancellationIntentMatch ? 'cancellation' : commercialIntentMatch ? 'commercial' : consultorIntentMatch ? 'consultant' : 'support';
         console.log(`[process-chat-flow] 🔒 ${exitType} exit com nextNode=null → forçando handoff`);
         
-        // Buscar departamento financeiro/comercial dinamicamente
+        // Buscar departamento dinamicamente
         let targetDeptId: string | null = null;
-        const deptSearchName = financialIntentMatch ? '%financ%' : '%comerci%';
+        const deptSearchName = financialIntentMatch ? '%financ%' : cancellationIntentMatch ? '%cancel%' : commercialIntentMatch ? '%comerci%' : consultorIntentMatch ? '%consult%' : '%suporte%';
         try {
           const { data: deptRow } = await supabaseClient
             .from('departments')
@@ -2309,6 +3579,12 @@ serve(async (req) => {
 
         const handoffMsg = financialIntentMatch
           ? 'Entendi. Para assuntos financeiros, vou te encaminhar para um atendente humano agora.'
+          : cancellationIntentMatch
+          ? 'Entendi que deseja cancelar. Vou te conectar com um atendente para resolver isso.'
+          : supportIntentMatch
+          ? 'Claro! Vou te transferir para um atendente humano agora.'
+          : consultorIntentMatch
+          ? 'Certo! Vou te conectar com seu consultor agora.'
           : 'Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso.';
 
         // Completar flow state como transferred
@@ -2494,7 +3770,9 @@ serve(async (req) => {
         // 🔧 FIX 3: Auto-traverse cobre condition_v2
         while (afterFetchNode && ['condition', 'condition_v2', 'input', 'start'].includes(afterFetchNode.type)) {
           if (afterFetchNode.type === 'condition' || afterFetchNode.type === 'condition_v2') {
-            const condPath = evaluateConditionPath(afterFetchNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+            const condPath = afterFetchNode.type === 'condition_v2'
+              ? evaluateConditionV2Path(afterFetchNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
+              : evaluateConditionPath(afterFetchNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
             const resolved = findNextNode(flowDef, afterFetchNode, condPath);
             if (!resolved || !['condition', 'condition_v2', 'input', 'start'].includes(resolved.type)) {
               afterFetchNode = resolved;
@@ -2561,11 +3839,7 @@ serve(async (req) => {
           // Phone validation
           if (nextNode.data?.validate_phone !== false && (vcContact.phone || vcContact.whatsapp_id)) {
             validationPromises.push(
-              fetch(`${supabaseUrl}/functions/v1/validate-by-kiwify-phone`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                body: JSON.stringify({ phone: vcContact.phone, whatsapp_id: vcContact.whatsapp_id, contact_id: vcConv?.contact_id })
-              }).then(r => r.json()).catch(() => ({ found: false }))
+              inlineKiwifyValidation(supabaseClient, vcContact.phone, vcContact.whatsapp_id, vcConv?.contact_id)
             );
           }
           
@@ -2632,7 +3906,9 @@ serve(async (req) => {
         // 🔧 FIX 3: Auto-traverse cobre condition_v2
         while (afterValidateNode && ['condition', 'condition_v2', 'input', 'start'].includes(afterValidateNode.type)) {
           if (afterValidateNode.type === 'condition' || afterValidateNode.type === 'condition_v2') {
-            const condPath = evaluateConditionPath(afterValidateNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+            const condPath = afterValidateNode.type === 'condition_v2'
+              ? evaluateConditionV2Path(afterValidateNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
+              : evaluateConditionPath(afterValidateNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
             const resolved = findNextNode(flowDef, afterValidateNode, condPath);
             if (!resolved || !['condition', 'condition_v2', 'input', 'start'].includes(resolved.type)) {
               afterValidateNode = resolved;
@@ -2658,7 +3934,45 @@ serve(async (req) => {
       // 🆕 Handler especial para verify_customer_otp (entrada inicial)
       if (nextNode?.type === 'verify_customer_otp') {
         console.log('[process-chat-flow] 🔐 Entering verify_customer_otp node');
-        
+        const otpVerifiedKey4 = nextNode.data?.save_verified_as || 'customer_verified';
+
+        // 🆕 PRE-CHECK: Se validate_customer já rodou
+        const preEmailZ4 = collectedData.customer_email_found || activeContactData?.email;
+        if (collectedData.customer_validated === true && preEmailZ4) {
+          const preEmail = preEmailZ4;
+          console.log('[process-chat-flow] 🔐 OTP pre-check [options handler]: customer validated, sending OTP to:', preEmail);
+          collectedData.__otp_step = 'wait_code';
+          collectedData.__otp_attempts = 0;
+          collectedData.__otp_email = preEmail;
+          collectedData.__otp_customer_name = collectedData.customer_name_found || '';
+          await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'waiting_input' }).eq('id', activeState.id);
+          const otpSendResZ4 = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+            body: JSON.stringify({ email: preEmail, type: 'customer' }),
+          });
+          const otpSendBodyZ4 = await otpSendResZ4.text();
+          if (!otpSendResZ4.ok) { console.error('[process-chat-flow] ⚠️ Failed to send OTP [options handler]:', otpSendBodyZ4); }
+          const otpSentMsg = nextNode.data?.message_otp_sent
+            ? nextNode.data.message_otp_sent.replace(/\{\{email\}\}/g, preEmail)
+            : `Enviamos um código de verificação para seu email de cadastro. Digite o código:`;
+          return new Response(JSON.stringify({ useAI: false, response: otpSentMsg, flowId: activeState.flow_id, flowName: activeState.chat_flows?.name || null }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        } else if (collectedData.customer_validated === false) {
+          console.log('[process-chat-flow] 🔐 OTP pre-check [options handler]: not a customer, skipping OTP');
+          collectedData[otpVerifiedKey4] = false;
+          collectedData.__otp_result = 'not_customer';
+          collectedData.customer_verified_email = '';
+          collectedData.customer_verified_name = '';
+          const notCustomerMsg = nextNode.data?.message_not_customer || "Você não foi identificado como cliente. Vou encaminhar para nosso time comercial.";
+          const afterOtp = findNextNode(flowDef, nextNode);
+          if (afterOtp) {
+            await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: afterOtp.id, status: afterOtp.type.startsWith('ask_') || afterOtp.type === 'condition' || afterOtp.type === 'condition_v2' || afterOtp.type === 'verify_customer_otp' ? 'waiting_input' : 'active' }).eq('id', activeState.id);
+          } else {
+            await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, status: 'completed', completed_at: new Date().toISOString() }).eq('id', activeState.id);
+          }
+          return new Response(JSON.stringify({ useAI: false, response: notCustomerMsg, flowId: activeState.flow_id, flowName: activeState.chat_flows?.name || null }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        // Fallback: pedir email normalmente
         collectedData.__otp_step = 'ask_email';
         collectedData.__otp_attempts = 0;
 
@@ -2713,7 +4027,7 @@ serve(async (req) => {
             conversationId: conversationId,
             flowStateId: activeState.id,
             nodeId: nextNode.id,
-            contactId: activeState.conversations?.contact_id || null,
+            contactId: activeContactData?.id || null,
             subject,
             description,
             category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
@@ -2742,8 +4056,8 @@ serve(async (req) => {
               } else {
                 console.log(`[process-chat-flow] ✅ Tag ${tagName} added to conversation`);
               }
-            } else if (activeState.conversations?.contact_id) {
-              const contactId = activeState.conversations.contact_id;
+            } else if (activeContactData?.id) {
+              const contactId = activeContactData.id;
               console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to contact ${contactId}`);
               const { error: tagError } = await supabaseClient
                 .from('contact_tags')
@@ -2818,12 +4132,14 @@ serve(async (req) => {
           }
         }
 
+        // 🆕 BUG 1 FIX: Adicionado completed_at no transfer principal
         await supabaseClient
           .from('chat_flow_states')
           .update({
             collected_data: collectedData,
             current_node_id: nextNode.id,
             status: 'transferred',
+            completed_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
@@ -2869,11 +4185,15 @@ serve(async (req) => {
       // Se é um nó de resposta IA
       if (nextNode.type === 'ai_response') {
         console.log(`[process-chat-flow] 🤖 AI response node: id=${nextNode.id} persona=${nextNode.data?.persona_id || 'default'} maxInteractions=${nextNode.data?.max_ai_interactions || 0} exitKeywords=[${(nextNode.data?.exit_keywords || []).join(',')}]`);
+        // Reinicializar contador de interações para novo nó AI
+        collectedData.__ai = { interaction_count: 0 };
+        // 🆕 BUG 5 FIX: Adicionado status 'active' no ai_response re-entry
         await supabaseClient
           .from('chat_flow_states')
           .update({
             collected_data: collectedData,
             current_node_id: nextNode.id,
+            status: 'active',
             updated_at: new Date().toISOString(),
           })
           .eq('id', activeState.id);
@@ -2902,6 +4222,9 @@ serve(async (req) => {
             forbidOptions: nextNode.data?.forbid_options ?? true,
             forbidFinancial: nextNode.data?.forbid_financial ?? false,
             forbidCommercial: nextNode.data?.forbid_commercial ?? false,
+            forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
+            forbidSupport: nextNode.data?.forbid_support ?? false,
+            forbidConsultant: nextNode.data?.forbid_consultant ?? false,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -2914,7 +4237,7 @@ serve(async (req) => {
       // até encontrar um nó que colete input (ask_*, ai_response, transfer, end)
       const extraMessages: string[] = [];
       
-      while (nextNode && (nextNode.type === 'message' || nextNode.type === 'create_ticket')) {
+      while (nextNode && (nextNode.type === 'message' || nextNode.type === 'create_ticket' || nextNode.type === 'validate_customer' || nextNode.type === 'fetch_order')) {
         if (nextNode.type === 'create_ticket') {
           // 🎫 Mid-flow: criar ticket e auto-avançar
           const subject = replaceVariables(nextNode.data?.subject_template || 'Ticket do Fluxo', variablesContext);
@@ -2926,7 +4249,7 @@ serve(async (req) => {
             conversationId: conversationId,
             flowStateId: activeState.id,
             nodeId: nextNode.id,
-            contactId: activeState.conversations?.contact_id || null,
+            contactId: activeContactData?.id || null,
             subject,
             description,
             category: nextNode.data?.ticket_category || 'outro',
@@ -2938,6 +4261,48 @@ serve(async (req) => {
           });
           if (ticket) collectedData.__last_ticket_id = ticket.id;
           console.log(`[process-chat-flow] 🎫 Auto-advancing past create_ticket node ${nextNode.id}`);
+        } else if (nextNode.type === 'validate_customer') {
+          // 🛡️ BUG A FIX: validate_customer inline no main auto-advance loop
+          console.log('[process-chat-flow] 🛡️ [main-autoadvance] validate_customer inline');
+          const vcUrlMain = Deno.env.get('SUPABASE_URL')!;
+          const vcKeyMain = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          const { data: vcConvMain } = await supabaseClient.from('conversations').select('contact_id').eq('id', conversationId).maybeSingle();
+          let vcContactMain: any = null;
+          if (vcConvMain?.contact_id) {
+            const { data: cgMain } = await supabaseClient.from('contacts').select('phone, email, document, whatsapp_id, first_name, last_name, kiwify_validated').eq('id', vcConvMain.contact_id).maybeSingle();
+            vcContactMain = cgMain;
+          }
+          const vKeyMain = nextNode.data?.save_validated_as || 'customer_validated';
+          const nKeyMain = nextNode.data?.save_customer_name_as || 'customer_name_found';
+          const eKeyMain = nextNode.data?.save_customer_email_as || 'customer_email_found';
+          let vFoundMain = false, vNameMain = '', vEmailMain = '';
+          if (vcContactMain && !vcContactMain.kiwify_validated) {
+            const vPromisesMain: Promise<any>[] = [];
+            if (nextNode.data?.validate_phone !== false && (vcContactMain.phone || vcContactMain.whatsapp_id)) {
+              vPromisesMain.push(inlineKiwifyValidation(supabaseClient, vcContactMain.phone, vcContactMain.whatsapp_id, vcConvMain?.contact_id));
+            }
+            if (nextNode.data?.validate_email !== false && vcContactMain.email) {
+              vPromisesMain.push(fetch(`${vcUrlMain}/functions/v1/verify-customer-email`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKeyMain}` }, body: JSON.stringify({ email: vcContactMain.email, contact_id: vcConvMain?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (nextNode.data?.validate_cpf === true && vcContactMain.document) {
+              vPromisesMain.push(fetch(`${vcUrlMain}/functions/v1/validate-by-cpf`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vcKeyMain}` }, body: JSON.stringify({ cpf: vcContactMain.document, contact_id: vcConvMain?.contact_id }) }).then(r => r.json()).catch(() => ({ found: false })));
+            }
+            if (vPromisesMain.length > 0) {
+              const vResultsMain = await Promise.allSettled(vPromisesMain);
+              for (const vr of vResultsMain) { if (vr.status === 'fulfilled' && vr.value?.found) { vFoundMain = true; if (vr.value.customer?.name) vNameMain = vr.value.customer.name; if (vr.value.customer?.email) vEmailMain = vr.value.customer.email; } }
+            }
+            if (vFoundMain && vcConvMain?.contact_id) {
+              await supabaseClient.from('contacts').update({ kiwify_validated: true, status: 'customer' }).eq('id', vcConvMain.contact_id);
+            }
+          } else if (vcContactMain?.kiwify_validated) {
+            vFoundMain = true; vNameMain = [vcContactMain.first_name, vcContactMain.last_name].filter(Boolean).join(' '); vEmailMain = vcContactMain.email || '';
+          }
+          collectedData[vKeyMain] = vFoundMain; collectedData[nKeyMain] = vNameMain; collectedData[eKeyMain] = vEmailMain;
+          console.log('[process-chat-flow] 🛡️ [main-autoadvance] validate result:', { vFoundMain, vNameMain });
+        } else if (nextNode.type === 'fetch_order') {
+          // 📦 BUG A FIX: fetch_order inline no main auto-advance loop
+          console.log('[process-chat-flow] 📦 [main-autoadvance] fetch_order inline');
+          collectedData = await handleFetchOrderNode(nextNode, collectedData, userMessage);
         } else {
           const msgText = replaceVariables(nextNode.data?.message || "", variablesContext);
           extraMessages.push(msgText);
@@ -2954,6 +4319,10 @@ serve(async (req) => {
         if (afterMessage.type === 'condition') {
           const condPath = evaluateConditionPath(afterMessage.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
           const afterCond = findNextNode(flowDef, afterMessage, condPath);
+          nextNode = afterCond || null;
+        } else if (afterMessage.type === 'condition_v2') {
+          const condV2Path = evaluateConditionV2Path(afterMessage.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || []);
+          const afterCond = findNextNode(flowDef, afterMessage, condV2Path);
           nextNode = afterCond || null;
         } else if (afterMessage.type === 'input' || afterMessage.type === 'start') {
           nextNode = findNextNode(flowDef, afterMessage);
@@ -3012,7 +4381,7 @@ serve(async (req) => {
             conversationId: conversationId,
             flowStateId: activeState.id,
             nodeId: nextNode.id,
-            contactId: activeState.conversations?.contact_id || null,
+            contactId: activeContactData?.id || null,
             subject,
             description,
             category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
@@ -3023,6 +4392,22 @@ serve(async (req) => {
             collectedData,
           });
           if (ticket) collectedData.__last_ticket_id = ticket.id;
+        }
+
+        // 🛡️ BUG I FIX: EndNode action: add_tag (after auto-advance message chain)
+        if (nextNode.data?.end_action === 'add_tag') {
+          const tagId = nextNode.data.action_data?.tag_id;
+          const tagScope = nextNode.data.action_data?.tag_scope || 'contact';
+          if (tagId) {
+            const tagName = nextNode.data.action_data?.tag_name || tagId;
+            if (tagScope === 'conversation') {
+              console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to conversation ${conversationId} (after msg chain)`);
+              await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+            } else if (activeContactData?.id) {
+              console.log(`[process-chat-flow] 🏷️ Adding tag ${tagName} to contact ${activeContactData.id} (after msg chain)`);
+              await supabaseClient.from('contact_tags').upsert({ contact_id: activeContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+            }
+          }
         }
 
         const endMsg = replaceVariables(nextNode.data?.message || '', variablesContext);
@@ -3166,18 +4551,21 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
+
+
+    } // end if (activeState)
 
     // 🧪 MODO TESTE: Bloquear triggers e Master Flow automáticos
     // Em modo teste, APENAS fluxos iniciados manualmente devem rodar
+    // MAS a IA deve continuar respondendo normalmente (useAI: true)
+    // 🔧 FIX: Movido para FORA do if(activeState) — antes estava como código morto (unreachable)
     if (isTestMode && !manualTrigger) {
-      console.log('[process-chat-flow] 🧪 TEST MODE: Bloqueando auto-triggers e Master Flow');
+      console.log('[process-chat-flow] 🧪 TEST MODE: Bloqueando auto-triggers/Master Flow, permitindo IA');
       return new Response(JSON.stringify({
-        useAI: false,
+        useAI: true,
         aiNodeActive: false,
-        skipAutoResponse: true,
-        reason: 'test_mode_manual_only',
-        message: 'Modo teste ativo - apenas fluxos manuais permitidos'
+        reason: 'test_mode_ai_allowed',
+        message: 'Modo teste ativo - auto-triggers bloqueados, IA permitida'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -3413,7 +4801,7 @@ serve(async (req) => {
         // 4. Logs fortes para diagnóstico
         // ============================================================
         
-        const NO_CONTENT = new Set(['input', 'start', 'condition', 'condition_v2']);
+        const NO_CONTENT = new Set(['input', 'start', 'condition', 'condition_v2', 'validate_customer', 'fetch_order']);
         const MAX_TRAVERSAL = 12;
 
         // 1) Descobrir startNode
@@ -3534,6 +4922,89 @@ serve(async (req) => {
               break;
             }
             node = next;
+          } else if (node.type === 'validate_customer') {
+            // 🛡️ Execute Kiwify validation inline during traversal
+            console.log('[process-chat-flow] 🛡️ Master traverse: executing validate_customer inline');
+            const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+            const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+            
+            const validatedKey = node.data?.save_validated_as || 'customer_validated';
+            const nameKey = node.data?.save_customer_name_as || 'customer_name_found';
+            const emailKey = node.data?.save_customer_email_as || 'customer_email_found';
+            
+            let vcFound = false;
+            let vcName = '';
+            let vcEmail = '';
+
+            if (contactData && !contactData.kiwify_validated) {
+              const vcPromises: Promise<any>[] = [];
+              if (node.data?.validate_phone !== false && (contactData.phone || contactData.whatsapp_id)) {
+                vcPromises.push(
+                  inlineKiwifyValidation(supabaseClient, contactData.phone, contactData.whatsapp_id, conversation?.contact_id)
+                );
+              }
+              if (node.data?.validate_email !== false && contactData.email) {
+                vcPromises.push(
+                  fetch(`${supabaseUrl}/functions/v1/verify-customer-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                    body: JSON.stringify({ email: contactData.email, contact_id: conversation?.contact_id })
+                  }).then(r => r.json()).catch(() => ({ found: false }))
+                );
+              }
+              if (node.data?.validate_cpf === true && contactData.document) {
+                vcPromises.push(
+                  fetch(`${supabaseUrl}/functions/v1/validate-by-cpf`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                    body: JSON.stringify({ cpf: contactData.document, contact_id: conversation?.contact_id })
+                  }).then(r => r.json()).catch(() => ({ found: false }))
+                );
+              }
+              if (vcPromises.length > 0) {
+                const results = await Promise.allSettled(vcPromises);
+                for (const r of results) {
+                  if (r.status === 'fulfilled' && r.value?.found) {
+                    vcFound = true;
+                    if (r.value.customer?.name) vcName = r.value.customer.name;
+                    if (r.value.customer?.email) vcEmail = r.value.customer.email;
+                  }
+                }
+              }
+              if (vcFound && conversation?.contact_id) {
+                await supabaseClient.from('contacts').update({ kiwify_validated: true, status: 'customer' }).eq('id', conversation.contact_id);
+                // Refresh contactData
+                contactData.kiwify_validated = true;
+                contactData.status = 'customer';
+                console.log('[process-chat-flow] ✅ Master traverse: contact promoted to customer');
+              }
+            } else if (contactData?.kiwify_validated) {
+              vcFound = true;
+              vcName = [contactData.first_name, contactData.last_name].filter(Boolean).join(' ');
+              vcEmail = contactData.email || '';
+            }
+
+            collectedData[validatedKey] = vcFound;
+            collectedData[nameKey] = vcName;
+            collectedData[emailKey] = vcEmail;
+            console.log('[process-chat-flow] 🛡️ Validate result:', { vcFound, vcName, vcEmail });
+
+            const next = findNextNode(flowDef, node);
+            if (!next) {
+              console.log('[process-chat-flow] ⚠️ No next node after validate_customer');
+              break;
+            }
+            node = next;
+          } else if (node.type === 'fetch_order') {
+            // 📦 BUG B FIX: fetch_order inline during master flow traversal
+            console.log('[process-chat-flow] 📦 Master traverse: executing fetch_order inline');
+            collectedData = await handleFetchOrderNode(node, collectedData, userMessage);
+            const next = findNextNode(flowDef, node);
+            if (!next) {
+              console.log('[process-chat-flow] ⚠️ No next node after fetch_order');
+              break;
+            }
+            node = next;
           } else {
             const next = findNextNode(flowDef, node);
             if (!next) {
@@ -3642,6 +5113,9 @@ serve(async (req) => {
               forbidOptions: node.data?.forbid_options ?? true,
               forbidFinancial: node.data?.forbid_financial ?? false,
               forbidCommercial: node.data?.forbid_commercial ?? false,
+              forbidCancellation: node.data?.forbid_cancellation ?? false,
+              forbidSupport: node.data?.forbid_support ?? false,
+              forbidConsultant: node.data?.forbid_consultant ?? false,
               debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -3651,15 +5125,31 @@ serve(async (req) => {
         if (node.type === 'transfer') {
           await supabaseClient
             .from('chat_flow_states')
-            .update({ status: 'transferred' , updated_at: new Date().toISOString() })
+            .update({ status: 'transferred', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
             .eq('id', stateId);
-            
+
+          // 🛡️ BUG J FIX: Master Flow transfer → transition-conversation-state
+          const mfTransDeptId = node.data?.department_id || null;
+          const mfTransAiMode = node.data?.ai_mode || 'waiting_human';
+          const mfTransType =
+            mfTransAiMode === 'copilot'   ? 'set_copilot' :
+            mfTransAiMode === 'autopilot' ? 'engage_ai' :
+            'handoff_to_human';
+          await fetch(
+            `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+              body: JSON.stringify({ conversationId, transition: mfTransType, departmentId: mfTransDeptId, reason: 'master_flow_transfer', metadata: { node_id: node.id, flow_id: masterFlow.id, ai_mode: mfTransAiMode } })
+            }
+          );
+
           const transferMsg = replaceVariables(node.data?.message || 'Transferindo para um atendente...', masterVariablesContext);
           const msg = (transferMsg || '').trim();
           return new Response(
             JSON.stringify({ 
               useAI: false, 
-              response: msg.length ? msg : null,  // ✅ null quando vazio
+              response: msg.length ? msg : null,
               transfer: true, 
               transferType: node.data?.transfer_type,
               departmentId: node.data?.department_id,
@@ -3675,15 +5165,45 @@ serve(async (req) => {
         if (node.type === 'end') {
           await supabaseClient
             .from('chat_flow_states')
-            .update({ status: 'completed', completed_at: new Date().toISOString() , updated_at: new Date().toISOString() })
+            .update({ status: 'completed', completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
             .eq('id', stateId);
-            
+
+          // 🛡️ BUG K FIX: Master Flow end → executa end_actions
+          if (node.data?.end_action === 'create_ticket') {
+            const actionData = node.data.action_data || {};
+            const subject = replaceVariables(actionData.subject || node.data.subject_template || 'Ticket do Fluxo', masterVariablesContext);
+            const description = replaceVariables(actionData.description || node.data.description_template || '', masterVariablesContext);
+            const internalNote = (actionData.internal_note || node.data.internal_note)
+              ? replaceVariables(actionData.internal_note || node.data.internal_note, masterVariablesContext) : null;
+            await createTicketFromFlow(supabaseClient, {
+              conversationId, flowStateId: stateId, nodeId: node.id,
+              contactId: contactData?.id || null,
+              subject, description,
+              category: actionData.ticket_category || node.data.ticket_category || 'outro',
+              priority: actionData.ticket_priority || node.data.ticket_priority || 'medium',
+              departmentId: actionData.department_id || node.data.department_id || null,
+              internalNote, useCollectedData: actionData.use_collected_data || node.data.use_collected_data || false,
+              collectedData: {},
+            });
+          }
+          if (node.data?.end_action === 'add_tag') {
+            const tagId = node.data.action_data?.tag_id;
+            const tagScope = node.data.action_data?.tag_scope || 'contact';
+            if (tagId) {
+              if (tagScope === 'conversation') {
+                await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+              } else if (contactData?.id) {
+                await supabaseClient.from('contact_tags').upsert({ contact_id: contactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+              }
+            }
+          }
+
           const endMsg = replaceVariables(node.data?.message || '', masterVariablesContext);
           const msg = (endMsg || '').trim();
           return new Response(
             JSON.stringify({ 
               useAI: false, 
-              response: msg.length ? msg : null,  // ✅ null quando vazio
+              response: msg.length ? msg : null,
               flowCompleted: true, 
               flowId: masterFlow.id,
               isMasterFlow: true,
@@ -3693,9 +5213,67 @@ serve(async (req) => {
           );
         }
 
+        // 🛡️ BUG L FIX: Master Flow → verify_customer_otp inicializa OTP
+        if (node.type === 'verify_customer_otp') {
+          const otpVerifiedKeyMF = node.data?.save_verified_as || 'customer_verified';
+
+          // 🆕 PRE-CHECK: Se validate_customer já rodou na travessia do master flow
+          const preEmailZ5 = collectedData.customer_email_found || contactData?.email;
+          if (collectedData.customer_validated === true && preEmailZ5) {
+            const preEmail = preEmailZ5;
+            console.log('[process-chat-flow] 🔐 OTP pre-check [master]: customer validated, sending OTP to:', preEmail);
+            const otpData = { ...collectedData, __otp_step: 'wait_code', __otp_attempts: 0, __otp_email: preEmail, __otp_customer_name: collectedData.customer_name_found || '' };
+            await supabaseClient.from('chat_flow_states').update({ collected_data: otpData, status: 'waiting_input' }).eq('id', stateId);
+            const otpSendResZ5 = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-verification-code`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+              body: JSON.stringify({ email: preEmail, type: 'customer' }),
+            });
+            const otpSendBodyZ5 = await otpSendResZ5.text();
+            if (!otpSendResZ5.ok) { console.error('[process-chat-flow] ⚠️ Failed to send OTP [master]:', otpSendBodyZ5); }
+            const otpSentMsg = node.data?.message_otp_sent
+              ? node.data.message_otp_sent.replace(/\{\{email\}\}/g, preEmail)
+              : `Enviamos um código de verificação para seu email de cadastro. Digite o código:`;
+            return new Response(JSON.stringify({ useAI: false, response: otpSentMsg, flowId: masterFlow.id, flowStarted: true, isMasterFlow: true, debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          } else if (collectedData.customer_validated === false) {
+            console.log('[process-chat-flow] 🔐 OTP pre-check [master]: not a customer, skipping OTP');
+            collectedData[otpVerifiedKeyMF] = false;
+            collectedData.__otp_result = 'not_customer';
+            collectedData.customer_verified_email = '';
+            collectedData.customer_verified_name = '';
+            const notCustomerMsg = node.data?.message_not_customer || "Você não foi identificado como cliente. Vou encaminhar para nosso time comercial.";
+            const masterFlowDef = masterFlow.flow_definition as any;
+            const afterOtp = findNextNode(masterFlowDef, node);
+            if (afterOtp) {
+              await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: afterOtp.id, status: afterOtp.type.startsWith('ask_') || afterOtp.type === 'condition' || afterOtp.type === 'condition_v2' || afterOtp.type === 'verify_customer_otp' ? 'waiting_input' : 'active' }).eq('id', stateId);
+            } else {
+              await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, status: 'completed', completed_at: new Date().toISOString() }).eq('id', stateId);
+            }
+            return new Response(JSON.stringify({ useAI: false, response: notCustomerMsg, flowId: masterFlow.id, flowStarted: true, isMasterFlow: true, debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+
+          // Fallback: pedir email normalmente
+          await supabaseClient.from('chat_flow_states').update({
+            collected_data: { ...collectedData, __otp_step: 'ask_email', __otp_attempts: 0 },
+            status: 'waiting_input',
+          }).eq('id', stateId);
+
+          const askEmailMsg = node.data?.message_ask_email || "Para verificar sua identidade, me informe seu email cadastrado:";
+          return new Response(
+            JSON.stringify({
+              useAI: false,
+              response: askEmailMsg,
+              flowId: masterFlow.id,
+              flowStarted: true,
+              isMasterFlow: true,
+              debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         // message / ask_options / ask_*
         const contentMessage = replaceVariables(node.data?.message || '', masterVariablesContext);
-        const msg = (contentMessage || '').trim();  // ✅ CORREÇÃO #1
+        const msg = (contentMessage || '').trim();
         const options = node.type === 'ask_options'
           ? (node.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value, id: opt.id }))
           : null;
@@ -3703,7 +5281,7 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             useAI: false,
-            response: msg.length ? msg : null,  // ✅ nunca "" - sempre null quando vazio
+            response: msg.length ? msg : null,
             options,
             flowId: masterFlow.id,
             flowStarted: true,
@@ -3732,8 +5310,8 @@ serve(async (req) => {
     console.log('[process-chat-flow] Matched flow:', matchedFlow.id, matchedFlow.name);
 
     // 4. Iniciar novo fluxo
-    const flowDef = matchedFlow.flow_definition as any;
-    if (!flowDef?.nodes?.length) {
+    const trigFlowDef = matchedFlow.flow_definition as any;
+    if (!trigFlowDef?.nodes?.length) {
       return new Response(
         JSON.stringify({ useAI: true, reason: "Empty flow definition" }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -3741,46 +5319,59 @@ serve(async (req) => {
     }
 
     // Encontrar primeiro nó (sem edges apontando para ele)
-    const targetIds = new Set((flowDef.edges || []).map((e: any) => e.target));
-    let startNode = flowDef.nodes.find((n: any) => !targetIds.has(n.id)) || flowDef.nodes[0];
+    const targetIds = new Set((trigFlowDef.edges || []).map((e: any) => e.target));
+    let startNode = trigFlowDef.nodes.find((n: any) => !targetIds.has(n.id)) || trigFlowDef.nodes[0];
     
     console.log('[process-chat-flow] 🚀 Start node:', startNode.type, startNode.id);
 
     // 🆕 CORREÇÃO: Se o nó inicial é "input" ou "condition", seguir para o próximo nó
     // Esses nós não têm conteúdo para enviar ao usuário
-    let currentNode = startNode;
+    let trigCurrentNode = startNode;
     let attempts = 0;
     const maxAttempts = 10; // Evitar loop infinito
     
-    while (attempts < maxAttempts && (currentNode.type === 'input' || currentNode.type === 'condition')) {
+    while (attempts < maxAttempts && (trigCurrentNode.type === 'input' || trigCurrentNode.type === 'condition' || trigCurrentNode.type === 'condition_v2' || trigCurrentNode.type === 'validate_customer' || trigCurrentNode.type === 'fetch_order')) {
       attempts++;
-      console.log('[process-chat-flow] ⏩ Nó sem conteúdo (', currentNode.type, ') - avançando...');
+      console.log('[process-chat-flow] ⏩ Nó sem conteúdo (', trigCurrentNode.type, ') - avançando...');
       
-      if (currentNode.type === 'condition') {
+      if (trigCurrentNode.type === 'condition') {
         // 🆕 FIX: Multi-regra com keywords precisa de mensagem real
-        const hasMultiRules = currentNode.data?.condition_rules?.length > 0;
-        const hasFieldRules = hasMultiRules && currentNode.data.condition_rules.some((r: any) => !!r.field);
+        const hasMultiRules = trigCurrentNode.data?.condition_rules?.length > 0;
+        const hasFieldRules = hasMultiRules && trigCurrentNode.data.condition_rules.some((r: any) => !!r.field);
         if (hasMultiRules && !hasFieldRules && (!userMessage || userMessage.trim().length === 0)) {
           console.log('[process-chat-flow] 🛑 New flow: multi-rule keyword condition without userMessage — stopping as waiting_input');
           break;
         }
-        const path = evaluateConditionPath(currentNode.data, {}, userMessage);
+        const path = evaluateConditionPath(trigCurrentNode.data, {}, userMessage);
         console.log('[process-chat-flow] 🔍 Condição avaliada → path:', path);
-        currentNode = findNextNode(flowDef, currentNode, path);
+        trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, path);
+      } else if (trigCurrentNode.type === 'condition_v2') {
+        const v2Path = evaluateConditionV2Path(trigCurrentNode.data, {}, userMessage, undefined, undefined, undefined, trigFlowDef.edges || []);
+        console.log('[process-chat-flow] 🔍 Condição V2 avaliada → path:', v2Path);
+        trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, v2Path);
+      } else if (trigCurrentNode.type === 'validate_customer') {
+        // 🛡️ BUG D FIX: validate_customer inline no trigger match traversal
+        console.log('[process-chat-flow] 🛡️ [trigger-match] validate_customer inline — skipping validation (no state yet)');
+        // During trigger match traversal we don't have a flow state yet, just advance past it
+        trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, undefined);
+      } else if (trigCurrentNode.type === 'fetch_order') {
+        // 📦 BUG D FIX: fetch_order inline no trigger match traversal
+        console.log('[process-chat-flow] 📦 [trigger-match] fetch_order inline — skipping fetch (no state yet)');
+        trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, undefined);
       } else {
         // Para nó input, apenas seguir para o próximo
-        currentNode = findNextNode(flowDef, currentNode, undefined);
+        trigCurrentNode = findNextNode(trigFlowDef, trigCurrentNode, undefined);
       }
       
-      if (!currentNode) {
+      if (!trigCurrentNode) {
         console.log('[process-chat-flow] ❌ Sem próximo nó após avançar');
         break;
       }
       
-      console.log('[process-chat-flow] 📍 Novo nó:', currentNode.type, currentNode.id);
+      console.log('[process-chat-flow] 📍 Novo nó:', trigCurrentNode.type, trigCurrentNode.id);
     }
 
-    if (!currentNode) {
+    if (!trigCurrentNode) {
       console.log('[process-chat-flow] ❌ Não encontrou nó com conteúdo');
       return new Response(
         JSON.stringify({ useAI: true, reason: "Flow has no content nodes" }),
@@ -3789,7 +5380,7 @@ serve(async (req) => {
     }
 
     // Atualizar startNode para o nó com conteúdo real
-    startNode = currentNode;
+    startNode = trigCurrentNode;
     
     console.log('[process-chat-flow] ✅ Nó final com conteúdo:', startNode.type, startNode.id);
 
@@ -3857,6 +5448,9 @@ serve(async (req) => {
           forbidOptions: startNode.data?.forbid_options ?? true,
           forbidFinancial: startNode.data?.forbid_financial ?? false,
           forbidCommercial: startNode.data?.forbid_commercial ?? false,
+          forbidCancellation: startNode.data?.forbid_cancellation ?? false,
+          forbidSupport: startNode.data?.forbid_support ?? false,
+          forbidConsultant: startNode.data?.forbid_consultant ?? false,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -3875,6 +5469,116 @@ serve(async (req) => {
       enrichContactIsCustomer(trigContactData);
     }
     const trigVarCtx = await buildVariablesContext({}, trigContactData, trigConv, supabaseClient);
+    // 🛡️ BUG M FIX: Trigger Match → verify_customer_otp inicializa OTP
+    if (startNode.type === 'verify_customer_otp') {
+      // Trigger match: collectedData é fresco, então customer_validated não existirá normalmente
+      // Mas manter o pre-check para consistência futura
+      const trigCollectedData: any = {};
+      const otpVerifiedKeyTM = startNode.data?.save_verified_as || 'customer_verified';
+
+      // Fallback: pedir email normalmente (trigger match não tem validate_customer prévio)
+      await supabaseClient.from('chat_flow_states').update({
+        collected_data: { __otp_step: 'ask_email', __otp_attempts: 0 },
+        status: 'waiting_input',
+      }).eq('id', newState.id);
+
+      const askEmailMsg = startNode.data?.message_ask_email || "Para verificar sua identidade, me informe seu email cadastrado:";
+      return new Response(
+        JSON.stringify({
+          useAI: false,
+          response: askEmailMsg,
+          flowId: matchedFlow.id,
+          flowStarted: true,
+          nodeType: startNode.type,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 🛡️ BUG N FIX: Trigger Match → transfer chama transition-conversation-state
+    if (startNode.type === 'transfer') {
+      await supabaseClient.from('chat_flow_states').update({
+        status: 'transferred', completed_at: new Date().toISOString(),
+      }).eq('id', newState.id);
+
+      const tmTransDeptId = startNode.data?.department_id || null;
+      const tmTransAiMode = startNode.data?.ai_mode || 'waiting_human';
+      const tmTransType =
+        tmTransAiMode === 'copilot'   ? 'set_copilot' :
+        tmTransAiMode === 'autopilot' ? 'engage_ai' :
+        'handoff_to_human';
+      await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+          body: JSON.stringify({ conversationId, transition: tmTransType, departmentId: tmTransDeptId, reason: 'trigger_match_transfer', metadata: { node_id: startNode.id, flow_id: matchedFlow.id, ai_mode: tmTransAiMode } })
+        }
+      );
+
+      const transferMsg = replaceVariables(startNode.data?.message || 'Transferindo para um atendente...', trigVarCtx);
+      return new Response(
+        JSON.stringify({
+          useAI: false,
+          response: transferMsg,
+          transfer: true,
+          transferType: startNode.data?.transfer_type,
+          departmentId: tmTransDeptId,
+          flowId: matchedFlow.id,
+          flowStarted: true,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 🛡️ BUG N FIX: Trigger Match → end executa end_actions
+    if (startNode.type === 'end') {
+      await supabaseClient.from('chat_flow_states').update({
+        status: 'completed', completed_at: new Date().toISOString(),
+      }).eq('id', newState.id);
+
+      if (startNode.data?.end_action === 'create_ticket') {
+        const actionData = startNode.data.action_data || {};
+        const subject = replaceVariables(actionData.subject || startNode.data.subject_template || 'Ticket do Fluxo', trigVarCtx);
+        const description = replaceVariables(actionData.description || startNode.data.description_template || '', trigVarCtx);
+        const internalNote = (actionData.internal_note || startNode.data.internal_note)
+          ? replaceVariables(actionData.internal_note || startNode.data.internal_note, trigVarCtx) : null;
+        await createTicketFromFlow(supabaseClient, {
+          conversationId, flowStateId: newState.id, nodeId: startNode.id,
+          contactId: trigContactData?.id || null,
+          subject, description,
+          category: actionData.ticket_category || startNode.data.ticket_category || 'outro',
+          priority: actionData.ticket_priority || startNode.data.ticket_priority || 'medium',
+          departmentId: actionData.department_id || startNode.data.department_id || null,
+          internalNote, useCollectedData: actionData.use_collected_data || startNode.data.use_collected_data || false,
+          collectedData: {},
+        });
+      }
+      if (startNode.data?.end_action === 'add_tag') {
+        const tagId = startNode.data.action_data?.tag_id;
+        const tagScope = startNode.data.action_data?.tag_scope || 'contact';
+        if (tagId) {
+          if (tagScope === 'conversation') {
+            await supabaseClient.from('conversation_tags').upsert({ conversation_id: conversationId, tag_id: tagId }, { onConflict: 'conversation_id,tag_id' });
+          } else if (trigContactData?.id) {
+            await supabaseClient.from('contact_tags').upsert({ contact_id: trigContactData.id, tag_id: tagId }, { onConflict: 'contact_id,tag_id' });
+          }
+        }
+      }
+
+      const endMsg = replaceVariables(startNode.data?.message || '', trigVarCtx);
+      return new Response(
+        JSON.stringify({
+          useAI: false,
+          response: endMsg || null,
+          flowCompleted: true,
+          flowId: matchedFlow.id,
+          flowStarted: true,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const startMessage = replaceVariables(startNode.data?.message || "", trigVarCtx);
     const options = startNode.type === 'ask_options' 
       ? (startNode.data?.options || []).map((opt: any) => ({ label: opt.label, value: opt.value }))

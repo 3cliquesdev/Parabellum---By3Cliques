@@ -6,11 +6,12 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface ConversionRateWidgetProps {
-  daysBack?: number;
+  startDate?: Date;
+  endDate?: Date;
 }
 
-export function ConversionRateWidget({ daysBack = 90 }: ConversionRateWidgetProps) {
-  const { data: conversionData, isLoading } = useConversionStats(daysBack);
+export function ConversionRateWidget({ startDate, endDate }: ConversionRateWidgetProps) {
+  const { data: conversionData, isLoading } = useConversionStats(startDate, endDate);
 
   // Calcular métricas resumidas
   const avgConversionRate = conversionData && conversionData.length > 0
@@ -39,6 +40,10 @@ export function ConversionRateWidget({ daysBack = 90 }: ConversionRateWidgetProp
     return "Estável";
   };
 
+  const periodLabel = startDate && endDate
+    ? `${format(startDate, "dd/MM/yyyy")} - ${format(endDate, "dd/MM/yyyy")}`
+    : "Últimos 90 dias";
+
   // Formatar dados para o gráfico
   const chartData = conversionData?.map((item) => ({
     date: format(parseISO(item.date), "dd/MM", { locale: ptBR }),
@@ -54,7 +59,7 @@ export function ConversionRateWidget({ daysBack = 90 }: ConversionRateWidgetProp
       <Card>
         <CardHeader>
           <CardTitle>Taxa de Conversão - Tendência</CardTitle>
-          <CardDescription>Últimos {daysBack} dias</CardDescription>
+          <CardDescription>{periodLabel}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="h-[300px] flex items-center justify-center">
@@ -76,14 +81,14 @@ export function ConversionRateWidget({ daysBack = 90 }: ConversionRateWidgetProp
           </div>
         </CardTitle>
         <CardDescription>
-          Últimos {daysBack} dias | Média: <span className="font-semibold text-foreground">{avgConversionRate}%</span> | 
+          {periodLabel} | Média: <span className="font-semibold text-foreground">{avgConversionRate}%</span> | 
           Atual: <span className="font-semibold text-foreground">{latestConversionRate}%</span>
         </CardDescription>
       </CardHeader>
       <CardContent>
         {chartData.length === 0 ? (
           <div className="h-[300px] flex items-center justify-center">
-            <p className="text-muted-foreground">Nenhum dado disponível para os últimos 90 dias</p>
+            <p className="text-muted-foreground">Nenhum dado disponível para o período selecionado</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={300}>

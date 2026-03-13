@@ -15,6 +15,7 @@ import ChatWindow from "@/components/ChatWindow";
 import ContactDetailsSidebar from "@/components/ContactDetailsSidebar";
 import { InboxSidebar } from "@/components/inbox/InboxSidebar";
 import InboxFilterPopover, { type InboxFilters } from "@/components/inbox/InboxFilterPopover";
+import { ActiveFilterChips } from "@/components/inbox/ActiveFilterChips";
 import { BulkActionsBar } from "@/components/inbox/BulkActionsBar";
 import { InboxBulkDistributeBar } from "@/components/inbox/InboxBulkDistributeBar";
 import { InboxBulkDistributeDialog } from "@/components/inbox/InboxBulkDistributeDialog";
@@ -221,7 +222,7 @@ export default function Inbox() {
         external_ids: null,
         kiwify_customer_id: null,
         kiwify_subscription_id: null,
-        kiwify_validated: null,
+        kiwify_validated: (item as any).contact_kiwify_validated ?? null,
         kiwify_validated_at: null,
         last_contact_date: null,
         last_kiwify_event: null,
@@ -238,7 +239,7 @@ export default function Inbox() {
         source: null,
         state: null,
         state_registration: null,
-        status: null,
+        status: (item as any).contact_status ?? null,
         subscription_plan: null,
         support_channel_id: null,
         total_ltv: null,
@@ -603,6 +604,9 @@ export default function Inbox() {
           <InboxFilterPopover filters={filters} onFiltersChange={setFilters} />
         </div>
         
+        {/* Active filter chips - visible outside popover */}
+        <ActiveFilterChips filters={filters} onFiltersChange={setFilters} />
+        
         {/* Bulk Actions Bar for waiting_human conversations */}
         {filter === 'human_queue' && !selectionMode && (
           <BulkActionsBar
@@ -613,11 +617,14 @@ export default function Inbox() {
           />
         )}
         
-        {hasHiddenConversations && (
+        {orderedConversations.length === 0 && !isPageLoading && (
           <div className="flex-none px-3 py-2 bg-warning/10 border-b border-warning/30">
             <p className="text-xs text-warning-foreground">
-              Nenhuma conversa neste filtro.
-              {sidebarCounts.closed > 0 && (
+              Nenhuma conversa encontrada com essa combinação de filtros.
+              {(filters.channels.length > 0 || filters.tags.length > 0 || filters.assignedTo || filters.aiMode) && (
+                <span className="ml-1">Tente remover algum filtro acima.</span>
+              )}
+              {sidebarCounts.closed > 0 && !isArchived && (
                 <button 
                   onClick={() => navigate('/inbox?filter=archived')}
                   className="ml-1 underline hover:no-underline font-medium"

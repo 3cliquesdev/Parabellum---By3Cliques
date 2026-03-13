@@ -18,6 +18,7 @@ interface DownloadRequest {
   message_id: string;
   media_type: string;
   instance_id: string;
+  conversation_id?: string;
 }
 
 serve(async (req) => {
@@ -31,7 +32,7 @@ serve(async (req) => {
 
   try {
     const body: DownloadRequest = await req.json();
-    const { meta_media_id, message_id, media_type, instance_id } = body;
+    const { meta_media_id, message_id, media_type, instance_id, conversation_id } = body;
 
     console.log("[download-meta-media] 📥 Starting download:", { meta_media_id, message_id, media_type });
 
@@ -110,14 +111,15 @@ serve(async (req) => {
     const fileBuffer = await fileResponse.arrayBuffer();
     const fileExtension = getExtensionFromMimeType(mimeType);
     const fileName = `${message_id}_${Date.now()}${fileExtension}`;
+    const storageBucket = 'chat-attachments';
     const storagePath = `whatsapp/${fileName}`;
 
     console.log("[download-meta-media] 📦 File size:", fileBuffer.byteLength, "bytes");
 
     // Step 3: Upload to Supabase Storage
-    console.log("[download-meta-media] ⬆️ Uploading to Storage...");
+    console.log("[download-meta-media] ⬆️ Uploading to Storage bucket:", storageBucket);
     const { error: uploadError } = await supabase.storage
-      .from("chat-media")
+      .from(storageBucket)
       .upload(storagePath, fileBuffer, {
         contentType: mimeType,
         upsert: true,
@@ -131,41 +133,41 @@ serve(async (req) => {
       );
     }
 
-    // Get public URL
-    const { data: publicUrlData } = supabase.storage
-      .from("chat-media")
-      .getPublicUrl(storagePath);
+    console.log("[download-meta-media] ✅ Uploaded to bucket:", storageBucket, "path:", storagePath);
 
-    const publicUrl = publicUrlData.publicUrl;
-    console.log("[download-meta-media] ✅ Uploaded to:", publicUrl);
+    // Step 4: Create media_attachments record with conversation_id for permission checks
+    const insertData: Record<string, any> = {
+      message_id: message_id,
+      original_filename: fileName,
+      mime_type: mimeType,
+      file_size: fileBuffer.byteLength,
+      storage_path: storagePath,
+      storage_bucket: storageBucket,
+      status: 'ready',
+    };
 
-    // Step 4: Create media_attachments record with correct column names
+    // Add conversation_id if provided (needed for get-media-url permission checks)
+    if (conversation_id) {
+      insertData.conversation_id = conversation_id;
+    }
+
     const { data: attachment, error: attachmentError } = await supabase
       .from("media_attachments")
-      .insert({
-        message_id: message_id,
-        original_filename: fileName,
-        mime_type: mimeType,
-        file_size: fileBuffer.byteLength,
-        storage_path: storagePath,
-        storage_bucket: 'chat-media',
-        status: 'ready',
-      })
+      .insert(insertData)
       .select("id")
       .single();
 
     if (attachmentError) {
       console.error("[download-meta-media] ⚠️ Failed to create attachment record:", attachmentError);
-      // Continue anyway - file is uploaded
     } else {
       console.log("[download-meta-media] ✅ Attachment record created:", attachment?.id);
     }
 
-    // Step 5: Update message with attachment URL
+    // Step 5: Update message with storage_path reference (NOT public URL)
     const { error: updateError } = await supabase
       .from("messages")
       .update({
-        attachment_url: publicUrl,
+        attachment_url: `storage:${storageBucket}/${storagePath}`,
         attachment_type: media_type,
       })
       .eq("id", message_id);
@@ -173,13 +175,13 @@ serve(async (req) => {
     if (updateError) {
       console.error("[download-meta-media] ⚠️ Failed to update message:", updateError);
     } else {
-      console.log("[download-meta-media] ✅ Message updated with attachment URL");
+      console.log("[download-meta-media] ✅ Message updated with storage reference");
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        url: publicUrl,
+        storage_bucket: storageBucket,
         storage_path: storagePath,
         attachment_id: attachment?.id,
       }),

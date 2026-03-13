@@ -676,7 +676,7 @@ FORMATO: [TAG] texto (uma vez por tag, sem markdown, max 3 frases por tag)`;
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 1200, temperature: 0.7 }),
+    body: JSON.stringify({ model: 'gpt-5-nano', messages: [{ role: 'user', content: prompt }], max_completion_tokens: 1200 }),
   });
 
   if (!response.ok) throw new Error(`OpenAI error: ${response.status}`);
@@ -1317,6 +1317,14 @@ serve(async (req) => {
         ].join('\n')
       : '';
 
+    // ═══ HOJE — Time Comercial ═══
+    const teamTodaySummary = (salesMetrics.topReps ?? []).length > 0
+      ? `👥 *${dateStr} — Time Comercial*\n` +
+        (salesMetrics.topReps ?? []).slice(0, 5).map((r: any, i: number) =>
+          `${i + 1}. ${r.name}: ${r.deals} deals | ${fmtK(r.revenue)}`
+        ).join('\n')
+      : `👥 *${dateStr} — Time Comercial*\nNenhum fechamento hoje`;
+
     // ═══ MÊS — Acumulado ═══
     const monthSummary = `📊 *MES — Acumulado*\nReceita: ${fmtK(salesMetrics.revenueMonth)}${salesMetrics.goalProgress !== null ? ` | Meta: ${salesMetrics.goalProgress}%` : ''}\nDeals won: ${salesMetrics.dealsWonMonth}${salesMetrics.momGrowth !== null ? ` | MoM: ${salesMetrics.momGrowth > 0 ? '+' : ''}${salesMetrics.momGrowth}%` : ''}`;
 
@@ -1332,7 +1340,7 @@ serve(async (req) => {
 
     const optionalSections = [tagsSummary, ticketsSummary].filter(Boolean).join('\n\n');
 
-    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr} ${periodStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${newSalesSummary}\n\n${recurrenceSummary}\n\n${salesResume}\n\n${pipelineSummaryToday}\n${channelsSummarySection}${optionalSections ? '\n\n' + optionalSections : ''}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr} ${periodStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${newSalesSummary}\n\n${recurrenceSummary}\n\n${salesResume}\n\n${pipelineSummaryToday}\n${channelsSummarySection}\n\n${teamTodaySummary}${optionalSections ? '\n\n' + optionalSections : ''}\n\n${'─'.repeat(30)}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],

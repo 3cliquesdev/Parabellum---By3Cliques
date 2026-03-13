@@ -27,6 +27,8 @@ export const CONTACT_VARS: VariableItem[] = [
   { value: "contact_document", label: "Documento", group: "contact" },
   { value: "contact_consultant_id", label: "Consultor do Contato", group: "contact" },
   { value: "contact_is_customer", label: "É Cliente? (Kiwify Validado)", group: "contact" },
+  { value: "contact_onboarding_completed", label: "Onboarding Concluído", group: "contact" },
+  { value: "contact_organization_id", label: "Organização", group: "contact" },
 ];
 
 // Business hours & SLA variables (injected by engine at runtime)
@@ -84,6 +86,7 @@ export const CONDITION_CONTACT_FIELDS = [
   { value: "consultant_id", label: "Tem Consultor?" },
   { value: "is_customer", label: "É Cliente? (Kiwify Validado)" },
   { value: "organization_id", label: "Tem Organização?" },
+  { value: "onboarding_completed", label: "Onboarding Concluído?" },
 ];
 
 // Conversation fields for condition selector
@@ -93,6 +96,7 @@ export const CONDITION_CONVERSATION_FIELDS = [
   { value: "priority", label: "Prioridade" },
   { value: "protocol_number", label: "Protocolo" },
   { value: "queue", label: "Fila" },
+  { value: "ai_exit_intent", label: "Intenção de Saída IA" },
 ];
 
 /**

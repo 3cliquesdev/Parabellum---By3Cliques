@@ -953,22 +953,53 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     phone: phoneForDatabase
   });
 
-  // Validação Kiwify adicional para enriquecer dados do cliente
+  // Validação Kiwify INLINE (query direta, sem invoke entre edge functions)
   try {
-    const { data: kiwifyValidation, error: kiwifyError } = await supabase.functions.invoke('validate-by-kiwify-phone', {
-      body: { 
-        phone: phoneForDatabase,
-        contact_id: contactId
-      }
-    });
+    const phoneToValidate = phoneForDatabase || '';
+    const digitsOnly = phoneToValidate.replace(/\D/g, '');
+    let normalizedKiwify = '';
+    if (digitsOnly.startsWith('55') && digitsOnly.length >= 12 && digitsOnly.length <= 13) normalizedKiwify = digitsOnly;
+    else if (digitsOnly.length >= 10 && digitsOnly.length <= 11) normalizedKiwify = '55' + digitsOnly;
+    
+    if (normalizedKiwify.length >= 9) {
+      const last9 = normalizedKiwify.slice(-9);
+      const { data: kiwifyMatches, error: kiwifyErr } = await supabase
+        .from('kiwify_events')
+        .select('id, payload, customer_email, created_at')
+        .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
+        .filter('payload->Customer->>mobile', 'ilike', `%${last9}`)
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-    if (!kiwifyError && kiwifyValidation?.found) {
-      // Cliente tem compra Kiwify - confirma que vai para Suporte
-      targetDepartmentId = SUPORTE_DEPT_ID;
-      console.log(`[handle-whatsapp-event] ✅ Cliente Kiwify confirmado - Suporte`);
+      if (!kiwifyErr && kiwifyMatches && kiwifyMatches.length > 0) {
+        // Cliente tem compra Kiwify - confirma que vai para Suporte
+        targetDepartmentId = SUPORTE_DEPT_ID;
+        const products = [...new Set(kiwifyMatches.map(e => e.payload?.Product?.product_name || 'Produto'))];
+        const customerData = kiwifyMatches[0].payload?.Customer || {};
+        console.log(`[handle-whatsapp-event] ✅ Cliente Kiwify confirmado (inline) - Suporte. Produtos: ${products.join(', ')}`);
+
+        // Atualizar contato como cliente validado
+        const updateData: Record<string, unknown> = {
+          status: 'customer',
+          source: 'kiwify_validated',
+          kiwify_validated: true,
+          kiwify_validated_at: new Date().toISOString(),
+        };
+        if (customerData.email && contactId) updateData.email = customerData.email;
+
+        if (contactId) {
+          await supabase.from('contacts').update(updateData).eq('id', contactId);
+          await supabase.from('interactions').insert({
+            customer_id: contactId,
+            type: 'internal_note',
+            content: `✅ Cliente identificado via webhook inline Kiwify. Produtos: ${products.join(', ')}`,
+            channel: 'system',
+          });
+        }
+      }
     }
   } catch (kiwifyErr) {
-    console.warn('[handle-whatsapp-event] ⚠️ Validação Kiwify falhou (não crítico):', kiwifyErr);
+    console.warn('[handle-whatsapp-event] ⚠️ Validação Kiwify inline falhou (não crítico):', kiwifyErr);
   }
 
   // Buscar estado atual da conversa (incluindo instância atual para detectar swap e is_test_mode)
@@ -1164,8 +1195,49 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
     console.log('[handle-whatsapp-event] 🧪 Kill Switch ativo, mas MODO TESTE permite processar');
   }
 
-  // 7. Se ai_mode = 'autopilot' E IA global está ativada, disparar AI
-  if (isAIGloballyEnabled && conversationAIMode === 'autopilot') {
+  // 7a. 🔓 BYPASS: Se awaiting_close_confirmation=true, redirecionar para ai-autopilot-chat
+  // independente do ai_mode (pode estar em waiting_human após handoff)
+  const hasAwaitingCloseConfirmation = (metadata as any)?.awaiting_close_confirmation === true;
+  
+  if ((isAIGloballyEnabled || isTestMode) && hasAwaitingCloseConfirmation && conversationAIMode !== 'autopilot') {
+    console.log('[handle-whatsapp-event] 🔓 BYPASS: awaiting_close_confirmation=true → chamando ai-autopilot-chat');
+    try {
+      const closeConfirmResponse = await fetch(
+        `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-autopilot-chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            conversationId: conversationId,
+            customerMessage: messageText,
+            contact_id: contactId,
+            whatsapp_provider: "evolution",
+            whatsapp_instance_id: instance.id,
+          }),
+        }
+      );
+      if (!closeConfirmResponse.ok) {
+        console.error("[handle-whatsapp-event] ❌ Close confirmation autopilot error:", await closeConfirmResponse.text());
+      } else {
+        console.log("[handle-whatsapp-event] ✅ Close confirmation processed by ai-autopilot-chat");
+      }
+    } catch (closeErr) {
+      console.error("[handle-whatsapp-event] ⚠️ Close confirmation exception:", closeErr);
+    }
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message_saved: true, 
+      ai_processed: true, 
+      reason: 'awaiting_close_confirmation_bypass' 
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
+  // 7b. Se ai_mode = 'autopilot' E IA global está ativada (ou test mode), disparar AI
+  if ((isAIGloballyEnabled || isTestMode) && conversationAIMode === 'autopilot') {
     console.log('[handle-whatsapp-event] Triggering AI autopilot...');
     
     // ============================================================
@@ -1179,7 +1251,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       const { data: flowResult, error: flowError } = await supabase.functions.invoke('process-chat-flow', {
         body: {
           conversationId: conversationId,
-          userMessage: messageText
+          customerMessage: messageText
         }
       });
 
@@ -1246,6 +1318,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             forbidOptions: flowResult.forbidOptions ?? true,
             forbidFinancial: flowResult.forbidFinancial ?? false,
             forbidCommercial: flowResult.forbidCommercial ?? false,
+            forbidCancellation: flowResult.forbidCancellation ?? false,
+            forbidConsultant: flowResult.forbidConsultant ?? false,
             collectedData: flowResult.collectedData || null,
           };
 
@@ -1254,6 +1328,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             node_id: flowContext.node_id,
             forbidFinancial: flowContext.forbidFinancial,
             forbidCommercial: flowContext.forbidCommercial,
+            forbidCancellation: flowContext.forbidCancellation,
+            forbidConsultant: flowContext.forbidConsultant,
           }));
 
           const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-autopilot-chat', {
@@ -1277,7 +1353,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
               const { data: safetyResult, error: safetyError } = await supabase.functions.invoke('process-chat-flow', {
                 body: {
                   conversationId: conversationId,
-                  userMessage: messageText,
+                  customerMessage: messageText,
                   forceAIExit: true,
                 }
               });
@@ -1316,26 +1392,30 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
               hasFlowContext: aiResponse.hasFlowContext,
             }));
 
-            // 🆕 INTERCEPTAR: contractViolation, flowExit, financialBlocked, commercialBlocked, flow_advance_needed
+            // 🆕 INTERCEPTAR: contractViolation, flowExit, financialBlocked, commercialBlocked, cancellationBlocked, flow_advance_needed
             const needsFlowAdvance = aiResponse.contractViolation || 
                                      aiResponse.flowExit || 
                                      aiResponse.financialBlocked || 
                                      aiResponse.commercialBlocked ||
+                                     aiResponse.cancellationBlocked ||
                                      aiResponse.status === 'flow_advance_needed';
 
             if (needsFlowAdvance) {
               const exitType = aiResponse.financialBlocked ? 'forceFinancialExit' : 
-                               aiResponse.commercialBlocked ? 'forceCommercialExit' : 'forceAIExit';
+                               aiResponse.commercialBlocked ? 'forceCommercialExit' :
+                               aiResponse.cancellationBlocked ? 'forceCancellationExit' : 'forceAIExit';
               console.log(`[handle-whatsapp-event] 🔄 Re-invocando process-chat-flow com ${exitType}`);
 
               try {
                 const { data: exitFlowResult, error: exitFlowError } = await supabase.functions.invoke('process-chat-flow', {
                   body: {
                     conversationId: conversationId,
-                    userMessage: messageText,
-                    ...(aiResponse.financialBlocked ? { forceFinancialExit: true } : {}),
-                    ...(aiResponse.commercialBlocked ? { forceCommercialExit: true } : {}),
-                    ...(!aiResponse.financialBlocked && !aiResponse.commercialBlocked ? { forceAIExit: true } : {}),
+                    customerMessage: messageText,
+                    ...(aiResponse.financialBlocked ? { forceFinancialExit: true, intentData: { ai_exit_intent: 'financeiro' } } : {}),
+                    ...(aiResponse.commercialBlocked ? { forceCommercialExit: true, intentData: { ai_exit_intent: 'comercial' } } : {}),
+                    ...(aiResponse.cancellationBlocked ? { forceCancellationExit: true, intentData: { ai_exit_intent: 'cancelamento' } } : {}),
+                    ...(!aiResponse.financialBlocked && !aiResponse.commercialBlocked && !aiResponse.cancellationBlocked ? { forceAIExit: true } : {}),
+                    ...(aiResponse.ai_exit_intent ? { intentData: { ai_exit_intent: aiResponse.ai_exit_intent } } : {}),
                   }
                 });
 

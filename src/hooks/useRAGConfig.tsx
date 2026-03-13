@@ -18,7 +18,7 @@ export interface RAGConfig {
 }
 
 const DEFAULT_CONFIG: RAGConfig = {
-  model: "openai/gpt-5-mini",
+  model: "gpt-4o-mini",
   minThreshold: 0.10,
   directThreshold: 0.75,
   sources: {
@@ -30,13 +30,21 @@ const DEFAULT_CONFIG: RAGConfig = {
   strictMode: false,
 };
 
-// Models available in Lovable AI - OpenAI prioritized
+// Models available - OpenAI direct API
 export const RAG_MODELS = [
-  { id: "openai/gpt-5-mini", name: "GPT-5 Mini", provider: "OpenAI", description: "Balanceado - Custo-benefício", badge: "Recomendado" },
-  { id: "openai/gpt-5", name: "GPT-5", provider: "OpenAI", description: "Máxima precisão", badge: "Premium" },
-  { id: "openai/gpt-5-nano", name: "GPT-5 Nano", provider: "OpenAI", description: "Ultra rápido - Alto volume", badge: "Econômico" },
-  { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "Google", description: "Rápido e balanceado", badge: null },
-  { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "Google", description: "Raciocínio complexo", badge: null },
+  // Chat Models
+  { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", category: "chat", description: "Balanceado - Custo-benefício", badge: "Recomendado" },
+  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", category: "chat", description: "Máxima precisão multimodal", badge: "Premium" },
+  { id: "gpt-4.1-nano", name: "GPT-4.1 Nano", provider: "OpenAI", category: "chat", description: "Mais barato - Tarefas simples", badge: "Econômico" },
+  { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", provider: "OpenAI", category: "chat", description: "Ultra rápido - Alto volume", badge: "Rápido" },
+  { id: "gpt-4.1", name: "GPT-4.1", provider: "OpenAI", category: "chat", description: "Última geração - Contexto longo", badge: "Novo" },
+  { id: "gpt-5-nano", name: "GPT-5 Nano", provider: "OpenAI", category: "chat", description: "Velocidade + economia máxima", badge: "Econômico" },
+  { id: "gpt-5-mini", name: "GPT-5 Mini", provider: "OpenAI", category: "chat", description: "Forte performance - Custo moderado", badge: "Balanceado" },
+  { id: "gpt-5", name: "GPT-5", provider: "OpenAI", category: "chat", description: "Máxima capacidade - Raciocínio + multimodal", badge: "Premium+" },
+  // Reasoning Models
+  { id: "o4-mini", name: "o4-mini", provider: "OpenAI", category: "reasoning", description: "Raciocínio avançado - Custo acessível", badge: "Smart" },
+  { id: "o3", name: "o3", provider: "OpenAI", category: "reasoning", description: "Raciocínio máximo - Problemas complexos", badge: "Top" },
+  { id: "o3-mini", name: "o3-mini", provider: "OpenAI", category: "reasoning", description: "Raciocínio econômico - Bom equilíbrio", badge: "Eficiente" },
 ];
 
 export function useRAGConfig() {

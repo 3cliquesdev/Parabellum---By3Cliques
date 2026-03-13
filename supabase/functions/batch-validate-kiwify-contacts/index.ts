@@ -9,9 +9,9 @@ const corsHeaders = {
 function normalizePhone(phone: string): string {
   if (!phone) return '';
   const digits = phone.replace(/\D/g, '');
+  if (!/^\d{10,13}$/.test(digits)) return '';
   if (digits.startsWith('55') && digits.length >= 12 && digits.length <= 13) return digits;
   if (digits.length >= 10 && digits.length <= 11) return '55' + digits;
-  if (digits.length < 10) return '';
   return digits;
 }
 
@@ -26,116 +26,155 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    console.log("[batch-validate] Iniciando validação em massa...");
+    let specificIds: string[] | null = null;
+    try {
+      const body = await req.json();
+      if (body?.contact_ids && Array.isArray(body.contact_ids)) {
+        specificIds = body.contact_ids;
+      }
+    } catch { /* no body */ }
 
-    // 1. Buscar contatos não validados que têm telefone
-    const { data: contacts, error: contactsErr } = await supabaseClient
-      .from('contacts')
-      .select('id, phone, whatsapp_id, first_name, last_name, email')
-      .or('kiwify_validated.is.null,kiwify_validated.eq.false')
-      .or('phone.neq.,whatsapp_id.neq.')
-      .limit(1000);
+    console.log("[batch-validate] Iniciando...", specificIds ? `IDs: ${specificIds.length}` : "Todos pendentes");
 
-    if (contactsErr) throw contactsErr;
+    // 1. Buscar contatos não validados (paginado)
+    const allContacts: Array<any> = [];
+    let cOffset = 0;
+    let cMore = true;
 
-    console.log(`[batch-validate] Contatos para validar: ${contacts?.length || 0}`);
+    while (cMore) {
+      let q = supabaseClient
+        .from('contacts')
+        .select('id, phone, whatsapp_id, first_name, last_name, email')
+        .or('kiwify_validated.is.null,kiwify_validated.eq.false');
 
-    if (!contacts || contacts.length === 0) {
+      if (specificIds?.length) q = q.in('id', specificIds);
+
+      const { data: pg, error } = await q.range(cOffset, cOffset + 999);
+      if (error) throw error;
+      if (pg?.length) {
+        allContacts.push(...pg);
+        cOffset += pg.length;
+        cMore = pg.length === 1000;
+      } else {
+        cMore = false;
+      }
+    }
+
+    // Filter valid phones
+    const contacts = allContacts.filter(c => {
+      const n = normalizePhone(c.phone || c.whatsapp_id || '');
+      return n.length > 0;
+    });
+
+    console.log(`[batch-validate] Contatos válidos: ${contacts.length} (de ${allContacts.length})`);
+
+    if (!contacts.length) {
       return new Response(JSON.stringify({
         success: true, validated: 0, not_found: 0, total: 0,
-        message: "Nenhum contato pendente de validação"
+        message: "Nenhum contato pendente"
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 2. Buscar TODOS os eventos Kiwify relevantes (mobile do customer)
-    const { data: kiwifyEvents, error: kiwifyErr } = await supabaseClient
-      .from('kiwify_events')
-      .select('id, payload, customer_email, created_at')
-      .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
-      .limit(5000);
-
-    if (kiwifyErr) throw kiwifyErr;
-
-    console.log(`[batch-validate] Eventos Kiwify carregados: ${kiwifyEvents?.length || 0}`);
-
-    // 3. Criar mapa: últimos 9 dígitos → dados do cliente Kiwify
-    const kiwifyMap = new Map<string, { email: string; name: string; products: string[] }>();
-
-    for (const event of (kiwifyEvents || [])) {
-      const customer = event.payload?.Customer;
-      if (!customer?.mobile) continue;
-
-      const normalized = normalizePhone(customer.mobile);
-      if (!normalized) continue;
-
-      const last9 = normalized.slice(-9);
-      const existing = kiwifyMap.get(last9);
-
-      const productName = event.payload?.Product?.product_name || 'Produto';
-      if (existing) {
-        if (!existing.products.includes(productName)) existing.products.push(productName);
-      } else {
-        kiwifyMap.set(last9, {
-          email: customer.email || event.customer_email || '',
-          name: customer.full_name || customer.first_name || '',
-          products: [productName],
-        });
-      }
+    // 2. Build unique last9 digits map from contacts
+    const contactsByLast9 = new Map<string, Array<any>>();
+    for (const c of contacts) {
+      const norm = normalizePhone(c.phone || c.whatsapp_id || '');
+      const last9 = norm.slice(-9);
+      if (!contactsByLast9.has(last9)) contactsByLast9.set(last9, []);
+      contactsByLast9.get(last9)!.push(c);
     }
 
-    console.log(`[batch-validate] Números Kiwify únicos no mapa: ${kiwifyMap.size}`);
+    const uniquePhones = Array.from(contactsByLast9.keys());
+    console.log(`[batch-validate] Telefones únicos a verificar: ${uniquePhones.length}`);
 
-    // 4. Fazer matching e atualizar contatos
+    // 3. Query kiwify_events in batches of 50 phone suffixes using textSearch/ilike
     let validated = 0;
     let notFound = 0;
     const results: Array<{ contact_id: string; name: string; matched: boolean; products?: string[] }> = [];
+    const BATCH = 50;
 
-    for (const contact of contacts) {
-      const phone = contact.phone || contact.whatsapp_id || '';
-      const normalized = normalizePhone(phone);
-      if (!normalized) {
-        notFound++;
+    for (let i = 0; i < uniquePhones.length; i += BATCH) {
+      const batch = uniquePhones.slice(i, i + BATCH);
+      
+      // Build OR filter: payload->Customer->>mobile ends with each suffix
+      const orFilter = batch.map(last9 => `payload->Customer->>mobile.ilike.%${last9}`).join(',');
+      
+      const { data: events, error: evErr } = await supabaseClient
+        .from('kiwify_events')
+        .select('payload, customer_email')
+        .in('event_type', ['paid', 'order_approved', 'subscription_renewed'])
+        .or(orFilter)
+        .limit(500);
+
+      if (evErr) {
+        console.error(`[batch-validate] Query error batch ${i}:`, evErr.message);
         continue;
       }
 
-      const last9 = normalized.slice(-9);
-      const kiwifyData = kiwifyMap.get(last9);
-
-      if (kiwifyData) {
-        const updateData: Record<string, unknown> = {
-          status: 'customer',
-          source: 'kiwify_validated',
-          kiwify_validated: true,
-          kiwify_validated_at: new Date().toISOString(),
-        };
-        if (kiwifyData.email && !contact.email) {
-          updateData.email = kiwifyData.email;
-        }
-
-        const { error: updateErr } = await supabaseClient
-          .from('contacts')
-          .update(updateData)
-          .eq('id', contact.id);
-
-        if (!updateErr) {
-          validated++;
-          results.push({
-            contact_id: contact.id,
-            name: `${contact.first_name} ${contact.last_name}`.trim(),
-            matched: true,
-            products: kiwifyData.products,
-          });
-
-          // Registrar nota interna
-          await supabaseClient.from('interactions').insert({
-            customer_id: contact.id,
-            type: 'internal_note',
-            content: `✅ Cliente identificado via batch-validate Kiwify. Produtos: ${kiwifyData.products.join(', ')}`,
-            channel: 'system',
+      // Build map from found events
+      const foundMap = new Map<string, { email: string; name: string; products: string[] }>();
+      for (const ev of (events || [])) {
+        const cust = ev.payload?.Customer;
+        if (!cust?.mobile) continue;
+        const norm = normalizePhone(cust.mobile);
+        if (!norm) continue;
+        const l9 = norm.slice(-9);
+        const prod = ev.payload?.Product?.product_name || 'Produto';
+        const existing = foundMap.get(l9);
+        if (existing) {
+          if (!existing.products.includes(prod)) existing.products.push(prod);
+        } else {
+          foundMap.set(l9, {
+            email: cust.email || ev.customer_email || '',
+            name: cust.full_name || cust.first_name || '',
+            products: [prod],
           });
         }
-      } else {
-        notFound++;
+      }
+
+      // Update matched contacts
+      for (const [last9, kiwifyData] of foundMap) {
+        const matchedContacts = contactsByLast9.get(last9) || [];
+        for (const contact of matchedContacts) {
+          const updateData: Record<string, unknown> = {
+            status: 'customer',
+            source: 'kiwify_validated',
+            kiwify_validated: true,
+            kiwify_validated_at: new Date().toISOString(),
+          };
+          if (kiwifyData.email && !contact.email) {
+            updateData.email = kiwifyData.email;
+          }
+
+          const { error: upErr } = await supabaseClient
+            .from('contacts')
+            .update(updateData)
+            .eq('id', contact.id);
+
+          if (!upErr) {
+            validated++;
+            results.push({
+              contact_id: contact.id,
+              name: `${contact.first_name} ${contact.last_name}`.trim(),
+              matched: true,
+              products: kiwifyData.products,
+            });
+
+            await supabaseClient.from('interactions').insert({
+              customer_id: contact.id,
+              type: 'internal_note',
+              content: `✅ Cliente identificado via batch-validate Kiwify. Produtos: ${kiwifyData.products.join(', ')}`,
+              channel: 'system',
+            });
+          }
+        }
+      }
+
+      // Count not found in this batch
+      for (const last9 of batch) {
+        if (!foundMap.has(last9)) {
+          notFound += (contactsByLast9.get(last9) || []).length;
+        }
       }
     }
 
@@ -146,7 +185,7 @@ serve(async (req) => {
       total: contacts.length,
       validated,
       not_found: notFound,
-      kiwify_numbers_available: kiwifyMap.size,
+      skipped_invalid_phones: allContacts.length - contacts.length,
       details: results,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 

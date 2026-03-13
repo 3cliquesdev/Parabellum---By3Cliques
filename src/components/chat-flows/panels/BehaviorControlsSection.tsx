@@ -16,6 +16,10 @@ import {
   DollarSign,
   ShoppingCart,
   UserCheck,
+  XCircle,
+  HeadphonesIcon,
+  Route,
+  Briefcase,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -70,6 +74,9 @@ export function BehaviorControlsSection({
   const forbidOptions = selectedNode.data.forbid_options ?? true;
   const forbidFinancial = selectedNode.data.forbid_financial ?? false;
   const forbidCommercial = selectedNode.data.forbid_commercial ?? false;
+  const forbidCancellation = selectedNode.data.forbid_cancellation ?? false;
+  const forbidSupport = selectedNode.data.forbid_support ?? false;
+  const forbidConsultant = selectedNode.data.forbid_consultant ?? false;
   const objective = selectedNode.data.objective || "";
 
   return (
@@ -177,40 +184,6 @@ export function BehaviorControlsSection({
           />
         </div>
 
-        {/* Não resolver financeiro */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <DollarSign className="h-4 w-4 text-red-400" />
-            <div>
-              <Label className="text-sm font-medium">Não resolver assuntos financeiros</Label>
-              <p className="text-[10px] text-muted-foreground">
-                A IA transfere para humano ao detectar saque, reembolso ou devolução
-              </p>
-            </div>
-          </div>
-          <Switch
-            checked={forbidFinancial}
-            onCheckedChange={(checked) => updateNodeData("forbid_financial", checked)}
-          />
-        </div>
-
-        {/* Não resolver comercial (transferir para time comercial) */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4 text-red-400" />
-            <div>
-              <Label className="text-sm font-medium">Transferir intenção de compra</Label>
-              <p className="text-[10px] text-muted-foreground">
-                Detecta intenção comercial e transfere para o time Comercial
-              </p>
-            </div>
-          </div>
-          <Switch
-            checked={forbidCommercial}
-            onCheckedChange={(checked) => updateNodeData("forbid_commercial", checked)}
-          />
-        </div>
-
         {/* Status das Restrições */}
         <div className="flex flex-wrap gap-1 pt-1">
           {forbidQuestions && (
@@ -223,19 +196,141 @@ export function BehaviorControlsSection({
               Sem opções
             </Badge>
           )}
+          {!forbidQuestions && !forbidOptions && (
+            <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">
+              Sem restrições ativas
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* 🆕 Saídas automáticas por intenção */}
+      <div className="space-y-3 p-3 rounded-lg border bg-blue-500/5 border-blue-500/20">
+        <div className="flex items-center gap-2">
+          <Route className="h-4 w-4 text-blue-500" />
+          <Label className="text-xs font-semibold uppercase tracking-wide">
+            Saídas automáticas por intenção
+          </Label>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          Ative para detectar intenções e direcionar pela saída correspondente no nó.
+        </p>
+
+        {/* 💰 Financeiro */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
+            <div>
+              <Label className="text-sm font-medium">💰 Financeiro</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Saque, reembolso, estorno → saída amarela
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidFinancial}
+            onCheckedChange={(checked) => updateNodeData("forbid_financial", checked)}
+          />
+        </div>
+
+        {/* ❌ Cancelamento */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-500 shrink-0" />
+            <div>
+              <Label className="text-sm font-medium">❌ Cancelamento</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Cancelar plano, desistir → saída vermelha
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidCancellation}
+            onCheckedChange={(checked) => updateNodeData("forbid_cancellation", checked)}
+          />
+        </div>
+
+        {/* 🛒 Comercial */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-emerald-500 shrink-0" />
+            <div>
+              <Label className="text-sm font-medium">🛒 Comercial</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Comprar, preço, proposta → saída verde
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidCommercial}
+            onCheckedChange={(checked) => updateNodeData("forbid_commercial", checked)}
+          />
+        </div>
+
+        {/* 🧑 Suporte */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-500 shrink-0" />
+            <div>
+              <Label className="text-sm font-medium">🧑 Suporte</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Pedir atendente, falar com humano → saída azul
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidSupport}
+            onCheckedChange={(checked) => updateNodeData("forbid_support", checked)}
+          />
+        </div>
+
+        {/* 💼 Consultor */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-violet-500 shrink-0" />
+            <div>
+              <Label className="text-sm font-medium">💼 Consultor</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Falar com consultor → saída roxa (só se tiver consultor vinculado)
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidConsultant}
+            onCheckedChange={(checked) => updateNodeData("forbid_consultant", checked)}
+          />
+        </div>
+
+        {/* Status das saídas ativas */}
+        <div className="flex flex-wrap gap-1 pt-1">
           {forbidFinancial && (
-            <Badge variant="destructive" className="text-[10px] px-1.5">
-              💰 Sem financeiro
+            <Badge className="text-[10px] px-1.5 bg-amber-500/20 text-amber-700 border-amber-500/30">
+              💰 Financeiro
+            </Badge>
+          )}
+          {forbidCancellation && (
+            <Badge className="text-[10px] px-1.5 bg-red-500/20 text-red-700 border-red-500/30">
+              ❌ Cancelamento
             </Badge>
           )}
           {forbidCommercial && (
-            <Badge variant="destructive" className="text-[10px] px-1.5">
-              🛒 Comercial → Transfer
+            <Badge className="text-[10px] px-1.5 bg-emerald-500/20 text-emerald-700 border-emerald-500/30">
+              🛒 Comercial
             </Badge>
           )}
-          {!forbidQuestions && !forbidOptions && !forbidFinancial && !forbidCommercial && (
+          {forbidSupport && (
+            <Badge className="text-[10px] px-1.5 bg-blue-500/20 text-blue-700 border-blue-500/30">
+              🧑 Suporte
+            </Badge>
+          )}
+          {forbidConsultant && (
+            <Badge className="text-[10px] px-1.5 bg-violet-500/20 text-violet-700 border-violet-500/30">
+              💼 Consultor
+            </Badge>
+          )}
+          {!forbidFinancial && !forbidCancellation && !forbidCommercial && !forbidSupport && !forbidConsultant && (
             <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">
-              Sem restrições ativas
+              Nenhuma saída ativa
             </Badge>
           )}
         </div>

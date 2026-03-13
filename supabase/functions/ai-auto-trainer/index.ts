@@ -8,16 +8,7 @@ const corsHeaders = {
 
 // Helper para buscar modelo AI configurado
 async function getConfiguredAIModel(supabase: any): Promise<string> {
-  try {
-    const { data } = await supabase
-      .from('system_configurations')
-      .select('value')
-      .eq('key', 'ai_model_analysis')
-      .single();
-    return data?.value || 'openai/gpt-5-mini';
-  } catch {
-    return 'openai/gpt-5-mini';
-  }
+  return 'gpt-5-mini';
 }
 
 // Gerar embedding usando OpenAI
@@ -132,7 +123,7 @@ async function mineSuccessConversation(
   supabase: any,
   conversationId: string,
   aiModel: string,
-  LOVABLE_API_KEY: string,
+  OPENAI_API_KEY: string,
   departmentId?: string
 ): Promise<{ items: any[]; skipped: boolean; reason?: string; confidence?: number; reasoning?: string; messageCount?: number }> {
   // Buscar mensagens da conversa
@@ -204,10 +195,10 @@ RETORNE JSON ESTRUTURADO:
 
 Se não houver conhecimento útil OU se for duplicado, retorne: { "extracted_items": [], "confidence_score": 0, "reasoning": "Motivo" }`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -216,7 +207,7 @@ Se não houver conhecimento útil OU se for duplicado, retorne: { "extracted_ite
           { role: 'system', content: structuredPrompt },
           { role: 'user', content: `TRANSCRIPT:\n${transcript.substring(0, 10000)}` }
         ],
-        max_tokens: 2000,
+        max_completion_tokens: 2000,
       }),
     });
 
@@ -255,7 +246,7 @@ async function mineFailureCorrection(
   supabase: any,
   conversationId: string,
   aiModel: string,
-  LOVABLE_API_KEY: string
+  OPENAI_API_KEY: string
 ): Promise<{ item: any | null; skipped: boolean; reason?: string }> {
   const { data: messages, error } = await supabase
     .from('messages')
@@ -294,18 +285,18 @@ async function mineFailureCorrection(
   }
 
   try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: aiModel,
-        messages: [
-          {
-            role: 'system',
-            content: `Você é um Agente de Correção de IA. A IA não soube responder uma pergunta e um humano resolveu.
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: aiModel,
+          messages: [
+            {
+              role: 'system',
+              content: `Você é um Agente de Correção de IA. A IA não soube responder uma pergunta e um humano resolveu.
 
 SUA TAREFA:
 Crie uma regra de conhecimento para que a IA saiba responder da próxima vez.
@@ -318,14 +309,14 @@ RETORNE JSON VÁLIDO:
   "confidence_score": 0-100,
   "reasoning": "Por que esta regra é útil"
 }`
-          },
-          {
-            role: 'user',
-            content: `PERGUNTA DO CLIENTE:\n${customerQuestion}\n\nRESPOSTA DO HUMANO:\n${humanResponse}`
-          }
-        ],
-      }),
-    });
+            },
+            {
+              role: 'user',
+              content: `PERGUNTA DO CLIENTE:\n${customerQuestion}\n\nRESPOSTA DO HUMANO:\n${humanResponse}`
+            }
+          ],
+        }),
+      });
 
     if (!response.ok) {
       return { item: null, skipped: true, reason: 'ai_error' };
@@ -446,11 +437,11 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-  if (!LOVABLE_API_KEY) {
-    console.error('[ai-auto-trainer] LOVABLE_API_KEY not configured');
-    return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }), {
+  if (!OPENAI_API_KEY) {
+    console.error('[ai-auto-trainer] OPENAI_API_KEY not configured');
+    return new Response(JSON.stringify({ error: 'OPENAI_API_KEY not configured' }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -529,7 +520,7 @@ serve(async (req) => {
       conversationsProcessed++;
       
       // 🆕 FASE 2: Só chama IA se passou nos guard-rails
-      const result = await mineSuccessConversation(supabase, conv.id, aiModel, LOVABLE_API_KEY, conv.department);
+      const result = await mineSuccessConversation(supabase, conv.id, aiModel, OPENAI_API_KEY, conv.department);
       
       if (result.skipped) {
         console.log(`[ai-auto-trainer] Conversa ${conv.id} pulada: ${result.reason}`);
@@ -587,7 +578,7 @@ serve(async (req) => {
 
     for (const convId of fallbackConvIds) {
       failuresProcessed++;
-      const result = await mineFailureCorrection(supabase, convId, aiModel, LOVABLE_API_KEY);
+      const result = await mineFailureCorrection(supabase, convId, aiModel, OPENAI_API_KEY);
       
       if (result.skipped || !result.item) {
         console.log(`[ai-auto-trainer] Fallback ${convId} pulado: ${result.reason}`);

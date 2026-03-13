@@ -33,17 +33,17 @@ function generatePseudoEmbedding(keywords: string[]): number[] {
   return embedding.map(x => x / (norm || 1));
 }
 
-// Extract keywords from text using Lovable AI
-async function extractKeywordsWithLovableAI(text: string, lovableApiKey: string): Promise<string[]> {
+// Extract keywords from text using OpenAI
+async function extractKeywordsWithOpenAI(text: string, openaiApiKey: string): Promise<string[]> {
   try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
+        'Authorization': `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-5-nano',
+        model: 'gpt-5-nano',
         messages: [
           { 
             role: 'system', 
@@ -51,13 +51,13 @@ async function extractKeywordsWithLovableAI(text: string, lovableApiKey: string)
           },
           { role: 'user', content: text.substring(0, 2000) }
         ],
-        max_tokens: 200,
+        max_completion_tokens: 200,
         temperature: 0.1,
       }),
     });
 
     if (!response.ok) {
-      console.error('[extractKeywords] Lovable AI error:', await response.text());
+      console.error('[extractKeywords] OpenAI error:', await response.text());
       return [];
     }
 
@@ -81,8 +81,7 @@ async function extractKeywordsWithLovableAI(text: string, lovableApiKey: string)
 // Generate embedding with OpenAI or fallback to Lovable AI
 async function generateEmbedding(
   text: string, 
-  openaiApiKey: string | undefined, 
-  lovableApiKey: string | undefined
+  openaiApiKey: string | undefined
 ): Promise<number[] | null> {
   // Try OpenAI first (native embeddings - best quality)
   if (openaiApiKey) {
@@ -112,10 +111,10 @@ async function generateEmbedding(
     }
   }
 
-  // Fallback: Lovable AI + pseudo-embedding (keyword-based)
-  if (lovableApiKey) {
-    console.log('[generateEmbedding] Using Lovable AI fallback...');
-    const keywords = await extractKeywordsWithLovableAI(text, lovableApiKey);
+  // Fallback: keyword-based pseudo-embedding using OpenAI
+  if (openaiApiKey) {
+    console.log('[generateEmbedding] Using keyword-based fallback...');
+    const keywords = await extractKeywordsWithOpenAI(text, openaiApiKey);
     
     if (keywords.length > 0) {
       console.log(`[generateEmbedding] ✅ Generated pseudo-embedding from ${keywords.length} keywords`);
@@ -155,24 +154,20 @@ serve(async (req) => {
 
     // Get API keys
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
-    // Check if at least one provider is available
-    if (!OPENAI_API_KEY && !LOVABLE_API_KEY) {
-      console.error('[generate-batch-embeddings] No embedding provider configured');
+    // Check if provider is available
+    if (!OPENAI_API_KEY) {
+      console.error('[generate-batch-embeddings] OPENAI_API_KEY not configured');
       return new Response(
         JSON.stringify({ 
-          error: 'No embedding provider configured. Please set OPENAI_API_KEY or LOVABLE_API_KEY.',
+          error: 'OPENAI_API_KEY not configured.',
           success: false 
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('[generate-batch-embeddings] Providers available:', {
-      openai: !!OPENAI_API_KEY,
-      lovable: !!LOVABLE_API_KEY
-    });
+    console.log('[generate-batch-embeddings] Provider: OpenAI');
 
     // Fetch all articles without embeddings
     const { data: articles, error: fetchError } = await supabase
@@ -211,7 +206,7 @@ serve(async (req) => {
         console.log(`[generate-batch-embeddings] Processing article: ${article.title}`);
         
         const text = `${article.title}\n\n${article.content}`;
-        const embedding = await generateEmbedding(text, OPENAI_API_KEY, LOVABLE_API_KEY);
+        const embedding = await generateEmbedding(text, OPENAI_API_KEY);
 
         if (!embedding) {
           console.error(`[generate-batch-embeddings] Failed to generate embedding for article ${article.id}`);

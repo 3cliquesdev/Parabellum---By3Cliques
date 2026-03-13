@@ -76,7 +76,7 @@ async function handleCsvImport(request: any, supabaseClient: any) {
       errors: [] as Array<{ row: number; error: string }>,
     };
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
@@ -95,14 +95,14 @@ async function handleCsvImport(request: any, supabaseClient: any) {
           // Use AI to clean and extract
           const dialog = `${row.input}\n\n${row.output}`;
           
-          const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Authorization': `Bearer ${OPENAI_API_KEY}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'openai/gpt-5-mini',
+              model: 'gpt-5-nano',
               messages: [
                 {
                   role: 'system',
@@ -192,7 +192,7 @@ Retorne APENAS um JSON válido:
 
 async function handleDocumentImport(request: DocumentRequest, supabaseClient: any) {
   const { text, fileName, category, tags, mode } = request;
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
   
   const result = {
     created: 0,
@@ -203,14 +203,14 @@ async function handleDocumentImport(request: DocumentRequest, supabaseClient: an
   try {
     if (mode === 'full_document') {
       // Create a single article from the entire document
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'openai/gpt-5-mini',
+           model: 'gpt-5-nano',
           messages: [
             {
               role: 'system',
@@ -259,14 +259,14 @@ Retorne APENAS um JSON válido:
       }
     } else {
       // Split document into sections
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'openai/gpt-5-mini',
+          model: 'gpt-5-nano',
           messages: [
             {
               role: 'system',

@@ -6,31 +6,8 @@ const corsHeaders = {
 };
 
 // Helper: Buscar modelo AI configurado no banco
-async function getConfiguredAIModel(): Promise<string> {
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    // Se as envs não existirem, não tentar inicializar client (evita falha no boot)
-    if (!supabaseUrl || !serviceRoleKey) {
-      console.warn('[analyze-ticket] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY; using default model');
-      return 'google/gemini-2.5-flash-lite';
-    }
-
-    const supabaseClient = createClient(supabaseUrl, serviceRoleKey);
-    
-    const { data } = await supabaseClient
-      .from('system_configurations')
-      .select('value')
-      .eq('key', 'ai_default_model')
-      .maybeSingle();
-    
-    return data?.value || 'google/gemini-2.5-flash-lite';
-  } catch (error) {
-    console.error('[analyze-ticket] Error fetching AI model config:', error);
-    return 'google/gemini-2.5-flash-lite';
-  }
-}
+// Modelo padrão OpenAI
+const DEFAULT_MODEL = 'gpt-5-mini';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -39,14 +16,13 @@ Deno.serve(async (req) => {
 
   try {
     const { mode, messages, description, ticketSubject } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY not configured');
     }
     
-    // Buscar modelo configurado dinamicamente
-    const aiModel = await getConfiguredAIModel();
+    const aiModel = DEFAULT_MODEL;
     console.log(`[analyze-ticket] Using AI model: ${aiModel}`);
 
     let systemPrompt = '';
@@ -142,11 +118,11 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
       ]);
     };
 
-    // Call AI Gateway with timeout protection
-    const response = await fetchWithTimeout('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    // Call OpenAI with timeout protection
+    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -160,21 +136,21 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
 
     if (!response || !response.ok) {
       if (!response) {
-        throw new Error('Failed to get response from AI Gateway');
+        throw new Error('Failed to get response from OpenAI');
       }
       
       const errorText = await response.text();
-      console.error(`[analyze-ticket] AI Gateway error: ${response.status}`, errorText);
+      console.error(`[analyze-ticket] OpenAI API error: ${response.status}`, errorText);
       
       // GRACEFUL DEGRADATION: Return fallback values for known errors (including 402 payment required, 500 server error)
       if (response.status === 429 || response.status === 503 || response.status === 502 || response.status === 402 || response.status === 500) {
         const errorReason = response.status === 429 ? 'rate_limit' : 
                            response.status === 503 ? 'service_unavailable' :
                            response.status === 502 ? 'bad_gateway' : 
-                           response.status === 402 ? 'credits_depleted' :
-                           response.status === 500 ? 'server_error' : 'unknown';
+                            response.status === 402 ? 'payment_error' :
+                            response.status === 500 ? 'server_error' : 'unknown';
         
-        console.warn(`[analyze-ticket] ⚠️ AI Gateway error ${response.status}, returning fallback for mode: ${mode}`);
+        console.warn(`[analyze-ticket] ⚠️ OpenAI API error ${response.status}, returning fallback for mode: ${mode}`);
         
         let fallbackResult = '';
         let fallbackMessage = '';
@@ -183,31 +159,31 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
           case 'sentiment':
             fallbackResult = 'neutro'; // Safe default sentiment
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados. Adicione créditos ao seu workspace.' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Análise de sentimento indisponível';
             break;
           case 'summary':
             fallbackResult = 'Resumo indisponível temporariamente. Por favor, revise a conversa manualmente.';
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Sistema de resumo temporariamente indisponível';
             break;
           case 'reply':
             fallbackResult = 'Obrigado pela sua mensagem. Nossa equipe irá analisar seu caso e retornar em breve.';
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Sugestão de resposta temporariamente indisponível';
             break;
           case 'tags':
             fallbackResult = ''; // Empty tags
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Sistema de tags temporariamente indisponível';
             break;
           default:
             fallbackResult = 'Resultado não disponível';
             fallbackMessage = response.status === 402 
-              ? 'Créditos de IA esgotados' 
+              ? 'Erro de billing na API OpenAI. Verifique sua conta.' 
               : 'Serviço temporariamente indisponível';
         }
         
@@ -223,7 +199,7 @@ Responda apenas com as tags separadas por vírgula (ex: Bug, Técnico, Urgente)`
         });
       }
 
-      throw new Error(`AI Gateway error: ${response.status}`);
+      throw new Error(`OpenAI API error: ${response.status}`);
     }
 
     const data = await response.json();

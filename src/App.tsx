@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RealtimeNotifications from "./components/RealtimeNotifications";
@@ -43,13 +43,14 @@ const ChatLinksSettings = lazy(() => import("./pages/ChatLinksSettings"));
 const WidgetBuilder = lazy(() => import("./pages/WidgetBuilder"));
 const Auth = lazy(() => import("./pages/Auth"));
 const Automations = lazy(() => import("./pages/Automations"));
-const Analytics = lazy(() => import("./pages/Analytics"));
+// Analytics removed — now inline redirect
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
 const TVMode = lazy(() => import("./pages/TVMode"));
 const SetupPassword = lazy(() => import("./pages/SetupPassword"));
 const Goals = lazy(() => import("./pages/Goals"));
 const GoalsManagement = lazy(() => import("./pages/GoalsManagement"));
 const ImportClients = lazy(() => import("./pages/ImportClients"));
+const ImportDeals = lazy(() => import("./pages/ImportDeals"));
 const Support = lazy(() => import("./pages/Support"));
 const TicketDetail = lazy(() => import("./pages/TicketDetail"));
 const Knowledge = lazy(() => import("./pages/Knowledge"));
@@ -60,8 +61,7 @@ const MyTickets = lazy(() => import("./pages/MyTickets"));
 const AIStudio = lazy(() => import("./pages/AIStudio"));
 const MyPortfolio = lazy(() => import("./pages/MyPortfolio"));
 const FraudDetection = lazy(() => import("./pages/reports/FraudDetection"));
-const CSManagement = lazy(() => import("./pages/CSManagement"));
-const SalesManagement = lazy(() => import("./pages/SalesManagement"));
+// CSManagement and SalesManagement removed — now inline redirects
 const AgentQualityDashboard = lazy(() => import("./pages/AgentQualityDashboard"));
 const CopilotImpactDashboard = lazy(() => import("./pages/CopilotImpactDashboard"));
 const SalesRepDetail = lazy(() => import("./pages/SalesRepDetail"));
@@ -120,17 +120,18 @@ const IntegrationsCentralPage = lazy(() => import("./pages/IntegrationsCentralPa
 const ChatFlows = lazy(() => import("./pages/ChatFlows"));
 const ChatFlowEditorPage = lazy(() => import("./pages/ChatFlowEditorPage"));
 const WhatsAppMetaSettings = lazy(() => import("./pages/WhatsAppMetaSettings"));
-const SupportDashboard = lazy(() => import("./pages/SupportDashboard"));
+// SupportDashboard removed — now inline redirect
 const CommercialConversationsReport = lazy(() => import("./pages/CommercialConversationsReport"));
 const TicketsExportReport = lazy(() => import("./pages/TicketsExportReport"));
 const ConversationsReport = lazy(() => import("./pages/ConversationsReport"));
 const PlaybookEmailSequenceReport = lazy(() => import("./pages/PlaybookEmailSequenceReport"));
 const FormLeadsConversionReport = lazy(() => import("./pages/FormLeadsConversionReport"));
 const ReportBuilder = lazy(() => import("./pages/ReportBuilder"));
-const AnalyticsPremium = lazy(() => import("./pages/AnalyticsPremium"));
+// AnalyticsPremium removed — now inline redirect
 const DashboardsList = lazy(() => import("./pages/DashboardsList"));
 const InboxTimeReport = lazy(() => import("./pages/InboxTimeReport"));
 const DashboardView = lazy(() => import("./pages/DashboardView"));
+// AITelemetry moved into Dashboard as tab — redirect handled inline
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -184,10 +185,10 @@ const App = () => {
               <Route path="/" element={<ProtectedRoute requiredPermission="dashboard.view"><Layout><Dashboard /></Layout></ProtectedRoute>} />
               <Route path="/inbox" element={<ProtectedRoute requiredPermission="inbox.access"><Layout><Inbox /></Layout></ProtectedRoute>} />
               <Route path="/my-portfolio" element={<ProtectedRoute requiredPermission="cs.view_own_portfolio"><Layout><MyPortfolio /></Layout></ProtectedRoute>} />
-              <Route path="/cs-management" element={<ProtectedRoute requiredPermission="cs.view_management"><Layout><CSManagement /></Layout></ProtectedRoute>} />
+              <Route path="/cs-management" element={<Navigate to="/?tab=overview" replace />} />
               <Route path="/cs-management/consultant/:id" element={<ProtectedRoute requiredPermission="cs.view_management"><Layout><ConsultantDetail /></Layout></ProtectedRoute>} />
               <Route path="/consultants" element={<ProtectedRoute requiredPermission="cadastros.view_consultants"><Layout><Consultants /></Layout></ProtectedRoute>} />
-              <Route path="/sales-management" element={<ProtectedRoute requiredPermission="sales.view_management"><Layout><SalesManagement /></Layout></ProtectedRoute>} />
+              <Route path="/sales-management" element={<Navigate to="/?tab=sales" replace />} />
               <Route path="/sales-management/rep/:id" element={<ProtectedRoute requiredPermission="sales.view_management"><Layout><SalesRepDetail /></Layout></ProtectedRoute>} />
               
               <Route path="/contacts" element={<ProtectedRoute requiredPermission="contacts.view"><Layout><Contacts /></Layout></ProtectedRoute>} />
@@ -207,8 +208,8 @@ const App = () => {
               <Route path="/email-templates/v2/builder/:id" element={<ProtectedRoute requiredPermission="email.manage_templates"><EmailBuilderV2Page /></ProtectedRoute>} />
               <Route path="/onboarding-builder" element={<ProtectedRoute requiredPermission="playbooks.view"><Layout><OnboardingBuilder /></Layout></ProtectedRoute>} />
               <Route path="/playbook-executions" element={<ProtectedRoute requiredPermission="playbooks.view_executions"><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
-              <Route path="/analytics" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Analytics /></Layout></ProtectedRoute>} />
-              <Route path="/analytics/premium" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><AnalyticsPremium /></Layout></ProtectedRoute>} />
+              <Route path="/analytics" element={<Navigate to="/" replace />} />
+              <Route path="/analytics/premium" element={<Navigate to="/?tab=overview" replace />} />
               <Route path="/dashboards" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><DashboardsList /></Layout></ProtectedRoute>} />
               <Route path="/dashboard/:id" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><DashboardView /></Layout></ProtectedRoute>} />
               <Route path="/subscriptions" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Subscriptions /></Layout></ProtectedRoute>} />
@@ -234,12 +235,14 @@ const App = () => {
               <Route path="/sales-tasks" element={<ProtectedRoute requiredPermission="sales.view_workzone"><Layout><SalesTasks /></Layout></ProtectedRoute>} />
               <Route path="/support" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><Support /></Layout></ProtectedRoute>} />
               <Route path="/support/:ticketId" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><TicketDetail /></Layout></ProtectedRoute>} />
-              <Route path="/support-dashboard" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><SupportDashboard /></Layout></ProtectedRoute>} />
+              <Route path="/support-dashboard" element={<Navigate to="/?tab=support" replace />} />
               <Route path="/knowledge" element={<ProtectedRoute requiredPermission="inbox.view_knowledge"><Layout><Knowledge /></Layout></ProtectedRoute>} />
               <Route path="/knowledge/curation" element={<ProtectedRoute requiredPermission="knowledge.manage_articles"><Layout><KnowledgeCuration /></Layout></ProtectedRoute>} />
               <Route path="/knowledge/gaps" element={<ProtectedRoute requiredPermission="knowledge.manage_articles"><Layout><KBGapsDashboard /></Layout></ProtectedRoute>} />
               <Route path="/ai-studio/personas" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AIStudio /></Layout></ProtectedRoute>} />
+              <Route path="/ai-telemetry" element={<Navigate to="/?tab=ai-telemetry" replace />} />
               <Route path="/import-clients" element={<ProtectedRoute requiredPermission="contacts.import"><Layout><ImportClients /></Layout></ProtectedRoute>} />
+              <Route path="/import-deals" element={<ProtectedRoute requiredPermission="deals.create"><Layout><ImportDeals /></Layout></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute requiredPermission="settings.view"><Layout><Settings /></Layout></ProtectedRoute>} />
               <Route path="/settings/integrations" element={<ProtectedRoute requiredPermission="settings.integrations"><Layout><IntegrationsSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/email" element={<ProtectedRoute requiredPermission="email.manage_templates"><EmailSettingsPage /></ProtectedRoute>} />

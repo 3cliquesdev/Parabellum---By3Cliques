@@ -1,14 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export function useLTVStats() {
+export function useLTVStats(startDate?: Date, endDate?: Date) {
   return useQuery({
-    queryKey: ["ltv-stats"],
+    queryKey: ["ltv-stats", startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
-      const { data: contacts, error } = await supabase
+      let query = supabase
         .from("contacts")
         .select("total_ltv, status")
         .gt("total_ltv", 0);
+
+      // Filter by last_payment_date if date range provided
+      if (startDate) {
+        query = query.gte("last_payment_date", startDate.toISOString());
+      }
+      if (endDate) {
+        query = query.lte("last_payment_date", endDate.toISOString());
+      }
+
+      const { data: contacts, error } = await query;
 
       if (error) throw error;
 

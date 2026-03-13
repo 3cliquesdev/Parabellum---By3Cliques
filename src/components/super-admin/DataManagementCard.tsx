@@ -172,6 +172,12 @@ export function DataManagementCard() {
         />
 
         <ActionButton
+          icon={Upload}
+          label="Importar Deals"
+          onClick={() => navigate("/import-deals")}
+        />
+
+        <ActionButton
           icon={Eraser}
           label="Limpar Nomes de Contatos"
           onClick={() => setCleanupOpen(true)}

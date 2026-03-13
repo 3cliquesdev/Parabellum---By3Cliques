@@ -305,12 +305,12 @@ serve(async (req) => {
       if (dept) departmentName = dept.name;
     }
 
-    console.log('[generate-smart-reply] Chamando Lovable AI com prompt Observador...');
+    console.log('[generate-smart-reply] Chamando OpenAI com prompt Observador...');
 
-    // 6. Chamar Lovable AI com prompt estruturado
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY não configurada');
+    // 6. Chamar OpenAI com prompt estruturado
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY não configurada');
     }
 
     const userPrompt = `## Contexto da Conversa (${contactName}):
@@ -327,14 +327,14 @@ ${conversation.status}
 
 Analise e gere suas sugestões em JSON.`;
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-5-mini',
+        model: 'gpt-5-mini',
         max_completion_tokens: 500,
         response_format: { type: "json_object" },
         messages: [
@@ -347,7 +347,7 @@ Analise e gere suas sugestões em JSON.`;
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error('[generate-smart-reply] Erro na chamada AI:', aiResponse.status, errorText);
-      throw new Error(`Lovable AI error: ${aiResponse.status}`);
+      throw new Error(`OpenAI error: ${aiResponse.status}`);
     }
 
     const aiData = await aiResponse.json();

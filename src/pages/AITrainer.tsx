@@ -15,15 +15,21 @@ import { RAGConfigurationCard } from "@/components/settings/RAGConfigurationCard
 import { KnowledgeBrainStatus } from "@/components/KnowledgeBrainStatus";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
 
-// Modelos disponíveis no Lovable AI
+// Modelos disponíveis - OpenAI direta
 const AVAILABLE_MODELS = [
-  { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "Google", description: "Balanceado - Rápido e preciso", badge: "Recomendado" },
-  { id: "google/gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite", provider: "Google", description: "Ultra rápido - Tarefas simples", badge: "Econômico" },
-  { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "Google", description: "Top tier - Raciocínio complexo", badge: "Premium" },
-  { id: "google/gemini-3-pro-preview", name: "Gemini 3 Pro", provider: "Google", description: "Nova geração - Preview", badge: "Novo" },
-  { id: "openai/gpt-5", name: "GPT-5", provider: "OpenAI", description: "Poderoso - Alta precisão", badge: "Premium" },
-  { id: "openai/gpt-5-mini", name: "GPT-5 Mini", provider: "OpenAI", description: "Balanceado - Custo-benefício", badge: null },
-  { id: "openai/gpt-5-nano", name: "GPT-5 Nano", provider: "OpenAI", description: "Rápido - Alto volume", badge: "Econômico" },
+  // Chat
+  { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", description: "Balanceado - Rápido e preciso", badge: "Recomendado" },
+  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", description: "Máxima precisão multimodal", badge: "Premium" },
+  { id: "gpt-4.1-nano", name: "GPT-4.1 Nano", provider: "OpenAI", description: "Mais barato - Tarefas simples", badge: "Econômico" },
+  { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", provider: "OpenAI", description: "Ultra rápido - Alto volume", badge: "Rápido" },
+  { id: "gpt-4.1", name: "GPT-4.1", provider: "OpenAI", description: "Última geração - Contexto longo", badge: "Novo" },
+  { id: "gpt-5-nano", name: "GPT-5 Nano", provider: "OpenAI", description: "Velocidade + economia máxima", badge: "Econômico" },
+  { id: "gpt-5-mini", name: "GPT-5 Mini", provider: "OpenAI", description: "Forte performance - Custo moderado", badge: "Balanceado" },
+  { id: "gpt-5", name: "GPT-5", provider: "OpenAI", description: "Máxima capacidade - Raciocínio + multimodal", badge: "Premium+" },
+  // Reasoning
+  { id: "o4-mini", name: "o4-mini", provider: "OpenAI", description: "Raciocínio avançado - Custo acessível", badge: "Smart" },
+  { id: "o3", name: "o3", provider: "OpenAI", description: "Raciocínio máximo", badge: "Top" },
+  { id: "o3-mini", name: "o3-mini", provider: "OpenAI", description: "Raciocínio econômico", badge: "Eficiente" },
 ];
 
 export default function AITrainer() {
@@ -81,7 +87,7 @@ export default function AITrainer() {
   });
 
   // Set selected model when config loads
-  const configuredModel = currentConfig?.value || "google/gemini-2.5-flash";
+  const configuredModel = currentConfig?.value || "gpt-4o-mini";
 
   if (permLoading) {
     return (

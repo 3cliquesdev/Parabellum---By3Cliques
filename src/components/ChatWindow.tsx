@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { displayName } from "@/lib/displayName";
 import { useSearchParams } from "react-router-dom";
 import {
   AlertDialog,
@@ -17,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign, Ticket, PanelRightClose, PanelRight, FlaskConical, Send } from "lucide-react";
+import { Mail, MessageCircle, ArrowRightLeft, FileText, Hand, Bot, MessageSquare, CheckCircle, AlertCircle, DollarSign, Ticket, PanelRightClose, PanelRight, FlaskConical, Send, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMessages, useSendMessage } from "@/hooks/useMessages";
 import { useSendMessageInstant } from "@/hooks/useSendMessageInstant";
@@ -91,6 +92,16 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   // Captura os IDs antes de abrir o diálogo de confirmação (fix: conversation pode mudar para null)
   const [pendingTakeControl, setPendingTakeControl] = useState<{ conversationId: string; contactId: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // UX: Typing indicator + new message badge + relative timestamps
+  const [isWaitingResponse, setIsWaitingResponse] = useState(false);
+  const waitingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [hasNewMessageBelow, setHasNewMessageBelow] = useState(false);
+  // Single 60s tick counter for relative timestamps (instead of N intervals per bubble)
+  const [tickCounter, setTickCounter] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTickCounter(t => t + 1), 60_000);
+    return () => clearInterval(interval);
+  }, []);
   const { user } = useAuth();
   const { isAdmin, isManager, isSalesRep, role } = useUserRole();
   const { hasPermission } = useRolePermissions();
@@ -154,6 +165,31 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const scrollRef = useRef<HTMLDivElement>(null);
   const [shouldStickToBottom, setShouldStickToBottom] = useState(true);
 
+  // ========== TYPING INDICATOR + NEW MESSAGE BADGE ==========
+  const prevMsgCount = useRef(messages.length);
+  useEffect(() => {
+    if (messages.length > prevMsgCount.current) {
+      const lastMsg = messages[messages.length - 1];
+      // Clear typing indicator when response arrives
+      if (lastMsg && (lastMsg.sender_type !== 'user' || lastMsg.sender_id !== user?.id)) {
+        setIsWaitingResponse(false);
+        if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+      }
+      // Show "new message" badge if scrolled up
+      if (!shouldStickToBottom) {
+        setHasNewMessageBelow(true);
+      }
+    }
+    prevMsgCount.current = messages.length;
+  }, [messages.length, shouldStickToBottom]);
+
+  // Reset waiting state on conversation change
+  useEffect(() => {
+    setIsWaitingResponse(false);
+    setHasNewMessageBelow(false);
+    if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+  }, [conversation?.id]);
+
   // Detectar se usuário scrollou para cima
   useEffect(() => {
     const el = scrollRef.current;
@@ -175,6 +211,16 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     if (!el || !shouldStickToBottom) return;
     el.scrollTop = el.scrollHeight; // instant (WhatsApp-like)
   }, [messages?.length, shouldStickToBottom]);
+
+  useEffect(() => {
+    if (shouldStickToBottom) setHasNewMessageBelow(false);
+  }, [shouldStickToBottom]);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    setHasNewMessageBelow(false);
+  }, []);
 
   // 🆕 ENTERPRISE: Scroll-up pagination (load older messages)
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -232,7 +278,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
 
       await sendEmail.mutateAsync({
         to: conversation.contacts.email || '',
-        to_name: `${conversation.contacts.first_name} ${conversation.contacts.last_name}`,
+        to_name: displayName(conversation.contacts.first_name, conversation.contacts.last_name),
         subject: emailSubject.trim(),
         html: `<p>${message.trim().replace(/\n/g, '<br>')}</p>`,
         customer_id: conversation.contacts.id,
@@ -243,6 +289,13 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     } else {
       const isWhatsApp = conversation.channel === 'whatsapp';
       const messageContent = message.trim();
+      
+      // UX: Activate typing indicator BEFORE any async work (all channels)
+      if (!isInternal && !isEmailMode) {
+        setIsWaitingResponse(true);
+        if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+        waitingTimeoutRef.current = setTimeout(() => setIsWaitingResponse(false), 60_000);
+      }
       
       // FASE 7: Se é nota interna, salvar apenas no banco (não enviar para cliente)
       if (isInternal) {
@@ -324,6 +377,8 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
 
       setMessage("");
     }
+    
+    // (typing indicator already activated at start of function)
   };
 
   // Abre o diálogo de confirmação capturando os IDs imediatamente
@@ -432,7 +487,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
             open={createTicketDialogOpen}
             onOpenChange={setCreateTicketDialogOpen}
             conversationId={conversation.id}
-            contactName={`${conversation.contacts?.first_name || ''} ${conversation.contacts?.last_name || ''}`}
+            contactName={displayName(conversation.contacts?.first_name, conversation.contacts?.last_name)}
           />
           <CloseConversationDialog
             open={closeDialogOpen}
@@ -687,7 +742,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
             </Alert>
           )}
 
-          <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto bg-[hsl(var(--chat-bg))]">
+          <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto bg-[hsl(var(--chat-bg))] relative">
             <div className="px-4 py-6 md:px-6">
               <div className="max-w-4xl mx-auto w-full">
                 {conversation.status === "closed" && (
@@ -719,11 +774,38 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                       isAdmin={isAdmin}
                       isManager={isManager}
                       messagesEndRef={messagesEndRef}
+                      _tick={tickCounter}
                     />
+
+                    {/* Typing indicator */}
+                    {isWaitingResponse && (
+                      <div className="flex justify-start gap-2 mt-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                        <div className="flex items-center gap-1 px-4 py-3 bg-muted rounded-2xl rounded-tl-sm w-fit">
+                          <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce [animation-delay:0ms]" />
+                          <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce [animation-delay:150ms]" />
+                          <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce [animation-delay:300ms]" />
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
             </div>
+
+            {/* "Nova mensagem ↓" floating badge */}
+            {hasNewMessageBelow && (
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="shadow-lg gap-1.5 rounded-full px-4 h-8 text-xs font-medium"
+                  onClick={scrollToBottom}
+                >
+                  Nova mensagem
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </div>
 
           {isCopilot && conversation && (
