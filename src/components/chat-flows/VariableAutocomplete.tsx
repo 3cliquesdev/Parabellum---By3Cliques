@@ -240,10 +240,11 @@ export function VariableAutocomplete({
         </button>
       </div>
 
-      {open && (
+      {open && dropdownPos && createPortal(
         <div
           ref={dropdownRef}
-          className="absolute z-50 w-80 mt-1 rounded-md border bg-popover text-popover-foreground shadow-md"
+          className="fixed z-[9999] w-80 rounded-md border bg-popover text-popover-foreground shadow-md"
+          style={{ top: dropdownPos.top, left: dropdownPos.left }}
         >
           <div className="flex items-center border-b px-3">
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
@@ -256,7 +257,7 @@ export function VariableAutocomplete({
               onMouseDown={(e) => e.stopPropagation()}
             />
           </div>
-          <ScrollArea className="max-h-[250px]">
+          <ScrollArea className="max-h-[250px] overflow-y-auto">
             <div className="p-1">
               {hasResults ? (
                 <>
@@ -273,7 +274,8 @@ export function VariableAutocomplete({
               )}
             </div>
           </ScrollArea>
-        </div>
+        </div>,
+        document.body
       )}
 
       {orphans.length > 0 && (
