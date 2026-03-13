@@ -1434,7 +1434,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, customerMessage, maxHistory = 50, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
+    let { conversationId, customerMessage, maxHistory = 50, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
 
     // 🔒 FIX 1: Hard validation — customerMessage obrigatório (exceto warmup)
     if (!customerMessage || typeof customerMessage !== 'string' || customerMessage.trim() === '') {
