@@ -8791,7 +8791,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             ai_exit_intent: aiExitIntent || 'none',
           });
           // Log auditoria non-blocking
-          supabaseClient.from('ai_events').insert({
+          Promise.resolve(supabaseClient.from('ai_events').insert({
             entity_type: 'conversation',
             entity_id: conversationId,
             event_type: 'flow_exit_clean',
@@ -8804,7 +8804,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
               ai_exit_intent: aiExitIntent,
             },
             input_summary: customerMessage?.substring(0, 200) || '',
-          }).then(() => {}).catch((err: any) => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
+          })).catch((err: any) => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
           return new Response(JSON.stringify({
             flowExit: true,
             reason: 'ai_requested_exit',
