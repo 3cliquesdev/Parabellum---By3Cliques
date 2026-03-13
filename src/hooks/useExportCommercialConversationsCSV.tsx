@@ -208,6 +208,7 @@ export function useExportCommercialConversationsCSV() {
           row.ticket_id || "",
           row.bot_flow || "",
           Array.isArray(row.tags_all) ? row.tags_all.join(", ") : (row.tags_all || ""),
+          Array.isArray(row.tags_auto) ? row.tags_auto.join(", ") : (row.tags_auto || ""),
           row.last_conversation_tag || "",
           row.first_customer_message || "",
           formatDuration(row.waiting_after_assignment_seconds),
