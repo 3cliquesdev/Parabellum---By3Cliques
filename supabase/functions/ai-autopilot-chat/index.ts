@@ -6798,7 +6798,7 @@ Resolução desejada: Reembolso integral"
 - close_conversation: Encerre SOMENTE quando o cliente indicar CLARAMENTE que não tem mais dúvidas (ex: "era só isso", "não tenho mais dúvidas", "é isso", "pode encerrar"). NÃO interprete agradecimentos ("obrigado", "valeu", "muito obrigado") como sinal de encerramento — agradecer é educação, não significa que acabou. SEMPRE pergunte antes (customer_confirmed=false). Só use customer_confirmed=true após cliente confirmar "sim". Se cliente disser "não" ou tiver mais dúvidas, continue normalmente.
 - classify_and_resolve_ticket: Após encerrar conversa (close_conversation confirmado), classifique e registre a resolução. Use a categoria mais adequada do enum. Escreva summary curto e resolution_notes objetivo.
 
-${knowledgeContext}${identityWallNote}
+${knowledgeContext}${sandboxTrainingContext}${identityWallNote}
 
 **Contexto do Cliente:**
 - Nome: ${contactName}${contactCompany}
