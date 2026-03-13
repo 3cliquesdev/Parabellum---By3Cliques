@@ -328,6 +328,7 @@ export function MessagesWithMedia({
               content={message.content}
               createdAt={message.created_at}
               senderName={message.sender?.full_name}
+              attachments={attachments}
             />
           );
         }

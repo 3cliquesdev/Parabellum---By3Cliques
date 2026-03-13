@@ -1,18 +1,33 @@
 import { StickyNote } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { MediaPreview } from "@/components/inbox/MediaPreview";
+
+interface Attachment {
+  url: string;
+  mimeType: string;
+  filename: string;
+  size?: number;
+  waveformData?: number[];
+  durationSeconds?: number;
+  error?: string;
+  isLoading?: boolean;
+  onRetry?: () => void;
+}
 
 interface InternalNoteMessageProps {
   content: string;
   createdAt: string;
   senderName?: string;
+  attachments?: Attachment[];
 }
 
 // FASE 8: Componente de exibição de Nota Interna
 export function InternalNoteMessage({ 
   content, 
   createdAt,
-  senderName 
+  senderName,
+  attachments 
 }: InternalNoteMessageProps) {
   return (
     <div className="flex justify-center py-2">
@@ -38,11 +53,31 @@ export function InternalNoteMessage({
             </>
           )}
         </div>
+
+        {/* Attachments */}
+        {attachments && attachments.length > 0 && (
+          <div className="mb-2 space-y-2">
+            {attachments.map((att, idx) => (
+              <MediaPreview
+                key={idx}
+                url={att.url}
+                mimeType={att.mimeType}
+                filename={att.filename}
+                size={att.size}
+                waveformData={att.waveformData}
+                durationSeconds={att.durationSeconds}
+                compact
+              />
+            ))}
+          </div>
+        )}
         
         {/* Content */}
-        <p className="text-sm text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap">
-          {content}
-        </p>
+        {content && (
+          <p className="text-sm text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap">
+            {content}
+          </p>
+        )}
         
         {/* Timestamp */}
         <div className="mt-2 text-right">

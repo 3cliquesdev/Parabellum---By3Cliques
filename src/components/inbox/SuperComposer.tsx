@@ -363,14 +363,33 @@ export function SuperComposer({
     // ============================================
     
     try {
-      // Internal note - INSTANT
+      // Internal note - INSTANT (com suporte a anexos)
       if (isInternal) {
+        const firstAtt = uploadedAttachments.length > 0 ? uploadedAttachments[0] : null;
+        let attachmentUrl: string | undefined;
+        
+        if (firstAtt) {
+          const freshUrl = await getFreshMediaUrl(firstAtt.id);
+          attachmentUrl = freshUrl ? `storage:${firstAtt.storagePath || firstAtt.id}` : undefined;
+        }
+
         sentMessageId = sendInstant({
           conversationId,
-          content: messageContent,
+          content: messageContent || (firstAtt ? `📎 ${firstAtt.filename}` : ''),
           isInternal: true,
           channel: 'web_chat',
         });
+
+        // Persistir attachment_url na mensagem se houver anexo
+        if (sentMessageId && attachmentUrl) {
+          supabase
+            .from('messages')
+            .update({ attachment_url: attachmentUrl })
+            .eq('id', sentMessageId)
+            .then(({ error }) => {
+              if (error) console.error('[SuperComposer] Erro ao salvar attachment_url na nota interna:', error);
+            });
+        }
       } 
       // WhatsApp Meta
       else if (whatsappProvider === 'meta' && whatsappMetaInstanceId && contactPhone) {
