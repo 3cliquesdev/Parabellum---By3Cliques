@@ -6781,6 +6781,9 @@ ${contactOrgName ? `- Organização: ${contactOrgName}` : ''}
 ${contactConsultantName ? `- Consultor responsável: ${contactConsultantName}` : ''}
 ${contactSellerName ? `- Vendedor responsável: ${contactSellerName}` : ''}
 ${contactTagsList.length > 0 ? `- Tags: ${contactTagsList.join(', ')}` : ''}
+${customerProducts.length > 0 ? `- Produtos/Serviços contratados: ${customerProducts.join(', ')}` : '- Produtos/Serviços contratados: Nenhum identificado'}
+
+Os "Produtos/Serviços contratados" são produtos DIGITAIS (cursos online, mentorias, assinaturas, comunidades) que o cliente COMPROU na plataforma. Use essa informação para personalizar o atendimento e contextualizar respostas sobre acesso, conteúdo e suporte dos produtos específicos do cliente. Não confunda com produtos físicos.
 ${crossSessionContext}${personaToneInstruction}
 
 Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
