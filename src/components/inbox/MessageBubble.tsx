@@ -1,5 +1,4 @@
 import { format } from "date-fns";
-import { format } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bot, AlertCircle, RefreshCw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
