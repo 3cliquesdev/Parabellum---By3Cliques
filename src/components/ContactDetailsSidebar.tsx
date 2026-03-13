@@ -704,6 +704,48 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Deal Dialog */}
+      {editingDeal && (
+        <DealDialog
+          deal={editingDeal}
+          trigger={<></>}
+          defaultOpen={true}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingDeal(null);
+              queryClient.invalidateQueries({ queryKey: ["contact-deals", contactId] });
+            }
+          }}
+        />
+      )}
+
+      {/* Lost Reason Dialog */}
+      <LostReasonDialog
+        open={!!lostDeal}
+        onClose={() => setLostDeal(null)}
+        dealTitle={lostDeal?.title || ""}
+        onConfirm={(reason, notes) => {
+          if (!lostDeal) return;
+          updateDeal.mutate(
+            {
+              id: lostDeal.id,
+              updates: {
+                status: "lost",
+                lost_reason: reason,
+                lost_notes: notes || null,
+              },
+            },
+            {
+              onSuccess: () => {
+                queryClient.invalidateQueries({ queryKey: ["contact-deals", contactId] });
+                toast({ title: "Negócio marcado como perdido", variant: "destructive" });
+                setLostDeal(null);
+              },
+            }
+          );
+        }}
+      />
     </div>
   );
 }
