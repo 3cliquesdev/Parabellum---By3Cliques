@@ -56,7 +56,7 @@ export default function KanbanCard({
   const navigate = useNavigate();
   const { toast } = useToast();
   const deleteDeal = useDeleteDeal();
-  const createConversation = useCreateConversation();
+  // Template dialog handles conversation creation now
   const [isNavigatingToInbox, setIsNavigatingToInbox] = useState(false);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   // Format WhatsApp number with country code
