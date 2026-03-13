@@ -568,7 +568,7 @@ serve(async (req) => {
                     whatsapp_provider: "meta",
                     whatsapp_meta_instance_id: instance.id,
                   })
-                  .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider")
+                  .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata")
                   .single();
 
                 conversation = newConv;
