@@ -3446,9 +3446,9 @@ serve(async (req) => {
           console.log('[process-chat-flow] 🎯 ai_exit_intent=comercial_internacional (auto-detect from internacionalIntentMatch)');
         }
 
-        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || keywordMatch || maxReached || aiExitForced) {
-          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : supportIntentMatch ? 'support_requested' : consultorIntentMatch ? 'consultant_requested' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
-          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} support=${supportIntentMatch} consultant=${consultorIntentMatch} count=${aiCount}`);
+        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || pedidosIntentMatch || devolucaoIntentMatch || saqueIntentMatch || sistemaIntentMatch || internacionalIntentMatch || keywordMatch || maxReached || aiExitForced) {
+          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : supportIntentMatch ? 'support_requested' : consultorIntentMatch ? 'consultant_requested' : pedidosIntentMatch ? 'pedidos_requested' : devolucaoIntentMatch ? 'devolucao_requested' : saqueIntentMatch ? 'saque_requested' : sistemaIntentMatch ? 'sistema_requested' : internacionalIntentMatch ? 'internacional_requested' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
+          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} support=${supportIntentMatch} consultant=${consultorIntentMatch} pedidos=${pedidosIntentMatch} devolucao=${devolucaoIntentMatch} saque=${saqueIntentMatch} sistema=${sistemaIntentMatch} internacional=${internacionalIntentMatch} count=${aiCount}`);
 
           // Log de transferência estruturado em ai_events
           try {
