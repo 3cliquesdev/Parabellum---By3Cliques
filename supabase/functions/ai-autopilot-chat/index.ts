@@ -1507,6 +1507,8 @@ serve(async (req) => {
     const flowForbidCancellation: boolean = flow_context?.forbidCancellation ?? false;
     const flowForbidCommercialPrompt: boolean = flow_context?.forbidCommercial ?? false;
     const flowForbidConsultantPrompt: boolean = flow_context?.forbidConsultant ?? false;
+    // 🆕 Onboarding detection: default true sem flow (autopilot puro), false com flow (controlado pelo toggle)
+    const flowOnboardingDetection: boolean = flow_context ? (flow_context.onboardingDetection ?? false) : true;
     
     // ðŸ†• FASE 1: Flag para usar prompt restritivo
     const useRestrictedPrompt = !!(flow_context && (flowObjective || flowForbidQuestions || flowForbidOptions || flowForbidFinancial));
