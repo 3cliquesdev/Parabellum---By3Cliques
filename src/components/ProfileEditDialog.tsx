@@ -136,15 +136,23 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
   const handleSendReport = async () => {
     setSendingReport(true);
     try {
+      const body: Record<string, any> = reportDate
+        ? { report_date: formatLocalDate(reportDate) }
+        : { force_today: true };
+
       const { data, error } = await supabase.functions.invoke("ai-governor", {
-        body: { force_today: true },
+        body,
       });
 
       if (error) throw error;
 
+      const label = reportDate
+        ? format(reportDate, "dd/MM/yyyy")
+        : "hoje";
+
       toast({
         title: "Relatório enviado!",
-        description: `Métricas coletadas: ${data?.metrics?.totalConvs ?? 0} conversas processadas.`,
+        description: `Relatório de ${label} — ${data?.metrics?.totalConvs ?? 0} conversas processadas.`,
       });
     } catch (error) {
       console.error("Error sending governor report:", error);
