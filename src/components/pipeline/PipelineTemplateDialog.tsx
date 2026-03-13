@@ -50,7 +50,7 @@ export function PipelineTemplateDialog({
       const { data, error } = await supabase
         .from("whatsapp_meta_instances")
         .select("id")
-        .eq("status", "active")
+        .in("status", ["active", "connected"])
         .limit(1)
         .maybeSingle();
       if (error) throw error;
