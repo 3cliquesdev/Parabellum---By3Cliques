@@ -79,6 +79,35 @@ export default function KanbanCard({
       console.error('Erro ao copiar telefone:', error);
     }
   };
+
+  const handleStartInboxConversation = async () => {
+    if (!deal.contact_id) {
+      toast({ title: "Sem contato", description: "Este deal não tem um contato vinculado.", variant: "destructive" });
+      return;
+    }
+    setIsNavigatingToInbox(true);
+    try {
+      // Check for existing open conversation
+      const { data: existing } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("contact_id", deal.contact_id)
+        .eq("status", "open")
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        navigate(`/inbox?conversation=${existing.id}`);
+      } else {
+        const newConversation = await createConversation.mutateAsync(deal.contact_id);
+        navigate(`/inbox?conversation=${newConversation.id}`);
+      }
+    } catch (error) {
+      console.error("Erro ao iniciar conversa:", error);
+    } finally {
+      setIsNavigatingToInbox(false);
+    }
+  };
   
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: deal.id,
