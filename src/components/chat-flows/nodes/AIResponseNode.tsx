@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
-import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign, Store, Briefcase } from "lucide-react";
+import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign, Store, Briefcase, Truck, RotateCcw, Wallet, Monitor, Globe } from "lucide-react";
 import { ChatFlowNodeWrapper } from "../ChatFlowNodeWrapper";
 import { Badge } from "@/components/ui/badge";
 
@@ -30,6 +30,12 @@ interface AIResponseNodeData {
   forbid_cancellation?: boolean;
   forbid_support?: boolean;
   forbid_consultant?: boolean;
+  // 🆕 5 novos intents
+  forbid_pedidos?: boolean;
+  forbid_devolucao?: boolean;
+  forbid_saque?: boolean;
+  forbid_sistema?: boolean;
+  forbid_internacional?: boolean;
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
