@@ -183,6 +183,23 @@ export function MessagesWithMedia({
     return attachments;
   }, [messages]);
 
+  // Coletar storage: refs de mensagens sem media_attachments (para fallback)
+  const storageRefs = useMemo(() => {
+    const refs = new Map<string, string>();
+    messages.forEach(msg => {
+      const hasMediaAttachments = msg.media_attachments?.some(
+        a => a.status === 'ready' && a.storage_bucket && a.storage_path
+      );
+      if (!hasMediaAttachments && msg.attachment_url?.startsWith('storage:') && !msg.is_ai_generated) {
+        refs.set(msg.id, msg.attachment_url);
+      }
+    });
+    return refs;
+  }, [messages]);
+
+  // Resolver storage: URLs para signed URLs
+  const resolvedStorageUrls = useStorageUrlsResolver(storageRefs);
+
   // Carregar signed URLs para todos os attachments
   const { urls: mediaUrls, isLoading: mediaLoading, getUrl, retryLoad } = useMediaUrls(allAttachments);
 
