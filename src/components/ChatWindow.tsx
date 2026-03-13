@@ -47,6 +47,7 @@ import { MessagesWithMedia } from "@/components/inbox/MessagesWithMedia";
 import { ActiveFlowIndicator } from "@/components/inbox/ActiveFlowIndicator";
 import { TestModeDropdown } from "@/components/inbox/TestModeDropdown";
 import { FlowPickerButton } from "@/components/inbox/FlowPickerButton";
+import { LinkedDealPanel } from "@/components/inbox/LinkedDealPanel";
 import { useActiveFlowState } from "@/hooks/useActiveFlowState";
 // REMOVIDO: useCustomerTags - tags do contato não devem aparecer no header do chat
 // Tags da conversa são gerenciadas por ConversationTagsSection
@@ -707,6 +708,11 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
               </div>
             </div>
           </div>
+
+          {/* Linked Deal Panel */}
+          {(conversation as any).deal_id && (
+            <LinkedDealPanel dealId={(conversation as any).deal_id} />
+          )}
 
           {/* Active Flow Indicator - fixed in header */}
           <ActiveFlowIndicator conversationId={conversation.id} />

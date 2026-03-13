@@ -2340,6 +2340,7 @@ export type Database = {
           contact_id: string
           created_at: string
           customer_metadata: Json | null
+          deal_id: string | null
           department: string | null
           dispatch_attempts: number | null
           dispatch_status: string | null
@@ -2377,6 +2378,7 @@ export type Database = {
           contact_id: string
           created_at?: string
           customer_metadata?: Json | null
+          deal_id?: string | null
           department?: string | null
           dispatch_attempts?: number | null
           dispatch_status?: string | null
@@ -2414,6 +2416,7 @@ export type Database = {
           contact_id?: string
           created_at?: string
           customer_metadata?: Json | null
+          deal_id?: string | null
           department?: string | null
           dispatch_attempts?: number | null
           dispatch_status?: string | null
@@ -2459,6 +2462,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
             referencedColumns: ["id"]
           },
           {

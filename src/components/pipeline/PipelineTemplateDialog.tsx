@@ -24,6 +24,7 @@ interface PipelineTemplateDialogProps {
   contactId: string;
   contactPhone: string;
   contactName: string;
+  dealId?: string;
   onConversationCreated: (conversationId: string) => void;
 }
 
@@ -33,6 +34,7 @@ export function PipelineTemplateDialog({
   contactId,
   contactPhone,
   contactName,
+  dealId,
   onConversationCreated,
 }: PipelineTemplateDialogProps) {
   const { user } = useAuth();
@@ -88,17 +90,20 @@ export function PipelineTemplateDialog({
         .eq("contact_id", contactId)
         .eq("status", "open");
 
-      // Create new conversation
+      // Create new conversation (with deal_id if from pipeline)
+      const insertPayload: any = {
+        contact_id: contactId,
+        channel: "whatsapp",
+        status: "open",
+        ai_mode: "waiting_human",
+        assigned_to: user?.id,
+        whatsapp_meta_instance_id: instanceId,
+      };
+      if (dealId) insertPayload.deal_id = dealId;
+
       const { data: newConv, error: convError } = await supabase
         .from("conversations")
-        .insert({
-          contact_id: contactId,
-          channel: "whatsapp",
-          status: "open",
-          ai_mode: "waiting_human",
-          assigned_to: user?.id,
-          whatsapp_meta_instance_id: instanceId,
-        })
+        .insert(insertPayload)
         .select("id")
         .single();
 

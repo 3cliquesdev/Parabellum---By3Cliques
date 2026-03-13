@@ -190,6 +190,7 @@ export default function Inbox() {
       needs_human_review: false,
       previous_agent_id: null,
       rating_sent_at: null,
+      deal_id: item.deal_id || null,
       related_ticket_id: null,
       session_token: null,
       support_channel_id: null,
