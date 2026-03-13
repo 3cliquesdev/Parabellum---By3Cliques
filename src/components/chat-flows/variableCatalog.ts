@@ -8,7 +8,7 @@ import type { Node, Edge } from "reactflow";
 export interface VariableItem {
   value: string;
   label: string;
-  group: "flow" | "contact" | "conversation" | "order";
+  group: "flow" | "contact" | "conversation" | "order" | "collection";
 }
 
 // Fixed contact variables (always available)
@@ -59,6 +59,19 @@ export const CUSTOMER_VALIDATION_VARS: VariableItem[] = [
   { value: "customer_validated", label: "Cliente Validado", group: "contact" },
   { value: "customer_name_found", label: "Nome Encontrado", group: "contact" },
   { value: "customer_email_found", label: "Email Encontrado", group: "contact" },
+];
+
+// Smart Collection variables (collected by AI during flow)
+export const COLLECTION_VARS: VariableItem[] = [
+  { value: "name", label: "Nome (Coletado)", group: "collection" },
+  { value: "email", label: "Email (Coletado)", group: "collection" },
+  { value: "phone", label: "Telefone (Coletado)", group: "collection" },
+  { value: "cpf", label: "CPF (Coletado)", group: "collection" },
+  { value: "address", label: "Endereço (Coletado)", group: "collection" },
+  { value: "pix_key", label: "Chave PIX (Coletado)", group: "collection" },
+  { value: "bank", label: "Banco (Coletado)", group: "collection" },
+  { value: "reason", label: "Motivo (Coletado)", group: "collection" },
+  { value: "amount", label: "Valor (Coletado)", group: "collection" },
 ];
 
 // Fixed order variables (from fetch_order nodes)
@@ -132,6 +145,7 @@ export function getAvailableVariables(
   contactVars: VariableItem[];
   conversationVars: VariableItem[];
   orderVars: VariableItem[];
+  collectionVars: VariableItem[];
   all: VariableItem[];
 } {
   let flowVars: VariableItem[] = [];
@@ -170,13 +184,21 @@ export function getAvailableVariables(
 
   const customerValidationVars = hasValidateNode ? CUSTOMER_VALIDATION_VARS : [];
 
-  const all = [...flowVars, ...CONTACT_VARS, ...CONVERSATION_VARS, ...BUSINESS_VARS, ...orderVars, ...customerValidationVars];
+  // Check if any ancestor has a smart collection AI node
+  const hasCollectionNode = ancestorSet
+    ? nodes.some(n => ancestorSet.has(n.id) && n.type === "ai_response" && n.data?.smart_collection_enabled)
+    : nodes.some(n => n.type === "ai_response" && n.data?.smart_collection_enabled);
+
+  const collectionVars = hasCollectionNode ? COLLECTION_VARS : [];
+
+  const all = [...flowVars, ...CONTACT_VARS, ...CONVERSATION_VARS, ...BUSINESS_VARS, ...orderVars, ...customerValidationVars, ...collectionVars];
 
   return {
     flowVars,
     contactVars: CONTACT_VARS,
     conversationVars: CONVERSATION_VARS,
     orderVars,
+    collectionVars,
     all,
   };
 }

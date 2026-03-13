@@ -21,6 +21,7 @@ interface VariableAutocompleteProps {
 
 const GROUP_LABELS: Record<string, { label: string; icon: string }> = {
   flow: { label: "Variáveis do Fluxo", icon: "💾" },
+  collection: { label: "Dados Coletados", icon: "📋" },
   contact: { label: "Contato", icon: "👤" },
   conversation: { label: "Conversa", icon: "📡" },
   order: { label: "Pedido", icon: "📦" },
@@ -42,7 +43,7 @@ export function VariableAutocomplete({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const cursorPosRef = useRef<number>(0);
 
-  const { flowVars, contactVars, conversationVars, orderVars } = useMemo(
+  const { flowVars, contactVars, conversationVars, orderVars, collectionVars } = useMemo(
     () => getAvailableVariables(nodes, edges, selectedNodeId),
     [nodes, edges, selectedNodeId]
   );
@@ -157,6 +158,7 @@ export function VariableAutocomplete({
   };
 
   const hasResults = filterItems(flowVars).length > 0 ||
+    filterItems(collectionVars).length > 0 ||
     filterItems(contactVars).length > 0 ||
     filterItems(conversationVars).length > 0 ||
     filterItems(orderVars).length > 0;
@@ -247,6 +249,7 @@ export function VariableAutocomplete({
               {hasResults ? (
                 <>
                   {renderGroup(flowVars, "flow")}
+                  {renderGroup(collectionVars, "collection")}
                   {renderGroup(contactVars, "contact")}
                   {renderGroup(conversationVars, "conversation")}
                   {renderGroup(orderVars, "order")}
