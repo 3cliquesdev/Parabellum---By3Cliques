@@ -95,6 +95,12 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const [isWaitingResponse, setIsWaitingResponse] = useState(false);
   const waitingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasNewMessageBelow, setHasNewMessageBelow] = useState(false);
+  // Single 60s tick counter for relative timestamps (instead of N intervals per bubble)
+  const [tickCounter, setTickCounter] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTickCounter(t => t + 1), 60_000);
+    return () => clearInterval(interval);
+  }, []);
   const { user } = useAuth();
   const { isAdmin, isManager, isSalesRep, role } = useUserRole();
   const { hasPermission } = useRolePermissions();
@@ -154,20 +160,27 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     }
   }, [conversation?.id]);
 
-  // ========== TYPING INDICATOR: clear when new message arrives ==========
+  // ========== SMART SCROLL (WhatsApp-like) ==========
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [shouldStickToBottom, setShouldStickToBottom] = useState(true);
 
-  // ========== TYPING INDICATOR: clear when new message arrives ==========
+  // ========== TYPING INDICATOR + NEW MESSAGE BADGE ==========
   const prevMsgCount = useRef(messages.length);
   useEffect(() => {
     if (messages.length > prevMsgCount.current) {
       const lastMsg = messages[messages.length - 1];
+      // Clear typing indicator when response arrives
       if (lastMsg && (lastMsg.sender_type !== 'user' || lastMsg.sender_id !== user?.id)) {
         setIsWaitingResponse(false);
         if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
       }
+      // Show "new message" badge if scrolled up
+      if (!shouldStickToBottom) {
+        setHasNewMessageBelow(true);
+      }
     }
     prevMsgCount.current = messages.length;
-  }, [messages.length]);
+  }, [messages.length, shouldStickToBottom]);
 
   // Reset waiting state on conversation change
   useEffect(() => {
@@ -175,10 +188,6 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     setHasNewMessageBelow(false);
     if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
   }, [conversation?.id]);
-
-  // ========== SMART SCROLL (WhatsApp-like) ==========
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [shouldStickToBottom, setShouldStickToBottom] = useState(true);
 
   // Detectar se usuário scrollou para cima
   useEffect(() => {
@@ -201,13 +210,6 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     if (!el || !shouldStickToBottom) return;
     el.scrollTop = el.scrollHeight; // instant (WhatsApp-like)
   }, [messages?.length, shouldStickToBottom]);
-
-  // UX: Show "new message" badge when scrolled up + clear when at bottom
-  useEffect(() => {
-    if (messages.length > prevMsgCount.current && !shouldStickToBottom) {
-      setHasNewMessageBelow(true);
-    }
-  }, [messages.length, shouldStickToBottom]);
 
   useEffect(() => {
     if (shouldStickToBottom) setHasNewMessageBelow(false);
@@ -286,6 +288,13 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     } else {
       const isWhatsApp = conversation.channel === 'whatsapp';
       const messageContent = message.trim();
+      
+      // UX: Activate typing indicator BEFORE any async work (all channels)
+      if (!isInternal && !isEmailMode) {
+        setIsWaitingResponse(true);
+        if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+        waitingTimeoutRef.current = setTimeout(() => setIsWaitingResponse(false), 60_000);
+      }
       
       // FASE 7: Se é nota interna, salvar apenas no banco (não enviar para cliente)
       if (isInternal) {
@@ -368,12 +377,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
       setMessage("");
     }
     
-    // UX: Show typing indicator after sending (not for internal notes or emails)
-    if (!isInternal && !isEmailMode) {
-      setIsWaitingResponse(true);
-      if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
-      waitingTimeoutRef.current = setTimeout(() => setIsWaitingResponse(false), 60_000);
-    }
+    // (typing indicator already activated at start of function)
   };
 
   // Abre o diálogo de confirmação capturando os IDs imediatamente
@@ -769,6 +773,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                       isAdmin={isAdmin}
                       isManager={isManager}
                       messagesEndRef={messagesEndRef}
+                      _tick={tickCounter}
                     />
 
                     {/* Typing indicator */}

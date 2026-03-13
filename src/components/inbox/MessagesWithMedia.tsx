@@ -49,6 +49,8 @@ interface MessagesWithMediaProps {
   isAdmin: boolean;
   isManager: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement>;
+  /** Tick counter from parent — forces re-render for relative timestamps */
+  _tick?: number;
 }
 
 // Helper: Extrair MIME type do attachment_type
