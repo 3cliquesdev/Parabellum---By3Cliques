@@ -733,7 +733,6 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
               updates: {
                 status: "lost",
                 lost_reason: reason,
-                lost_notes: notes || null,
               },
             },
             {
