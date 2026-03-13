@@ -3614,7 +3614,7 @@ serve(async (req) => {
         
         // Buscar departamento dinamicamente
         let targetDeptId: string | null = null;
-        const deptSearchName = saqueIntentMatch ? '%financ%' : financialIntentMatch ? '%financ%' : devolucaoIntentMatch ? '%devolu%' : pedidosIntentMatch ? '%pedido%' : cancellationIntentMatch ? '%cancel%' : internacionalIntentMatch ? '%internac%' : commercialIntentMatch ? '%comerci%' : sistemaIntentMatch ? '%suporte%' : consultorIntentMatch ? '%consult%' : '%suporte%';
+        const deptSearchName = saqueIntentMatch ? '%saque%' : financialIntentMatch ? '%financ%' : devolucaoIntentMatch ? '%devolu%' : pedidosIntentMatch ? '%pedido%' : cancellationIntentMatch ? '%cancel%' : internacionalIntentMatch ? '%internac%' : commercialIntentMatch ? '%comerci%' : sistemaIntentMatch ? '%sistema%' : consultorIntentMatch ? '%consult%' : '%suporte%';
 
         const handoffMsg = saqueIntentMatch
           ? 'Entendi. Para realizar o saque, vou te encaminhar para um atendente humano agora.'
