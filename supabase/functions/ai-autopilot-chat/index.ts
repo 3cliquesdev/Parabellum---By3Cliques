@@ -1212,6 +1212,7 @@ interface FlowContext {
   forbidCancellation?: boolean;
   forbidSupport?: boolean;
   forbidConsultant?: boolean;
+  collectedData?: any;
 }
 
 // 🆕 FASE 1: Função para gerar prompt RESTRITIVO baseado no flow_context
@@ -1434,7 +1435,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { conversationId, customerMessage, maxHistory = 50, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
+    let { conversationId, customerMessage, maxHistory = 50, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
 
     // 🔒 FIX 1: Hard validation — customerMessage obrigatório (exceto warmup)
     if (!customerMessage || typeof customerMessage !== 'string' || customerMessage.trim() === '') {
@@ -1790,7 +1791,7 @@ serve(async (req) => {
       let contactTagsList: string[] = [];
 
       try {
-        const enrichPromises: Promise<any>[] = [];
+        const enrichPromises: PromiseLike<any>[] = [];
 
         // Organização
         if (contact.organization_id) {
@@ -2759,7 +2760,7 @@ serve(async (req) => {
       console.log('[ai-autopilot-chat] 🔍 Triagem silenciosa: validando phone+email+CPF contra base Kiwify...');
       
       try {
-        const validationPromises: Promise<any>[] = [];
+        const validationPromises: PromiseLike<any>[] = [];
 
         // 1) Telefone — inline query (sem invoke entre edge functions)
         if (contact.phone || contact.whatsapp_id) {
@@ -4770,14 +4771,14 @@ Responda APENAS: skip ou search`
           timestamp: new Date().toISOString()
         }));
         // Persist telemetry to ai_events (non-blocking)
-        supabaseClient.from('ai_events').insert({
+        Promise.resolve(supabaseClient.from('ai_events').insert({
           entity_type: 'conversation',
           entity_id: conversationId,
           event_type: 'ai_decision_strict_rag_handoff',
           model: 'system',
           score: 0,
           output_json: { reason: 'strict_rag_handoff', exitType: 'handoff', fallback_used: false, articles_found: knowledgeArticles.length, hasFlowContext: !!flow_context },
-        }).then(() => {}).catch(() => {});
+        })).catch(() => {});
         
         return new Response(JSON.stringify({
           status: 'strict_rag_handoff',
@@ -5244,14 +5245,14 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         articles_found: knowledgeArticles.length,
         timestamp: new Date().toISOString()
       }));
-      supabaseClient.from('ai_events').insert({
+      Promise.resolve(supabaseClient.from('ai_events').insert({
         entity_type: 'conversation',
         entity_id: conversationId,
         event_type: 'ai_decision_zero_confidence_cautious',
         model: 'system',
         score: confidenceResult.score,
         output_json: { reason: 'zero_confidence_cautious', exitType: 'stay_in_node', fallback_used: false, articles_found: knowledgeArticles.length, hasFlowContext: true },
-      }).then(() => {}).catch(() => {});
+      })).catch(() => {});
       
       // Forçar modo cautious em vez de sair do nó
       confidenceResult.action = 'cautious';
@@ -5425,14 +5426,14 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           articles_found: knowledgeArticles.length,
           timestamp: new Date().toISOString()
         }));
-        supabaseClient.from('ai_events').insert({
+        Promise.resolve(supabaseClient.from('ai_events').insert({
           entity_type: 'conversation',
           entity_id: conversationId,
           event_type: 'ai_decision_confidence_flow_advance',
           model: 'system',
           score: confidenceResult.score,
           output_json: { reason: 'confidence_flow_advance', exitType: 'flow_advance_needed', fallback_used: false, articles_found: knowledgeArticles.length, hasFlowContext: true },
-        }).then(() => {}).catch(() => {});
+        })).catch(() => {});
         
         return new Response(JSON.stringify({
           status: 'flow_advance_needed',
@@ -8465,14 +8466,14 @@ Conversa: ${conversationId}`;
           articles_found: 0,
           timestamp: new Date().toISOString()
         }));
-        supabaseClient.from('ai_events').insert({
+        Promise.resolve(supabaseClient.from('ai_events').insert({
           entity_type: 'conversation',
           entity_id: conversationId,
           event_type: 'ai_decision_anti_loop_max_fallbacks',
           model: 'system',
           score: 0,
           output_json: { reason: 'anti_loop_max_fallbacks', exitType: 'flow_advance_needed', fallback_used: true, articles_found: 0, hasFlowContext: true },
-        }).then(() => {}).catch(() => {});
+        })).catch(() => {});
         isFallbackResponse = true;
       }
     }
@@ -8513,14 +8514,14 @@ Conversa: ${conversationId}`;
         articles_found: 0,
         timestamp: new Date().toISOString()
       }));
-      supabaseClient.from('ai_events').insert({
+      Promise.resolve(supabaseClient.from('ai_events').insert({
         entity_type: 'conversation',
         entity_id: conversationId,
         event_type: 'ai_decision_fallback_phrase_detected',
         model: 'system',
         score: 0,
         output_json: { reason: 'fallback_phrase_detected', exitType: flow_context ? 'stay_in_node' : 'handoff', fallback_used: true, articles_found: 0, hasFlowContext: !!flow_context },
-      }).then(() => {}).catch(() => {});
+      })).catch(() => {});
 
       // 🆕 FIX: Se flow_context existe, NÃO sair do nó — limpar fallback phrases e continuar
       if (flow_context) {
@@ -8565,7 +8566,7 @@ Conversa: ${conversationId}`;
         assistantMessage = cleanedMessage;
         
         // Log de qualidade (sem sair do nó)
-        supabaseClient.from('ai_quality_logs').insert({
+        Promise.resolve(supabaseClient.from('ai_quality_logs').insert({
           conversation_id: conversationId,
           contact_id: contact.id,
           customer_message: customerMessage,
@@ -8574,7 +8575,7 @@ Conversa: ${conversationId}`;
           handoff_reason: 'fallback_stripped_flow_context',
           confidence_score: 0,
           articles_count: knowledgeArticles.length
-        }).catch((e: any) => console.error('[ai-autopilot-chat] ⚠️ Falha ao logar fallback_cleaned:', e));
+        })).catch((e: any) => console.error('[ai-autopilot-chat] ⚠️ Falha ao logar fallback_cleaned:', e));
         
         // Resetar flag — NÃO é mais fallback após limpeza
         isFallbackResponse = false;
@@ -8790,7 +8791,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             ai_exit_intent: aiExitIntent || 'none',
           });
           // Log auditoria non-blocking
-          supabaseClient.from('ai_events').insert({
+          Promise.resolve(supabaseClient.from('ai_events').insert({
             entity_type: 'conversation',
             entity_id: conversationId,
             event_type: 'flow_exit_clean',
@@ -8803,7 +8804,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
               ai_exit_intent: aiExitIntent,
             },
             input_summary: customerMessage?.substring(0, 200) || '',
-          }).then(() => {}).catch(err => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
+          })).catch((err: any) => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
           return new Response(JSON.stringify({
             flowExit: true,
             reason: 'ai_requested_exit',
@@ -8820,7 +8821,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           console.warn('[ai-autopilot-chat] ⚠️ ESCAPE DETECTADO ANTES de salvar! IA tentou fabricar transferência');
           console.warn('[ai-autopilot-chat] Resposta bloqueada:', assistantMessage.substring(0, 100));
           // Log auditoria non-blocking
-          supabaseClient.from('ai_events').insert({
+          Promise.resolve(supabaseClient.from('ai_events').insert({
             entity_type: 'conversation',
             entity_id: conversationId,
             event_type: 'contract_violation_blocked',
@@ -8832,7 +8833,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
               reason: 'ai_contract_violation',
             },
             input_summary: customerMessage?.substring(0, 200) || '',
-          }).then(() => {}).catch(err => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
+          })).catch((err: any) => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
           
           // 🆕 FIX: Substituir mensagem e FICAR no nó (não retornar flowExit)
           console.log('[ai-autopilot-chat] 🔄 Contract violation + flow_context → substituindo mensagem e permanecendo no nó');
@@ -8863,20 +8864,20 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           articles_found: 0,
           timestamp: new Date().toISOString()
         }));
-        supabaseClient.from('ai_events').insert({
+        Promise.resolve(supabaseClient.from('ai_events').insert({
           entity_type: 'conversation',
           entity_id: conversationId,
           event_type: 'ai_decision_restriction_violation_' + restrictionCheck.violation,
           model: 'system',
           score: 0,
           output_json: { reason: 'restriction_violation_' + restrictionCheck.violation, exitType: 'stay_in_node', fallback_used: true, articles_found: 0, hasFlowContext: true },
-        }).then(() => {}).catch(() => {});
+        })).catch(() => {});
         
         // 🆕 FIX: Substituir mensagem pelo fallback e FICAR no nó (não retornar flow_advance_needed)
         console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇÃO + flow_context → substituindo mensagem e permanecendo no nó');
         assistantMessage = fallbackMessage;
         
-        supabaseClient.from('ai_quality_logs').insert({
+        Promise.resolve(supabaseClient.from('ai_quality_logs').insert({
           conversation_id: conversationId,
           contact_id: contact.id,
           customer_message: customerMessage,
@@ -8885,7 +8886,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           handoff_reason: `restriction_violation_${restrictionCheck.violation}`,
           confidence_score: 0,
           articles_count: knowledgeArticles.length
-        }).catch((e: any) => console.error('[ai-autopilot-chat] ⚠️ Falha ao logar restriction_violation:', e));
+        })).catch((e: any) => console.error('[ai-autopilot-chat] ⚠️ Falha ao logar restriction_violation:', e));
         
         // Continua execução — mensagem será persistida abaixo
       } else if (forbidFinancial) {

@@ -278,7 +278,7 @@ Deno.serve(async (req) => {
     // 1. Buscar departamentos com auto_close_enabled = true
     const { data: departments, error: deptError } = await supabase
       .from('departments')
-      .select('id, name, auto_close_enabled, auto_close_minutes, send_rating_on_close, ai_auto_close_minutes')
+      .select('id, name, auto_close_enabled, auto_close_minutes, send_rating_on_close, ai_auto_close_minutes, human_auto_close_minutes, slow_response_alert_enabled, slow_response_alert_minutes, slow_response_alert_tag_id')
       .eq('auto_close_enabled', true)
       .not('auto_close_minutes', 'is', null);
 

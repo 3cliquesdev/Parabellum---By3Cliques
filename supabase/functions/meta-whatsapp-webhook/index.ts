@@ -568,7 +568,7 @@ serve(async (req) => {
                     whatsapp_provider: "meta",
                     whatsapp_meta_instance_id: instance.id,
                   })
-                  .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider")
+                  .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata")
                   .single();
 
                 conversation = newConv;
@@ -825,17 +825,19 @@ serve(async (req) => {
                     // 🆕 FIX #2: Verificar se há agentes ONLINE no departamento
                     let queueMessage = "💬 Sua conversa já está na fila de atendimento.\n\nFique tranquilo, em breve um especialista irá te atender. 🙂";
                     
-                    if (conversation.department_id) {
+                    if ((conversation as any).department_id || (conversation as any).department) {
+                      const deptId = (conversation as any).department_id || (conversation as any).department;
+                      const { data: deptAgentIds } = await supabase
+                        .from("agent_departments")
+                        .select("profile_id")
+                        .eq("department_id", deptId);
+                      
+                      const agentIds = (deptAgentIds || []).map((a: any) => a.profile_id);
                       const { data: onlineAgents } = await supabase
                         .from("profiles")
                         .select("id")
                         .eq("availability_status", "online")
-                        .in("id", 
-                          supabase
-                            .from("agent_departments")
-                            .select("profile_id")
-                            .eq("department_id", conversation.department_id)
-                        );
+                        .in("id", agentIds.length > 0 ? agentIds : ['__none__']);
                       
                       // Se query falhou ou retornou vazio, tentar contagem direta
                       let hasOnlineAgents = (onlineAgents && onlineAgents.length > 0);

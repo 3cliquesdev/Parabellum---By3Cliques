@@ -322,7 +322,7 @@ Deno.serve(async (req) => {
         
         const { data: existingTicket, error: ticketError } = await supabase
           .from("tickets")
-          .select("id, subject, channel, customer_id, assigned_to, status, last_email_message_id")
+         .select("id, subject, channel, customer_id, assigned_to, status, last_email_message_id, ticket_number")
           .eq("last_email_message_id", refMessageId)
           .single();
 
@@ -443,7 +443,7 @@ Deno.serve(async (req) => {
           // Buscar por ticket_number (formato TK-YYYY-NNNNN)
           const { data, error } = await supabase
             .from("tickets")
-            .select("id, subject, channel, customer_id, assigned_to, status, last_email_message_id")
+            .select("id, subject, channel, customer_id, assigned_to, status, last_email_message_id, ticket_number")
             .eq("ticket_number", matchedId.toUpperCase())
             .maybeSingle();
           
