@@ -1,8 +1,9 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState, useEffect, useRef } from "react";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { InternalNoteMessage } from "@/components/InternalNoteMessage";
 import { StreamingMessage } from "@/components/inbox/StreamingMessage";
 import { useMediaUrls } from "@/hooks/useMediaUrls";
+import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -78,6 +79,78 @@ function extractFilename(url: string): string {
   }
 }
 
+// Helper: Parse storage: reference → { bucket, path }
+function parseStorageRef(ref: string): { bucket: string; path: string } | null {
+  if (!ref.startsWith('storage:')) return null;
+  const rest = ref.slice('storage:'.length); // "chat-attachments/path/to/file"
+  const slashIdx = rest.indexOf('/');
+  if (slashIdx === -1) return null;
+  return { bucket: rest.slice(0, slashIdx), path: rest.slice(slashIdx + 1) };
+}
+
+/**
+ * Hook to resolve multiple storage: prefixed URLs to signed URLs
+ * Only activates for messages with storage: attachment_url but no media_attachments
+ */
+function useStorageUrlsResolver(refs: Map<string, string>) {
+  // Map<messageId, { url, error, isLoading }>
+  const [resolved, setResolved] = useState<Map<string, { url: string | null; error: string | null; isLoading: boolean }>>(new Map());
+  const resolvedRefsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const toResolve: Array<{ msgId: string; ref: string }> = [];
+    refs.forEach((ref, msgId) => {
+      if (!resolvedRefsRef.current.has(msgId)) {
+        toResolve.push({ msgId, ref });
+      }
+    });
+
+    if (toResolve.length === 0) return;
+
+    // Mark as processing
+    toResolve.forEach(({ msgId }) => resolvedRefsRef.current.add(msgId));
+
+    // Set loading states
+    setResolved(prev => {
+      const next = new Map(prev);
+      toResolve.forEach(({ msgId }) => {
+        next.set(msgId, { url: null, error: null, isLoading: true });
+      });
+      return next;
+    });
+
+    // Resolve all in parallel
+    Promise.all(
+      toResolve.map(async ({ msgId, ref }) => {
+        const parsed = parseStorageRef(ref);
+        if (!parsed) return { msgId, url: null, error: 'Invalid storage reference' };
+
+        const { data, error } = await supabase.storage
+          .from(parsed.bucket)
+          .createSignedUrl(parsed.path, 3600);
+
+        if (error || !data?.signedUrl) {
+          console.warn(`[useStorageUrlsResolver] Failed for ${msgId}:`, error?.message);
+          resolvedRefsRef.current.delete(msgId); // Allow retry
+          return { msgId, url: null, error: error?.message || 'Failed to resolve' };
+        }
+
+        return { msgId, url: data.signedUrl, error: null };
+      })
+    ).then(results => {
+      setResolved(prev => {
+        const next = new Map(prev);
+        results.forEach(r => {
+          next.set(r.msgId, { url: r.url, error: r.error, isLoading: false });
+        });
+        return next;
+      });
+    });
+  }, [refs]);
+
+  return resolved;
+}
+
 export function MessagesWithMedia({
   messages,
   contact,
@@ -109,6 +182,23 @@ export function MessagesWithMedia({
 
     return attachments;
   }, [messages]);
+
+  // Coletar storage: refs de mensagens sem media_attachments (para fallback)
+  const storageRefs = useMemo(() => {
+    const refs = new Map<string, string>();
+    messages.forEach(msg => {
+      const hasMediaAttachments = msg.media_attachments?.some(
+        a => a.status === 'ready' && a.storage_bucket && a.storage_path
+      );
+      if (!hasMediaAttachments && msg.attachment_url?.startsWith('storage:') && !msg.is_ai_generated) {
+        refs.set(msg.id, msg.attachment_url);
+      }
+    });
+    return refs;
+  }, [messages]);
+
+  // Resolver storage: URLs para signed URLs
+  const resolvedStorageUrls = useStorageUrlsResolver(storageRefs);
 
   // Carregar signed URLs para todos os attachments
   const { urls: mediaUrls, isLoading: mediaLoading, getUrl, retryLoad } = useMediaUrls(allAttachments);
@@ -180,9 +270,33 @@ export function MessagesWithMedia({
         // FALLBACK: Se não tem media_attachments mas tem attachment_url direto
         // Isso cobre mídias Meta que falharam ao criar registro ou mídias antigas
         if (attachments.length === 0 && message.attachment_url && !isAI) {
-          // Verificar se é uma URL válida (não é JSON de metadata AI)
           const isValidUrl = message.attachment_url.startsWith('http');
-          if (isValidUrl) {
+          const isStorageRef = message.attachment_url.startsWith('storage:');
+
+          if (isStorageRef) {
+            // Resolver storage: URL via signed URL
+            const resolved = resolvedStorageUrls.get(message.id);
+            const mimeType = getMimeFromType((message as any).attachment_type);
+            const storagePath = message.attachment_url.slice('storage:'.length);
+            const filename = storagePath.split('/').pop() || 'media';
+
+            attachments = [{
+              id: `storage-fallback-${message.id}`,
+              url: resolved?.url || '',
+              mimeType,
+              filename,
+              size: undefined,
+              waveformData: undefined,
+              durationSeconds: undefined,
+              error: resolved?.error || undefined,
+              isLoading: resolved?.isLoading ?? true,
+              onRetry: resolved?.error ? () => {
+                // Force re-resolve by clearing the ref tracking
+                // The hook will pick it up on next render
+                window.location.reload(); // Simple fallback for edge case
+              } : undefined,
+            }];
+          } else if (isValidUrl) {
             // Detectar tipo de mídia pela URL ou attachment_type
             const mimeType = getMimeFromType((message as any).attachment_type);
             const filename = extractFilename(message.attachment_url);
