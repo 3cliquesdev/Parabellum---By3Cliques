@@ -251,6 +251,11 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         forbid_cancellation: false,
         forbid_support: false,
         forbid_consultant: false,
+        forbid_pedidos: false,
+        forbid_devolucao: false,
+        forbid_saque: false,
+        forbid_sistema: false,
+        forbid_internacional: false,
         objective: ""
       },
       transfer: { label: "Transferir", message: "Transferindo para atendimento humano...", transfer_type: "department" },

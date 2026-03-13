@@ -306,6 +306,91 @@ export function BehaviorControlsSection({
           />
         </div>
 
+        {/* 🆕 📦 Pedidos */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-teal-500 shrink-0" />
+            <div>
+              <Label className="text-sm font-medium">📦 Pedidos</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Rastreio, status de entrega → saída teal
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidPedidos}
+            onCheckedChange={(checked) => updateNodeData("forbid_pedidos", checked)}
+          />
+        </div>
+
+        {/* 🆕 🔄 Devolução */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-orange-500 shrink-0" />
+            <div>
+              <Label className="text-sm font-medium">🔄 Devolução</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Produto com defeito, troca → saída laranja
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidDevolucao}
+            onCheckedChange={(checked) => updateNodeData("forbid_devolucao", checked)}
+          />
+        </div>
+
+        {/* 🆕 💰 Saque */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-yellow-500 shrink-0" />
+            <div>
+              <Label className="text-sm font-medium">💰 Saque</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Sacar saldo da carteira → saída amarela
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidSaque}
+            onCheckedChange={(checked) => updateNodeData("forbid_saque", checked)}
+          />
+        </div>
+
+        {/* 🆕 🖥️ Sistema */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-slate-500 shrink-0" />
+            <div>
+              <Label className="text-sm font-medium">🖥️ Sistema</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Bug, erro técnico, acesso → saída cinza
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidSistema}
+            onCheckedChange={(checked) => updateNodeData("forbid_sistema", checked)}
+          />
+        </div>
+
+        {/* 🆕 🌍 Internacional */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-cyan-500 shrink-0" />
+            <div>
+              <Label className="text-sm font-medium">🌍 Internacional</Label>
+              <p className="text-[10px] text-muted-foreground">
+                Operação fora do Brasil → saída ciano
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={forbidInternacional}
+            onCheckedChange={(checked) => updateNodeData("forbid_internacional", checked)}
+          />
+        </div>
+
         {/* Status das saídas ativas */}
         <div className="flex flex-wrap gap-1 pt-1">
           {forbidFinancial && (
@@ -333,7 +418,32 @@ export function BehaviorControlsSection({
               💼 Consultor
             </Badge>
           )}
-          {!forbidFinancial && !forbidCancellation && !forbidCommercial && !forbidSupport && !forbidConsultant && (
+          {forbidPedidos && (
+            <Badge className="text-[10px] px-1.5 bg-teal-500/20 text-teal-700 border-teal-500/30">
+              📦 Pedidos
+            </Badge>
+          )}
+          {forbidDevolucao && (
+            <Badge className="text-[10px] px-1.5 bg-orange-500/20 text-orange-700 border-orange-500/30">
+              🔄 Devolução
+            </Badge>
+          )}
+          {forbidSaque && (
+            <Badge className="text-[10px] px-1.5 bg-yellow-500/20 text-yellow-700 border-yellow-500/30">
+              💰 Saque
+            </Badge>
+          )}
+          {forbidSistema && (
+            <Badge className="text-[10px] px-1.5 bg-slate-500/20 text-slate-700 border-slate-500/30">
+              🖥️ Sistema
+            </Badge>
+          )}
+          {forbidInternacional && (
+            <Badge className="text-[10px] px-1.5 bg-cyan-500/20 text-cyan-700 border-cyan-500/30">
+              🌍 Internacional
+            </Badge>
+          )}
+          {!forbidFinancial && !forbidCancellation && !forbidCommercial && !forbidSupport && !forbidConsultant && !forbidPedidos && !forbidDevolucao && !forbidSaque && !forbidSistema && !forbidInternacional && (
             <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">
               Nenhuma saída ativa
             </Badge>

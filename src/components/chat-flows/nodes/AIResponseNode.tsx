@@ -287,6 +287,46 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
           </Badge>
         )}
 
+        {/* 🆕 Badge de Trava Pedidos */}
+        {data.forbid_pedidos && (
+          <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-teal-600/90">
+            <Truck className="h-2.5 w-2.5" />
+            Pedidos
+          </Badge>
+        )}
+
+        {/* 🆕 Badge de Trava Devolução */}
+        {data.forbid_devolucao && (
+          <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-orange-600/90">
+            <RotateCcw className="h-2.5 w-2.5" />
+            Devolução
+          </Badge>
+        )}
+
+        {/* 🆕 Badge de Trava Saque */}
+        {data.forbid_saque && (
+          <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-yellow-600/90">
+            <Wallet className="h-2.5 w-2.5" />
+            Saque
+          </Badge>
+        )}
+
+        {/* 🆕 Badge de Trava Sistema */}
+        {data.forbid_sistema && (
+          <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-slate-600/90">
+            <Monitor className="h-2.5 w-2.5" />
+            Sistema
+          </Badge>
+        )}
+
+        {/* 🆕 Badge de Trava Internacional */}
+        {data.forbid_internacional && (
+          <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-cyan-600/90">
+            <Globe className="h-2.5 w-2.5" />
+            Internacional
+          </Badge>
+        )}
+
         {/* Badge de fallback configurado */}
         {data.fallback_message && (
           <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 opacity-60">
