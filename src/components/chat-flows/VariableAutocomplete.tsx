@@ -249,6 +249,7 @@ export function VariableAutocomplete({
               {hasResults ? (
                 <>
                   {renderGroup(flowVars, "flow")}
+                  {renderGroup(collectionVars, "collection")}
                   {renderGroup(contactVars, "contact")}
                   {renderGroup(conversationVars, "conversation")}
                   {renderGroup(orderVars, "order")}
