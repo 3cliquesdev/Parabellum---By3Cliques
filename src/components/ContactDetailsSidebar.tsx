@@ -8,20 +8,34 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket, MessageSquare, ExternalLink, Loader2, AlertTriangle, ChevronRight } from "lucide-react";
+import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket, MessageSquare, ExternalLink, Loader2, AlertTriangle, ChevronRight, Pencil, Trophy, XCircle, ArrowRightLeft, MoreHorizontal } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ContactTagsSection from "./inbox/ContactTagsSection";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useContactTickets } from "@/hooks/useContactTickets";
 import { useUnifiedTimeline } from "@/hooks/useUnifiedTimeline";
 import DealDialog from "./DealDialog";
+import LostReasonDialog from "./LostReasonDialog";
 import { SLABadge } from "./SLABadge";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
 import { useActiveTicketStatuses } from "@/hooks/useTicketStatuses";
 import { getStatusIcon } from "@/lib/ticketStatusIcons";
+import { useUpdateDeal, useUpdateDealStage } from "@/hooks/useDeals";
+import { useStages } from "@/hooks/useStages";
+import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 type Conversation = Tables<"conversations"> & {
   contacts: Tables<"contacts"> & {
