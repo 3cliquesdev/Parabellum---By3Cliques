@@ -113,6 +113,41 @@ export function AIResponsePropertiesPanel({
 
       <Separator />
 
+      {/* Seção: Detectar Onboarding Incompleto */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-4 w-4 text-emerald-500" />
+            <Label className="text-xs font-semibold uppercase tracking-wide">
+              Detectar Onboarding
+            </Label>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p className="text-xs">
+                    A IA identifica se o cliente tem etapas pendentes de onboarding e direciona para continuar de onde parou.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <Switch
+            checked={selectedNode.data.onboarding_detection_enabled === true}
+            onCheckedChange={(checked) => updateNodeData("onboarding_detection_enabled", checked)}
+          />
+        </div>
+        {selectedNode.data.onboarding_detection_enabled && (
+          <p className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 p-2 rounded">
+            🎓 Quando ativo, a IA verifica se o cliente tem onboarding incompleto e pode orientá-lo sobre os próximos passos.
+          </p>
+        )}
+      </div>
+
+      <Separator />
+
       {/* Seção: Coleta Inteligente */}
       <SmartCollectionSection
         selectedNode={selectedNode}
