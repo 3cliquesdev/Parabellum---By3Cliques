@@ -712,45 +712,21 @@ async function sendWhatsAppMessage(
 // ============================================================
 // 🔒 CONSTANTES GLOBAIS - Unificadas para prevenir inconsistências
 // ============================================================
+// ✅ FIX 1: FALLBACK_PHRASES reconstruída para NÃO conflitar com system prompt da persona.
+// Removidas frases legítimas que a IA é instruída a dizer (ex: 'preciso verificar', 'não tenho certeza').
+// Mantidas APENAS frases que indicam transferência real ou incapacidade total de ajudar.
 const FALLBACK_PHRASES = [
   'vou chamar um especialista',
   'vou transferir para um atendente',
   'transferir para um atendente',
   'encaminhar para um humano',
-  'não tenho essa informação',
-  'não encontrei essa informação',
-  'não consegui encontrar',
-  'não consegui registrar',
-  'momento por favor',
   'chamar um atendente',
-  // 🆕 Frases faltantes que causavam cache poisoning
-  'desculpe',
-  'não consegui processar',
   'não consigo',
-  'infelizmente não',
   'não posso ajudar',
-  'não sei como',
   'sorry',
   'i cannot',
   'unable to',
-  // 🆕 FASE 5: Novas frases anti-alucinação
-  'não tenho certeza',
-  'preciso verificar',
-  'não posso confirmar',
-  'não sei informar',
-  'deixa eu consultar',
   'melhor falar com',
-  'recomendo aguardar',
-  'preciso de mais informações',
-  'não localizei',
-  'não encontrei registro',
-  'sistema não mostra',
-  'não aparece aqui',
-  // Português informal
-  'num sei',
-  'n sei',
-  'nao sei',
-  // 🆕 FIX LOOP ia_entrada: Frases de redirecionamento que a IA gera como fallback
   'direcionar para',
   'encontrar o especialista',
   'menu de atendimento',
@@ -758,6 +734,8 @@ const FALLBACK_PHRASES = [
   'vou te encaminhar',
   'encaminhar para o setor',
   'transferir para o setor',
+  'vou transferir você para um especialista',
+  // Redirecionamentos explícitos
   'redirecionar para',
   'encaminhar você',
   'direcionar você',
@@ -3206,7 +3184,8 @@ serve(async (req) => {
       
       const { data: flowResult, error: flowError } = await supabaseClient.functions.invoke(
         'process-chat-flow',
-        { body: { conversationId, userMessage: customerMessage } }
+        // ✅ FIX 4: process-chat-flow espera 'customerMessage', não 'userMessage'
+        { body: { conversationId, customerMessage: customerMessage } }
       );
       
       if (!flowError && flowResult) {
@@ -6996,7 +6975,12 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     }
 
     const aiData = await callAIWithFallback(aiPayload);
-    let assistantMessage = aiData.choices?.[0]?.message?.content || 'Desculpe, não consegui processar sua mensagem.';
+    // ✅ FIX 2: Fallback não usa 'Desculpe' que está na lista de frases proibidas (auto-loop).
+    const rawAIContent = aiData.choices?.[0]?.message?.content;
+    if (!rawAIContent && !aiData.choices?.[0]?.message?.tool_calls?.length) {
+      console.error('[ai-autopilot-chat] ❌ AI returned empty content, no tool calls either');
+    }
+    let assistantMessage = rawAIContent || 'Pode repetir sua mensagem? Não consegui processar corretamente.';
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
 
     // 🎯 PREFIXO DE RESPOSTA CAUTELOSA (confiança média)
@@ -8543,13 +8527,24 @@ Conversa: ${conversationId}`;
         console.log('[ai-autopilot-chat] ⚠️ FALLBACK + flow_context → limpando fallback phrases e permanecendo no nó');
 
         // Strip fallback phrases da resposta
+        // ✅ FIX 5: Detectar [[FLOW_EXIT]] ANTES de stripar — é sinal INTENCIONAL da persona
+        const hasIntentionalExit = /\[\[FLOW_EXIT(:[a-zA-Z_]+)?\]\]/.test(assistantMessage);
+        if (hasIntentionalExit) {
+          console.log('[ai-autopilot-chat] 🎯 [[FLOW_EXIT]] detectado na resposta da IA — tratando como transferência intencional');
+          const exitMatch = assistantMessage.match(/\[\[FLOW_EXIT:?([a-zA-Z_]*)\]\]/);
+          const exitDestination = exitMatch?.[1] || null;
+          console.log('[ai-autopilot-chat] 🎯 Destino do exit:', exitDestination || 'padrão');
+          // Limpar o token da mensagem visível e deixar o flow avançar normalmente abaixo
+          assistantMessage = assistantMessage.replace(/\[\[FLOW_EXIT(:[a-zA-Z_]+)?\]\]/gi, '').trim();
+        }
+
         const FALLBACK_STRIP_PATTERNS = [
           /vou\s+(te\s+)?transferir\s+(para|a)\s+\w+/gi,
           /encaminh(ar|ando|o)\s+(para|a|você)\s+\w+/gi,
           /passar\s+(para|a)\s+um\s+(especialista|atendente|humano|agente)/gi,
           /um\s+(especialista|atendente|humano|agente)\s+(vai|irá|poderá)\s+(te\s+)?(atender|ajudar)/gi,
           /(vou|irei|posso)\s+(te\s+)?(conectar|direcionar|redirecionar)\s+(com|a)\s+\w+/gi,
-          /\[\[FLOW_EXIT(:[a-zA-Z_]+)?\]\]/gi,
+          // [[FLOW_EXIT]] removido aqui — já tratado acima como sinal intencional
         ];
         
         let cleanedMessage = assistantMessage;
@@ -9389,7 +9384,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         // 2. Escolher mensagem de fallback baseada no contexto
         const fallbackMessage = hasActiveFlow
           ? "Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar."
-          : "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano!";
+          // ✅ FIX 2b: Removido 'Desculpe' que acionava o próprio detector de fallback
+          : "Estou com instabilidade no momento. Pode tentar novamente em alguns instantes?";
         
         console.log(`[ai-autopilot-chat] 🛡️ Flow sovereignty check: hasActiveFlow=${hasActiveFlow}, message=${hasActiveFlow ? 'retry' : 'handoff'}`);
         
@@ -9524,7 +9520,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         status: 'fallback',
         message: hasActiveFlow 
           ? "Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar."
-          : "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano!",
+          // ✅ FIX 2c: Removido 'Desculpe' que acionava o próprio detector de fallback
+          : "Estou com instabilidade no momento. Pode tentar novamente em alguns instantes?",
         handoff_triggered: !hasActiveFlow,
         flow_context_preserved: hasActiveFlow,
         admin_notified: true
