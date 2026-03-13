@@ -3735,6 +3735,7 @@ serve(async (req) => {
               forbidSaque: currentNode.data?.forbid_saque ?? false,
               forbidSistema: currentNode.data?.forbid_sistema ?? false,
               forbidInternacional: currentNode.data?.forbid_internacional ?? false,
+              onboardingDetection: currentNode.data?.onboarding_detection_enabled ?? false,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
