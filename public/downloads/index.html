@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Download</title></head>
+<body>
+<script>
+  const a = document.createElement('a');
+  a.href = '/downloads/ai-autopilot-chat.txt';
+  a.download = 'ai-autopilot-chat.ts';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  document.body.innerHTML = '<p style="font-family:sans-serif;text-align:center;margin-top:40vh">Download iniciado! Pode fechar esta aba.</p>';
+</script>
+</body></html>
