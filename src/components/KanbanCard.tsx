@@ -29,6 +29,7 @@ import DealDialog from "./DealDialog";
 import ContactSheet from "./ContactSheet";
 import MoveToPipelineDialog from "./deals/MoveToPipelineDialog";
 import LeadInfoPopover from "./deals/LeadInfoPopover";
+import { PipelineTemplateDialog } from "./pipeline/PipelineTemplateDialog";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
