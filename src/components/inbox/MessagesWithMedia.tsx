@@ -79,6 +79,80 @@ function extractFilename(url: string): string {
   }
 }
 
+// Helper: Parse storage: reference → { bucket, path }
+function parseStorageRef(ref: string): { bucket: string; path: string } | null {
+  if (!ref.startsWith('storage:')) return null;
+  const rest = ref.slice('storage:'.length); // "chat-attachments/path/to/file"
+  const slashIdx = rest.indexOf('/');
+  if (slashIdx === -1) return null;
+  return { bucket: rest.slice(0, slashIdx), path: rest.slice(slashIdx + 1) };
+}
+
+/**
+ * Hook to resolve storage: prefixed URLs to signed URLs
+ * Only activates when there's a storage: URL with no media_attachments
+ */
+function useStorageUrlResolver(storageRef: string | null) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!storageRef) {
+      setSignedUrl(null);
+      return;
+    }
+
+    const parsed = parseStorageRef(storageRef);
+    if (!parsed) {
+      setError('Invalid storage reference');
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+
+    supabase.storage
+      .from(parsed.bucket)
+      .createSignedUrl(parsed.path, 3600)
+      .then(({ data, error: err }) => {
+        if (cancelled) return;
+        if (err || !data?.signedUrl) {
+          console.warn('[useStorageUrlResolver] Failed:', err?.message || 'No URL');
+          setError(err?.message || 'Failed to resolve storage URL');
+        } else {
+          setSignedUrl(data.signedUrl);
+        }
+        setIsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [storageRef]);
+
+  const retry = useCallback(() => {
+    if (!storageRef) return;
+    setError(null);
+    setIsLoading(true);
+    const parsed = parseStorageRef(storageRef);
+    if (!parsed) return;
+
+    supabase.storage
+      .from(parsed.bucket)
+      .createSignedUrl(parsed.path, 3600)
+      .then(({ data, error: err }) => {
+        if (err || !data?.signedUrl) {
+          setError(err?.message || 'Failed');
+        } else {
+          setSignedUrl(data.signedUrl);
+        }
+        setIsLoading(false);
+      });
+  }, [storageRef]);
+
+  return { signedUrl, isLoading, error, retry };
+}
+
 export function MessagesWithMedia({
   messages,
   contact,
