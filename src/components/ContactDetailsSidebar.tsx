@@ -49,9 +49,17 @@ interface ContactDetailsSidebarProps {
 
 export default function ContactDetailsSidebar({ conversation }: ContactDetailsSidebarProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [selectedConversationMeta, setSelectedConversationMeta] = useState<any>(null);
+  const [editingDeal, setEditingDeal] = useState<any>(null);
+  const [lostDeal, setLostDeal] = useState<{ id: string; title: string } | null>(null);
   const contactId = conversation?.contacts?.id || null;
+
+  const updateDeal = useUpdateDeal();
+  const updateDealStage = useUpdateDealStage();
+  const { data: stages = [] } = useStages();
 
   const { data: contactDeals = [] } = useQuery({
     queryKey: ["contact-deals", contactId],
@@ -64,6 +72,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
           *,
           contacts (first_name, last_name),
           organizations (name),
+          stages (id, name),
           assigned_user:profiles!deals_assigned_to_fkey (id, full_name, avatar_url)
         `)
         .eq("contact_id", contactId)
