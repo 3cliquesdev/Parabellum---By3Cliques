@@ -2296,6 +2296,7 @@ serve(async (req) => {
                     forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
                     forbidSupport: resolvedNode.data?.forbid_support ?? false,
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
+                    onboardingDetection: resolvedNode.data?.onboarding_detection_enabled ?? false,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
