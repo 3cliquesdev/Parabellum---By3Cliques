@@ -8832,7 +8832,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
               reason: 'ai_contract_violation',
             },
             input_summary: customerMessage?.substring(0, 200) || '',
-          }).then(() => {}).catch(err => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
+          }).then(() => {}).catch((err: any) => console.error('[ai-autopilot-chat] ⚠️ Failed to log escape event:', err));
           
           // 🆕 FIX: Substituir mensagem e FICAR no nó (não retornar flowExit)
           console.log('[ai-autopilot-chat] 🔄 Contract violation + flow_context → substituindo mensagem e permanecendo no nó');
