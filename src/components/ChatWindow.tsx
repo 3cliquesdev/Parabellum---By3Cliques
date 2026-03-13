@@ -207,6 +207,23 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     el.scrollTop = el.scrollHeight; // instant (WhatsApp-like)
   }, [messages?.length, shouldStickToBottom]);
 
+  // UX: Show "new message" badge when scrolled up + clear when at bottom
+  useEffect(() => {
+    if (messages.length > prevMsgCount.current && !shouldStickToBottom) {
+      setHasNewMessageBelow(true);
+    }
+  }, [messages.length, shouldStickToBottom]);
+
+  useEffect(() => {
+    if (shouldStickToBottom) setHasNewMessageBelow(false);
+  }, [shouldStickToBottom]);
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    setHasNewMessageBelow(false);
+  }, []);
+
   // 🆕 ENTERPRISE: Scroll-up pagination (load older messages)
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const scrollAnchorRef = useRef<{ height: number; top: number } | null>(null);
