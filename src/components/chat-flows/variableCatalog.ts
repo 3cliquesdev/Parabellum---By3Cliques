@@ -184,13 +184,21 @@ export function getAvailableVariables(
 
   const customerValidationVars = hasValidateNode ? CUSTOMER_VALIDATION_VARS : [];
 
-  const all = [...flowVars, ...CONTACT_VARS, ...CONVERSATION_VARS, ...BUSINESS_VARS, ...orderVars, ...customerValidationVars];
+  // Check if any ancestor has a smart collection AI node
+  const hasCollectionNode = ancestorSet
+    ? nodes.some(n => ancestorSet.has(n.id) && n.type === "ai_response" && n.data?.smart_collection_enabled)
+    : nodes.some(n => n.type === "ai_response" && n.data?.smart_collection_enabled);
+
+  const collectionVars = hasCollectionNode ? COLLECTION_VARS : [];
+
+  const all = [...flowVars, ...CONTACT_VARS, ...CONVERSATION_VARS, ...BUSINESS_VARS, ...orderVars, ...customerValidationVars, ...collectionVars];
 
   return {
     flowVars,
     contactVars: CONTACT_VARS,
     conversationVars: CONVERSATION_VARS,
     orderVars,
+    collectionVars,
     all,
   };
 }
