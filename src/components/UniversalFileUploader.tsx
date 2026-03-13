@@ -106,20 +106,43 @@ export function UniversalFileUploader({ onDataParsed }: UniversalFileUploaderPro
           console.info(`${LOG_PREFIX} Parsing CSV file`);
           setIsJsonFile(false);
           
-          Papa.parse<Record<string, unknown>>(selectedFile, {
+          // Primeiro, ler o conteúdo para detectar delimitador BR (;) vs padrão (,)
+          const textContent = await selectedFile.text();
+          const firstLine = textContent.split('\n')[0] || '';
+          const semicolonCount = (firstLine.match(/;/g) || []).length;
+          const commaCount = (firstLine.match(/,/g) || []).length;
+          const detectedDelimiter = semicolonCount > commaCount ? ';' : ',';
+          
+          console.info(`${LOG_PREFIX} Delimiter detection:`, { 
+            semicolonCount, commaCount, detectedDelimiter 
+          });
+
+          Papa.parse<Record<string, unknown>>(textContent, {
             header: true,
             skipEmptyLines: true,
+            delimiter: detectedDelimiter,
+            encoding: 'UTF-8',
+            transformHeader: (header: string) => header.trim(),
+            transform: (value: string) => value.trim(),
             complete: (results) => {
-              console.info(`${LOG_PREFIX} CSV parsed:`, { rowCount: results.data.length });
+              console.info(`${LOG_PREFIX} CSV parsed:`, { 
+                rowCount: results.data.length,
+                delimiter: detectedDelimiter,
+                headers: Object.keys(results.data[0] as object || {})
+              });
               
               if (results.data.length > 0) {
                 const headers = Object.keys(results.data[0] as object);
-                onDataParsed(results.data, headers);
+                // Filtrar linhas completamente vazias
+                const cleanData = results.data.filter((row: any) => 
+                  headers.some(h => row[h] && String(row[h]).trim() !== '')
+                );
+                onDataParsed(cleanData, headers);
                 setFile(selectedFile);
                 
                 toast({
                   title: 'CSV carregado',
-                  description: `${results.data.length} linhas encontradas.`,
+                  description: `${cleanData.length} linhas encontradas (delimitador: "${detectedDelimiter}").`,
                 });
               } else {
                 showError('Erro no CSV', 'O arquivo CSV está vazio ou não possui dados válidos.');
