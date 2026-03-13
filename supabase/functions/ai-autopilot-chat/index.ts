@@ -1876,7 +1876,7 @@ serve(async (req) => {
 
         const enrichResults = await Promise.all(enrichPromises);
 
-        let onboardingInfo: { status: string; progress: string; nextStep: string; playbookName: string; resumeLink: string } | null = null;
+
 
         for (const result of enrichResults) {
           if (result.type === 'org' && result.data?.name) contactOrgName = result.data.name;
