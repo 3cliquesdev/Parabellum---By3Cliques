@@ -22,13 +22,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useDeleteDeal } from "@/hooks/useDeals";
-import { useCreateConversation } from "@/hooks/useConversations";
+// useCreateConversation removed - now using PipelineTemplateDialog
 import { differenceInDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import DealDialog from "./DealDialog";
 import ContactSheet from "./ContactSheet";
 import MoveToPipelineDialog from "./deals/MoveToPipelineDialog";
 import LeadInfoPopover from "./deals/LeadInfoPopover";
+import { PipelineTemplateDialog } from "./pipeline/PipelineTemplateDialog";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -55,9 +56,9 @@ export default function KanbanCard({
   const navigate = useNavigate();
   const { toast } = useToast();
   const deleteDeal = useDeleteDeal();
-  const createConversation = useCreateConversation();
+  // Template dialog handles conversation creation now
   const [isNavigatingToInbox, setIsNavigatingToInbox] = useState(false);
-
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   // Format WhatsApp number with country code
   const formatWhatsAppNumber = (phone: string) => {
     const cleanPhone = phone.replace(/\D/g, '');
@@ -97,10 +98,11 @@ export default function KanbanCard({
         .maybeSingle();
 
       if (existing) {
+        // Active conversation exists - navigate directly
         navigate(`/inbox?conversation=${existing.id}`);
       } else {
-        const newConversation = await createConversation.mutateAsync(deal.contact_id);
-        navigate(`/inbox?conversation=${newConversation.id}`);
+        // No active conversation - show template selector
+        setShowTemplateDialog(true);
       }
     } catch (error) {
       console.error("Erro ao iniciar conversa:", error);
@@ -475,6 +477,20 @@ export default function KanbanCard({
         open={showContactSheet}
         onOpenChange={setShowContactSheet}
       />
+
+      {/* Pipeline Template Dialog */}
+      {deal.contact_id && deal.contacts?.phone && (
+        <PipelineTemplateDialog
+          open={showTemplateDialog}
+          onOpenChange={setShowTemplateDialog}
+          contactId={deal.contact_id}
+          contactPhone={deal.contacts.phone}
+          contactName={`${deal.contacts.first_name} ${deal.contacts.last_name}`}
+          onConversationCreated={(conversationId) => {
+            navigate(`/inbox?conversation=${conversationId}`);
+          }}
+        />
+      )}
     </>
   );
 }
