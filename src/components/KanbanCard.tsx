@@ -349,6 +349,30 @@ export default function KanbanCard({
             </Tooltip>
           </TooltipProvider>
 
+          {/* Inbox - Iniciar Conversa */}
+          {deal.contact_id && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-primary"
+                    disabled={isNavigatingToInbox}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartInboxConversation();
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <Inbox className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Abrir no Inbox</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
           {deal.contacts?.phone && (
             <>
               {/* WhatsApp */}
