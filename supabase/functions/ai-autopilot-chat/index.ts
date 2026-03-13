@@ -7223,18 +7223,37 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
     }
 
     if (!rawAIContent && !toolCalls.length) {
-      console.error('[ai-autopilot-chat] âŒ AI returned empty content after all retries, no tool calls');
+      console.error('[ai-autopilot-chat] ❌ AI returned empty content after all retries, no tool calls');
+      try {
+        await supabaseClient.from('ai_events').insert({
+          entity_id: conversationId,
+          entity_type: 'conversation',
+          event_type: 'ai_decision',
+          model: ragConfig?.model || 'unknown',
+          output_json: {
+            decision: 'empty_response_fallback',
+            customer_message: customerMessage?.substring(0, 200),
+            had_flow_context: !!flow_context,
+            persona_name: persona?.name || 'unknown'
+          }
+        });
+      } catch (logErr) {
+        console.error('[ai-autopilot-chat] Failed to log empty response event:', logErr);
+      }
     }
 
     let assistantMessage: string;
     if (rawAIContent) {
       assistantMessage = rawAIContent;
     } else if (isWithdrawalRequest) {
-      assistantMessage = 'Para solicitar o saque, preciso primeiro confirmar sua identidade. Qual Ã© o seu e-mail de cadastro?';
+      assistantMessage = 'Para solicitar o saque, preciso primeiro confirmar sua identidade. Qual é o seu e-mail de cadastro?';
     } else if (isFinancialRequest) {
-      assistantMessage = 'Entendi sua solicitaÃ§Ã£o financeira. Para prosseguir com seguranÃ§a, qual Ã© o seu e-mail de cadastro?';
+      assistantMessage = 'Entendi sua solicitação financeira. Para prosseguir com segurança, qual é o seu e-mail de cadastro?';
+    } else if (flow_context) {
+      assistantMessage = 'Olá! Como posso te ajudar hoje?';
+      console.warn('[ai-autopilot-chat] ⚠️ EMPTY RESPONSE GUARD: mensagem vazia substituída por fallback (flow context ativo)');
     } else {
-      assistantMessage = 'Pode repetir sua mensagem? NÃ£o consegui processar corretamente.';
+      assistantMessage = 'Pode repetir sua mensagem? Não consegui processar corretamente.';
     }
     const isEmptyAIResponse = !rawAIContent;
 
