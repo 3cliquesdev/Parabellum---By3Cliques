@@ -95,7 +95,6 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const [isWaitingResponse, setIsWaitingResponse] = useState(false);
   const waitingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasNewMessageBelow, setHasNewMessageBelow] = useState(false);
-  const [tickCounter, setTickCounter] = useState(0);
   const { user } = useAuth();
   const { isAdmin, isManager, isSalesRep, role } = useUserRole();
   const { hasPermission } = useRolePermissions();
