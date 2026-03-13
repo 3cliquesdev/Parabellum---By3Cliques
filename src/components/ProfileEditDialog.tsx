@@ -55,6 +55,7 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [notifyGovernor, setNotifyGovernor] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
+  const [reportDate, setReportDate] = useState<Date | undefined>(undefined);
   const { profile, user, refetchProfile } = useAuth();
   const { toast } = useToast();
   const { uploadAvatar, uploading: uploadingAvatar } = useAvatarUpload();
