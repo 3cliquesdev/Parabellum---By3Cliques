@@ -96,7 +96,6 @@ export function useExportConversationsCSV() {
         "CSAT": r.csat_score ?? "",
         "Ticket": r.ticket_id || "",
         "Tags": Array.isArray(r.tags_all) ? r.tags_all.join(", ") : "",
-        "Tags Automáticas": Array.isArray(r.tags_auto) ? r.tags_auto.join(", ") : "",
         "Tempo Espera pós Atribuição": formatDuration(r.waiting_after_assignment_seconds),
         "Primeira Mensagem": r.first_customer_message || "",
       }));

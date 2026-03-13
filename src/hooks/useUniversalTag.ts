@@ -27,13 +27,18 @@ export function useUniversalTag(conversationId?: string, contactId?: string) {
 
   const selectTag = useMutation({
     mutationFn: async (tagId: string) => {
-      // 1. Remove old conversation tag if exists
-      if (currentTag && conversationId) {
+      // 1. Remove ALL conversation tags (including protected/automatic ones)
+      if (conversationId) {
+        // Clean protected tags first so the manual tag prevails
+        await supabase
+          .from("protected_conversation_tags")
+          .delete()
+          .eq("conversation_id", conversationId);
+
         await supabase
           .from("conversation_tags")
           .delete()
-          .eq("conversation_id", conversationId)
-          .eq("tag_id", currentTag.id);
+          .eq("conversation_id", conversationId);
       }
 
       // 2. Remove ALL old contact tags
