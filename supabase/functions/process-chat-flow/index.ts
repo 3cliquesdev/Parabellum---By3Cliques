@@ -2068,6 +2068,7 @@ serve(async (req) => {
                     forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
                     forbidSupport: resolvedNode.data?.forbid_support ?? false,
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
+                    onboardingDetection: resolvedNode.data?.onboarding_detection_enabled ?? false,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
@@ -2295,6 +2296,7 @@ serve(async (req) => {
                     forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
                     forbidSupport: resolvedNode.data?.forbid_support ?? false,
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
+                    onboardingDetection: resolvedNode.data?.onboarding_detection_enabled ?? false,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
@@ -2480,6 +2482,7 @@ serve(async (req) => {
                       forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
                       forbidSupport: resolvedNode.data?.forbid_support ?? false,
                       forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
+                      onboardingDetection: resolvedNode.data?.onboarding_detection_enabled ?? false,
                     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                   }
 
@@ -3732,6 +3735,7 @@ serve(async (req) => {
               forbidSaque: currentNode.data?.forbid_saque ?? false,
               forbidSistema: currentNode.data?.forbid_sistema ?? false,
               forbidInternacional: currentNode.data?.forbid_internacional ?? false,
+              onboardingDetection: currentNode.data?.onboarding_detection_enabled ?? false,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -4412,6 +4416,7 @@ serve(async (req) => {
             forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
             forbidSupport: nextNode.data?.forbid_support ?? false,
             forbidConsultant: nextNode.data?.forbid_consultant ?? false,
+            onboardingDetection: nextNode.data?.onboarding_detection_enabled ?? false,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -5304,6 +5309,7 @@ serve(async (req) => {
               forbidCancellation: node.data?.forbid_cancellation ?? false,
               forbidSupport: node.data?.forbid_support ?? false,
               forbidConsultant: node.data?.forbid_consultant ?? false,
+              onboardingDetection: node.data?.onboarding_detection_enabled ?? false,
               debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -5639,6 +5645,7 @@ serve(async (req) => {
           forbidCancellation: startNode.data?.forbid_cancellation ?? false,
           forbidSupport: startNode.data?.forbid_support ?? false,
           forbidConsultant: startNode.data?.forbid_consultant ?? false,
+          onboardingDetection: startNode.data?.onboarding_detection_enabled ?? false,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

@@ -1213,6 +1213,7 @@ interface FlowContext {
   forbidSupport?: boolean;
   forbidConsultant?: boolean;
   collectedData?: any;
+  onboardingDetection?: boolean;
 }
 
 // ðŸ†• FASE 1: FunÃ§Ã£o para gerar prompt RESTRITIVO baseado no flow_context
@@ -1506,6 +1507,8 @@ serve(async (req) => {
     const flowForbidCancellation: boolean = flow_context?.forbidCancellation ?? false;
     const flowForbidCommercialPrompt: boolean = flow_context?.forbidCommercial ?? false;
     const flowForbidConsultantPrompt: boolean = flow_context?.forbidConsultant ?? false;
+    // 🆕 Onboarding detection: default true sem flow (autopilot puro), false com flow (controlado pelo toggle)
+    const flowOnboardingDetection: boolean = flow_context ? (flow_context.onboardingDetection ?? false) : true;
     
     // ðŸ†• FASE 1: Flag para usar prompt restritivo
     const useRestrictedPrompt = !!(flow_context && (flowObjective || flowForbidQuestions || flowForbidOptions || flowForbidFinancial));
@@ -1853,8 +1856,8 @@ serve(async (req) => {
             .then((r: any) => ({ type: 'tags', data: r.data }))
         );
 
-        // 📋 Onboarding progress (SÓ para clientes com produto contratado)
-        if (contact.status === 'customer') {
+        // 📋 Onboarding progress (SÓ para clientes com produto contratado E detecção ativa)
+        if (contact.status === 'customer' && flowOnboardingDetection) {
           enrichPromises.push(
             supabaseClient
               .from('playbook_executions')
