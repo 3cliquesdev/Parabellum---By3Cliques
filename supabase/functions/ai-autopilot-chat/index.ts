@@ -9364,7 +9364,10 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         });
       }
       
-      // ERRO TÉCNICO REAL: manter protocolo de emergência com handoff
+      // ERRO TÉCNICO REAL: protocolo de emergência
+      // 🛡️ FLOW SOVEREIGNTY: se há fluxo ativo, NÃO forçar copilot
+      const hasActiveFlow = !!flow_context;
+      
       try {
         // 1. Registrar falha no banco para monitoramento
         const { data: failureLog } = await supabaseClient
@@ -9382,8 +9385,13 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         
         console.log('[ai-autopilot-chat] 📝 Falha registrada no log:', failureLog?.id);
         
-        // 2. Enviar mensagem de fallback ao cliente
-        const fallbackMessage = "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano!";
+        // 2. Escolher mensagem de fallback baseada no contexto
+        const fallbackMessage = hasActiveFlow
+          ? "Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar."
+          : "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano!";
+        
+        console.log(`[ai-autopilot-chat] 🛡️ Flow sovereignty check: hasActiveFlow=${hasActiveFlow}, message=${hasActiveFlow ? 'retry' : 'handoff'}`);
+        
         const { data: fallbackMsgData, error: fallbackSaveError } = await supabaseClient
           .from('messages')
           .insert({
@@ -9393,7 +9401,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             sender_id: null,
             is_ai_generated: true,
             channel: responseChannel,
-            status: 'sending'
+            status: 'sending',
+            is_bot_message: true
           })
           .select('id')
           .single();
@@ -9445,24 +9454,37 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           }
         }
         
-        // 3. Trigger handoff automático (copilot mode)
-        await supabaseClient
-          .from('conversations')
-          .update({ 
-            ai_mode: 'copilot',
-            department: conversation.department || '36ce66cd-7414-4fc8-bd4a-268fecc3f01a',
-            last_message_at: new Date().toISOString()
-          })
-          .eq('id', conversationId);
-        
-        console.log('[ai-autopilot-chat] 🤝 Handoff automático executado (ai_mode → copilot)');
-        
-        // 4. Rotear conversa para departamento apropriado
-        await supabaseClient.functions.invoke('route-conversation', {
-          body: { conversationId }
-        });
-        
-        console.log('[ai-autopilot-chat] 📮 Conversa roteada para fila humana');
+        // 3. Handoff: SOMENTE se NÃO há fluxo ativo
+        if (hasActiveFlow) {
+          // 🛡️ FLOW SOVEREIGNTY: manter autopilot, apenas atualizar last_message_at
+          await supabaseClient
+            .from('conversations')
+            .update({ 
+              last_message_at: new Date().toISOString()
+            })
+            .eq('id', conversationId);
+          
+          console.log('[ai-autopilot-chat] 🛡️ Flow ativo preservado — ai_mode mantido como autopilot, sem handoff');
+        } else {
+          // Comportamento original: copilot + handoff para fila humana
+          await supabaseClient
+            .from('conversations')
+            .update({ 
+              ai_mode: 'copilot',
+              department: conversation.department || '36ce66cd-7414-4fc8-bd4a-268fecc3f01a',
+              last_message_at: new Date().toISOString()
+            })
+            .eq('id', conversationId);
+          
+          console.log('[ai-autopilot-chat] 🤝 Handoff automático executado (ai_mode → copilot)');
+          
+          // 4. Rotear conversa para departamento apropriado
+          await supabaseClient.functions.invoke('route-conversation', {
+            body: { conversationId }
+          });
+          
+          console.log('[ai-autopilot-chat] 📮 Conversa roteada para fila humana');
+        }
         
         // 5. Notificar admin sobre a falha crítica
         const contactName = conversation?.contacts 
@@ -9472,7 +9494,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         await supabaseClient.functions.invoke('send-admin-alert', {
           body: {
             type: 'ai_failure',
-            message: `IA falhou ao responder cliente ${contactName}`,
+            message: `IA falhou ao responder cliente ${contactName}${hasActiveFlow ? ' (fluxo preservado)' : ''}`,
             error: errorMessage,
             conversationId: conversationId,
             contactName: contactName
@@ -9499,8 +9521,11 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       // Retornar resposta indicando que houve fallback
       return new Response(JSON.stringify({ 
         status: 'fallback',
-        message: "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano!",
-        handoff_triggered: true,
+        message: hasActiveFlow 
+          ? "Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar."
+          : "Desculpe, estou com dificuldades técnicas no momento. Vou te conectar com um atendente humano!",
+        handoff_triggered: !hasActiveFlow,
+        flow_context_preserved: hasActiveFlow,
         admin_notified: true
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
