@@ -385,13 +385,14 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
   // Reps performance hoje
   const repsMap: Record<string, { deals: number; revenue: number }> = {};
 
-  let totalRevToday = 0;
+  const totalRevToday = newSalesRevenue;
 
-  wonToday?.forEach((d: any) => {
+  // IMPORTANTE: Iterar apenas sobre vendas NOVAS para canais e reps
+  // Recorrências têm seção separada no relatório
+  newSalesDeals.forEach((d: any) => {
     const origin = classifyOrigin(d);
     const rev = Number(d.gross_value) || 0;
     const comm = Number(d.affiliate_commission) || 0;
-    totalRevToday += rev;
 
     let catKey = 'outros';
     if (origin.startsWith('parceiro:')) {
@@ -480,6 +481,7 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
     .from('deals')
     .select('assigned_to, gross_value')
     .eq('status', 'won')
+    .eq('is_returning_customer', false)
     .gte('closed_at', firstDayOfMonth)
     .not('assigned_to', 'is', null);
 
