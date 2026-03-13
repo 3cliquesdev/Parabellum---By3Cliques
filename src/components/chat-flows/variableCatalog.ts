@@ -61,6 +61,19 @@ export const CUSTOMER_VALIDATION_VARS: VariableItem[] = [
   { value: "customer_email_found", label: "Email Encontrado", group: "contact" },
 ];
 
+// Smart Collection variables (collected by AI during flow)
+export const COLLECTION_VARS: VariableItem[] = [
+  { value: "name", label: "Nome (Coletado)", group: "collection" },
+  { value: "email", label: "Email (Coletado)", group: "collection" },
+  { value: "phone", label: "Telefone (Coletado)", group: "collection" },
+  { value: "cpf", label: "CPF (Coletado)", group: "collection" },
+  { value: "address", label: "Endereço (Coletado)", group: "collection" },
+  { value: "pix_key", label: "Chave PIX (Coletado)", group: "collection" },
+  { value: "bank", label: "Banco (Coletado)", group: "collection" },
+  { value: "reason", label: "Motivo (Coletado)", group: "collection" },
+  { value: "amount", label: "Valor (Coletado)", group: "collection" },
+];
+
 // Fixed order variables (from fetch_order nodes)
 export const ORDER_VARS: VariableItem[] = [
   { value: "order_found", label: "Pedido Encontrado", group: "order" },
