@@ -155,6 +155,42 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
     }
   }, [conversation?.id]);
 
+  // ========== TICK COUNTER for relative timestamps (every 60s) ==========
+  useEffect(() => {
+    const interval = setInterval(() => setTickCounter(c => c + 1), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ========== TYPING INDICATOR: clear when new message arrives ==========
+  const prevMsgCount = useRef(messages.length);
+  useEffect(() => {
+    if (messages.length > prevMsgCount.current) {
+      // New message arrived — check if it's NOT from the current user
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg && (lastMsg.sender_type !== 'user' || lastMsg.sender_id !== user?.id)) {
+        setIsWaitingResponse(false);
+        if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+      }
+      // Badge for new message while scrolled up
+      if (!shouldStickToBottom) {
+        setHasNewMessageBelow(true);
+      }
+    }
+    prevMsgCount.current = messages.length;
+  }, [messages.length]);
+
+  // Reset waiting state on conversation change
+  useEffect(() => {
+    setIsWaitingResponse(false);
+    setHasNewMessageBelow(false);
+    if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+  }, [conversation?.id]);
+
+  // Clear badge when user scrolls to bottom
+  useEffect(() => {
+    if (shouldStickToBottom) setHasNewMessageBelow(false);
+  }, [shouldStickToBottom]);
+
   // ========== SMART SCROLL (WhatsApp-like) ==========
   const scrollRef = useRef<HTMLDivElement>(null);
   const [shouldStickToBottom, setShouldStickToBottom] = useState(true);
