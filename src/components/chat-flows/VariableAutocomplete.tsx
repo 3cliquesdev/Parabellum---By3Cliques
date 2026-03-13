@@ -158,6 +158,7 @@ export function VariableAutocomplete({
   };
 
   const hasResults = filterItems(flowVars).length > 0 ||
+    filterItems(collectionVars).length > 0 ||
     filterItems(contactVars).length > 0 ||
     filterItems(conversationVars).length > 0 ||
     filterItems(orderVars).length > 0;
