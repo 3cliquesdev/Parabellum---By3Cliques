@@ -1803,6 +1803,7 @@ serve(async (req) => {
       let contactConsultantName: string | null = null;
       let contactSellerName: string | null = null;
       let contactTagsList: string[] = [];
+      let onboardingInfo: { status: string; progress: string; nextStep: string; playbookName: string; resumeLink: string } | null = null;
 
       try {
         const enrichPromises: PromiseLike<any>[] = [];
@@ -1852,7 +1853,30 @@ serve(async (req) => {
             .then((r: any) => ({ type: 'tags', data: r.data }))
         );
 
+        // 📋 Onboarding progress (SÓ para clientes com produto contratado)
+        if (contact.status === 'customer') {
+          enrichPromises.push(
+            supabaseClient
+              .from('playbook_executions')
+              .select('id, status, playbook:onboarding_playbooks(name)')
+              .eq('contact_id', contact.id)
+              .eq('status', 'in_progress')
+              .limit(1)
+              .then((r: any) => ({ type: 'onboarding_execution', data: r.data }))
+          );
+          enrichPromises.push(
+            supabaseClient
+              .from('customer_journey_steps')
+              .select('id, step_name, completed, position')
+              .eq('contact_id', contact.id)
+              .order('position', { ascending: true })
+              .then((r: any) => ({ type: 'onboarding_steps', data: r.data }))
+          );
+        }
+
         const enrichResults = await Promise.all(enrichPromises);
+
+
 
         for (const result of enrichResults) {
           if (result.type === 'org' && result.data?.name) contactOrgName = result.data.name;
@@ -1861,13 +1885,35 @@ serve(async (req) => {
           if (result.type === 'tags' && result.data) {
             contactTagsList = result.data.map((t: any) => t.tags?.name).filter(Boolean);
           }
+          if (result.type === 'onboarding_execution' && result.data?.length > 0) {
+            const exec = result.data[0];
+            onboardingInfo = {
+              status: 'in_progress',
+              progress: '',
+              nextStep: '',
+              playbookName: exec.playbook?.name || 'Onboarding',
+              resumeLink: `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || ''}/public-onboarding/${exec.id}`,
+            };
+          }
+          if (result.type === 'onboarding_steps' && result.data && onboardingInfo) {
+            const steps = result.data;
+            const completed = steps.filter((s: any) => s.completed).length;
+            const total = steps.length;
+            const nextPending = steps.find((s: any) => !s.completed);
+            onboardingInfo.progress = `${completed}/${total} etapas`;
+            onboardingInfo.nextStep = nextPending?.step_name || 'Todas concluídas';
+            if (completed >= total) {
+              onboardingInfo = null;
+            }
+          }
         }
 
-        console.log('[ai-autopilot-chat] ðŸ·ï¸ Contexto enriquecido:', {
+        console.log('[ai-autopilot-chat] 🏷️ Contexto enriquecido:', {
           org: contactOrgName,
           consultant: contactConsultantName,
           seller: contactSellerName,
-          tags: contactTagsList
+          tags: contactTagsList,
+          onboarding: onboardingInfo ? `${onboardingInfo.progress} - next: ${onboardingInfo.nextStep}` : 'N/A',
         });
       } catch (enrichErr) {
         console.error('[ai-autopilot-chat] âš ï¸ Erro ao enriquecer contexto do contato:', enrichErr);
@@ -6553,7 +6599,20 @@ Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecime
 ` : ''}
 ` : '';
 
-    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
+    // 📋 ONBOARDING: Instrução condicional para IA sobre onboarding incompleto
+    const onboardingGuardInstruction = onboardingInfo ? `
+
+📋 ONBOARDING DO CLIENTE:
+Este cliente tem onboarding incompleto (${onboardingInfo.progress} - Playbook: "${onboardingInfo.playbookName}").
+- NÃO mencione proativamente. Só aborde se:
+  1. Cliente perguntar "o que falta fazer", "próximos passos", "como usar", "como começar"
+  2. O assunto da conversa for diretamente relacionado ao produto/serviço do onboarding
+- Quando relevante, informe o progresso e compartilhe o link para continuar de onde parou.
+- Próxima etapa: "${onboardingInfo.nextStep}"
+- Link: ${onboardingInfo.resumeLink}
+` : '';
+
+    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}${onboardingGuardInstruction}
 
 **ðŸš« REGRA DE HANDOFF (SÃ“ QUANDO CLIENTE PEDIR):**
 TransferÃªncia para humano SÃ“ acontece quando:
@@ -6826,6 +6885,9 @@ ${contactConsultantName ? `- Consultor responsÃ¡vel: ${contactConsultantName}`
 ${contactSellerName ? `- Vendedor responsÃ¡vel: ${contactSellerName}` : ''}
 ${contactTagsList.length > 0 ? `- Tags: ${contactTagsList.join(', ')}` : ''}
 ${customerProducts.length > 0 ? `- Produtos/ServiÃ§os contratados: ${customerProducts.join(', ')}` : '- Produtos/ServiÃ§os contratados: Nenhum identificado'}
+${onboardingInfo ? `- Onboarding: Incompleto (${onboardingInfo.progress})
+- Próxima etapa pendente: "${onboardingInfo.nextStep}"
+- Link para continuar: ${onboardingInfo.resumeLink}` : ''}
 
 Os "Produtos/ServiÃ§os contratados" sÃ£o produtos DIGITAIS (cursos online, mentorias, assinaturas, comunidades) que o cliente COMPROU na plataforma. Use essa informaÃ§Ã£o para personalizar o atendimento e contextualizar respostas sobre acesso, conteÃºdo e suporte dos produtos especÃ­ficos do cliente. NÃ£o confunda com produtos fÃ­sicos.
 ${crossSessionContext}${personaToneInstruction}
