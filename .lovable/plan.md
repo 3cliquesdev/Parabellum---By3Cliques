@@ -1,43 +1,45 @@
 
 
-## Plano: Adicionar nós de Criação de Ticket no FLUXO MASTER V4
+## Plano: Inserir 4 nós de ticket no FLUXO MASTER V4
 
-### Problema
-
-Os 4 caminhos críticos (Saque, Financeiro, Cancelamento, Devolução) vão direto da IA especialista para o Transfer sem criar ticket. O plano original pedia ticket nesses caminhos.
+O update anterior não persistiu os nós de ticket. O fluxo atual tem 24 nós e 54 edges, sem nenhum nó de ticket.
 
 ### O que será feito
 
-Inserir 4 nós `create_ticket` entre cada IA especialista e seu respectivo Transfer, via update SQL no `flow_definition` (JSONB).
+Um SQL update no `flow_definition` (JSONB) do fluxo `9926200d-5f15-429a-ae98-9adedb2e4f65` para:
 
-### Mapeamento
+**1. Adicionar 4 nós `create_ticket`** (x=1200, alinhados com suas IAs):
 
-| Caminho | IA Especialista | Novo Nó Ticket | Transfer Destino | Categoria |
-|---------|----------------|----------------|-----------------|-----------|
-| Saque | `node_5_ia_saque` | `node_ticket_saque` | `node_20_transfer_financeiro` | `saque` |
-| Financeiro | `node_6_ia_financeiro` | `node_ticket_financeiro` | `node_20_transfer_financeiro` | `financeiro` |
-| Cancelamento | `node_7_ia_cancelamento` | `node_ticket_cancelamento` | `node_21_transfer_suporte_cancel` | `cancelamento` |
-| Devolução | `node_8_ia_devolucoes` | `node_ticket_devolucao` | `node_22_transfer_pedidos` | `devolucao` |
+| Nó | y | Subject Template | Category | Priority |
+|----|---|-----------------|----------|----------|
+| `node_ticket_saque` | 100 | Solicitação de Saque — {{contact_name}} | saque | high |
+| `node_ticket_financeiro` | 320 | Solicitação Financeira — {{contact_name}} | financeiro | high |
+| `node_ticket_cancelamento` | 540 | Cancelamento — {{contact_name}} | cancelamento | high |
+| `node_ticket_devolucao` | 760 | Devolução — {{contact_name}} | devolucao | high |
 
-### Configuração de cada nó ticket
+Todos com `use_collected_data: true`.
 
-- `use_collected_data: true` — snapshot do contexto da conversa
-- `ticket_priority: "high"`
-- Templates com variáveis: `{{contact_name}}`
-- Posição: x=1200 (entre coluna 3 e 4), y alinhado com a IA correspondente
+**2. Redirecionar 8 edges existentes** para apontar ao nó ticket em vez do transfer:
 
-### Rerouting de edges
+- `e_5_default_20` e `e_5_suporte_20`: target → `node_ticket_saque`
+- `e_6_default_20` e `e_6_suporte_20`: target → `node_ticket_financeiro`
+- `e_7_default_21` e `e_7_suporte_21`: target → `node_ticket_cancelamento`
+- `e_8_default_22` e `e_8_suporte_22`: target → `node_ticket_devolucao`
 
-Para cada caminho, as edges `default` e `suporte` que iam da IA direto ao Transfer passam a apontar para o nó ticket. Uma nova edge liga o nó ticket ao Transfer original.
+**3. Criar 4 novas edges** (ticket → transfer):
 
-Exemplo (Saque):
-- `e_5_default_20`: target muda de `node_20` → `node_ticket_saque`
-- `e_5_suporte_20`: target muda de `node_20` → `node_ticket_saque`
-- Nova edge: `node_ticket_saque` → `node_20_transfer_financeiro`
+- `node_ticket_saque` → `node_20_transfer_financeiro`
+- `node_ticket_financeiro` → `node_20_transfer_financeiro`
+- `node_ticket_cancelamento` → `node_21_transfer_suporte_cancel`
+- `node_ticket_devolucao` → `node_22_transfer_pedidos`
 
-Cross-links (ex: `e_6_saque_5`, `e_7_financeiro_6`) permanecem inalterados.
+**4. Cross-links permanecem intactos** (`e_6_saque_5`, `e_7_financeiro_6`, `e_7_sistema_10`, `e_8_financeiro_6`).
 
 ### Implementação
 
-Um único update SQL no campo `flow_definition` adicionando os 4 nós e ajustando as 8 edges existentes + criando 4 novas edges.
+Um único SQL update usando `jsonb_set` e array concatenation para adicionar os nós e edges ao JSONB existente, seguido de updates pontuais nos targets das edges redirecionadas.
+
+### Resultado esperado
+
+O fluxo passará de 24→28 nós e 54→58 edges, com os 4 caminhos críticos agora criando ticket antes de transferir para humano.
 
