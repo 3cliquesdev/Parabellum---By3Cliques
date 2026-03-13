@@ -55,6 +55,16 @@ export function VariableAutocomplete({
     [value, nodes, edges, selectedNodeId]
   );
 
+  // Update dropdown position when open
+  useEffect(() => {
+    if (!open || !textareaRef.current) return;
+    const rect = textareaRef.current.getBoundingClientRect();
+    setDropdownPos({
+      top: rect.bottom + 4,
+      left: rect.left,
+    });
+  }, [open]);
+
   // Close dropdown on outside click
   useEffect(() => {
     if (!open) return;
