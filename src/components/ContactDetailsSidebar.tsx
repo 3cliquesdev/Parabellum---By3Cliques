@@ -366,43 +366,134 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
                         Criar
                       </Button>
                     }
-                    onOpenChange={(open) => {}}
+                    onOpenChange={(open) => {
+                      if (!open) {
+                        queryClient.invalidateQueries({ queryKey: ["contact-deals", contactId] });
+                      }
+                    }}
                   />
                 </div>
                 {contactDeals && contactDeals.length > 0 ? (
                   <div className="space-y-1.5">
-                    {contactDeals.map((deal) => (
-                      <div
-                        key={deal.id}
-                        className="p-2 rounded-md bg-muted hover:bg-muted/80 transition-colors"
-                      >
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="text-xs font-medium text-foreground truncate flex-1">
-                            {deal.title}
-                          </p>
-                          <Badge
-                            variant={
-                              deal.status === "won"
-                                ? "default"
-                                : deal.status === "lost"
-                                ? "destructive"
-                                : "secondary"
-                            }
-                            className="text-[9px] px-1 py-0"
-                          >
-                            {deal.status === "open" ? "Aberto" : deal.status === "won" ? "Ganho" : "Perdido"}
-                          </Badge>
+                    {contactDeals.map((deal) => {
+                      const dealStages = stages.filter((s: any) => s.pipeline_id === deal.pipeline_id);
+                      return (
+                        <div
+                          key={deal.id}
+                          className="p-2 rounded-md border border-border bg-card hover:bg-accent/50 transition-colors group"
+                        >
+                          {/* Row 1: Title + Actions Menu */}
+                          <div className="flex items-center justify-between gap-1">
+                            <p
+                              className="text-xs font-medium text-foreground truncate flex-1 cursor-pointer hover:text-primary transition-colors"
+                              onClick={() => setEditingDeal(deal)}
+                            >
+                              {deal.title}
+                            </p>
+                            <div className="flex items-center gap-0.5">
+                              <Badge
+                                variant={
+                                  deal.status === "won"
+                                    ? "default"
+                                    : deal.status === "lost"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                                className="text-[9px] px-1 py-0"
+                              >
+                                {deal.status === "open" ? "Aberto" : deal.status === "won" ? "Ganho" : "Perdido"}
+                              </Badge>
+                              {deal.status === "open" && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="xs" className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <MoreHorizontal className="h-3 w-3" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-44">
+                                    <DropdownMenuItem onClick={() => setEditingDeal(deal)}>
+                                      <Pencil className="h-3 w-3 mr-2" />
+                                      Editar
+                                    </DropdownMenuItem>
+                                    {dealStages.length > 0 && (
+                                      <DropdownMenuSub>
+                                        <DropdownMenuSubTrigger>
+                                          <ArrowRightLeft className="h-3 w-3 mr-2" />
+                                          Mudar Etapa
+                                        </DropdownMenuSubTrigger>
+                                        <DropdownMenuSubContent>
+                                          {dealStages.map((stage: any) => (
+                                            <DropdownMenuItem
+                                              key={stage.id}
+                                              disabled={stage.id === deal.stage_id}
+                                              onClick={() => {
+                                                updateDealStage.mutate(
+                                                  { id: deal.id, stage_id: stage.id },
+                                                  {
+                                                    onSuccess: () => {
+                                                      queryClient.invalidateQueries({ queryKey: ["contact-deals", contactId] });
+                                                      toast({ title: `Etapa alterada para "${stage.name}"` });
+                                                    },
+                                                  }
+                                                );
+                                              }}
+                                            >
+                                              {stage.name}
+                                              {stage.id === deal.stage_id && " ✓"}
+                                            </DropdownMenuItem>
+                                          ))}
+                                        </DropdownMenuSubContent>
+                                      </DropdownMenuSub>
+                                    )}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        updateDeal.mutate(
+                                          { id: deal.id, updates: { status: "won" } },
+                                          {
+                                            onSuccess: () => {
+                                              queryClient.invalidateQueries({ queryKey: ["contact-deals", contactId] });
+                                              toast({ title: "🏆 Negócio marcado como ganho!" });
+                                            },
+                                          }
+                                        );
+                                      }}
+                                      className="text-success"
+                                    >
+                                      <Trophy className="h-3 w-3 mr-2" />
+                                      Marcar como Ganho
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => setLostDeal({ id: deal.id, title: deal.title })}
+                                      className="text-destructive"
+                                    >
+                                      <XCircle className="h-3 w-3 mr-2" />
+                                      Marcar como Perdido
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </div>
+                          </div>
+                          {/* Row 2: Stage + Value */}
+                          <div className="flex items-center justify-between mt-1">
+                            {(deal as any).stages?.name && (
+                              <span className="text-[10px] text-muted-foreground truncate">
+                                📌 {(deal as any).stages.name}
+                              </span>
+                            )}
+                            {deal.value && (
+                              <p className="text-xs font-bold text-success">
+                                {new Intl.NumberFormat("pt-BR", {
+                                  style: "currency",
+                                  currency: deal.currency || "BRL",
+                                }).format(deal.value)}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        {deal.value && (
-                          <p className="text-xs font-bold text-success mt-0.5">
-                            {new Intl.NumberFormat("pt-BR", {
-                              style: "currency",
-                              currency: deal.currency || "BRL",
-                            }).format(deal.value)}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground text-center py-3">
