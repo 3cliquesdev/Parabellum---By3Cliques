@@ -6574,7 +6574,20 @@ Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecime
 ` : ''}
 ` : '';
 
-    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
+    // 📋 ONBOARDING: Instrução condicional para IA sobre onboarding incompleto
+    const onboardingGuardInstruction = onboardingInfo ? `
+
+📋 ONBOARDING DO CLIENTE:
+Este cliente tem onboarding incompleto (${onboardingInfo.progress} - Playbook: "${onboardingInfo.playbookName}").
+- NÃO mencione proativamente. Só aborde se:
+  1. Cliente perguntar "o que falta fazer", "próximos passos", "como usar", "como começar"
+  2. O assunto da conversa for diretamente relacionado ao produto/serviço do onboarding
+- Quando relevante, informe o progresso e compartilhe o link para continuar de onde parou.
+- Próxima etapa: "${onboardingInfo.nextStep}"
+- Link: ${onboardingInfo.resumeLink}
+` : '';
+
+    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}${onboardingGuardInstruction}
 
 **ðŸš« REGRA DE HANDOFF (SÃ“ QUANDO CLIENTE PEDIR):**
 TransferÃªncia para humano SÃ“ acontece quando:
