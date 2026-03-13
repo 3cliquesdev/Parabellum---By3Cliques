@@ -32,7 +32,7 @@ serve(async (req) => {
 
   try {
     const body: DownloadRequest = await req.json();
-    const { meta_media_id, message_id, media_type, instance_id } = body;
+    const { meta_media_id, message_id, media_type, instance_id, conversation_id } = body;
 
     console.log("[download-meta-media] 📥 Starting download:", { meta_media_id, message_id, media_type });
 
