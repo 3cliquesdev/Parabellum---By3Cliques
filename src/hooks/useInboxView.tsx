@@ -130,6 +130,7 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
   }
 
   // ✅ Filtro de tags no nível do banco (evita limite de 1000 do client-side)
+  // Usa chunking para tags com muitas conversas (evita 400 Bad Request por URL longa)
   if (tags && tags.length > 0) {
     const { data: tagRows } = await supabase
       .from('conversation_tags')
@@ -144,8 +145,122 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
       return [];
     }
 
-    // Supabase .in() supports up to ~2000 IDs; slice to be safe
-    query = query.in('conversation_id', tagConvIds.slice(0, 2000));
+    const CHUNK_SIZE = 300;
+
+    if (tagConvIds.length <= CHUNK_SIZE) {
+      // Caso simples: poucos IDs, query única
+      query = query.in('conversation_id', tagConvIds);
+    } else {
+      // Chunking: dividir IDs em lotes e executar em paralelo
+      console.log(`[InboxView] tag filter has ${tagConvIds.length} IDs — using chunked queries (${CHUNK_SIZE}/chunk)`);
+
+      // Precisamos finalizar a query base aqui e executar chunks manualmente
+      // Salvar os filtros já aplicados na query e recriar para cada chunk
+      const chunks: string[][] = [];
+      for (let i = 0; i < tagConvIds.length; i += CHUNK_SIZE) {
+        chunks.push(tagConvIds.slice(i, i + CHUNK_SIZE));
+      }
+
+      // Executar todas as queries em paralelo
+      const chunkResults = await Promise.all(
+        chunks.map(async (chunk) => {
+          // Reconstruir query com os mesmos filtros para cada chunk
+          let chunkQuery = supabase.from("inbox_view").select("*");
+
+          if (scope === 'archived') {
+            chunkQuery = chunkQuery.eq("status", "closed");
+          } else {
+            chunkQuery = chunkQuery.neq("status", "closed");
+          }
+
+          if (scope === 'archived' && aiMode) {
+            if (aiMode === 'ai_only') {
+              chunkQuery = chunkQuery.eq("ai_mode", "autopilot").is("assigned_to", null);
+            } else if (aiMode === 'ai_all') {
+              chunkQuery = chunkQuery.in("ai_mode", ["autopilot", "copilot", "waiting_human"]);
+            } else {
+              chunkQuery = chunkQuery.eq("ai_mode", aiMode);
+            }
+          }
+
+          if (scope === 'archived' && dateRange) {
+            if (dateRange.from) {
+              const startOfDay = new Date(dateRange.from);
+              startOfDay.setHours(0, 0, 0, 0);
+              chunkQuery = chunkQuery.gte("last_message_at", startOfDay.toISOString());
+            }
+            if (dateRange.to) {
+              const endOfDay = new Date(dateRange.to);
+              endOfDay.setHours(23, 59, 59, 999);
+              chunkQuery = chunkQuery.lte("last_message_at", endOfDay.toISOString());
+            }
+          }
+
+          if (scope === 'archived' && channels && channels.length > 0) {
+            chunkQuery = chunkQuery.overlaps("channels", channels);
+          }
+
+          if (scope === 'archived' && department) {
+            chunkQuery = chunkQuery.eq("department", department);
+          }
+
+          if (scope === 'archived' && assignedTo) {
+            if (assignedTo === 'unassigned') {
+              chunkQuery = chunkQuery.is("assigned_to", null);
+            } else {
+              chunkQuery = chunkQuery.eq("assigned_to", assignedTo);
+            }
+          }
+
+          chunkQuery = chunkQuery.in('conversation_id', chunk);
+
+          if (role && userId && !hasFullInboxAccess(role)) {
+            if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
+              if (departmentIds && departmentIds.length > 0) {
+                chunkQuery = chunkQuery.or(
+                  `assigned_to.eq.${userId},department.in.(${departmentIds.join(",")}),and(assigned_to.is.null,department.is.null)`
+                );
+              } else {
+                chunkQuery = chunkQuery.or(
+                  `assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null)`
+                );
+              }
+            } else if (role === "consultant" || role === "user") {
+              chunkQuery = chunkQuery.eq("assigned_to", userId);
+            }
+          }
+
+          const isArchivedScope = scope === 'archived';
+          chunkQuery = chunkQuery
+            .order("updated_at", { ascending: !isArchivedScope })
+            .limit(isArchivedScope ? 1000 : 500);
+
+          const { data, error } = await chunkQuery;
+          if (error) throw error;
+          return (data || []) as InboxViewItem[];
+        })
+      );
+
+      // Mergear e deduplicar por conversation_id
+      const seen = new Map<string, InboxViewItem>();
+      for (const rows of chunkResults) {
+        for (const row of rows) {
+          seen.set(row.conversation_id, row);
+        }
+      }
+
+      const merged = Array.from(seen.values());
+      const isArchivedScope = scope === 'archived';
+      merged.sort((a, b) => {
+        const diff = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+        return isArchivedScope ? -diff : diff;
+      });
+
+      console.log(`[InboxView] chunked tag query: ${chunks.length} chunks, ${merged.length} unique results`);
+
+      // Retornar diretamente — pular o resto da função
+      return merged.slice(0, isArchivedScope ? 1000 : 500);
+    }
   }
 
   const isArchivedScope = scope === 'archived';
