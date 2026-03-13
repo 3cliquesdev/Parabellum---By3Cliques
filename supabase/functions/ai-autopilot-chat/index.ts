@@ -2759,7 +2759,7 @@ serve(async (req) => {
       console.log('[ai-autopilot-chat] 🔍 Triagem silenciosa: validando phone+email+CPF contra base Kiwify...');
       
       try {
-        const validationPromises: Promise<any>[] = [];
+        const validationPromises: PromiseLike<any>[] = [];
 
         // 1) Telefone — inline query (sem invoke entre edge functions)
         if (contact.phone || contact.whatsapp_id) {
