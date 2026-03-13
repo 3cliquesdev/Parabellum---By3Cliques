@@ -1,4 +1,5 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from "react";
+import { displayInitials } from "@/lib/displayName";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { InternalNoteMessage } from "@/components/InternalNoteMessage";
 import { StreamingMessage } from "@/components/inbox/StreamingMessage";
@@ -383,7 +384,7 @@ export function MessagesWithMedia({
                 avatar_url: message.sender.avatar_url || null,
                 job_title: message.sender.job_title || null,
               } : null}
-              contactInitials={`${contact?.first_name?.[0] || ''}${contact?.last_name?.[0] || ''}`}
+              contactInitials={displayInitials(contact?.first_name, contact?.last_name)}
               channel={conversation.channel}
               showChannel={false}
               status={message.status as "sending" | "sent" | "delivered" | "read" | "failed" | undefined}
