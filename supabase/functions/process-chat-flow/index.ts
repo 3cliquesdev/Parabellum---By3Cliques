@@ -3590,6 +3590,12 @@ serve(async (req) => {
               forbidCancellation: currentNode.data?.forbid_cancellation ?? false,
               forbidSupport: currentNode.data?.forbid_support ?? false,
               forbidConsultant: currentNode.data?.forbid_consultant ?? false,
+              // 🆕 Novos forbid flags
+              forbidPedidos: currentNode.data?.forbid_pedidos ?? false,
+              forbidDevolucao: currentNode.data?.forbid_devolucao ?? false,
+              forbidSaque: currentNode.data?.forbid_saque ?? false,
+              forbidSistema: currentNode.data?.forbid_sistema ?? false,
+              forbidInternacional: currentNode.data?.forbid_internacional ?? false,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
