@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { displayName, displayInitials } from "@/lib/displayName";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

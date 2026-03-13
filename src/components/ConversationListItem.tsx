@@ -7,6 +7,7 @@ import { ChannelIcon } from "@/components/ChannelIcon";
 import { SentimentBadge } from "@/components/SentimentBadge";
 import { WifiOff, AlertTriangle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { displayName } from "@/lib/displayName";
 import { formatDistanceToNow, differenceInMinutes, differenceInHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";

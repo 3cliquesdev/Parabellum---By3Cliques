@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Mail, Phone, ChevronRight } from "lucide-react";
+import { displayName, displayInitials } from "@/lib/displayName";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
