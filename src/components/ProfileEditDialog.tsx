@@ -249,6 +249,39 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <FormLabel>Relatório do dia:</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !reportDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {reportDate
+                            ? format(reportDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+                            : "Hoje (padrão)"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={reportDate}
+                          onSelect={setReportDate}
+                          disabled={(date) => date > new Date()}
+                          locale={ptBR}
+                          initialFocus
+                          className="pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
                   <Button
                     type="button"
                     variant="outline"
@@ -258,7 +291,11 @@ export default function ProfileEditDialog({ trigger }: ProfileEditDialogProps) {
                     className="w-full"
                   >
                     <Send className="h-4 w-4 mr-2" />
-                    {sendingReport ? "Enviando..." : "Enviar relatório agora"}
+                    {sendingReport
+                      ? "Enviando..."
+                      : reportDate
+                        ? `Enviar relatório de ${format(reportDate, "dd/MM/yyyy")}`
+                        : "Enviar relatório de hoje"}
                   </Button>
                 </div>
               </>
