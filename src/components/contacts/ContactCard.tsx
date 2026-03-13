@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Mail, Phone, ChevronRight } from "lucide-react";
+import { displayName, displayInitials } from "@/lib/displayName";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Contact = Tables<"contacts"> & {
@@ -19,13 +20,13 @@ export function ContactCard({ contact, onClick }: ContactCardProps) {
     >
       {/* Avatar */}
       <div className="flex-shrink-0 h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
-        {contact.first_name?.[0] || ''}{contact.last_name?.[0] || ''}
+        {displayInitials(contact.first_name, contact.last_name)}
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
         <p className="font-medium text-foreground truncate">
-          {contact.first_name} {contact.last_name}
+          {displayName(contact.first_name, contact.last_name)}
         </p>
         <div className="flex items-center gap-3 text-sm text-muted-foreground mt-0.5">
           {contact.email && (

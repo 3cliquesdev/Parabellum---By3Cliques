@@ -263,8 +263,15 @@ serve(async (req) => {
         if (!contact) {
           // Criar novo contato
           const names = (sale.customer.full_name || sale.customer.email).split(' ');
-          const firstName = sale.customer.first_name || names[0] || 'Cliente';
-          const lastName = sale.customer.last_name || names.slice(1).join(' ') || 'Kiwify';
+          let firstName = sale.customer.first_name || names[0] || 'Cliente';
+          let lastName = sale.customer.last_name || names.slice(1).join(' ') || 'Kiwify';
+          
+          // Corrigir nomes duplicados
+          if (firstName.trim() === lastName.trim()) {
+            const parts = firstName.trim().split(' ');
+            firstName = parts[0];
+            lastName = parts.slice(1).join(' ') || '';
+          }
           
           const { data: newContact, error: contactError } = await supabaseClient
             .from('contacts')

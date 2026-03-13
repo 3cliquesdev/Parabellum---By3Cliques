@@ -1,4 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
+import { displayName, displayInitials } from "@/lib/displayName";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,11 +127,11 @@ export default function ContactInfoCard({ contact }: ContactInfoCardProps) {
         <div className="flex flex-col items-center mb-6">
           <Avatar className="h-28 w-28 mb-3">
             <AvatarFallback className="bg-primary/10 text-primary text-4xl font-bold">
-              {contact.first_name?.[0] || "?"}{contact.last_name?.[0] || ""}
+              {displayInitials(contact.first_name, contact.last_name)}
             </AvatarFallback>
           </Avatar>
           <h2 className="text-xl font-bold text-center text-foreground">
-            {contact.first_name} {contact.last_name}
+            {displayName(contact.first_name, contact.last_name)}
           </h2>
           {contact.company && (
             <p className="text-sm text-muted-foreground mt-1">{contact.company}</p>

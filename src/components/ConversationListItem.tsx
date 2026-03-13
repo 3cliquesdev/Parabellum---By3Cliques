@@ -7,6 +7,7 @@ import { ChannelIcon } from "@/components/ChannelIcon";
 import { SentimentBadge } from "@/components/SentimentBadge";
 import { WifiOff, AlertTriangle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { displayName } from "@/lib/displayName";
 import { formatDistanceToNow, differenceInMinutes, differenceInHours } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
@@ -278,7 +279,7 @@ function ConversationListItemComponent({
         {/* Linha 1: Nome + Tempo SLA */}
         <div className="flex items-center justify-between mb-0.5">
           <p className="font-medium truncate text-foreground text-sm">
-            {conversation.contacts?.first_name || 'Cliente'}
+            {displayName(conversation.contacts?.first_name, conversation.contacts?.last_name)}
           </p>
           <div className="flex items-center gap-1.5">
             <span className={cn(

@@ -60,10 +60,26 @@ function prepareContactData(contact: ContactRow, consultantMap: Map<string, stri
     }
   }
 
+  let firstName = contact.first_name?.trim() || '';
+  let lastName = contact.last_name?.trim() || '';
+
+  // Corrigir nomes duplicados (ex: "Ronildo Oliveira" / "Ronildo Oliveira")
+  if (firstName && lastName && firstName === lastName) {
+    const parts = firstName.split(' ');
+    firstName = parts[0];
+    lastName = parts.slice(1).join(' ') || '';
+  }
+  // Se só tem first_name com espaço e last_name vazio, fazer split
+  if (firstName && !lastName && firstName.includes(' ')) {
+    const parts = firstName.split(' ');
+    firstName = parts[0];
+    lastName = parts.slice(1).join(' ');
+  }
+
   return {
     email: contact.email.toLowerCase().trim(),
-    first_name: contact.first_name?.trim() || '',
-    last_name: contact.last_name?.trim() || '',
+    first_name: firstName,
+    last_name: lastName,
     phone: contact.phone?.trim() || null,
     company: contact.company?.trim() || null,
     document: contact.document?.trim() || null,
