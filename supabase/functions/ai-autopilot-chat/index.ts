@@ -1212,6 +1212,7 @@ interface FlowContext {
   forbidCancellation?: boolean;
   forbidSupport?: boolean;
   forbidConsultant?: boolean;
+  collectedData?: any;
 }
 
 // 🆕 FASE 1: Função para gerar prompt RESTRITIVO baseado no flow_context
