@@ -1396,10 +1396,13 @@ serve(async (req) => {
           textLength: finalText.length 
         });
 
-        // 1. Salvar na tabela messages
+        // 1. Salvar na tabela messages (guard: conteúdo vazio)
+        if (!finalText || String(finalText).trim().length === 0) {
+          console.warn('[process-chat-flow] ⚠️ Empty finalText for manual trigger, skipping insert');
+        } else {
         const { error: insertError } = await supabaseClient.from('messages').insert({
           conversation_id: conversationId,
-          content: finalText,
+          content: String(finalText).trim(),
           sender_type: 'user',
           sender_id: null,
           is_ai_generated: true,
