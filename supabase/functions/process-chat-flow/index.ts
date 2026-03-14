@@ -2078,6 +2078,15 @@ serve(async (req) => {
                     otpNcAiMode === 'copilot'   ? 'set_copilot' :
                     otpNcAiMode === 'autopilot' ? 'engage_ai' :
                     'handoff_to_human';
+                  // 🆕 Verificar horário comercial antes de handoff OTP not_customer
+                  const ahCheckOtpNc = await checkAfterHoursAndIntercept(supabaseClient, conversationId, otpNcTransType);
+                  if (ahCheckOtpNc.intercepted) {
+                    return new Response(JSON.stringify({
+                      useAI: false, response: ahCheckOtpNc.afterHoursMessage,
+                      afterHours: true, flowCompleted: true, collectedData,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
                   await fetch(
                     `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
                     {
@@ -2308,6 +2317,15 @@ serve(async (req) => {
                     otpOkAiMode === 'copilot'   ? 'set_copilot' :
                     otpOkAiMode === 'autopilot' ? 'engage_ai' :
                     'handoff_to_human';
+                  // 🆕 Verificar horário comercial antes de handoff OTP verified
+                  const ahCheckOtpOk = await checkAfterHoursAndIntercept(supabaseClient, conversationId, otpOkTransType);
+                  if (ahCheckOtpOk.intercepted) {
+                    return new Response(JSON.stringify({
+                      useAI: false, response: ahCheckOtpOk.afterHoursMessage,
+                      afterHours: true, flowCompleted: true, collectedData,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
                   await fetch(
                     `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
                     {
@@ -2486,6 +2504,15 @@ serve(async (req) => {
                       otpMaxAiMode === 'copilot'   ? 'set_copilot' :
                       otpMaxAiMode === 'autopilot' ? 'engage_ai' :
                       'handoff_to_human';
+                    // 🆕 Verificar horário comercial antes de handoff OTP max_attempts
+                    const ahCheckOtpMax = await checkAfterHoursAndIntercept(supabaseClient, conversationId, otpMaxTransType);
+                    if (ahCheckOtpMax.intercepted) {
+                      return new Response(JSON.stringify({
+                        useAI: false, response: ahCheckOtpMax.afterHoursMessage,
+                        afterHours: true, flowCompleted: true, collectedData,
+                      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                    }
+
                     await fetch(
                       `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
                       {
@@ -3305,6 +3332,15 @@ serve(async (req) => {
                     const deptId = resolvedNode.data?.department_id || null;
                     const aiMode = resolvedNode.data?.ai_mode || 'waiting_human';
                     const transType = aiMode === 'copilot' ? 'set_copilot' : aiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
+                    // 🆕 Verificar horário comercial antes de handoff inline OTP not_customer
+                    const ahCheckInlineNc = await checkAfterHoursAndIntercept(supabaseClient, conversationId, transType);
+                    if (ahCheckInlineNc.intercepted) {
+                      return new Response(JSON.stringify({
+                        useAI: false, response: ahCheckInlineNc.afterHoursMessage,
+                        afterHours: true, flowCompleted: true, collectedData,
+                      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                    }
+
                     await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
@@ -3429,6 +3465,15 @@ serve(async (req) => {
                     const deptId = resolvedNode.data?.department_id || null;
                     const aiMode = resolvedNode.data?.ai_mode || 'waiting_human';
                     const transType = aiMode === 'copilot' ? 'set_copilot' : aiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
+                    // 🆕 Verificar horário comercial antes de handoff inline OTP verified
+                    const ahCheckInlineOk = await checkAfterHoursAndIntercept(supabaseClient, conversationId, transType);
+                    if (ahCheckInlineOk.intercepted) {
+                      return new Response(JSON.stringify({
+                        useAI: false, response: ahCheckInlineOk.afterHoursMessage,
+                        afterHours: true, flowCompleted: true, collectedData,
+                      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                    }
+
                     await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
@@ -3532,6 +3577,15 @@ serve(async (req) => {
                   completed_at: new Date().toISOString(),
                 }).eq('id', activeState.id);
 
+                // 🆕 Verificar horário comercial antes de handoff inline OTP verified no next node
+                const ahCheckInlineNoNext = await checkAfterHoursAndIntercept(supabaseClient, conversationId, 'handoff_to_human');
+                if (ahCheckInlineNoNext.intercepted) {
+                  return new Response(JSON.stringify({
+                    useAI: false, response: ahCheckInlineNoNext.afterHoursMessage,
+                    afterHours: true, flowCompleted: true, collectedData,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
                 await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
@@ -3589,6 +3643,15 @@ serve(async (req) => {
                         const deptId = resolvedNode.data?.department_id || null;
                         const aiMode = resolvedNode.data?.ai_mode || 'waiting_human';
                         const transType = aiMode === 'copilot' ? 'set_copilot' : aiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
+                        // 🆕 Verificar horário comercial antes de handoff inline OTP failed
+                        const ahCheckInlineFail = await checkAfterHoursAndIntercept(supabaseClient, conversationId, transType);
+                        if (ahCheckInlineFail.intercepted) {
+                          return new Response(JSON.stringify({
+                            useAI: false, response: ahCheckInlineFail.afterHoursMessage,
+                            afterHours: true, flowCompleted: true, collectedData,
+                          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                        }
+
                         await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
@@ -3624,6 +3687,15 @@ serve(async (req) => {
                     status: 'transferred',
                     completed_at: new Date().toISOString(),
                   }).eq('id', activeState.id);
+
+                  // 🆕 Verificar horário comercial antes de handoff inline OTP max_attempts
+                  const ahCheckInlineMax = await checkAfterHoursAndIntercept(supabaseClient, conversationId, 'handoff_to_human');
+                  if (ahCheckInlineMax.intercepted) {
+                    return new Response(JSON.stringify({
+                      useAI: false, response: ahCheckInlineMax.afterHoursMessage,
+                      afterHours: true, flowCompleted: true, collectedData,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
 
                   await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
                     method: 'POST',
