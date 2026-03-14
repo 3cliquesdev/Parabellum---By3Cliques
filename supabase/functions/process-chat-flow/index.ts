@@ -3401,9 +3401,10 @@ serve(async (req) => {
                     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                   }
 
+                  const otpVerifiedMsgGeneric = currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.";
                   return new Response(JSON.stringify({
                     useAI: false,
-                    response: "✅ Identidade verificada!\n\n" + (nextMsg || ''),
+                    response: otpVerifiedMsgGeneric + "\n\n" + (nextMsg || ''),
                     flowId: activeState.flow_id,
                     collectedData,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
