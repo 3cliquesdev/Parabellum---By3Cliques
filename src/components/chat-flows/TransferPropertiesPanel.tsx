@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { cn } from "@/lib/utils";
+import { ROLE_LABELS } from "@/config/roles";
 
 interface TransferPropertiesPanelProps {
   selectedNode: Node;
