@@ -5038,6 +5038,13 @@ serve(async (req) => {
           transferAiMode === 'copilot'   ? 'set_copilot' :
           transferAiMode === 'autopilot' ? 'engage_ai' :
           'handoff_to_human';
+        // 🆕 Verificar horário comercial antes de handoff
+        const ahCheck3 = await checkAfterHoursAndIntercept(supabaseClient, conversationId, transitionType);
+        if (ahCheck3.intercepted) {
+          return new Response(JSON.stringify({
+            useAI: false, response: ahCheck3.afterHoursMessage, afterHours: true, flowCompleted: true, collectedData, flowId: activeState.flow_id,
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
         await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
           {
