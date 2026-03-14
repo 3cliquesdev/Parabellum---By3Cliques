@@ -21,6 +21,7 @@ import {
   HeadphonesIcon,
   Route,
   Briefcase,
+  ShieldCheck,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
