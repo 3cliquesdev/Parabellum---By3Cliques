@@ -1,0 +1,25 @@
+-- Sprint 3: Fix search_path (corrected signatures)
+ALTER FUNCTION public.auto_assign_deal_on_insert() SET search_path = public;
+ALTER FUNCTION public.claim_playbook_queue_items(batch_size integer) SET search_path = public;
+ALTER FUNCTION public.create_knowledge_version() SET search_path = public;
+ALTER FUNCTION public.ensure_single_master_flow() SET search_path = public;
+ALTER FUNCTION public.fix_handoff_not_completed() SET search_path = public;
+ALTER FUNCTION public.fix_orphan_copilot_conversations() SET search_path = public;
+ALTER FUNCTION public.fn_inbox_view_set_short_id() SET search_path = public;
+ALTER FUNCTION public.get_email_evolution(p_days integer, p_start timestamp with time zone, p_end timestamp with time zone) SET search_path = public;
+ALTER FUNCTION public.get_playbook_kpis(p_start timestamp with time zone, p_end timestamp with time zone) SET search_path = public;
+ALTER FUNCTION public.get_playbook_performance(p_start timestamp with time zone, p_end timestamp with time zone) SET search_path = public;
+ALTER FUNCTION public.normalize_phone(phone text) SET search_path = public;
+ALTER FUNCTION public.pause_playbook_executions_on_deactivate() SET search_path = public;
+ALTER FUNCTION public.set_deal_closed_at() SET search_path = public;
+ALTER FUNCTION public.set_processed_at() SET search_path = public;
+ALTER FUNCTION public.sync_agent_departments_from_profiles() SET search_path = public;
+ALTER FUNCTION public.sync_assigned_to_consultant_id() SET search_path = public;
+ALTER FUNCTION public.sync_inbox_view_on_delete() SET search_path = public;
+ALTER FUNCTION public.sync_profiles_department_from_agent_departments() SET search_path = public;
+ALTER FUNCTION public.try_lock_conversation_buffer(conv_id uuid) SET search_path = public;
+ALTER FUNCTION public.update_deal_closed_at() SET search_path = public;
+ALTER FUNCTION public.update_form_board_integrations_updated_at() SET search_path = public;
+ALTER FUNCTION public.update_project_updated_at() SET search_path = public;
+ALTER FUNCTION public.update_whatsapp_meta_instances_updated_at() SET search_path = public;
+ALTER FUNCTION public.validate_risk_level() SET search_path = public;
