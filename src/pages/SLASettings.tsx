@@ -556,8 +556,11 @@ export default function SLASettings() {
 
 function BusinessMessagesSection() {
   const { data: messages = [], isLoading } = useBusinessMessages();
+  const { data: allTags = [] } = useTags();
   const updateMessage = useUpdateBusinessMessage();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+  const [tagInitialized, setTagInitialized] = useState(false);
 
   const defaults: Record<string, string> = {
     after_hours_handoff: "Nosso atendimento humano funciona {schedule}. {next_open} um atendente poderá te ajudar. Enquanto isso, posso continuar tentando por aqui! 😊",
@@ -569,13 +572,24 @@ function BusinessMessagesSection() {
       const initial: Record<string, string> = {};
       messages.forEach((m) => { initial[m.id] = m.message_template; });
       setDrafts(initial);
+      if (!tagInitialized) {
+        const afterHoursMsg = messages.find(m => m.message_key === 'after_hours_handoff');
+        if (afterHoursMsg) {
+          setSelectedTagId(afterHoursMsg.after_hours_tag_id || null);
+        }
+        setTagInitialized(true);
+      }
     }
-  }, [messages]);
+  }, [messages, tagInitialized]);
 
-  const handleSave = (id: string) => {
+  const handleSave = (id: string, messageKey?: string) => {
     const template = drafts[id];
     if (template !== undefined) {
-      updateMessage.mutate({ id, message_template: template });
+      const mutationData: { id: string; message_template: string; after_hours_tag_id?: string | null } = { id, message_template: template };
+      if (messageKey === 'after_hours_handoff') {
+        mutationData.after_hours_tag_id = selectedTagId || null;
+      }
+      updateMessage.mutate(mutationData);
     }
   };
 
