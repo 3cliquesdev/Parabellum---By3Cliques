@@ -223,9 +223,7 @@ Deno.serve(async (req) => {
         ? 'clicked_at'
         : eventType === 'email.bounced'
           ? 'bounced_at'
-          : eventType === 'email.delivered'
-            ? 'delivered_at'
-            : null;
+          : null; // delivered_at column doesn't exist in email_sends
 
     if (updateField) {
       // Só atualiza se campo ainda estiver NULL (manter primeiro timestamp)
