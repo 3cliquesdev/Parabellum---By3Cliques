@@ -601,19 +601,20 @@ async function handleFlowReInvoke(
     console.log(`[process-buffered-messages] ✅ Flow re-invoked (${flagName}):`, JSON.stringify(flowResult));
 
     const flowMessage = flowResult.response || flowResult.message;
-    if (flowMessage && instanceId && fromNumber) {
+    const trimmedFlowMessage = flowMessage ? String(flowMessage).trim() : '';
+    if (trimmedFlowMessage.length > 0 && instanceId && fromNumber) {
       await supabase.functions.invoke("send-meta-whatsapp", {
         body: {
           instance_id: instanceId,
           phone_number: fromNumber,
-          message: flowMessage,
+          message: trimmedFlowMessage,
           conversation_id: conversationId,
           skip_db_save: true,
         },
       });
       await supabase.from("messages").insert({
         conversation_id: conversationId,
-        content: flowMessage,
+        content: trimmedFlowMessage,
         sender_type: "user",
         is_ai_generated: true,
         message_type: "text",

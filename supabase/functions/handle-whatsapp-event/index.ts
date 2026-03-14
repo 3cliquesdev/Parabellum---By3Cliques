@@ -1255,14 +1255,14 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         }
       });
 
-      if (!flowError && flowResult && !flowResult.useAI && flowResult.response) {
+      if (!flowError && flowResult && !flowResult.useAI && flowResult.response && String(flowResult.response).trim().length > 0) {
         console.log('[handle-whatsapp-event] 📋 Fluxo retornou resposta:', flowResult.response?.slice(0, 50));
         flowHandled = true;
 
         // Inserir resposta do fluxo no banco
         const { data: savedFlowMsg } = await supabase.from('messages').insert({
           conversation_id: conversationId,
-          content: flowResult.response,
+          content: String(flowResult.response).trim(),
           sender_type: 'user',
           is_ai_generated: true,
           channel: 'whatsapp'
