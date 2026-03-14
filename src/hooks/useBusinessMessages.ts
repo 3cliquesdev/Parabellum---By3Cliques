@@ -7,6 +7,7 @@ interface BusinessMessage {
   message_key: string;
   message_template: string;
   description: string | null;
+  after_hours_tag_id: string | null;
   created_at: string;
   updated_at: string;
 }
