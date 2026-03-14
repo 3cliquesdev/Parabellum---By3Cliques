@@ -1,30 +1,47 @@
 
 
-## Análise: Arquivo Enviado vs. Versão Atual
+## Problema
 
-Comparei o arquivo enviado (`process-chat-flow-index_2.ts`, 5626 linhas) com a versão atualmente deployada (`process-chat-flow/index.ts`, 5822 linhas).
+O hook `useKnowledgeCategories` busca artigos da tabela `knowledge_articles` e extrai categorias únicas no lado do cliente. Porém:
 
-### Resultado: A versão atual já está MAIS completa
+1. **Limite de 1000 linhas** — Supabase retorna no máximo 1000 registros por padrão. Se existem mais de 1000 artigos, categorias de artigos além desse limite simplesmente não aparecem.
+2. **Ineficiência** — Busca todos os artigos só para extrair o campo `category`.
 
-Os dois fixes aprovados (Fix 1: fallback `max_interactions` e Fix 2: guard anti-saudação) **já estão aplicados** na versão deployada.
+## Solução
 
-### Diferenças encontradas
+Substituir a query client-side por uma **database function** que retorna categorias distintas diretamente no banco, sem limite de linhas.
 
-| Aspecto | Arquivo Enviado (5626 linhas) | Versão Atual (5822 linhas) |
-|---------|------|------|
-| Fix 1: `max_interactions` fallback | ✅ Presente (linha 3092) | ✅ Presente (linha 3101) |
-| Fix 2: Guard anti-saudação | ✅ Presente (linha 3373) | ✅ Presente (linha 3546) |
-| Intents no `intentData` mapping | 5 intents (financeiro, cancelamento, comercial, suporte, consultor) | **11 intents** (+ saque, devolução, pedidos, sistema, internacional, humano) |
-| Guard reseta `keywordMatch`/`aiExitForced` | ❌ Não | ✅ Sim |
-| Detecção `sistema` (suporte técnico) | ❌ Ausente | ✅ Presente |
-| Detecção `internacional` | ❌ Ausente | ✅ Presente |
-| Detecção `saque` dedicado | ❌ Ausente | ✅ Presente |
-| Detecção `devolução` dedicado | ❌ Ausente | ✅ Presente |
-| Detecção `pedidos` dedicado | ❌ Ausente | ✅ Presente |
+### Passo 1 — Criar função SQL no banco
 
-### Conclusão
+```sql
+CREATE OR REPLACE FUNCTION public.get_distinct_knowledge_categories()
+RETURNS TABLE(category TEXT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT DISTINCT ka.category
+  FROM knowledge_articles ka
+  WHERE ka.category IS NOT NULL
+    AND ka.category != ''
+  ORDER BY ka.category;
+$$;
+```
 
-O arquivo enviado é uma **versão anterior** que não deve substituir a atual. A versão deployada já contém todos os fixes do plano aprovado **mais** funcionalidades adicionais (11 intents, detecções de sistema/internacional/saque/devolução/pedidos).
+### Passo 2 — Atualizar `useKnowledgeCategories.tsx`
 
-**Nenhuma alteração necessária.** Se há um problema específico que você quer resolver com este arquivo, me diga qual é que eu investigo.
+Trocar a query atual por uma chamada RPC:
+
+```typescript
+const { data, error } = await supabase.rpc("get_distinct_knowledge_categories");
+```
+
+Retornar `data.map(row => row.category)` — sem necessidade de deduplicar no cliente.
+
+### Resultado
+
+- Todas as categorias aparecem independente do número de artigos
+- Query mais rápida (DISTINCT no banco vs. buscar 1000+ linhas)
+- Sem mudança na interface — o hook continua retornando `string[]`
 
