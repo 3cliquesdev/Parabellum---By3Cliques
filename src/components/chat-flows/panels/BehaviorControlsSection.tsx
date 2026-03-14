@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Node } from "reactflow";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +21,7 @@ import {
   HeadphonesIcon,
   Route,
   Briefcase,
+  ShieldCheck,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -450,6 +452,70 @@ export function BehaviorControlsSection({
           )}
         </div>
       </div>
+
+      {/* 🔐 Seção: Exigir OTP para Financeiro/Saque */}
+      {(forbidFinancial || forbidSaque) && (
+        <div className="space-y-3 p-3 rounded-lg border bg-purple-500/5 border-purple-500/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-purple-500" />
+              <div>
+                <Label className="text-sm font-medium">🔐 Exigir verificação OTP</Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Verificar identidade antes de processar saque/financeiro
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={selectedNode.data.require_otp_for_financial ?? false}
+              onCheckedChange={(checked) => updateNodeData("require_otp_for_financial", checked)}
+            />
+          </div>
+
+          {selectedNode.data.require_otp_for_financial && (
+            <div className="space-y-3 pl-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Mensagem para pedir email</Label>
+                <Textarea
+                  onKeyDown={(e) => e.stopPropagation()}
+                  value={selectedNode.data.otp_message_ask_email || "Para sua segurança, preciso verificar sua identidade. Por favor, informe seu email cadastrado:"}
+                  onChange={(e) => updateNodeData("otp_message_ask_email", e.target.value)}
+                  rows={2}
+                  className="resize-none text-sm"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Mensagem quando OTP enviado</Label>
+                <Textarea
+                  onKeyDown={(e) => e.stopPropagation()}
+                  value={selectedNode.data.otp_message_sent || "Enviamos um código de 6 dígitos para {{email}}. Digite o código:"}
+                  onChange={(e) => updateNodeData("otp_message_sent", e.target.value)}
+                  rows={2}
+                  className="resize-none text-sm"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">Máximo de tentativas OTP</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={selectedNode.data.otp_max_attempts ?? 3}
+                  onChange={(e) => updateNodeData("otp_max_attempts", parseInt(e.target.value) || 3)}
+                  className="w-16 h-8 text-sm text-center"
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
+
+              <p className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-500/10 p-2 rounded">
+                🔐 Quando ativado, a IA pedirá email + código OTP antes de avançar para o ramo financeiro/saque. Variáveis salvas: <code className="bg-muted px-1 rounded">{'{{customer_verified}}'}</code>, <code className="bg-muted px-1 rounded">{'{{customer_verified_email}}'}</code>
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 🆕 Seção: Quando sair da IA */}
       <div className="space-y-3 p-3 rounded-lg border bg-indigo-500/5 border-indigo-500/20">
