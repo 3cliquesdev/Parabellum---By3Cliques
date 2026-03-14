@@ -1329,6 +1329,7 @@ export type Database = {
       }
       business_messages_config: {
         Row: {
+          after_hours_tag_id: string | null
           created_at: string | null
           description: string | null
           id: string
@@ -1337,6 +1338,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          after_hours_tag_id?: string | null
           created_at?: string | null
           description?: string | null
           id?: string
@@ -1345,6 +1347,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          after_hours_tag_id?: string | null
           created_at?: string | null
           description?: string | null
           id?: string
@@ -1352,7 +1355,15 @@ export type Database = {
           message_template?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "business_messages_config_after_hours_tag_id_fkey"
+            columns: ["after_hours_tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cadence_enrollments: {
         Row: {
