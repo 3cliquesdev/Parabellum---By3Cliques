@@ -38,28 +38,41 @@ serve(async (req) => {
       });
     }
 
-    // DENTRO DO HORÁRIO: Buscar tag pendente_retorno
-    console.log('[redistribute-after-hours] ☀️ Dentro do horário - buscando conversas com tag pendente_retorno...');
+    // DENTRO DO HORÁRIO: Buscar tag configurada ou fallback pendente_retorno
+    console.log('[redistribute-after-hours] ☀️ Dentro do horário - buscando conversas com tag after-hours...');
 
-    // 1. Buscar o tag_id de "pendente_retorno"
-    const { data: tagRow, error: tagError } = await supabaseClient
-      .from('tags')
-      .select('id')
-      .eq('name', 'pendente_retorno')
+    // 1. Buscar tag configurada na business_messages_config
+    let pendenteTagId: string | null = null;
+    const { data: configRow } = await supabaseClient
+      .from('business_messages_config')
+      .select('after_hours_tag_id')
+      .eq('message_key', 'after_hours_handoff')
       .maybeSingle();
 
-    if (tagError || !tagRow) {
-      console.log('[redistribute-after-hours] ⚠️ Tag pendente_retorno não encontrada, nada a redistribuir');
-      return new Response(JSON.stringify({ 
-        status: 'ok', 
-        message: 'Tag pendente_retorno não encontrada',
-        redistributed: 0
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    if (configRow?.after_hours_tag_id) {
+      pendenteTagId = configRow.after_hours_tag_id;
+      console.log('[redistribute-after-hours] 🏷️ Usando tag configurada:', pendenteTagId);
+    } else {
+      // Fallback para pendente_retorno
+      const { data: tagRow, error: tagError } = await supabaseClient
+        .from('tags')
+        .select('id')
+        .eq('name', 'pendente_retorno')
+        .maybeSingle();
 
-    const pendenteTagId = tagRow.id;
+      if (tagError || !tagRow) {
+        console.log('[redistribute-after-hours] ⚠️ Nenhuma tag configurada ou fallback encontrada');
+        return new Response(JSON.stringify({ 
+          status: 'ok', 
+          message: 'Nenhuma tag configurada encontrada',
+          redistributed: 0
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      pendenteTagId = tagRow.id;
+      console.log('[redistribute-after-hours] 🏷️ Usando tag fallback pendente_retorno:', pendenteTagId);
+    }
 
     // 2. Buscar conversation_tags com essa tag em conversas abertas
     const { data: taggedConversations, error: taggedError } = await supabaseClient

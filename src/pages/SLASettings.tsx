@@ -660,11 +660,36 @@ function BusinessMessagesSection() {
                   </AlertDescription>
                 </Alert>
               )}
+              {msg.message_key === 'after_hours_handoff' && (
+                <div className="space-y-1.5 pt-2">
+                  <Label className="text-sm font-medium">Tag aplicada ao encerrar fora do horário</Label>
+                  <p className="text-xs text-muted-foreground">Selecione a tag que será adicionada automaticamente à conversa quando encerrada fora do horário comercial</p>
+                  <Select
+                    value={selectedTagId || "none"}
+                    onValueChange={(val) => setSelectedTagId(val === "none" ? null : val)}
+                  >
+                    <SelectTrigger className="w-full max-w-xs">
+                      <SelectValue placeholder="Selecione uma tag" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhuma (sem tag)</SelectItem>
+                      {allTags.map((tag) => (
+                        <SelectItem key={tag.id} value={tag.id}>
+                          <span className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tag.color || 'hsl(var(--muted-foreground))' }} />
+                            {tag.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
-                  onClick={() => handleSave(msg.id)}
-                  disabled={!isDirty || isEmpty || updateMessage.isPending}
+                  onClick={() => handleSave(msg.id, msg.message_key)}
+                  disabled={(!isDirty && selectedTagId === (messages.find(m => m.message_key === 'after_hours_handoff')?.after_hours_tag_id || null)) || isEmpty || updateMessage.isPending}
                 >
                   <Save className="h-4 w-4 mr-1" />
                   Salvar
