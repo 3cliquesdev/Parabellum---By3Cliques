@@ -2078,6 +2078,15 @@ serve(async (req) => {
                     otpNcAiMode === 'copilot'   ? 'set_copilot' :
                     otpNcAiMode === 'autopilot' ? 'engage_ai' :
                     'handoff_to_human';
+                  // 🆕 Verificar horário comercial antes de handoff OTP not_customer
+                  const ahCheckOtpNc = await checkAfterHoursAndIntercept(supabaseClient, conversationId, otpNcTransType);
+                  if (ahCheckOtpNc.intercepted) {
+                    return new Response(JSON.stringify({
+                      useAI: false, response: ahCheckOtpNc.afterHoursMessage,
+                      afterHours: true, flowCompleted: true, collectedData,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
                   await fetch(
                     `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
                     {
