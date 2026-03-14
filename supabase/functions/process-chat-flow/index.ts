@@ -3543,6 +3543,26 @@ serve(async (req) => {
             console.log(`[process-chat-flow] 🎯 intentData.ai_exit_intent="${intent}" → *IntentMatch forçado`);
           }
         }
+        // 🛡️ Guard anti-saudação — bloquear exit intent se for a 1ª interação e mensagem for saudação
+        const isGreetingOnly = /^(oi|olá|ola|boa\s*(noite|tarde|manha|manhã)|tudo\s*(bem|bom|certo|ok)|e\s*ai|e aí|hey|hello|bom\s*dia|hi|opa|oi\s+tudo\s+bem)[!?.,\s]*$/i.test((userMessage || '').trim());
+        const greetingExitBlocked = isGreetingOnly && aiCount <= 1;
+
+        if (greetingExitBlocked && (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || saqueIntentMatch || devolucaoIntentMatch || pedidosIntentMatch || sistemaIntentMatch || internacionalIntentMatch || keywordMatch || aiExitForced)) {
+          console.log(`[process-chat-flow] 🛡️ Exit bloqueado — saudação na 1ª interação (aiCount=${aiCount}). Triagem deve perguntar a intenção.`);
+          financialIntentMatch = false;
+          cancellationIntentMatch = false;
+          commercialIntentMatch = false;
+          supportIntentMatch = false;
+          consultorIntentMatch = false;
+          saqueIntentMatch = false;
+          devolucaoIntentMatch = false;
+          pedidosIntentMatch = false;
+          sistemaIntentMatch = false;
+          internacionalIntentMatch = false;
+          keywordMatch = false;
+          aiExitForced = false;
+        }
+
         // Salvar intent automático
         if (financialIntentMatch && !collectedData.ai_exit_intent) {
           collectedData.ai_exit_intent = 'financeiro';
