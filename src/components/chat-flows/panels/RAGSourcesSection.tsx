@@ -92,7 +92,7 @@ export function RAGSourcesSection({
                 <Skeleton className="h-6 w-3/4" />
               </div>
             ) : kbCategories && kbCategories.length > 0 ? (
-              <ScrollArea className="max-h-28">
+              <ScrollArea className="max-h-48">
                 <div className="space-y-1 pr-2">
                   {kbCategories.map((category) => (
                     <label
