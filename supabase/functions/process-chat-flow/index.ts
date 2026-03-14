@@ -4225,6 +4225,28 @@ serve(async (req) => {
             console.log(`[process-chat-flow] 🎯 maxReached sem intent → path set to "default"`);
           }
 
+          // 🔐 INLINE OTP: Interceptar saque/financeiro quando require_otp_for_financial=true
+          if ((saqueIntentMatch || financialIntentMatch) && currentNode.data?.require_otp_for_financial === true && !collectedData.__otp_step) {
+            console.log(`[process-chat-flow] 🔐 Inline OTP START: Intercepting ${path} intent, starting OTP flow`);
+            collectedData.__otp_step = 'ask_email';
+            collectedData.__otp_from_ai_intent = path;
+
+            await supabaseClient.from('chat_flow_states').update({
+              collected_data: collectedData,
+              status: 'waiting_input',
+              updated_at: new Date().toISOString(),
+            }).eq('id', activeState.id);
+
+            const askEmailMsg = currentNode.data?.otp_message_ask_email || "Para sua segurança, preciso verificar sua identidade. Por favor, informe seu email cadastrado:";
+
+            return new Response(JSON.stringify({
+              useAI: false,
+              response: askEmailMsg,
+              retry: false,
+              flowId: activeState.flow_id,
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+
           // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir
           delete collectedData.__ai;
           // Cai no findNextNode normal abaixo
