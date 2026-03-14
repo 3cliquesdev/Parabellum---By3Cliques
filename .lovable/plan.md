@@ -1,19 +1,20 @@
 
 
-## Plano: Renomear "Tecnologia e Integrações" → "Marketplaces e Integrações"
+## Plano: Renomear "Dúvidas Gerais" → "FAQ e Dúvidas Frequentes"
+
+Faz sentido sim — "FAQ e Dúvidas Frequentes" é mais descritivo e alinhado com o que os clientes esperam encontrar.
 
 ### Locais afetados
 
 | Local | Itens | Ação |
 |---|---|---|
-| `knowledge_articles` (banco) | 6 artigos | UPDATE category |
-| `chat_flows` flow_definition (banco) | Fluxo V4 — nós 10 e 14 | Substituir no JSON de kb_categories |
+| `knowledge_articles` (banco) | 3 artigos | UPDATE category |
+| `chat_flows` flow_definition (banco) | Fluxo V4 — nós 4, 14 | Substituir no JSON de kb_categories |
 
 ### O que será feito
 
-1. **Artigos**: `UPDATE knowledge_articles SET category = 'Marketplaces e Integrações' WHERE category = 'Tecnologia e Integrações'`
+1. **Artigos**: `UPDATE knowledge_articles SET category = 'FAQ e Dúvidas Frequentes' WHERE category = 'Dúvidas Gerais'`
+2. **Fluxo V4**: Substituir `"Dúvidas Gerais"` por `"FAQ e Dúvidas Frequentes"` no JSON do `flow_definition`
 
-2. **Fluxo V4**: Atualizar o JSON do `flow_definition` substituindo todas as ocorrências de `"Tecnologia e Integrações"` por `"Marketplaces e Integrações"` nos nós `node_10_ia_sistema` e `node_14_ia_suporte`
-
-Nenhuma alteração de código necessária — não há referências hardcoded no frontend.
+Nenhuma alteração de código — tudo dinâmico via banco.
 
