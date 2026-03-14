@@ -905,14 +905,16 @@ serve(async (req) => {
       );
       console.log('[process-chat-flow] ✅ Estado transicionado via transition-conversation-state');
       
-      // Inserir mensagem de transferência
-      await supabaseClient.from('messages').insert({
-        conversation_id: conversationId,
-        content: transferMessage,
-        sender_type: 'user',
-        is_ai_generated: true,
-        channel: conversation?.channel || 'web_chat'
-      });
+      // Inserir mensagem de transferência (guard: conteúdo vazio)
+      if (transferMessage && String(transferMessage).trim().length > 0) {
+        await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: String(transferMessage).trim(),
+          sender_type: 'user',
+          is_ai_generated: true,
+          channel: conversation?.channel || 'web_chat'
+        });
+      }
       
       console.log('[process-chat-flow] ✅ TransferNode ativado pelo fluxo (soberano)');
       
