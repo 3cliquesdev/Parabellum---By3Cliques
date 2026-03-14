@@ -1,37 +1,43 @@
 
-## Plano: Configurar Base de Conhecimento e Controles em cada IA do Fluxo V4
 
-### Situação Atual
-- O fluxo V4 tem **11 nós de IA** (triagem + 10 especialistas)
-- O nó de triagem usa categorias **desatualizadas** que não existem mais ("Cancelamento", "Importado", "Produto")
-- Os demais nós provavelmente não têm categorias de KB vinculadas
-- Existem **8 personas ativas** no sistema, cada uma com seu system_prompt especializado
+## Plano: Corrigir exibição de cargos desatualizados
 
-### Mapeamento Proposto (Nó → Persona → Categorias KB → Controles)
+### Problema
+O campo `job_title` na tabela `profiles` está desatualizado para vários usuários. Exemplos:
+- **Marco Cruz** → job_title: "Vendedor", role real: `cs_manager`
+- **Ael** → job_title: "Vendedor", role real: `general_manager`
+- **Danilo Pereira** → job_title: "Vendedor", role real: `support_manager`
+- **Flavio, João, Larissa, GEISIANE** → job_title: "Vendedor", role real: `support_agent`
+- **Ligia Martins** → job_title: "Vendedor", role real: `financial_agent`
+- **Marcos Chen, Lucas Moreira** → job_title: "Vendedor", role real: `general_manager`
+- **Oliveira** → job_title: "Consultor", role real: `admin`
 
-| Nó | Persona | Categorias KB | Travas |
-|---|---|---|---|
-| **IA Triagem** (node_4) | Clicker | Dúvidas Gerais, Sobre a Empresa, Atendimento e Suporte, Planos e Ofertas | forbid_options: true, max_sentences: 2 |
-| **IA Saque** (node_5) | Helper Saque | Financeiro e Pagamentos, Segurança | forbid_options: true, forbid_questions: false |
-| **IA Financeiro** (node_6) | Helper Financeiro | Financeiro e Pagamentos, Segurança | forbid_options: true |
-| **IA Cancelamento** (node_7) | Helper Cancelamento | Cancelamento e Políticas, Planos e Ofertas | forbid_options: true |
-| **IA Devoluções** (node_8) | Helper Devoluções | Logística e Pedidos, Operação e Processos | forbid_options: false (precisa oferecer troca/reembolso) |
-| **IA Pedidos** (node_9) | Helper Pedidos | Logística e Pedidos, Operação e Processos | forbid_options: true |
-| **IA Sistema** (node_10) | Helper (Suporte) | Tecnologia e Integrações, Manual e Treinamento, Atendimento e Suporte | forbid_options: true |
-| **IA Comercial** (node_11) | Clicker | Vendas, Planos e Ofertas, Produtos e Serviços, Benefícios e Qualidade | forbid_options: false |
-| **IA Internacional** (node_12) | Clicker | Vendas, Planos e Ofertas, Produtos e Serviços | forbid_options: false |
-| **IA Consultor** (node_13) | Clicker | Sobre a Empresa, Atendimento e Suporte | forbid_options: true, max_sentences: 2 |
-| **IA Suporte** (node_14) | Helper (Suporte) | Atendimento e Suporte, Manual e Treinamento, Dúvidas Gerais, Tecnologia e Integrações | forbid_options: true |
+### Solução (2 partes)
 
-### O que será feito
-1. **Atualizar o `flow_definition` (JSON)** do fluxo V4 no banco de dados, configurando em cada nó `ai_response`:
-   - `persona_id` e `persona_name` corretos
-   - `kb_categories` com as categorias padronizadas relevantes
-   - `forbid_options`, `forbid_questions`, `max_sentences`, `fallback_message`
-   - `context_prompt` (instruções extras específicas por nó quando necessário)
+**1. Corrigir dados no banco** — Migração SQL para atualizar `job_title` com base no role real:
 
-2. **Nenhuma alteração de código** -- é apenas uma atualização de dados no campo `flow_definition` da tabela `chat_flows`
+| Role | job_title correto |
+|---|---|
+| admin | Administrador |
+| general_manager | Gerente Geral |
+| manager | Gerente |
+| sales_rep | Vendedor |
+| consultant | Consultor |
+| support_agent | Agente de Suporte |
+| support_manager | Gerente de Suporte |
+| financial_manager | Gerente Financeiro |
+| financial_agent | Agente Financeiro |
+| cs_manager | Gerente CS |
+| ecommerce_analyst | Analista E-commerce |
 
-### Detalhe Importante
-- As personas já possuem `knowledge_base_paths: null` (acesso global), mas as `kb_categories` no nó filtram o que a IA consulta no RAG **durante aquele nó específico**
-- Isso garante que a IA de Saque só busque artigos de "Financeiro e Pagamentos" e não traga artigos de "Marketing e Escala", por exemplo
+Apenas atualiza onde `job_title` está vazio ou incorreto (diverge do role). Usuários com `job_title` customizado (ex: "Assistente de atendimento Pedidos", "Head Comercial") serão preservados.
+
+**2. Dropdown de agentes no fluxo** — Alterar `TransferPropertiesPanel.tsx` e `useUsersByDepartment.tsx` para mostrar o **role real** do `user_roles` ao lado do nome, em vez de depender do `job_title` (que pode ficar desatualizado novamente).
+
+### Arquivos alterados
+| Arquivo | Alteração |
+|---|---|
+| Migração SQL | UPDATE profiles SET job_title baseado em user_roles |
+| `src/hooks/useUsersByDepartment.tsx` | Incluir join com user_roles para trazer o role real |
+| `src/components/chat-flows/TransferPropertiesPanel.tsx` | Mostrar label do role real no dropdown |
+
