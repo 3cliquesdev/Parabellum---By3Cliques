@@ -3491,9 +3491,10 @@ serve(async (req) => {
 
                       variablesContext = await rebuildCtx();
                       const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
+                      const otpFailedMsgNext = currentNode.data?.otp_message_failed || "Não foi possível verificar. Vou te encaminhar para um atendente.";
                       return new Response(JSON.stringify({
                         useAI: false,
-                        response: ["Máximo de tentativas excedido.", nextMsg].filter(Boolean).join('\n\n'),
+                        response: [otpFailedMsgNext, nextMsg].filter(Boolean).join('\n\n'),
                         flowId: activeState.flow_id,
                         collectedData,
                       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
