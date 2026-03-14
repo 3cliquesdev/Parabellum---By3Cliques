@@ -3478,9 +3478,10 @@ serve(async (req) => {
                           body: JSON.stringify({ conversationId, transition: transType, departmentId: deptId, reason: 'inline_otp_failed', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id } })
                         });
 
+                        const otpFailedMsgTransfer = currentNode.data?.otp_message_failed || "Não foi possível verificar. Vou te encaminhar para um atendente.";
                         return new Response(JSON.stringify({
                           useAI: false,
-                          response: "Máximo de tentativas excedido. Vou te transferir para um atendente.",
+                          response: otpFailedMsgTransfer,
                           transfer: true,
                           departmentId: deptId,
                           collectedData,
