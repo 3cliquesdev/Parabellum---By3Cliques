@@ -496,6 +496,28 @@ export function BehaviorControlsSection({
                 />
               </div>
 
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">✅ Mensagem OTP verificado</Label>
+                <Textarea
+                  onKeyDown={(e) => e.stopPropagation()}
+                  value={selectedNode.data.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação."}
+                  onChange={(e) => updateNodeData("otp_message_verified", e.target.value)}
+                  rows={2}
+                  className="resize-none text-sm"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">❌ Mensagem OTP falhou</Label>
+                <Textarea
+                  onKeyDown={(e) => e.stopPropagation()}
+                  value={selectedNode.data.otp_message_failed || "Não foi possível verificar. Vou te encaminhar para um atendente."}
+                  onChange={(e) => updateNodeData("otp_message_failed", e.target.value)}
+                  rows={2}
+                  className="resize-none text-sm"
+                />
+              </div>
+
               <div className="flex items-center justify-between">
                 <Label className="text-xs text-muted-foreground">Máximo de tentativas OTP</Label>
                 <Input

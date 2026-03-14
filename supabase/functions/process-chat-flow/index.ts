@@ -3320,9 +3320,10 @@ serve(async (req) => {
                       body: JSON.stringify({ conversationId, transition: transType, departmentId: deptId, reason: 'inline_otp_verified', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id } })
                     });
 
+                    const otpVerifiedMsg = currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.";
                     return new Response(JSON.stringify({
                       useAI: false,
-                      response: "✅ Identidade verificada!\n\n" + (nextMsg || "Transferindo..."),
+                      response: otpVerifiedMsg + "\n\n" + (nextMsg || "Transferindo..."),
                       transfer: true,
                       departmentId: deptId,
                       collectedData,
@@ -3358,9 +3359,10 @@ serve(async (req) => {
                     }
 
                     const endMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext || await rebuildCtx());
+                    const otpVerifiedMsgEnd = currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.";
                     return new Response(JSON.stringify({
                       useAI: false,
-                      response: "✅ Identidade verificada!\n\n" + (endMsg || ''),
+                      response: otpVerifiedMsgEnd + "\n\n" + (endMsg || ''),
                       flowCompleted: true,
                       flowId: activeState.flow_id,
                       collectedData,
@@ -3380,7 +3382,7 @@ serve(async (req) => {
                       useAI: true,
                       aiNodeActive: true,
                       nodeId: resolvedNode.id,
-                      response: "✅ Identidade verificada!",
+                      response: currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.",
                       flowId: activeState.flow_id,
                       flowName: activeState.chat_flows?.name || null,
                       contextPrompt: resolvedNode.data?.context_prompt,
@@ -3399,9 +3401,10 @@ serve(async (req) => {
                     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                   }
 
+                  const otpVerifiedMsgGeneric = currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.";
                   return new Response(JSON.stringify({
                     useAI: false,
-                    response: "✅ Identidade verificada!\n\n" + (nextMsg || ''),
+                    response: otpVerifiedMsgGeneric + "\n\n" + (nextMsg || ''),
                     flowId: activeState.flow_id,
                     collectedData,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -3422,7 +3425,7 @@ serve(async (req) => {
 
                 return new Response(JSON.stringify({
                   useAI: false,
-                  response: "✅ Identidade verificada! Vou te transferir para um atendente agora.",
+                  response: (currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.") + " Vou te transferir para um atendente agora.",
                   transfer: true,
                   collectedData,
                   flowId: activeState.flow_id,
@@ -3477,9 +3480,10 @@ serve(async (req) => {
                           body: JSON.stringify({ conversationId, transition: transType, departmentId: deptId, reason: 'inline_otp_failed', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id } })
                         });
 
+                        const otpFailedMsgTransfer = currentNode.data?.otp_message_failed || "Não foi possível verificar. Vou te encaminhar para um atendente.";
                         return new Response(JSON.stringify({
                           useAI: false,
-                          response: "Máximo de tentativas excedido. Vou te transferir para um atendente.",
+                          response: otpFailedMsgTransfer,
                           transfer: true,
                           departmentId: deptId,
                           collectedData,
@@ -3489,9 +3493,10 @@ serve(async (req) => {
 
                       variablesContext = await rebuildCtx();
                       const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
+                      const otpFailedMsgNext = currentNode.data?.otp_message_failed || "Não foi possível verificar. Vou te encaminhar para um atendente.";
                       return new Response(JSON.stringify({
                         useAI: false,
-                        response: ["Máximo de tentativas excedido.", nextMsg].filter(Boolean).join('\n\n'),
+                        response: [otpFailedMsgNext, nextMsg].filter(Boolean).join('\n\n'),
                         flowId: activeState.flow_id,
                         collectedData,
                       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -3511,9 +3516,10 @@ serve(async (req) => {
                     body: JSON.stringify({ conversationId, transition: 'handoff_to_human', reason: 'inline_otp_max_attempts', metadata: { node_id: currentNode.id, flow_id: activeState.flow_id } })
                   });
 
+                  const otpFailedMsgFallback = currentNode.data?.otp_message_failed || "Não foi possível verificar. Vou te encaminhar para um atendente.";
                   return new Response(JSON.stringify({
                     useAI: false,
-                    response: "Máximo de tentativas excedido. Vou te transferir para um atendente.",
+                    response: otpFailedMsgFallback,
                     transfer: true,
                     collectedData,
                     flowId: activeState.flow_id,
