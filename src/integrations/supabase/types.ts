@@ -10327,6 +10327,12 @@ export type Database = {
           total_conversations: number
         }[]
       }
+      get_distinct_knowledge_categories: {
+        Args: never
+        Returns: {
+          category: string
+        }[]
+      }
       get_email_evolution: {
         Args: { p_days?: number; p_end?: string; p_start?: string }
         Returns: {

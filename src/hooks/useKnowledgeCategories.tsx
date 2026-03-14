@@ -9,14 +9,16 @@ export function useKnowledgeCategories() {
   return useQuery({
     queryKey: ["knowledge-categories"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_distinct_knowledge_categories");
+      const { data, error } = await supabase.rpc(
+        "get_distinct_knowledge_categories" as any
+      );
 
       if (error) {
         console.error("Error fetching knowledge categories:", error);
         throw error;
       }
 
-      return (data ?? []).map((row: { category: string }) => row.category);
+      return ((data as any[]) ?? []).map((row: { category: string }) => row.category);
     },
   });
 }
