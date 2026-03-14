@@ -36,6 +36,8 @@ interface AIResponseNodeData {
   forbid_saque?: boolean;
   forbid_sistema?: boolean;
   forbid_internacional?: boolean;
+  // 🆕 OTP inline
+  require_otp_for_financial?: boolean;
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
@@ -112,7 +114,19 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
       {/* 🆕 Source handle comercial_internacional */}
       <Handle type="source" position={Position.Right} id="comercial_internacional"
         className="!w-4 !h-4 !bg-cyan-500 !border-2 !border-background"
-        style={{ top: '95%' }} />
+        style={{ top: data.require_otp_for_financial ? '73%' : '95%' }} />
+
+      {/* 🆕 OTP conditional handles - only when require_otp_for_financial is enabled */}
+      {data.require_otp_for_financial && (
+        <>
+          <Handle type="source" position={Position.Right} id="otp_verified"
+            className="!w-4 !h-4 !bg-green-500 !border-2 !border-background"
+            style={{ top: '84%' }} />
+          <Handle type="source" position={Position.Right} id="otp_failed"
+            className="!w-4 !h-4 !bg-red-500 !border-2 !border-background"
+            style={{ top: '95%' }} />
+        </>
+      )}
 
       {/* Labels visuais */}
       <div className="absolute right-[-55px] text-[8px] text-muted-foreground font-medium pointer-events-none" style={{ top: '2%' }}>
@@ -139,15 +153,27 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
       <div className="absolute right-[-70px] text-[8px] text-orange-600 font-medium pointer-events-none" style={{ top: '65%' }}>
         🔄 devolução
       </div>
-      <div className="absolute right-[-55px] text-[8px] text-yellow-600 font-medium pointer-events-none" style={{ top: '74%' }}>
+      <div className="absolute right-[-55px] text-[8px] text-yellow-600 font-medium pointer-events-none" style={{ top: data.require_otp_for_financial ? '51%' : '74%' }}>
         💰 saque
       </div>
-      <div className="absolute right-[-60px] text-[8px] text-slate-600 font-medium pointer-events-none" style={{ top: '83%' }}>
+      <div className="absolute right-[-60px] text-[8px] text-slate-600 font-medium pointer-events-none" style={{ top: data.require_otp_for_financial ? '62%' : '83%' }}>
         🖥️ sistema
       </div>
-      <div className="absolute right-[-75px] text-[8px] text-cyan-600 font-medium pointer-events-none" style={{ top: '92%' }}>
+      <div className="absolute right-[-75px] text-[8px] text-cyan-600 font-medium pointer-events-none" style={{ top: data.require_otp_for_financial ? '70%' : '92%' }}>
         🌍 internacional
       </div>
+
+      {/* 🆕 OTP Labels */}
+      {data.require_otp_for_financial && (
+        <>
+          <div className="absolute right-[-65px] text-[8px] text-green-600 font-bold pointer-events-none" style={{ top: '81%' }}>
+            ✅ OTP ok
+          </div>
+          <div className="absolute right-[-80px] text-[8px] text-red-600 font-bold pointer-events-none" style={{ top: '92%' }}>
+            ❌ OTP falhou
+          </div>
+        </>
+      )}
     </>
   );
 

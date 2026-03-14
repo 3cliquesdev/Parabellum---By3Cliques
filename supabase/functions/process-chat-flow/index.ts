@@ -3157,7 +3157,8 @@ serve(async (req) => {
               delete collectedData.__otp_email;
               delete collectedData.__ai;
 
-              const nextNode = findNextNode(flowDef, currentNode, savedPath);
+              // 🆕 Tentar handle otp_failed primeiro, fallback para savedPath
+              const nextNode = findNextNode(flowDef, currentNode, 'otp_failed') || findNextNode(flowDef, currentNode, savedPath);
               if (nextNode) {
                 let resolvedNode = nextNode;
                 while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
@@ -3278,8 +3279,8 @@ serve(async (req) => {
                 delete collectedData.__otp_from_ai_intent;
                 delete collectedData.__ai;
 
-                // Avançar para próximo nó usando o path salvo
-                const nextAfterOtp = findNextNode(flowDef, currentNode, savedPath);
+                // 🆕 Tentar handle otp_verified primeiro, fallback para savedPath
+                const nextAfterOtp = findNextNode(flowDef, currentNode, 'otp_verified') || findNextNode(flowDef, currentNode, savedPath);
                 let resolvedNode = nextAfterOtp;
                 while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
                   if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
@@ -3437,7 +3438,8 @@ serve(async (req) => {
                   delete collectedData.__otp_from_ai_intent;
                   delete collectedData.__ai;
 
-                  const nextNode = findNextNode(flowDef, currentNode, savedPath);
+                  // 🆕 Tentar handle otp_failed primeiro, fallback para savedPath
+                  const nextNode = findNextNode(flowDef, currentNode, 'otp_failed') || findNextNode(flowDef, currentNode, savedPath);
                   if (nextNode) {
                     let resolvedNode = nextNode;
                     while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
