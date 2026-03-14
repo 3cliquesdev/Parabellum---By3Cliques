@@ -1,20 +1,18 @@
 
 
-## Plano: Renomear "Dúvidas Gerais" → "FAQ e Dúvidas Frequentes"
-
-Faz sentido sim — "FAQ e Dúvidas Frequentes" é mais descritivo e alinhado com o que os clientes esperam encontrar.
+## Plano: Renomear "Sobre a Empresa" → "Sobre a Empresa e Serviços"
 
 ### Locais afetados
 
-| Local | Itens | Ação |
-|---|---|---|
-| `knowledge_articles` (banco) | 3 artigos | UPDATE category |
-| `chat_flows` flow_definition (banco) | Fluxo V4 — nós 4, 14 | Substituir no JSON de kb_categories |
+| Local | Ação |
+|---|---|
+| `knowledge_articles` (banco) | UPDATE category em todos os artigos |
+| `chat_flows` flow_definition (banco) | Substituir no JSON de kb_categories do Fluxo V4 |
 
 ### O que será feito
 
-1. **Artigos**: `UPDATE knowledge_articles SET category = 'FAQ e Dúvidas Frequentes' WHERE category = 'Dúvidas Gerais'`
-2. **Fluxo V4**: Substituir `"Dúvidas Gerais"` por `"FAQ e Dúvidas Frequentes"` no JSON do `flow_definition`
+1. **Artigos**: `UPDATE knowledge_articles SET category = 'Sobre a Empresa e Serviços' WHERE category = 'Sobre a Empresa'`
+2. **Fluxo V4**: Substituir `"Sobre a Empresa"` por `"Sobre a Empresa e Serviços"` no JSON do `flow_definition`
 
 Nenhuma alteração de código — tudo dinâmico via banco.
 
