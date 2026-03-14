@@ -1436,6 +1436,7 @@ serve(async (req) => {
             console.warn('[process-chat-flow] ⚠️ No WhatsApp Meta instance for delivery');
           }
         }
+        } // end else (non-empty finalText guard)
       }
 
       // Montar resposta baseada no tipo do nó de conteúdo alcançado
