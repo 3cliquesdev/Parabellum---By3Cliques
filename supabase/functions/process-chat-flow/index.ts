@@ -3577,6 +3577,15 @@ serve(async (req) => {
                   completed_at: new Date().toISOString(),
                 }).eq('id', activeState.id);
 
+                // 🆕 Verificar horário comercial antes de handoff inline OTP verified no next node
+                const ahCheckInlineNoNext = await checkAfterHoursAndIntercept(supabaseClient, conversationId, 'handoff_to_human');
+                if (ahCheckInlineNoNext.intercepted) {
+                  return new Response(JSON.stringify({
+                    useAI: false, response: ahCheckInlineNoNext.afterHoursMessage,
+                    afterHours: true, flowCompleted: true, collectedData,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
                 await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
