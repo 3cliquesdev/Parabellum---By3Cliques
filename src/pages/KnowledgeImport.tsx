@@ -48,6 +48,7 @@ export default function KnowledgeImport() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { hasPermission, loading: permLoading } = useRolePermissions();
+  const { data: validCategories = [] } = useKnowledgeCategories();
   
   // CSV/Excel state
   const [csvData, setCsvData] = useState<any[]>([]);
