@@ -3157,7 +3157,8 @@ serve(async (req) => {
               delete collectedData.__otp_email;
               delete collectedData.__ai;
 
-              const nextNode = findNextNode(flowDef, currentNode, savedPath);
+              // 🆕 Tentar handle otp_failed primeiro, fallback para savedPath
+              const nextNode = findNextNode(flowDef, currentNode, 'otp_failed') || findNextNode(flowDef, currentNode, savedPath);
               if (nextNode) {
                 let resolvedNode = nextNode;
                 while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
