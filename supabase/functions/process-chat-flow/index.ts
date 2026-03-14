@@ -981,6 +981,20 @@ serve(async (req) => {
       
       const transferMessage = 'Vou transferir você para um atendente humano.';
       
+      // 🆕 Verificar horário comercial antes de handoff
+      const ahCheck1 = await checkAfterHoursAndIntercept(supabaseClient, conversationId, 'handoff_to_human');
+      if (ahCheck1.intercepted) {
+        console.log('[process-chat-flow] 🌙 Contract violation transfer interceptado por after-hours');
+        return new Response(JSON.stringify({
+          useAI: false,
+          aiNodeActive: false,
+          transferActivated: false,
+          afterHours: true,
+          reason: 'after_hours_handoff',
+          message: ahCheck1.afterHoursMessage,
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       // ✅ FIX 14: Usar transition-conversation-state centralizado
       await fetch(
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
