@@ -4930,6 +4930,37 @@ Responda APENAS: skip ou search`
       
       const strictResponse = strictResult.response!;
       
+      // GUARD 2: Fallback para resposta vazia antes de salvar/enviar
+      if (!strictResponse || strictResponse.trim().length === 0) {
+        console.warn('[ai-autopilot-chat] ⚠️ strictResponse vazio após validação - usando fallback');
+        const fallbackGreeting = `Olá${contactName ? ', ' + contactName : ''}! Como posso te ajudar hoje? 😊`;
+        
+        // Salvar fallback como mensagem
+        await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: fallbackGreeting,
+          sender_type: 'user',
+          is_ai_generated: true,
+          channel: responseChannel
+        });
+        
+        // Log em ai_events
+        Promise.resolve(supabaseClient.from('ai_events').insert({
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          event_type: 'strict_rag_empty_fallback',
+          model: 'system',
+          score: 0,
+          output_json: { reason: 'empty_strict_response', fallback_used: true },
+        })).catch(() => {});
+        
+        return new Response(JSON.stringify({
+          response: fallbackGreeting,
+          source: 'strict_rag_empty_fallback',
+          handoff: false
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      
       // Salvar mensagem da IA
       const { data: strictMsgData } = await supabaseClient
         .from('messages')
