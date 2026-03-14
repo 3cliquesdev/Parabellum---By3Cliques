@@ -2999,6 +2999,12 @@ serve(async (req) => {
             const transferDeptId = nextNode.data?.department_id || null;
             const transferAiMode = nextNode.data?.ai_mode || 'waiting_human';
             const transitionType = transferAiMode === 'copilot' ? 'set_copilot' : transferAiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
+            // 🆕 Verificar horário comercial antes de handoff
+            const ahCheck2 = await checkAfterHoursAndIntercept(supabaseClient, conversationId, transitionType);
+            if (ahCheck2.intercepted) {
+              const transferMsg = replaceVariables(nextNode.data?.message || "Transferindo...", variablesContext);
+              return new Response(JSON.stringify({ useAI: false, response: ahCheck2.afterHoursMessage, afterHours: true, flowCompleted: true, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
             await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
