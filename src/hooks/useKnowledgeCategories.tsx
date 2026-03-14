@@ -9,22 +9,16 @@ export function useKnowledgeCategories() {
   return useQuery({
     queryKey: ["knowledge-categories"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("knowledge_articles")
-        .select("category")
-        .not("category", "is", null);
+      const { data, error } = await supabase.rpc(
+        "get_distinct_knowledge_categories" as any
+      );
 
       if (error) {
         console.error("Error fetching knowledge categories:", error);
         throw error;
       }
 
-      // Extrair categorias únicas e ordenar
-      const categories = [...new Set(data.map(article => article.category))]
-        .filter(Boolean)
-        .sort();
-
-      return categories as string[];
+      return ((data as any[]) ?? []).map((row: { category: string }) => row.category);
     },
   });
 }
