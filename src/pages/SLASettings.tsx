@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { useTags } from "@/hooks/useTags";
 import { useBusinessMessages, useUpdateBusinessMessage } from "@/hooks/useBusinessMessages";
 import { 
   useSLAPolicies, 
@@ -556,8 +557,11 @@ export default function SLASettings() {
 
 function BusinessMessagesSection() {
   const { data: messages = [], isLoading } = useBusinessMessages();
+  const { data: allTags = [] } = useTags();
   const updateMessage = useUpdateBusinessMessage();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
+  const [tagInitialized, setTagInitialized] = useState(false);
 
   const defaults: Record<string, string> = {
     after_hours_handoff: "Nosso atendimento humano funciona {schedule}. {next_open} um atendente poderá te ajudar. Enquanto isso, posso continuar tentando por aqui! 😊",
@@ -569,13 +573,24 @@ function BusinessMessagesSection() {
       const initial: Record<string, string> = {};
       messages.forEach((m) => { initial[m.id] = m.message_template; });
       setDrafts(initial);
+      if (!tagInitialized) {
+        const afterHoursMsg = messages.find(m => m.message_key === 'after_hours_handoff');
+        if (afterHoursMsg) {
+          setSelectedTagId(afterHoursMsg.after_hours_tag_id || null);
+        }
+        setTagInitialized(true);
+      }
     }
-  }, [messages]);
+  }, [messages, tagInitialized]);
 
-  const handleSave = (id: string) => {
+  const handleSave = (id: string, messageKey?: string) => {
     const template = drafts[id];
     if (template !== undefined) {
-      updateMessage.mutate({ id, message_template: template });
+      const mutationData: { id: string; message_template: string; after_hours_tag_id?: string | null } = { id, message_template: template };
+      if (messageKey === 'after_hours_handoff') {
+        mutationData.after_hours_tag_id = selectedTagId || null;
+      }
+      updateMessage.mutate(mutationData);
     }
   };
 
@@ -646,11 +661,36 @@ function BusinessMessagesSection() {
                   </AlertDescription>
                 </Alert>
               )}
+              {msg.message_key === 'after_hours_handoff' && (
+                <div className="space-y-1.5 pt-2">
+                  <Label className="text-sm font-medium">Tag aplicada ao encerrar fora do horário</Label>
+                  <p className="text-xs text-muted-foreground">Selecione a tag que será adicionada automaticamente à conversa quando encerrada fora do horário comercial</p>
+                  <Select
+                    value={selectedTagId || "none"}
+                    onValueChange={(val) => setSelectedTagId(val === "none" ? null : val)}
+                  >
+                    <SelectTrigger className="w-full max-w-xs">
+                      <SelectValue placeholder="Selecione uma tag" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhuma (sem tag)</SelectItem>
+                      {allTags.map((tag) => (
+                        <SelectItem key={tag.id} value={tag.id}>
+                          <span className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tag.color || 'hsl(var(--muted-foreground))' }} />
+                            {tag.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
-                  onClick={() => handleSave(msg.id)}
-                  disabled={!isDirty || isEmpty || updateMessage.isPending}
+                  onClick={() => handleSave(msg.id, msg.message_key)}
+                  disabled={(!isDirty && selectedTagId === (messages.find(m => m.message_key === 'after_hours_handoff')?.after_hours_tag_id || null)) || isEmpty || updateMessage.isPending}
                 >
                   <Save className="h-4 w-4 mr-1" />
                   Salvar

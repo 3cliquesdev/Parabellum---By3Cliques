@@ -7,6 +7,7 @@ interface BusinessMessage {
   message_key: string;
   message_template: string;
   description: string | null;
+  after_hours_tag_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,10 +31,14 @@ export function useUpdateBusinessMessage() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, message_template }: { id: string; message_template: string }) => {
+    mutationFn: async ({ id, message_template, after_hours_tag_id }: { id: string; message_template: string; after_hours_tag_id?: string | null }) => {
+      const updateData: Record<string, any> = { message_template, updated_at: new Date().toISOString() };
+      if (after_hours_tag_id !== undefined) {
+        updateData.after_hours_tag_id = after_hours_tag_id;
+      }
       const { error } = await supabase
         .from("business_messages_config")
-        .update({ message_template, updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq("id", id);
       if (error) throw error;
     },
