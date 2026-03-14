@@ -3020,6 +3020,530 @@ serve(async (req) => {
         // O nó ai_response "segura" a conversa até condição de saída
         // ============================================================
 
+        // ============================================================
+        // 🔐 INLINE OTP: Se __otp_step existe, executar máquina de estados OTP
+        // dentro do nó ai_response (antes de qualquer lógica de IA)
+        // ============================================================
+        if (collectedData.__otp_step && collectedData.__otp_from_ai_intent) {
+          const otpStep = collectedData.__otp_step;
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+          const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          const maxAttempts = currentNode.data?.otp_max_attempts || 3;
+
+          console.log(`[process-chat-flow] 🔐 Inline OTP (ai_response) step: ${otpStep} | msg: "${(userMessage || '').slice(0, 40)}"`);
+
+          // --- SUB-ESTADO: ask_email ---
+          if (otpStep === 'ask_email') {
+            const emailInput = (userMessage || '').trim().toLowerCase();
+            const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput);
+            if (!emailValid) {
+              return new Response(JSON.stringify({
+                useAI: false,
+                response: "Por favor, informe um email válido (exemplo@email.com)",
+                retry: true,
+                flowId: activeState.flow_id,
+              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+
+            collectedData.__otp_email = emailInput;
+            collectedData.__otp_step = 'check_email';
+
+            try {
+              const verifyRes = await fetch(`${supabaseUrl}/functions/v1/verify-customer-email`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                body: JSON.stringify({ email: emailInput }),
+              });
+              const verifyData = await verifyRes.json();
+
+              if (verifyData.found) {
+                console.log('[process-chat-flow] 🔐 Inline OTP: Customer found, sending OTP to:', emailInput);
+                collectedData.__otp_customer_name = verifyData.customer?.name || '';
+                collectedData.__otp_customer_id = verifyData.customer?.id || '';
+
+                await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                  body: JSON.stringify({ email: emailInput, type: 'customer' }),
+                });
+
+                collectedData.__otp_step = 'wait_code';
+                collectedData.__otp_attempts = 0;
+
+                await supabaseClient.from('chat_flow_states').update({
+                  collected_data: collectedData,
+                  status: 'waiting_input',
+                }).eq('id', activeState.id);
+
+                const otpMsg = (currentNode.data?.otp_message_sent || "Enviamos um código de 6 dígitos para {{email}}. Digite o código:")
+                  .replace(/\{\{email\}\}/g, emailInput);
+
+                return new Response(JSON.stringify({
+                  useAI: false,
+                  response: otpMsg,
+                  retry: false,
+                  flowId: activeState.flow_id,
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+              } else {
+                console.log('[process-chat-flow] 🔐 Inline OTP: Email not found:', emailInput);
+                collectedData.__otp_step = 'confirm_email';
+
+                await supabaseClient.from('chat_flow_states').update({
+                  collected_data: collectedData,
+                  status: 'waiting_input',
+                }).eq('id', activeState.id);
+
+                return new Response(JSON.stringify({
+                  useAI: false,
+                  response: "Não encontramos este email em nossa base. O email está correto? Envie novamente ou digite 'não' para cancelar.",
+                  retry: false,
+                  flowId: activeState.flow_id,
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+              }
+            } catch (err) {
+              console.error('[process-chat-flow] ❌ Inline OTP: Error verifying email:', err);
+              collectedData.__otp_step = 'confirm_email';
+              await supabaseClient.from('chat_flow_states').update({
+                collected_data: collectedData,
+                status: 'waiting_input',
+              }).eq('id', activeState.id);
+
+              return new Response(JSON.stringify({
+                useAI: false,
+                response: "Ocorreu um erro ao verificar o email. Tente novamente.",
+                retry: false,
+                flowId: activeState.flow_id,
+              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+          }
+
+          // --- SUB-ESTADO: confirm_email ---
+          if (otpStep === 'confirm_email') {
+            const input = (userMessage || '').trim().toLowerCase();
+            const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
+            if (looksLikeEmail) {
+              collectedData.__otp_email = input;
+              collectedData.__otp_step = 'ask_email';
+              await supabaseClient.from('chat_flow_states').update({
+                collected_data: collectedData,
+                status: 'waiting_input',
+              }).eq('id', activeState.id);
+              return new Response(JSON.stringify({
+                useAI: false,
+                response: "Ok, vou verificar esse email. Aguarde...",
+                flowId: activeState.flow_id,
+                reprocess: true,
+                reprocessMessage: input,
+              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+
+            const negativePatterns = ['nao', 'não', 'no', 'n', 'nope', 'cancelar'];
+            const isNegative = negativePatterns.some(p => input.includes(p));
+
+            if (isNegative) {
+              // Cancelar OTP → avançar com customer_verified=false
+              collectedData.customer_verified = false;
+              collectedData.__otp_result = 'not_customer';
+              collectedData.customer_verified_email = '';
+              const savedPath = collectedData.__otp_from_ai_intent;
+              delete collectedData.__otp_step;
+              delete collectedData.__otp_from_ai_intent;
+              delete collectedData.__otp_email;
+              delete collectedData.__ai;
+
+              const nextNode = findNextNode(flowDef, currentNode, savedPath);
+              if (nextNode) {
+                let resolvedNode = nextNode;
+                while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
+                  if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
+                    const condPath = resolvedNode.type === 'condition_v2'
+                      ? evaluateConditionV2Path(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
+                      : evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+                    resolvedNode = findNextNode(flowDef, resolvedNode, condPath);
+                  } else {
+                    resolvedNode = findNextNode(flowDef, resolvedNode);
+                  }
+                }
+
+                if (resolvedNode) {
+                  const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2' || resolvedNode.type === 'verify_customer_otp'
+                    ? 'waiting_input' : 'active';
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    current_node_id: resolvedNode.id,
+                    status: nextStatus,
+                  }).eq('id', activeState.id);
+
+                  if (resolvedNode.type === 'transfer') {
+                    await supabaseClient.from('chat_flow_states').update({
+                      status: 'transferred',
+                      completed_at: new Date().toISOString(),
+                    }).eq('id', activeState.id);
+
+                    const deptId = resolvedNode.data?.department_id || null;
+                    const aiMode = resolvedNode.data?.ai_mode || 'waiting_human';
+                    const transType = aiMode === 'copilot' ? 'set_copilot' : aiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
+                    await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                      body: JSON.stringify({ conversationId, transition: transType, departmentId: deptId, reason: 'inline_otp_not_customer', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id } })
+                    });
+
+                    return new Response(JSON.stringify({
+                      useAI: false,
+                      response: "Sem problemas. Vou te encaminhar para nosso time.",
+                      transfer: true,
+                      departmentId: deptId,
+                      collectedData,
+                      flowId: activeState.flow_id,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
+                  variablesContext = await rebuildCtx();
+                  const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
+                  return new Response(JSON.stringify({
+                    useAI: false,
+                    response: ["Sem problemas.", nextMsg].filter(Boolean).join('\n\n'),
+                    flowId: activeState.flow_id,
+                    collectedData,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+              }
+
+              // Fallback: sem próximo nó
+              await supabaseClient.from('chat_flow_states').update({
+                collected_data: collectedData,
+                status: 'completed',
+                completed_at: new Date().toISOString(),
+              }).eq('id', activeState.id);
+
+              return new Response(JSON.stringify({
+                useAI: false,
+                response: "Sem problemas. Vou te encaminhar para nosso time.",
+                flowCompleted: true,
+                collectedData,
+              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+
+            // Resposta ambígua → pedir email novamente
+            collectedData.__otp_step = 'ask_email';
+            await supabaseClient.from('chat_flow_states').update({
+              collected_data: collectedData,
+              status: 'waiting_input',
+            }).eq('id', activeState.id);
+
+            return new Response(JSON.stringify({
+              useAI: false,
+              response: "Ok, por favor informe novamente seu email:",
+              flowId: activeState.flow_id,
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+
+          // --- SUB-ESTADO: wait_code ---
+          if (otpStep === 'wait_code') {
+            const codeInput = (userMessage || '').trim();
+            const email = collectedData.__otp_email;
+            const attempts = (collectedData.__otp_attempts || 0) + 1;
+            collectedData.__otp_attempts = attempts;
+
+            try {
+              const verifyRes = await fetch(`${supabaseUrl}/functions/v1/verify-code`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                body: JSON.stringify({ email, code: codeInput }),
+              });
+              const verifyData = await verifyRes.json();
+
+              if (verifyData.success) {
+                console.log('[process-chat-flow] 🔐 Inline OTP verified successfully for:', email);
+                collectedData.customer_verified = true;
+                collectedData.__otp_result = 'verified';
+                collectedData.customer_verified_email = email;
+                collectedData.customer_verified_name = collectedData.__otp_customer_name || '';
+
+                if (collectedData.__otp_customer_id && activeConversationData?.contact_id) {
+                  await supabaseClient.from('contacts').update({
+                    kiwify_validated: true,
+                  }).eq('id', activeConversationData.contact_id);
+                }
+
+                const savedPath = collectedData.__otp_from_ai_intent;
+                delete collectedData.__otp_step;
+                delete collectedData.__otp_from_ai_intent;
+                delete collectedData.__ai;
+
+                // Avançar para próximo nó usando o path salvo
+                const nextAfterOtp = findNextNode(flowDef, currentNode, savedPath);
+                let resolvedNode = nextAfterOtp;
+                while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
+                  if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
+                    const condPath = resolvedNode.type === 'condition_v2'
+                      ? evaluateConditionV2Path(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
+                      : evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+                    resolvedNode = findNextNode(flowDef, resolvedNode, condPath);
+                  } else {
+                    resolvedNode = findNextNode(flowDef, resolvedNode);
+                  }
+                }
+
+                if (resolvedNode) {
+                  const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2' || resolvedNode.type === 'verify_customer_otp'
+                    ? 'waiting_input' : 'active';
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    current_node_id: resolvedNode.id,
+                    status: nextStatus,
+                  }).eq('id', activeState.id);
+
+                  variablesContext = await rebuildCtx();
+                  const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
+
+                  if (resolvedNode.type === 'transfer') {
+                    await supabaseClient.from('chat_flow_states').update({
+                      status: 'transferred',
+                      completed_at: new Date().toISOString(),
+                    }).eq('id', activeState.id);
+
+                    const deptId = resolvedNode.data?.department_id || null;
+                    const aiMode = resolvedNode.data?.ai_mode || 'waiting_human';
+                    const transType = aiMode === 'copilot' ? 'set_copilot' : aiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
+                    await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                      body: JSON.stringify({ conversationId, transition: transType, departmentId: deptId, reason: 'inline_otp_verified', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id } })
+                    });
+
+                    return new Response(JSON.stringify({
+                      useAI: false,
+                      response: "✅ Identidade verificada!\n\n" + (nextMsg || "Transferindo..."),
+                      transfer: true,
+                      departmentId: deptId,
+                      collectedData,
+                      flowId: activeState.flow_id,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
+                  if (resolvedNode.type === 'end') {
+                    await supabaseClient.from('chat_flow_states').update({
+                      collected_data: collectedData,
+                      current_node_id: resolvedNode.id,
+                      status: 'completed',
+                      completed_at: new Date().toISOString(),
+                    }).eq('id', activeState.id);
+
+                    if (resolvedNode.data?.end_action === 'create_ticket') {
+                      variablesContext = await rebuildCtx();
+                      const actionData = resolvedNode.data.action_data || {};
+                      const subject = replaceVariables(actionData.subject || resolvedNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
+                      const description = replaceVariables(actionData.description || resolvedNode.data.description_template || '', variablesContext);
+                      const internalNote = (actionData.internal_note || resolvedNode.data.internal_note)
+                        ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
+                      await createTicketFromFlow(supabaseClient, {
+                        conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
+                        contactId: activeContactData?.id || null,
+                        subject, description,
+                        category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                        priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
+                        departmentId: actionData.department_id || resolvedNode.data.department_id || null,
+                        internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
+                        collectedData,
+                      });
+                    }
+
+                    const endMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext || await rebuildCtx());
+                    return new Response(JSON.stringify({
+                      useAI: false,
+                      response: "✅ Identidade verificada!\n\n" + (endMsg || ''),
+                      flowCompleted: true,
+                      flowId: activeState.flow_id,
+                      collectedData,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
+                  if (resolvedNode.type === 'ai_response') {
+                    collectedData.__ai = { interaction_count: 0 };
+                    await supabaseClient.from('chat_flow_states').update({
+                      collected_data: collectedData,
+                      current_node_id: resolvedNode.id,
+                      status: 'active',
+                      updated_at: new Date().toISOString(),
+                    }).eq('id', activeState.id);
+
+                    return new Response(JSON.stringify({
+                      useAI: true,
+                      aiNodeActive: true,
+                      nodeId: resolvedNode.id,
+                      response: "✅ Identidade verificada!",
+                      flowId: activeState.flow_id,
+                      flowName: activeState.chat_flows?.name || null,
+                      contextPrompt: resolvedNode.data?.context_prompt,
+                      useKnowledgeBase: resolvedNode.data?.use_knowledge_base !== false,
+                      collectedData,
+                      allowedSources: buildAllowedSources(resolvedNode.data),
+                      responseFormat: 'text_only',
+                      personaId: resolvedNode.data?.persona_id || null,
+                      personaName: resolvedNode.data?.persona_name || null,
+                      kbCategories: resolvedNode.data?.kb_categories || null,
+                      fallbackMessage: resolvedNode.data?.fallback_message || null,
+                      objective: resolvedNode.data?.objective || null,
+                      maxSentences: resolvedNode.data?.max_sentences ?? 3,
+                      forbidQuestions: resolvedNode.data?.forbid_questions ?? true,
+                      forbidOptions: resolvedNode.data?.forbid_options ?? true,
+                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
+
+                  return new Response(JSON.stringify({
+                    useAI: false,
+                    response: "✅ Identidade verificada!\n\n" + (nextMsg || ''),
+                    flowId: activeState.flow_id,
+                    collectedData,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                // Sem próximo nó → handoff
+                await supabaseClient.from('chat_flow_states').update({
+                  collected_data: collectedData,
+                  status: 'transferred',
+                  completed_at: new Date().toISOString(),
+                }).eq('id', activeState.id);
+
+                await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                  body: JSON.stringify({ conversationId, transition: 'handoff_to_human', reason: 'inline_otp_verified_no_next_node', metadata: { node_id: currentNode.id, flow_id: activeState.flow_id } })
+                });
+
+                return new Response(JSON.stringify({
+                  useAI: false,
+                  response: "✅ Identidade verificada! Vou te transferir para um atendente agora.",
+                  transfer: true,
+                  collectedData,
+                  flowId: activeState.flow_id,
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+              } else {
+                // Código incorreto
+                if (attempts >= maxAttempts) {
+                  console.log('[process-chat-flow] 🔐 Inline OTP: Max attempts reached');
+                  collectedData.customer_verified = false;
+                  collectedData.__otp_result = 'failed';
+                  const savedPath = collectedData.__otp_from_ai_intent;
+                  delete collectedData.__otp_step;
+                  delete collectedData.__otp_from_ai_intent;
+                  delete collectedData.__ai;
+
+                  const nextNode = findNextNode(flowDef, currentNode, savedPath);
+                  if (nextNode) {
+                    let resolvedNode = nextNode;
+                    while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
+                      if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
+                        const condPath = resolvedNode.type === 'condition_v2'
+                          ? evaluateConditionV2Path(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
+                          : evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
+                        resolvedNode = findNextNode(flowDef, resolvedNode, condPath);
+                      } else {
+                        resolvedNode = findNextNode(flowDef, resolvedNode);
+                      }
+                    }
+
+                    if (resolvedNode) {
+                      const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2'
+                        ? 'waiting_input' : 'active';
+                      await supabaseClient.from('chat_flow_states').update({
+                        collected_data: collectedData,
+                        current_node_id: resolvedNode.id,
+                        status: nextStatus,
+                      }).eq('id', activeState.id);
+
+                      if (resolvedNode.type === 'transfer') {
+                        await supabaseClient.from('chat_flow_states').update({
+                          status: 'transferred',
+                          completed_at: new Date().toISOString(),
+                        }).eq('id', activeState.id);
+
+                        const deptId = resolvedNode.data?.department_id || null;
+                        const aiMode = resolvedNode.data?.ai_mode || 'waiting_human';
+                        const transType = aiMode === 'copilot' ? 'set_copilot' : aiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
+                        await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                          body: JSON.stringify({ conversationId, transition: transType, departmentId: deptId, reason: 'inline_otp_failed', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id } })
+                        });
+
+                        return new Response(JSON.stringify({
+                          useAI: false,
+                          response: "Máximo de tentativas excedido. Vou te transferir para um atendente.",
+                          transfer: true,
+                          departmentId: deptId,
+                          collectedData,
+                          flowId: activeState.flow_id,
+                        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                      }
+
+                      variablesContext = await rebuildCtx();
+                      const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
+                      return new Response(JSON.stringify({
+                        useAI: false,
+                        response: ["Máximo de tentativas excedido.", nextMsg].filter(Boolean).join('\n\n'),
+                        flowId: activeState.flow_id,
+                        collectedData,
+                      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                    }
+                  }
+
+                  // Fallback handoff
+                  await supabaseClient.from('chat_flow_states').update({
+                    collected_data: collectedData,
+                    status: 'transferred',
+                    completed_at: new Date().toISOString(),
+                  }).eq('id', activeState.id);
+
+                  await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+                    body: JSON.stringify({ conversationId, transition: 'handoff_to_human', reason: 'inline_otp_max_attempts', metadata: { node_id: currentNode.id, flow_id: activeState.flow_id } })
+                  });
+
+                  return new Response(JSON.stringify({
+                    useAI: false,
+                    response: "Máximo de tentativas excedido. Vou te transferir para um atendente.",
+                    transfer: true,
+                    collectedData,
+                    flowId: activeState.flow_id,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+
+                await supabaseClient.from('chat_flow_states').update({
+                  collected_data: collectedData,
+                  status: 'waiting_input',
+                }).eq('id', activeState.id);
+
+                return new Response(JSON.stringify({
+                  useAI: false,
+                  response: (verifyData.error || "Código inválido.") + ` Tentativa ${attempts}/${maxAttempts}. Tente novamente:`,
+                  retry: false,
+                  flowId: activeState.flow_id,
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+              }
+            } catch (err) {
+              console.error('[process-chat-flow] ❌ Inline OTP verify-code error:', err);
+              await supabaseClient.from('chat_flow_states').update({
+                collected_data: collectedData,
+                status: 'waiting_input',
+              }).eq('id', activeState.id);
+
+              return new Response(JSON.stringify({
+                useAI: false,
+                response: "Erro ao verificar o código. Tente novamente:",
+                retry: false,
+                flowId: activeState.flow_id,
+              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+          }
+        }
+        // ============================================================
+        // FIM DO INLINE OTP
+        // ============================================================
+
         // 🆕 AUTO VALIDATE CUSTOMER: Triagem silenciosa antes de responder
         if (currentNode.data?.auto_validate_customer === true && activeContactData && !activeContactData.kiwify_validated) {
           const validateFields: string[] = currentNode.data?.validate_fields || ['phone', 'email', 'cpf'];
