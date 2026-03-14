@@ -8449,28 +8449,41 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
                 assistantMessage = defaultAfterHoursMsg;
               }
 
-              // 4. Adicionar tag "pendente_retorno" na conversation_tags
+              // 4. Adicionar tag configurada (ou fallback pendente_retorno) na conversation_tags
               try {
-                const { data: tagRow } = await supabaseClient
-                  .from('tags')
-                  .select('id')
-                  .eq('name', 'pendente_retorno')
+                let resolvedTagId: string | null = null;
+                const { data: afterHoursConfig } = await supabaseClient
+                  .from('business_messages_config')
+                  .select('after_hours_tag_id')
+                  .eq('message_key', 'after_hours_handoff')
                   .maybeSingle();
 
-                if (tagRow) {
-                  // Upsert para evitar duplicata
+                if (afterHoursConfig?.after_hours_tag_id) {
+                  resolvedTagId = afterHoursConfig.after_hours_tag_id;
+                  console.log('[ai-autopilot-chat] Tag configurada encontrada:', resolvedTagId);
+                } else {
+                  const { data: tagRow } = await supabaseClient
+                    .from('tags')
+                    .select('id')
+                    .eq('name', 'pendente_retorno')
+                    .maybeSingle();
+                  resolvedTagId = tagRow?.id || null;
+                  console.log('[ai-autopilot-chat] Fallback pendente_retorno:', resolvedTagId);
+                }
+
+                if (resolvedTagId) {
                   await supabaseClient
                     .from('conversation_tags')
                     .upsert({
                       conversation_id: conversationId,
-                      tag_id: tagRow.id,
+                      tag_id: resolvedTagId,
                     }, { onConflict: 'conversation_id,tag_id' });
-                  console.log('[ai-autopilot-chat] ðŸ·ï¸ Tag pendente_retorno aplicada');
+                  console.log('[ai-autopilot-chat] Tag after-hours aplicada');
                 } else {
-                  console.warn('[ai-autopilot-chat] âš ï¸ Tag pendente_retorno nÃ£o encontrada no banco');
+                  console.warn('[ai-autopilot-chat] Nenhuma tag after-hours encontrada');
                 }
               } catch (tagErr) {
-                console.error('[ai-autopilot-chat] âš ï¸ Erro ao aplicar tag pendente_retorno:', tagErr);
+                console.error('[ai-autopilot-chat] Erro ao aplicar tag after-hours:', tagErr);
               }
 
               // 5. Salvar metadata na conversa
