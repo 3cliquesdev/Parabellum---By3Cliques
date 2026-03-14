@@ -92,23 +92,21 @@ export function RAGSourcesSection({
                 <Skeleton className="h-6 w-3/4" />
               </div>
             ) : kbCategories && kbCategories.length > 0 ? (
-              <ScrollArea className="max-h-48">
-                <div className="space-y-1 pr-2">
-                  {kbCategories.map((category) => (
-                    <label
-                      key={category}
-                      className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/50 px-2 py-1 rounded"
-                    >
-                      <Checkbox
-                        checked={selectedCategories.includes(category)}
-                        onCheckedChange={() => handleCategoryToggle(category)}
-                        className="h-3.5 w-3.5"
-                      />
-                      <span className="truncate">{category}</span>
-                    </label>
-                  ))}
-                </div>
-              </ScrollArea>
+              <div className="max-h-52 overflow-y-auto border rounded-md p-1 space-y-1">
+                {kbCategories.map((category) => (
+                  <label
+                    key={category}
+                    className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/50 px-2 py-1 rounded"
+                  >
+                    <Checkbox
+                      checked={selectedCategories.includes(category)}
+                      onCheckedChange={() => handleCategoryToggle(category)}
+                      className="h-3.5 w-3.5"
+                    />
+                    <span className="truncate">{category}</span>
+                  </label>
+                ))}
+              </div>
             ) : (
               <p className="text-[10px] text-muted-foreground italic">
                 Nenhuma categoria na KB
