@@ -3382,7 +3382,7 @@ serve(async (req) => {
                       useAI: true,
                       aiNodeActive: true,
                       nodeId: resolvedNode.id,
-                      response: "✅ Identidade verificada!",
+                      response: currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.",
                       flowId: activeState.flow_id,
                       flowName: activeState.chat_flows?.name || null,
                       contextPrompt: resolvedNode.data?.context_prompt,
