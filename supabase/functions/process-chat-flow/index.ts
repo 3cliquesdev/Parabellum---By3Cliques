@@ -3098,7 +3098,7 @@ serve(async (req) => {
         // ==================================================================
 
         const exitKeywords: string[] = currentNode.data?.exit_keywords || [];
-        const maxInteractions: number = currentNode.data?.max_ai_interactions ?? 0;
+        const maxInteractions: number = currentNode.data?.max_ai_interactions ?? currentNode.data?.max_interactions ?? 0;
         let forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
         const forbidCommercial: boolean = currentNode.data?.forbid_commercial ?? false;
         const forbidCancellation: boolean = currentNode.data?.forbid_cancellation ?? false;
