@@ -3320,9 +3320,10 @@ serve(async (req) => {
                       body: JSON.stringify({ conversationId, transition: transType, departmentId: deptId, reason: 'inline_otp_verified', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id } })
                     });
 
+                    const otpVerifiedMsg = currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.";
                     return new Response(JSON.stringify({
                       useAI: false,
-                      response: "✅ Identidade verificada!\n\n" + (nextMsg || "Transferindo..."),
+                      response: otpVerifiedMsg + "\n\n" + (nextMsg || "Transferindo..."),
                       transfer: true,
                       departmentId: deptId,
                       collectedData,
