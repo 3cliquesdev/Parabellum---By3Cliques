@@ -44,6 +44,8 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   const [duplicateReturnId, setDuplicateReturnId] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [buyerName, setBuyerName] = useState<string | null>(null);
+  const [productItems, setProductItems] = useState<{ title: string; sku: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastSearchedRef = useRef<string>("");
 
@@ -61,6 +63,8 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
     setProtocol("");
     setDuplicateReturnId("");
     setPhotos([]);
+    setBuyerName(null);
+    setProductItems([]);
   };
 
   const lookupOrderByTracking = useCallback(async (trackingVal: string) => {
@@ -76,11 +80,17 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
       if (!error && data?.found && data?.external_order_id) {
         setOrderId(data.external_order_id);
         setTrackingOriginal(data.external_order_id);
+        setBuyerName(data.buyer_name || null);
+        setProductItems(data.product_items || []);
       } else {
         setTrackingOriginal(null);
+        setBuyerName(null);
+        setProductItems([]);
       }
     } catch {
       setTrackingOriginal(null);
+      setBuyerName(null);
+      setProductItems([]);
     } finally {
       setLoadingTracking(false);
       setTrackingSearched(true);
@@ -201,6 +211,8 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
                   setTrackingSearched(false);
                   setTrackingOriginal(null);
                   setOrderId("");
+                  setBuyerName(null);
+                  setProductItems([]);
                 }}
                 onBlur={() => lookupOrderByTracking(trackingOutbound)}
                 placeholder="Cole o código de rastreio de envio"
@@ -230,6 +242,32 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
                 />
               )}
             </div>
+
+            {/* Dados do pedido encontrado */}
+            {trackingOriginal && (buyerName || productItems.length > 0) && (
+              <div className="rounded-md bg-muted/50 border border-border p-3 text-sm space-y-2">
+                {buyerName && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Seller</p>
+                    <p className="font-medium text-foreground">{buyerName}</p>
+                  </div>
+                )}
+                {productItems.map((item, i) => (
+                  <div key={i} className="space-y-0.5">
+                    {item.title && (
+                      <p className="text-xs text-muted-foreground">
+                        Produto: <span className="font-medium text-foreground">{item.title}</span>
+                      </p>
+                    )}
+                    {item.sku && (
+                      <p className="text-xs text-muted-foreground">
+                        SKU: <span className="font-medium text-foreground">{item.sku}</span>
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Código de Rastreio da Devolução (opcional)</Label>
