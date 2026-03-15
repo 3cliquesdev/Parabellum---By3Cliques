@@ -4,8 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 
 export interface OnboardingStep {
   id: string;
-  name: string;
-  description: string | null;
+  step_name: string;
+  notes: string | null;
   step_type: string | null;
   completed: boolean;
   completed_at: string | null;
