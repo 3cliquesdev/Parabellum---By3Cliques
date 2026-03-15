@@ -974,7 +974,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       if (!kiwifyErr && kiwifyMatches && kiwifyMatches.length > 0) {
         // Cliente tem compra Kiwify - confirma que vai para Suporte
         targetDepartmentId = SUPORTE_DEPT_ID;
-        const products = [...new Set(kiwifyMatches.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
+        const products = [...new Set(kiwifyMatches.map(e => e.payload?.Product?.product_name || 'Produto'))];
         const customerData = kiwifyMatches[0].payload?.Customer || {};
         console.log(`[handle-whatsapp-event] ✅ Cliente Kiwify confirmado (inline) - Suporte. Produtos: ${products.join(', ')}`);
 
@@ -1255,14 +1255,14 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         }
       });
 
-      if (!flowError && flowResult && !flowResult.useAI && flowResult.response && String(flowResult.response).trim().length > 0) {
+      if (!flowError && flowResult && !flowResult.useAI && flowResult.response) {
         console.log('[handle-whatsapp-event] 📋 Fluxo retornou resposta:', flowResult.response?.slice(0, 50));
         flowHandled = true;
 
         // Inserir resposta do fluxo no banco
         const { data: savedFlowMsg } = await supabase.from('messages').insert({
           conversation_id: conversationId,
-          content: String(flowResult.response).trim(),
+          content: flowResult.response,
           sender_type: 'user',
           is_ai_generated: true,
           channel: 'whatsapp'
@@ -1314,7 +1314,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             fallbackMessage: flowResult.fallbackMessage || null,
             objective: flowResult.objective || null,
             maxSentences: flowResult.maxSentences ?? 3,
-            forbidQuestions: flowResult.forbidQuestions ?? true,
+            forbidQuestions: flowResult.forbidQuestions ?? false, // FIX 1: triagem precisa perguntar — default false, não true
             forbidOptions: flowResult.forbidOptions ?? true,
             forbidFinancial: flowResult.forbidFinancial ?? false,
             forbidCommercial: flowResult.forbidCommercial ?? false,
@@ -1371,7 +1371,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
                       to: targetNumber,
                       message: safetyMsg,
                       conversationId: conversationId,
-                      instanceId: instance,
+                      instanceId: instanceId,
                       is_bot_message: true,
                     }
                   });
