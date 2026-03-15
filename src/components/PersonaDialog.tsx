@@ -11,6 +11,7 @@ import { useCreatePersona } from "@/hooks/useCreatePersona";
 import { useUpdatePersona } from "@/hooks/useUpdatePersona";
 import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
 import { TrainingExamplesTab } from "./TrainingExamplesTab";
+import { TemperaturePreview } from "./settings/TemperaturePreview";
 
 interface PersonaDialogProps {
   trigger: React.ReactNode;
