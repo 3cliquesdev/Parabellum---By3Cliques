@@ -221,9 +221,9 @@ export default function Settings() {
             <SettingsCard
               icon={RotateCcw}
               iconBgColor="bg-orange-500"
-              title="Motivos de Devolução"
-              description="Cadastrar e editar motivos"
-              onClick={() => navigate('/settings/return-reasons')}
+              title="Conf. de Devoluções"
+              description="Motivos e SLA de devoluções"
+              onClick={() => navigate('/settings/returns-config')}
             />
             <SettingsCard
               icon={Zap}
