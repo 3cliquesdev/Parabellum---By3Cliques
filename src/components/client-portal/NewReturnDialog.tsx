@@ -44,6 +44,8 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   const [duplicateReturnId, setDuplicateReturnId] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [buyerName, setBuyerName] = useState<string | null>(null);
+  const [productItems, setProductItems] = useState<{ title: string; sku: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastSearchedRef = useRef<string>("");
 
