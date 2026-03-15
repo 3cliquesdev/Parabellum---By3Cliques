@@ -72,6 +72,7 @@ export const COLLECTION_VARS: VariableItem[] = [
   { value: "bank", label: "Banco (Coletado)", group: "collection" },
   { value: "reason", label: "Motivo (Coletado)", group: "collection" },
   { value: "amount", label: "Valor (Coletado)", group: "collection" },
+  { value: "return_reasons_list", label: "Motivos de Devolução (Lista)", group: "collection" },
 ];
 
 // Fixed order variables (from fetch_order nodes)

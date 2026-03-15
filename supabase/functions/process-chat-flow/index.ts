@@ -646,6 +646,23 @@ async function buildVariablesContext(
     }
   }
 
+  // 🆕 Return reasons (motivos de devolução dinâmicos)
+  if (supabaseClient) {
+    try {
+      const { data: returnReasons } = await supabaseClient
+        .from('return_reasons')
+        .select('key, label')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (returnReasons && returnReasons.length > 0) {
+        ctx['return_reasons_list'] = returnReasons.map((r: any) => r.label).join(', ');
+        ctx['__return_reasons_full'] = returnReasons; // Internal: array completo para IA
+      }
+    } catch (e) {
+      console.warn('[process-chat-flow] ⚠️ Failed to load return_reasons:', e);
+    }
+  }
+
   return ctx;
 }
 
