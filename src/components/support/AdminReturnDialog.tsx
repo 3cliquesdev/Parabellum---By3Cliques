@@ -80,11 +80,11 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
 
       if (result.found && result.external_order_id) {
         setOrderId(result.external_order_id);
-        setContactId(result.contact_id || null);
+        setBuyerName(result.buyer_name || null);
         setOrderIdManual(false);
       } else {
         setOrderId("");
-        setContactId(null);
+        setBuyerName(null);
         setOrderIdManual(true);
       }
     } catch (err) {
