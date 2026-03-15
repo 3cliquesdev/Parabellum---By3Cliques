@@ -3258,7 +3258,13 @@ serve(async (req) => {
     let flowContextPrompt: string | null = null;
     let flowFallbackMessage: string | null = null;
     
-    try {
+    // GUARD: Se flow_context foi fornecido explicitamente (ex: widget do portal),
+    // NAO chamar process-chat-flow - usar o contexto direto do request
+    if (flow_context) {
+      console.log('[ai-autopilot-chat] flow_context fornecido no body - PULANDO process-chat-flow (widget/portal mode)');
+    }
+    
+    if (!flow_context) try {
       console.log('[ai-autopilot-chat] ðŸ”„ [PRIORIDADE] Verificando Chat Flow ANTES da triagem...');
       
       const { data: flowResult, error: flowError } = await supabaseClient.functions.invoke(
