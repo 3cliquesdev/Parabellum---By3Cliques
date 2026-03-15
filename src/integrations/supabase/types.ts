@@ -7980,6 +7980,7 @@ export type Database = {
           description: string | null
           external_order_id: string
           id: string
+          photos: Json | null
           reason: string
           registered_email: string | null
           status: string
@@ -7994,6 +7995,7 @@ export type Database = {
           description?: string | null
           external_order_id: string
           id?: string
+          photos?: Json | null
           reason: string
           registered_email?: string | null
           status?: string
@@ -8008,6 +8010,7 @@ export type Database = {
           description?: string | null
           external_order_id?: string
           id?: string
+          photos?: Json | null
           reason?: string
           registered_email?: string | null
           status?: string
