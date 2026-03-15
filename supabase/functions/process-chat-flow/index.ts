@@ -3532,6 +3532,21 @@ serve(async (req) => {
           } else if (consultorIntentMatch) {
             path = 'consultor';
             console.log('[process-chat-flow] 🎯 consultorIntentMatch → path set to "consultor"');
+          } else if (saqueIntentMatch) {
+            path = 'saque';
+            console.log('[process-chat-flow] 🎯 saqueIntentMatch → path set to "saque"');
+          } else if (devolucaoIntentMatch) {
+            path = 'devolucao';
+            console.log('[process-chat-flow] 🎯 devolucaoIntentMatch → path set to "devolucao"');
+          } else if (pedidosIntentMatch) {
+            path = 'pedidos';
+            console.log('[process-chat-flow] 🎯 pedidosIntentMatch → path set to "pedidos"');
+          } else if (sistemaIntentMatch) {
+            path = 'suporte_sistema';
+            console.log('[process-chat-flow] 🎯 sistemaIntentMatch → path set to "suporte_sistema"');
+          } else if (internacionalIntentMatch) {
+            path = 'comercial_internacional';
+            console.log('[process-chat-flow] 🎯 internacionalIntentMatch → path set to "comercial_internacional"');
           } else if (keywordMatch) {
             path = 'suporte';
             collectedData.ai_exit_intent = 'suporte';
