@@ -186,16 +186,6 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
         {step === "form" && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label>Número do Pedido</Label>
               <Input
                 value={orderId}
@@ -204,7 +194,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
                   setTrackingSearched(false);
                   setTrackingOriginal(null);
                 }}
-                onBlur={() => lookupTracking(email, orderId)}
+                onBlur={() => lookupTracking(orderId)}
                 placeholder="Ex: SA-12345"
               />
             </div>
