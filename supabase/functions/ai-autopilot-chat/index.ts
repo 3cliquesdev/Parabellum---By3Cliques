@@ -7227,7 +7227,7 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
           model: selectedModel,
           messages: retryMessages,
           temperature: 0.7,
-          max_tokens: 300,
+          max_tokens: 600,  // FIX: Aumentado de 300→600 para evitar truncamento no retry
         };
         const retryData = await callAIWithFallback(retryPayload);
         rawAIContent = retryData.choices?.[0]?.message?.content;
