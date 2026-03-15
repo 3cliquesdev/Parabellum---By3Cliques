@@ -80,11 +80,17 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
       if (!error && data?.found && data?.external_order_id) {
         setOrderId(data.external_order_id);
         setTrackingOriginal(data.external_order_id);
+        setBuyerName(data.buyer_name || null);
+        setProductItems(data.product_items || []);
       } else {
         setTrackingOriginal(null);
+        setBuyerName(null);
+        setProductItems([]);
       }
     } catch {
       setTrackingOriginal(null);
+      setBuyerName(null);
+      setProductItems([]);
     } finally {
       setLoadingTracking(false);
       setTrackingSearched(true);
