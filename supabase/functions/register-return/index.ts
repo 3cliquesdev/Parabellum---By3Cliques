@@ -16,10 +16,23 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const { email, external_order_id, tracking_code_return, reason, description } = await req.json();
+    const body = await req.json();
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 255) : '';
+    const external_order_id = typeof body.external_order_id === 'string' ? body.external_order_id.trim().slice(0, 100) : '';
+    const tracking_code_return = typeof body.tracking_code_return === 'string' ? body.tracking_code_return.trim().slice(0, 100) : null;
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+    const description = typeof body.description === 'string' ? body.description.trim().slice(0, 2000) : null;
 
     if (!email || !external_order_id || !reason) {
       return new Response(JSON.stringify({ error: 'Campos obrigatórios: email, external_order_id, reason' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validação de formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return new Response(JSON.stringify({ error: 'Email inválido' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
