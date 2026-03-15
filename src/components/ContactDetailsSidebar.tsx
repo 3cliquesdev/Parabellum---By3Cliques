@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket, MessageSquare, ExternalLink, Loader2, AlertTriangle, ChevronRight, Pencil, Trophy, XCircle, ArrowRightLeft, MoreHorizontal } from "lucide-react";
+import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket, MessageSquare, ExternalLink, Loader2, AlertTriangle, ChevronRight, Pencil, Trophy, XCircle, ArrowRightLeft, MoreHorizontal, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ContactTagsSection from "./inbox/ContactTagsSection";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
