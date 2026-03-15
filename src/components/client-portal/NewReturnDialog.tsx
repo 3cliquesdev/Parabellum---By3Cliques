@@ -198,17 +198,45 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
               <Label>Número do Pedido</Label>
               <Input
                 value={orderId}
-                onChange={(e) => setOrderId(e.target.value)}
+                onChange={(e) => {
+                  setOrderId(e.target.value);
+                  setTrackingSearched(false);
+                  setTrackingOriginal(null);
+                }}
+                onBlur={() => lookupTracking(email, orderId)}
                 placeholder="Ex: SA-12345"
               />
             </div>
+
+            {/* Rastreio original (auto-preenchido) */}
+            {loadingTracking && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground px-1">
+                <Search className="h-3.5 w-3.5 animate-pulse" />
+                <span>Buscando rastreio do pedido...</span>
+              </div>
+            )}
+            {!loadingTracking && trackingSearched && trackingOriginal && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/5 border border-primary/20">
+                <Package className="h-4 w-4 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">Rastreio do envio</p>
+                  <p className="text-sm font-medium text-foreground truncate">{trackingOriginal}</p>
+                </div>
+                <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+              </div>
+            )}
+            {!loadingTracking && trackingSearched && !trackingOriginal && (
+              <p className="text-xs text-muted-foreground px-1">
+                Rastreio do envio não localizado automaticamente
+              </p>
+            )}
 
             <div className="space-y-2">
               <Label>Código de Rastreio da Devolução (opcional)</Label>
               <Input
                 value={trackingReturn}
                 onChange={(e) => setTrackingReturn(e.target.value)}
-                placeholder="Código de rastreio"
+                placeholder="Código de rastreio reverso"
               />
             </div>
 
