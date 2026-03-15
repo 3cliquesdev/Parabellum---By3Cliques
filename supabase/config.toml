@@ -430,3 +430,6 @@ verify_jwt = false
 
 [functions.link-return]
 verify_jwt = false
+
+[functions.lookup-order-tracking]
+verify_jwt = false
