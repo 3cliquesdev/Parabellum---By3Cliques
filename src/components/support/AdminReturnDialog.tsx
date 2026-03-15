@@ -55,7 +55,8 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
 
   const handleTrackingBlur = async () => {
     const trimmed = trackingOriginal.trim();
-    if (!trimmed) {
+    if (!trimmed || trimmed === lastSearchedRef.current) {
+      if (!trimmed) {
       setLookupResult(null);
       setOrderId("");
       setOrderIdManual(false);
