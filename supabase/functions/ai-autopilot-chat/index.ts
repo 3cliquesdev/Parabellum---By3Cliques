@@ -1221,6 +1221,10 @@ interface FlowContext {
   forbidCancellation?: boolean;
   forbidSupport?: boolean;
   forbidConsultant?: boolean;
+  forbidPedidos?: boolean;
+  forbidDevolucao?: boolean;
+  forbidSaque?: boolean;
+  forbidSistema?: boolean;
   collectedData?: any;
   onboardingDetection?: boolean;
   // 🆕 Motivos de devolução dinâmicos
@@ -1315,6 +1319,59 @@ Se o cliente mencionar termos como consultor, assessor, gestor ou estratÃ©gia 
 Nunca assuma a intenÃ§Ã£o do cliente â€” sempre pergunte quando houver ambiguidade.
 Se o cliente confirmar que quer FALAR COM CONSULTOR â†’ responda com [[FLOW_EXIT:consultor]]
 Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.`;
+  }
+
+  const forbidPedidos = flowContext.forbidPedidos ?? false;
+  if (forbidPedidos) {
+    restrictions += `\n\n📦 TRAVA PEDIDOS ATIVA:
+Se o cliente solicitar RASTREIO, STATUS ou informações de PEDIDO (ex: "onde está meu pedido", "rastrear pedido"), responda:
+"Entendi! Vou te encaminhar para o especialista em pedidos."
+E retorne [[FLOW_EXIT:pedidos]] imediatamente.
+
+🔍 DESAMBIGUAÇÃO PEDIDOS OBRIGATÓRIA:
+Se o cliente mencionar termos como pedido, entrega, rastreio sem deixar claro se quer uma INFORMAÇÃO ou precisa de AÇÃO, você DEVE perguntar:
+"Você tem dúvidas sobre como funciona a entrega ou precisa acompanhar um pedido específico?"
+Nunca assuma a intenção do cliente – sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que precisa de ACOMPANHAMENTO → responda com [[FLOW_EXIT:pedidos]]
+Se for apenas dúvida informativa → responda normalmente usando a Base de Conhecimento.`;
+  }
+
+  const forbidDevolucao = flowContext.forbidDevolucao ?? false;
+  if (forbidDevolucao) {
+    restrictions += `\n\n🔄 TRAVA DEVOLUÇÃO ATIVA:
+Se o cliente solicitar DEVOLUÇÃO, TROCA ou reportar produto defeituoso (ex: "quero devolver", "produto com defeito"), responda:
+"Entendi! Vou te encaminhar para o especialista em devoluções."
+E retorne [[FLOW_EXIT:devolucao]] imediatamente.
+
+🔍 DESAMBIGUAÇÃO DEVOLUÇÃO OBRIGATÓRIA:
+Se o cliente mencionar termos como troca, defeito, devolver sem deixar claro a intenção, você DEVE perguntar:
+"Você tem dúvidas sobre nossa política de trocas ou deseja solicitar uma devolução/troca?"
+Nunca assuma a intenção do cliente – sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer DEVOLVER/TROCAR → responda com [[FLOW_EXIT:devolucao]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
+  }
+
+  const forbidSaque = flowContext.forbidSaque ?? false;
+  if (forbidSaque) {
+    restrictions += `\n\n💰 TRAVA SAQUE ATIVA:
+Se o cliente solicitar SAQUE ou RETIRADA de saldo (ex: "quero sacar", "retirar meu saldo", "saque"), responda:
+"Entendi! Vou te encaminhar para o especialista de saques."
+E retorne [[FLOW_EXIT:saque]] imediatamente.
+
+🔍 DESAMBIGUAÇÃO SAQUE OBRIGATÓRIA:
+Se o cliente mencionar termos como saque, saldo, carteira sem deixar claro se quer INFORMAÇÃO ou AÇÃO, você DEVE perguntar:
+"Posso te ajudar com informações sobre saque ou você gostaria de realizar um saque agora?"
+Nunca assuma a intenção do cliente – sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer SACAR → responda com [[FLOW_EXIT:saque]]
+Se for apenas dúvida informativa → responda normalmente usando a Base de Conhecimento.`;
+  }
+
+  const forbidSistema = flowContext.forbidSistema ?? false;
+  if (forbidSistema) {
+    restrictions += `\n\n🖥️ TRAVA SUPORTE SISTEMA ATIVA:
+Se o cliente reportar BUG, ERRO ou problema TÉCNICO no sistema (ex: "sistema não funciona", "erro ao acessar", "bug"), responda:
+"Entendi! Vou te encaminhar para o suporte técnico."
+E retorne [[FLOW_EXIT:suporte_sistema]] imediatamente.`;
   }
   
   restrictions += `

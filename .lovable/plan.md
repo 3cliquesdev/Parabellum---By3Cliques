@@ -1,101 +1,178 @@
 
+# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-# Diagnóstico: IAs só transferem sem ajudar + sem roteamento cruzado entre Helpers
+## Arquivo: `supabase/functions/process-chat-flow/index.ts`
 
-## Problemas Identificados
+### FIX 1 ✅ — Proteção contra loop flow-to-flow
+### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
+### FIX 3 ✅ — Auto-traverse cobre condition_v2
+### FIX 4 ✅ — Transfer node atualiza conversations.department
+### FIX 5 ✅ — startMessage com replaceVariables
+### FIX 6 ✅ — financialIntentPattern simplificado
 
-### 1. Triagem configurada para NUNCA ajudar
-O objetivo do nó `IA Triagem` (node_4_ia_triagem) diz literalmente:
-- "Identifique a intenção do cliente e **encaminhe imediatamente**"
-- "**Nunca tente resolver**"
-- "Se a intenção estiver clara, encaminhe SEM fazer perguntas"
+---
 
-Isso faz a IA gerar `[[FLOW_EXIT:pedidos]]` na primeira mensagem sem tentar ajudar o cliente.
+# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
 
-### 2. Nenhum nó V4 tem `forbid_*` flags ativados
-Todos os 11 nós de IA do V4 Master têm TODOS os `forbid_*` como `null` (desativado):
-- forbid_financial, forbid_commercial, forbid_cancellation, forbid_support, forbid_pedidos, forbid_devolucao, forbid_saque, forbid_consultant = todos `null`
+## Problema
+Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
 
-Isso significa que o sistema de regex do `process-chat-flow` (que detecta intenções por palavras-chave) **nunca dispara** — só funciona quando `forbid_*` está `true`.
+## Correções aplicadas
 
-A única forma de exit é:
-- A IA enviar `[[FLOW_EXIT:intent]]` voluntariamente
-- Atingir `max_interactions` (4 na triagem, 4-6 nos helpers)
+### 7a — Fallback edge default (process-chat-flow ~L2273)
+Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
 
-### 3. Helpers não fazem roteamento cruzado
-Se o cliente está no Helper Pedidos e começa a falar de saque:
-- O Helper Pedidos **não tem** `forbid_saque=true`
-- A regex de saque não dispara
-- A IA não tem instrução no prompt para fazer `[[FLOW_EXIT:saque]]`
-- O helper fica preso tentando ajudar com pedidos até `max_interactions=5`
-- Quando atinge o máximo, vai para a saída `default` → Transfer Suporte Pedidos (humano)
-- O cliente **nunca chega** no Helper Saque
+### 7b — Guard final sem nó (process-chat-flow ~L2336)
+Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
 
-### 4. Helpers têm edges de roteamento cruzado, mas sem triggers
-Os edges existem no canvas (ex: Helper Pedidos → Helper Devoluções via `devolucao`, Helper Suporte → Helper Financeiro via `financeiro`), mas como nenhum `forbid_*` está ativo, esses caminhos **nunca são usados**.
+### 7c — Safety net IA falha (process-buffered-messages ~L383)
+Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
 
-## Plano de Correção
+### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
+Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
 
-### Fix 1 — Mudar objetivo da Triagem para AJUDAR antes de rotear
-**Arquivo**: Atualização do nó `node_4_ia_triagem` no flow_definition do V4 Master
+---
 
-Novo objetivo:
+# FIX 8 ✅ — pg_cron matando flows prematuramente (11/03/2026)
+
+## Problema
+O pg_cron `cleanup-stuck-flow-states` usava `started_at < now() - 3 min`, mas `started_at` é imutável. Flows com múltiplos passos (>3min) eram mortos antes de chegar ao nó de transfer.
+
+## Correções aplicadas
+
+### 8a — Coluna `updated_at` em `chat_flow_states`
+Nova coluna `updated_at timestamptz DEFAULT now()` adicionada via migration. Registros existentes backfilled com `COALESCE(completed_at, started_at)`.
+
+### 8b — `updated_at` em todos os `.update()` do process-chat-flow
+21 pontos de atualização no `process-chat-flow/index.ts` agora incluem `updated_at: new Date().toISOString()`, renovando o timestamp a cada interação.
+
+### 8c — pg_cron atualizado
+Cron usa `updated_at < now() - INTERVAL '15 minutes'` em vez de `started_at < now() - 3 min`.
+
+---
+
+# FIX 9 ✅ — IA não responde: safety net mata flow em quota error (11/03/2026)
+
+## Problema
+O `process-buffered-messages` tratava erros 429/503 (quota/rate limit) como falha fatal, disparando `forceAIExit` e matando o flow antes da IA ter chance de responder.
+
+## Correções aplicadas
+
+### 9a — Distinguir quota error de erro técnico real
+Na safety net do `process-buffered-messages`, erros 429/503 com `quota_error` ou `retry_suggested: true` NÃO disparam `forceAIExit`. Buffer fica como `processed=false` para retry no próximo ciclo.
+
+### 9b — Refresh `updated_at` do flow state após buffer processing com sucesso
+Após `ai-autopilot-chat` retornar OK via buffer, o `updated_at` do `chat_flow_states` é atualizado para evitar morte prematura pelo cron de 15 min.
+
+### 9c — Anti-retry infinito (3 ciclos)
+Buffers que falham por quota por 3+ ciclos de cron (~3 min) enviam mensagem de "alta demanda" ao contato e são marcados como processed.
+
+---
+
+# FIX 10 ✅ — Auditoria IA Semana 1: Quick wins (11/03/2026)
+
+## Correções aplicadas
+
+### 10a — auto-handoff: UUID dinâmico
+Substituído UUID hardcoded `36ce66cd-...` por busca dinâmica do departamento "Suporte" via `departments.ilike('name', '%suporte%')`. Se não encontrado, loga warning e aplica handoff sem forçar departamento.
+
+### 10b — auto-handoff: Markdown removido das notas internas
+Removido `**bold**` de todas as notas internas (linhas 78, 97, 174-181). Notas agora usam texto plano com emojis para compatibilidade cross-canal (WhatsApp).
+
+### 10c — ai-autopilot-chat: Memória cross-session
+Busca últimas 3 conversas fechadas do mesmo contact_id e injeta última mensagem de agente/sistema no system prompt. IA agora lembra conversas anteriores do mesmo cliente.
+
+### 10d — ai-autopilot-chat: Persona contextual
+Tom da IA varia automaticamente baseado no status do contato:
+- VIP/assinante → tom premium e proativo
+- Churn risk/inativo → tom empático e acolhedor
+- Lead quente (score ≥ 80) → tom entusiasmado e consultivo
+
+---
+
+# FIX 11 ✅ — Passive Learning ativado + Cron Job (11/03/2026)
+
+## O que foi feito
+
+### 11a — Flag `ai_passive_learning_enabled` = true
+Inserido na tabela `system_configurations` com categoria `ai`.
+
+### 11b — Cron job `passive-learning-hourly`
+pg_cron agendado para rodar a cada hora (`0 * * * *`), invocando a edge function `passive-learning-cron` via `net.http_post`.
+
+### Estado confirmado
+- `ai_global_enabled` = true
+- `ai_shadow_mode` = false
+- `ai_passive_learning_enabled` = true
+
+---
+
+# FIX 12 ✅ — Cron job corrigido: anon key no gateway (11/03/2026)
+
+## Problema
+`current_setting('supabase.service_role_key', true)` retorna NULL neste projeto → cron enviava `Authorization: Bearer null` → edge function não autenticava.
+
+## Correção
+Recriado cron job `passive-learning-hourly` (jobid 13) usando anon key no header Authorization. A anon key é suficiente para passar pelo API gateway; a função internamente usa `SUPABASE_SERVICE_ROLE_KEY` do ambiente Deno para operações admin.
+
+---
+
+# FIX 13 ✅ — Auto-KB Gap Detection (11/03/2026)
+
+## O que foi feito
+
+### 13a — Edge function `detect-kb-gaps`
+Criada edge function que:
+1. Busca eventos de IA das últimas 24h onde a IA fez handoff/exit (tipos: `ai_handoff_exit`, `contract_violation_blocked`, `flow_exit_clean`, `ai_exit_intent`)
+2. Clusteriza por similaridade textual (primeiras 3 palavras normalizadas)
+3. Filtra clusters com >= 2 ocorrências (gaps recorrentes)
+4. Cria `knowledge_candidates` com `status: 'pending'` + tag `'gap_detected'` (CHECK constraint impede valor custom)
+5. Notifica admins/managers via tabela `notifications`
+
+### 13b — Cron job `detect-kb-gaps-daily`
+Agendado para rodar diariamente às 8h UTC (`0 8 * * *`) usando anon key no gateway.
+
+### 13c — Workaround CHECK constraint
+`knowledge_candidates.status` só aceita `pending | approved | rejected`. Gaps usam `status: 'pending'` com tag `'gap_detected'` no array de tags para diferenciação.
+
+---
+
+# FIX 14 ✅ — transition-conversation-state: State Machine centralizado (11/03/2026)
+
+## Problema
+Mudanças de estado de conversas (ai_mode, department, assigned_to, dispatch jobs) eram feitas em múltiplos pontos do código (auto-handoff, process-chat-flow, etc.), causando inconsistências como conversa sem departamento, ai_mode errado, ou dispatch job desatualizado.
+
+## Correções aplicadas
+
+### 14a — Edge function `transition-conversation-state`
+Nova edge function que é a ÚNICA fonte da verdade para transições de estado. Suporta 7 tipos:
+- `handoff_to_human`: autopilot → waiting_human + cria dispatch job
+- `assign_agent`: qualquer → copilot + atribui agente + fecha dispatch
+- `unassign_agent`: copilot → waiting_human + reabre dispatch
+- `engage_ai`: qualquer → autopilot + fecha dispatch
+- `set_copilot`: qualquer → copilot
+- `update_department`: atualiza dept + dispatch job
+- `close`: qualquer → closed + fecha dispatch
+
+Cada transição:
+1. Busca estado atual da conversa
+2. Aplica update atômico
+3. Gerencia dispatch jobs (create/close/reopen)
+4. Loga em `ai_events` como `state_transition_{tipo}`
+5. Fallback dinâmico para dept "Suporte"
+
+### 14b — auto-handoff refatorado
+Substituída toda lógica de update direto (fallback dept + update ai_mode) por chamada única:
+```typescript
+supabaseClient.functions.invoke('transition-conversation-state', {
+  body: { conversationId, transition: 'handoff_to_human', reason, metadata }
+});
 ```
-Você é a assistente de triagem do atendimento 3 Cliques.
-Primeiro, TENTE AJUDAR o cliente com a Base de Conhecimento.
-Se a resposta está na KB, responda diretamente.
-Se NÃO conseguir resolver ou o cliente precisar de ação específica,
-identifique a intenção e encaminhe para o especialista certo.
 
-QUANDO ENCAMINHAR (usar [[FLOW_EXIT:intent]]):
-- Ação financeira (saque, reembolso, estorno) → [[FLOW_EXIT:saque]] ou [[FLOW_EXIT:financeiro]]
-- Cancelar plano/assinatura → [[FLOW_EXIT:cancelamento]]
-- Produto defeituoso/troca → [[FLOW_EXIT:devolucao]]
-- Rastreio/status pedido → [[FLOW_EXIT:pedidos]]
-- Bug/erro sistema → [[FLOW_EXIT:suporte_sistema]]
-- Comprar/preço → [[FLOW_EXIT:comercial]]
-- Falar com consultor → [[FLOW_EXIT:consultor]]
-
-QUANDO NÃO ENCAMINHAR:
-- Dúvidas informativas que a KB responde
-- Saudações (responda normalmente)
-- Perguntas gerais sobre como funciona algo
-```
-
-Também aumentar `max_interactions` de 4 para 8 e desativar `forbid_questions: false` para permitir perguntas de clarificação.
-
-### Fix 2 — Ativar `forbid_*` flags nos nós de Triagem e Helpers (roteamento cruzado)
-
-**Triagem** (node_4_ia_triagem): Ativar TODOS os forbid_* flags para que a regex do `process-chat-flow` funcione como backup do `[[FLOW_EXIT]]`:
-- forbid_financial=true, forbid_commercial=true, forbid_cancellation=true, forbid_pedidos=true, forbid_devolucao=true, forbid_saque=true, forbid_support=true, forbid_consultant=true
-
-**Helpers especializados**: Ativar forbid_* para temas FORA do seu escopo:
-- Helper Pedidos: `forbid_saque=true`, `forbid_financial=true`, `forbid_cancellation=true`, `forbid_commercial=true`
-- Helper Financeiro: `forbid_pedidos=true`, `forbid_commercial=true`, `forbid_cancellation=true`
-- Helper Saque: `forbid_pedidos=true`, `forbid_commercial=true`, `forbid_cancellation=true`
-- Helper Suporte: `forbid_saque=true`, `forbid_financial=true`, `forbid_cancellation=true`, `forbid_commercial=true` (já tem edges para esses destinos)
-- etc.
-
-Isso garante que quando o cliente muda de assunto dentro de um helper, o regex do motor detecta e roteia automaticamente.
-
-### Fix 3 — Adicionar instrução de roteamento cruzado no prompt restritivo dos Helpers
-
-Quando um Helper tem `forbid_*` flags ativos, adicionar ao prompt restritivo:
-```
-Se o cliente mudar de assunto para um tema fora do seu escopo,
-responda: "Entendi! Vou te encaminhar para o especialista certo."
-E retorne [[FLOW_EXIT:intent]] com a intenção detectada.
-```
-
-### Implementação
-
-1. **Atualizar flow_definition do V4 Master** via SQL (UPDATE no jsonb) — mudar objectives e adicionar forbid_* flags em cada nó
-2. **Atualizar `generateRestrictedPrompt`** no `ai-autopilot-chat` — adicionar travas para pedidos, devolução, saque, sistema e internacional (hoje só tem financial, cancellation, commercial e consultant)
-3. **Aumentar `max_interactions`** da Triagem de 4 para 8
-
-### Resultado Esperado
-- Triagem tenta ajudar o cliente ANTES de rotear
-- Se não conseguir, roteia para o especialista certo
-- Se o cliente muda de assunto dentro de um helper, o helper detecta e roteia para outro helper
-- Roteamento funciona por regex (backup) E por `[[FLOW_EXIT]]` (IA)
-
+### 14c — process-chat-flow: 5 blocos de transfer refatorados
+Todos os blocos de update direto de `conversations` em transfer nodes substituídos por `fetch()` para `transition-conversation-state`:
+1. Contract violation handler (~L726)
+2. Handoff sem próximo nó (~L2326)
+3. aiExitForced sem nó (~L2365)
+4. Transfer node principal (~L2808)
+5. Transfer node msg chain (~L3061)
