@@ -1055,7 +1055,7 @@ function generateResponsePrefix(action: 'direct' | 'cautious' | 'handoff'): stri
     case 'direct':
       return ''; // Sem prefixo para respostas diretas
     case 'cautious':
-      return 'Baseado nas informaÃ§Ãµes disponÃ­veis:\n\n';
+      return ''; // FIX: Removido prefixo RAG que vazava para o cliente
     case 'handoff':
       return ''; // Handoff usa mensagem prÃ³pria
   }
@@ -6963,7 +6963,7 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
         { role: 'user', content: customerMessage }
       ],
       temperature: persona.temperature ?? 0.7,  // CORRIGIDO: ?? ao invÃ©s de || (temperatura 0 Ã© vÃ¡lida)
-      max_tokens: persona.max_tokens ?? 500    // CORRIGIDO: ?? ao invÃ©s de || (consistÃªncia)
+      max_tokens: persona.max_tokens ?? 800    // FIX: Aumentado de 500->800 para evitar truncamento
     };
 
     console.log('[ai-autopilot-chat] Messages structure:', {
@@ -7214,6 +7214,21 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
     let rawAIContent = aiData.choices?.[0]?.message?.content;
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
 
+    // 🔧 FIX: Detectar truncamento por max_tokens e cortar até última frase completa
+    const finishReason = aiData.choices?.[0]?.finish_reason;
+    if (finishReason === 'length' && rawAIContent) {
+      console.warn('[ai-autopilot-chat] ⚠️ Response truncated by max_tokens — trimming to last complete sentence');
+      const lastPunctuation = Math.max(
+        rawAIContent.lastIndexOf('.'),
+        rawAIContent.lastIndexOf('!'),
+        rawAIContent.lastIndexOf('?')
+      );
+      if (lastPunctuation > rawAIContent.length * 0.3) {
+        rawAIContent = rawAIContent.substring(0, lastPunctuation + 1);
+        console.log('[ai-autopilot-chat] ✅ Trimmed to last complete sentence at position', lastPunctuation);
+      }
+    }
+
     // ðŸ†• FIX B: RETRY â€” Se IA retornou vazio sem tool_calls, tentar com prompt reduzido
     if (!rawAIContent && !toolCalls.length) {
       console.warn('[ai-autopilot-chat] âš ï¸ IA retornou vazio â€” tentando retry com prompt reduzido');
@@ -7227,7 +7242,7 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
           model: selectedModel,
           messages: retryMessages,
           temperature: 0.7,
-          max_tokens: 300,
+          max_tokens: 600,  // FIX: Aumentado de 300→600 para evitar truncamento no retry
         };
         const retryData = await callAIWithFallback(retryPayload);
         rawAIContent = retryData.choices?.[0]?.message?.content;
