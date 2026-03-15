@@ -137,10 +137,11 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   };
 
   const handleSubmit = async () => {
-    if (!email || !orderId || !reason) return;
+    const userEmail = user?.email || "";
+    if (!userEmail || !orderId || !reason) return;
 
     const result = await registerReturn.mutateAsync({
-      email,
+      email: userEmail,
       external_order_id: orderId,
       tracking_code_return: trackingReturn || undefined,
       reason,
