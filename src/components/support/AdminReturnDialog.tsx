@@ -61,9 +61,11 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
       setOrderId("");
       setOrderIdManual(false);
       setBuyerName(null);
+      }
       return;
     }
 
+    lastSearchedRef.current = trimmed;
     setSearching(true);
     try {
       const { data, error } = await supabase.functions.invoke('lookup-order-by-tracking', {
