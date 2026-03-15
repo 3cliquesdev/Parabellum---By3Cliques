@@ -3406,13 +3406,18 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🎯 ai_exit_intent salvo: "${intentData.ai_exit_intent}"`);
           
           // 🔴 FIX: Mapear ai_exit_intent para os flags *IntentMatch
-          if (!financialIntentMatch && !cancellationIntentMatch && !commercialIntentMatch && !supportIntentMatch && !consultorIntentMatch) {
+          if (!financialIntentMatch && !cancellationIntentMatch && !commercialIntentMatch && !supportIntentMatch && !consultorIntentMatch && !saqueIntentMatch && !devolucaoIntentMatch && !pedidosIntentMatch && !sistemaIntentMatch && !internacionalIntentMatch) {
             const intent = intentData.ai_exit_intent;
             if (intent === 'financeiro') { financialIntentMatch = true; }
             else if (intent === 'cancelamento') { cancellationIntentMatch = true; }
             else if (intent === 'comercial') { commercialIntentMatch = true; }
             else if (intent === 'suporte') { supportIntentMatch = true; }
             else if (intent === 'consultor') { consultorIntentMatch = true; }
+            else if (intent === 'saque') { saqueIntentMatch = true; }
+            else if (intent === 'devolucao') { devolucaoIntentMatch = true; }
+            else if (intent === 'pedidos') { pedidosIntentMatch = true; }
+            else if (intent === 'sistema' || intent === 'suporte_sistema') { sistemaIntentMatch = true; }
+            else if (intent === 'internacional' || intent === 'comercial_internacional') { internacionalIntentMatch = true; }
             console.log(`[process-chat-flow] 🎯 intentData.ai_exit_intent="${intent}" → *IntentMatch forçado`);
           }
         }
