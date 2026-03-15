@@ -53,6 +53,17 @@ export function useUpdateReturnStatus() {
         .update({ status })
         .eq("id", id);
       if (error) throw error;
+
+      // Notificar cliente por email para refunded e rejected
+      if (status === "refunded" || status === "rejected") {
+        try {
+          await supabase.functions.invoke("notify-return-status", {
+            body: { return_id: id, new_status: status },
+          });
+        } catch (emailErr) {
+          console.error("[useUpdateReturnStatus] Email notification error:", emailErr);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-returns"] });
@@ -77,8 +88,9 @@ export function useCreateAdminReturn() {
       description?: string;
       status?: string;
       photos?: string[];
+      registered_email?: string;
     }) => {
-      const { error } = await supabase.from("returns").insert({
+      const { data: inserted, error } = await supabase.from("returns").insert({
         external_order_id: data.external_order_id,
         tracking_code_original: data.tracking_code_original || null,
         tracking_code_return: data.tracking_code_return || null,
@@ -87,8 +99,20 @@ export function useCreateAdminReturn() {
         status: data.status || "pending",
         created_by: "admin",
         photos: data.photos || null,
-      });
+        registered_email: data.registered_email || null,
+      }).select("id").single();
       if (error) throw error;
+
+      // Enviar email de confirmação se tiver email
+      if (inserted?.id && data.registered_email) {
+        try {
+          await supabase.functions.invoke("notify-return-status", {
+            body: { return_id: inserted.id, new_status: "pending" },
+          });
+        } catch (emailErr) {
+          console.error("[useCreateAdminReturn] Email notification error:", emailErr);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-returns"] });

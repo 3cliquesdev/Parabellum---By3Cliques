@@ -99,6 +99,7 @@ export function useLinkReturn() {
   });
 }
 
+// Mantido para compatibilidade, mas preferir useReasonLabelsMap de useReturnReasons
 export const REASON_LABELS: Record<string, string> = {
   defeito: "Defeito no produto",
   arrependimento: "Arrependimento",
@@ -107,9 +108,10 @@ export const REASON_LABELS: Record<string, string> = {
   outro: "Outro",
 };
 
-export const STATUS_CONFIG: Record<string, { label: string; variant: "warning" | "success" | "destructive" | "info" }> = {
+export const STATUS_CONFIG: Record<string, { label: string; variant: "warning" | "success" | "destructive" | "info" | "secondary" }> = {
   pending: { label: "Pendente", variant: "warning" },
   approved: { label: "Aprovada", variant: "success" },
   rejected: { label: "Rejeitada", variant: "destructive" },
   refunded: { label: "Reembolsada", variant: "info" },
+  archived: { label: "Arquivada", variant: "secondary" },
 };

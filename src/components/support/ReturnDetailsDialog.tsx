@@ -1,5 +1,6 @@
 import { AdminReturn, useUpdateReturnStatus } from "@/hooks/useReturns";
-import { REASON_LABELS, STATUS_CONFIG } from "@/hooks/useClientReturns";
+import { STATUS_CONFIG } from "@/hooks/useClientReturns";
+import { useReasonLabelsMap } from "@/hooks/useReturnReasons";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -9,9 +10,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
-import { format } from "date-fns";
+import { Loader2, AlertTriangle } from "lucide-react";
+import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface ReturnDetailsDialogProps {
@@ -21,6 +23,7 @@ interface ReturnDetailsDialogProps {
 
 export function ReturnDetailsDialog({ returnData, onClose }: ReturnDetailsDialogProps) {
   const updateStatus = useUpdateReturnStatus();
+  const reasonLabels = useReasonLabelsMap();
   const [newStatus, setNewStatus] = useState("");
 
   useEffect(() => {
@@ -33,6 +36,10 @@ export function ReturnDetailsDialog({ returnData, onClose }: ReturnDetailsDialog
   const clientName = returnData.contacts
     ? `${returnData.contacts.first_name} ${returnData.contacts.last_name}`
     : returnData.registered_email || "Não vinculado";
+
+  const daysOld = differenceInDays(new Date(), new Date(returnData.created_at));
+  const isOverSLA = daysOld > 30;
+  const isArchived = returnData.status === "archived";
 
   const handleSave = async () => {
     if (newStatus !== returnData.status) {
@@ -52,6 +59,25 @@ export function ReturnDetailsDialog({ returnData, onClose }: ReturnDetailsDialog
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Alerta SLA 30 dias */}
+          {isOverSLA && !isArchived && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Esta devolução tem mais de 30 dias ({daysOld} dias). Recomenda-se arquivar — reembolso não será mais possível.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {isArchived && (
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Esta devolução foi arquivada. Não é possível reembolsar.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-muted-foreground">Cliente</p>
@@ -63,11 +89,11 @@ export function ReturnDetailsDialog({ returnData, onClose }: ReturnDetailsDialog
             </div>
             <div>
               <p className="text-muted-foreground">Motivo</p>
-              <p className="font-medium text-foreground">{REASON_LABELS[returnData.reason] || returnData.reason}</p>
+              <p className="font-medium text-foreground">{reasonLabels[returnData.reason] || returnData.reason}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Status Atual</p>
-              <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
+              <Badge variant={statusCfg.variant as any}>{statusCfg.label}</Badge>
             </div>
             <div>
               <p className="text-muted-foreground">Rastreio Original</p>
@@ -105,7 +131,10 @@ export function ReturnDetailsDialog({ returnData, onClose }: ReturnDetailsDialog
                   <SelectItem value="pending">Pendente</SelectItem>
                   <SelectItem value="approved">Aprovada</SelectItem>
                   <SelectItem value="rejected">Rejeitada</SelectItem>
-                  <SelectItem value="refunded">Reembolsada</SelectItem>
+                  <SelectItem value="refunded" disabled={isArchived || isOverSLA}>
+                    Reembolsada {(isArchived || isOverSLA) ? "(bloqueado)" : ""}
+                  </SelectItem>
+                  <SelectItem value="archived">Arquivada</SelectItem>
                 </SelectContent>
               </Select>
             </div>

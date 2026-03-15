@@ -1,4 +1,5 @@
-import { useClientReturns, REASON_LABELS, STATUS_CONFIG } from "@/hooks/useClientReturns";
+import { useClientReturns, STATUS_CONFIG } from "@/hooks/useClientReturns";
+import { useReasonLabelsMap } from "@/hooks/useReturnReasons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Package, RotateCcw, ChevronRight, Plus } from "lucide-react";
@@ -11,6 +12,7 @@ interface ReturnsListProps {
 
 export function ReturnsList({ onRequestNew }: ReturnsListProps) {
   const { data: returns, isLoading } = useClientReturns();
+  const reasonLabels = useReasonLabelsMap();
 
   if (isLoading) {
     return (
@@ -63,7 +65,7 @@ export function ReturnsList({ onRequestNew }: ReturnsListProps) {
                   </Badge>
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {REASON_LABELS[ret.reason] || ret.reason}
+                  {reasonLabels[ret.reason] || ret.reason}
                 </p>
                 <div className="flex items-center gap-3 mt-1.5 text-[11px] text-gray-400">
                   <span>Protocolo: {ret.id.substring(0, 8).toUpperCase()}</span>

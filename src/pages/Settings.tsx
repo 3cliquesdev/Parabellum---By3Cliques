@@ -25,7 +25,8 @@ import {
   Palette,
   Send,
   GitBranch,
-  Store
+  Store,
+  RotateCcw
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SettingsCategory } from "@/components/settings/SettingsCategory";
@@ -216,6 +217,13 @@ export default function Settings() {
               title="SLA e Prazos"
               description="Políticas de tempo"
               onClick={() => navigate('/settings/sla')}
+            />
+            <SettingsCard
+              icon={RotateCcw}
+              iconBgColor="bg-orange-500"
+              title="Motivos de Devolução"
+              description="Cadastrar e editar motivos"
+              onClick={() => navigate('/settings/return-reasons')}
             />
             <SettingsCard
               icon={Zap}

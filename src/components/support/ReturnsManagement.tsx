@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAdminReturns, AdminReturn } from "@/hooks/useReturns";
-import { REASON_LABELS, STATUS_CONFIG } from "@/hooks/useClientReturns";
+import { STATUS_CONFIG } from "@/hooks/useClientReturns";
+import { useReasonLabelsMap } from "@/hooks/useReturnReasons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +22,7 @@ export default function ReturnsManagement() {
   const [showCreate, setShowCreate] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<AdminReturn | null>(null);
   const { data: returns, isLoading } = useAdminReturns(statusFilter);
+  const reasonLabels = useReasonLabelsMap();
 
   return (
     <PageContainer>
@@ -35,6 +37,7 @@ export default function ReturnsManagement() {
             <SelectItem value="approved">Aprovada</SelectItem>
             <SelectItem value="rejected">Rejeitada</SelectItem>
             <SelectItem value="refunded">Reembolsada</SelectItem>
+            <SelectItem value="archived">Arquivada</SelectItem>
           </SelectContent>
         </Select>
 
@@ -85,9 +88,9 @@ export default function ReturnsManagement() {
                     <TableCell>{clientName}</TableCell>
                     <TableCell>{ret.external_order_id}</TableCell>
                     <TableCell>
-                      <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
+                      <Badge variant={statusCfg.variant as any}>{statusCfg.label}</Badge>
                     </TableCell>
-                    <TableCell>{REASON_LABELS[ret.reason] || ret.reason}</TableCell>
+                    <TableCell>{reasonLabels[ret.reason] || ret.reason}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(ret.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
                     </TableCell>

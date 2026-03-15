@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useRegisterReturn, useLinkReturn, REASON_LABELS } from "@/hooks/useClientReturns";
+import { useRegisterReturn, useLinkReturn } from "@/hooks/useClientReturns";
+import { useReturnReasons } from "@/hooks/useReturnReasons";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, CheckCircle, AlertTriangle, Upload, X, ImageIcon, Package, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +30,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   const { user } = useAuth();
   const registerReturn = useRegisterReturn();
   const linkReturn = useLinkReturn();
+  const { data: reasons } = useReturnReasons();
 
   const [step, setStep] = useState<Step>("form");
   
@@ -285,9 +287,9 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
                   <SelectValue placeholder="Selecione o motivo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(REASON_LABELS).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
+                  {reasons?.map((r) => (
+                    <SelectItem key={r.key} value={r.key}>
+                      {r.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

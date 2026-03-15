@@ -10,7 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useCreateAdminReturn } from "@/hooks/useReturns";
-import { REASON_LABELS } from "@/hooks/useClientReturns";
+import { useReturnReasons } from "@/hooks/useReturnReasons";
 import { Loader2, Search, CheckCircle2, AlertCircle, Upload, X, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ interface LookupResult {
 
 export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps) {
   const createReturn = useCreateAdminReturn();
+  const { data: reasons } = useReturnReasons();
   const [trackingOriginal, setTrackingOriginal] = useState("");
   const [orderId, setOrderId] = useState("");
   const [orderIdManual, setOrderIdManual] = useState(false);
@@ -255,8 +256,8 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
             <Select value={reason} onValueChange={setReason}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {Object.entries(REASON_LABELS).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v}</SelectItem>
+              {reasons?.map((r) => (
+                  <SelectItem key={r.key} value={r.key}>{r.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

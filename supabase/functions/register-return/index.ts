@@ -38,8 +38,14 @@ serve(async (req) => {
       });
     }
 
-    const validReasons = ['defeito', 'arrependimento', 'troca', 'nao_recebido', 'outro'];
-    if (!validReasons.includes(reason)) {
+    // Validar motivo dinâmicamente via tabela return_reasons
+    const { data: validReasons } = await supabase
+      .from('return_reasons')
+      .select('key')
+      .eq('is_active', true);
+    
+    const validReasonKeys = (validReasons || []).map((r: any) => r.key);
+    if (!validReasonKeys.includes(reason)) {
       return new Response(JSON.stringify({ error: 'Motivo inválido' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
