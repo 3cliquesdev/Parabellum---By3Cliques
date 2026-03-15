@@ -66,6 +66,7 @@ const AgentQualityDashboard = lazy(() => import("./pages/AgentQualityDashboard")
 const CopilotImpactDashboard = lazy(() => import("./pages/CopilotImpactDashboard"));
 const SalesRepDetail = lazy(() => import("./pages/SalesRepDetail"));
 const OnboardingBuilder = lazy(() => import("./pages/OnboardingBuilder"));
+const ReturnsManagement = lazy(() => import("./components/support/ReturnsManagement"));
 const PlaybookExecutions = lazy(() => import("./pages/PlaybookExecutions"));
 const KnowledgeImport = lazy(() => import("./pages/KnowledgeImport"));
 const DeliveryGroups = lazy(() => import("./pages/DeliveryGroups"));
