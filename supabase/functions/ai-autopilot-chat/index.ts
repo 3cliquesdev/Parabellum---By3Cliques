@@ -6963,7 +6963,7 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
         { role: 'user', content: customerMessage }
       ],
       temperature: persona.temperature ?? 0.7,  // CORRIGIDO: ?? ao invÃ©s de || (temperatura 0 Ã© vÃ¡lida)
-      max_tokens: persona.max_tokens ?? 500    // CORRIGIDO: ?? ao invÃ©s de || (consistÃªncia)
+      max_tokens: persona.max_tokens ?? 800    // FIX: Aumentado de 500->800 para evitar truncamento
     };
 
     console.log('[ai-autopilot-chat] Messages structure:', {
