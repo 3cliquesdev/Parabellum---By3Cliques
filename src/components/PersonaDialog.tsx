@@ -188,34 +188,20 @@ export function PersonaDialog({ trigger, persona, onOpenChange }: PersonaDialogP
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="temperature">Temperature ({temperature})</Label>
-              <Input
-                id="temperature"
-                type="number"
-                min="0"
-                max="2"
-                step="0.1"
-                value={temperature}
-                onChange={(e) => setTemperature(parseFloat(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">0 = Preciso, 2 = Criativo</p>
-            </div>
+          <TemperaturePreview value={temperature} onChange={setTemperature} />
 
-            <div className="space-y-2">
-              <Label htmlFor="maxTokens">Max Tokens</Label>
-              <Input
-                id="maxTokens"
-                type="number"
-                min="50"
-                max="4000"
-                step="50"
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">Limite de resposta</p>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="maxTokens">Max Tokens</Label>
+            <Input
+              id="maxTokens"
+              type="number"
+              min="50"
+              max="4000"
+              step="50"
+              value={maxTokens}
+              onChange={(e) => setMaxTokens(parseInt(e.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">Limite de resposta</p>
           </div>
 
           <div className="space-y-4">
