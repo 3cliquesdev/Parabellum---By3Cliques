@@ -89,7 +89,7 @@ export default function ClientPortal() {
         </div>
 
         {/* Conteúdo da aba */}
-        <div className="bg-card rounded-xl shadow-sm border border-border/50 p-5 mb-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4">
           {activeTab === "info" && (
             <div className="space-y-5">
               <div className="text-center py-2">
