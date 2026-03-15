@@ -225,6 +225,65 @@ async function checkAfterHoursAndIntercept(
 }
 
 // ============================================================
+// 🆕 HELPER: Mensagem proativa pós-handoff
+// Verifica agentes online no departamento e envia msg ao cliente
+// ============================================================
+async function sendProactiveHandoffMessage(
+  supabaseClient: any,
+  conversationId: string,
+  departmentId: string | null,
+): Promise<void> {
+  try {
+    // Buscar canal da conversa
+    const { data: convData } = await supabaseClient
+      .from('conversations')
+      .select('channel')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    const channel = convData?.channel || 'web_chat';
+
+    // Verificar se há agentes online no departamento
+    let hasOnlineAgents = false;
+    if (departmentId) {
+      const { count } = await supabaseClient
+        .from('profiles')
+        .select('id, agent_departments!inner(department_id)', { count: 'exact', head: true })
+        .eq('availability_status', 'online')
+        .eq('is_blocked', false)
+        .eq('agent_departments.department_id', departmentId);
+      hasOnlineAgents = (count ?? 0) > 0;
+    } else {
+      // Sem departamento específico: verificar qualquer agente online
+      const { count } = await supabaseClient
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('availability_status', 'online')
+        .eq('is_blocked', false);
+      hasOnlineAgents = (count ?? 0) > 0;
+    }
+
+    const proactiveMsg = hasOnlineAgents
+      ? '💬 Estou te conectando com um especialista. Aguarde um momento! 🙂'
+      : '⏳ Nosso time de atendimento está momentaneamente indisponível. Assim que um especialista ficar online, você será atendido automaticamente. 🙏';
+
+    await supabaseClient.from('messages').insert({
+      conversation_id: conversationId,
+      content: proactiveMsg,
+      sender_type: 'user',
+      is_ai_generated: true,
+      is_bot_message: true,
+      channel,
+    });
+
+    console.log(`[process-chat-flow] 📢 Mensagem proativa pós-handoff enviada (agentes online: ${hasOnlineAgents})`);
+  } catch (err) {
+    // Non-blocking: não interromper fluxo se falhar
+    console.error('[process-chat-flow] ⚠️ Erro ao enviar mensagem proativa pós-handoff:', err);
+  }
+}
+
+// ============================================================
 // 🆕 MATCHER ESTRITO PARA ask_options (Contrato v2.3)
 // ============================================================
 interface AskOption {
