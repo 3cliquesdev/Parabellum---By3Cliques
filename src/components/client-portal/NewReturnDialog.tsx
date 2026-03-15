@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useRegisterReturn, useLinkReturn, REASON_LABELS } from "@/hooks/useClientReturns";
+import { useRegisterReturn, useLinkReturn } from "@/hooks/useClientReturns";
+import { useReturnReasons } from "@/hooks/useReturnReasons";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, CheckCircle, AlertTriangle, Upload, X, ImageIcon, Package, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
