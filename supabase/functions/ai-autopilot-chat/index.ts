@@ -4059,6 +4059,10 @@ serve(async (req) => {
       content: m.content
     })) || [];
 
+    // 🆕 FIX: Aumentar janela de histórico quando há transição entre nós (flow_context)
+    // Isso garante que o agente de destino tenha contexto suficiente da triagem
+    const historySliceSize = flow_context && messageHistory.length > 6 ? 10 : 6;
+
     // Obter API keys antecipadamente
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     // LOVABLE_API_KEY removida - usando OpenAI diretamente
