@@ -3315,10 +3315,9 @@ serve(async (req) => {
     // ðŸ†• PRIORIDADE 1: CHAT FLOW - Verificar ANTES da triagem
     // ============================================================
     let flowProcessedEarly = false;
-    let flowPersonaId: string | null = null;
-    let flowKbCategories: string[] | null = null;
-    let flowContextPrompt: string | null = null;
-    let flowFallbackMessage: string | null = null;
+    // 🔧 FIX: Removido re-declaração de flowPersonaId/flowKbCategories/flowContextPrompt/flowFallbackMessage
+    // Essas variáveis já existem no escopo externo (linhas ~1517-1520) e devem ser reutilizadas
+    // A re-declaração com let criava variáveis locais ao try block que eram descartadas
     
     try {
       console.log('[ai-autopilot-chat] ðŸ”„ [PRIORIDADE] Verificando Chat Flow ANTES da triagem...');
@@ -8748,8 +8747,72 @@ Conversa: ${conversationId}`;
               output_json: { category: args.category, summary: args.summary, severity: args.severity, tags: args.tags, ticket_id: ticketId, action: ticketAction, shadow_mode: false }
             });
 
+            // 🆕 FIX: Aplicar tag correspondente à categoria na conversa
+            try {
+              // Mapear categoria do ticket para nome de tag
+              const categoryTagMap: Record<string, string> = {
+                'billing': 'Financeiro',
+                'technical': 'Suporte Técnico',
+                'general': 'Suporte Geral',
+                'sales': 'Comercial',
+                'cancellation': 'Cancelamento',
+                'refund': 'Reembolso',
+                'shipping': 'Pedidos/Entregas',
+                'product': 'Produto',
+                'account': 'Conta',
+                'feedback': 'Feedback',
+                'bug': 'Bug/Erro',
+                'feature_request': 'Sugestão',
+                'onboarding': 'Onboarding',
+                'outro': 'Outros',
+                'other': 'Outros',
+              };
+
+              const tagName = categoryTagMap[args.category] || args.category;
+              
+              // Buscar ou criar tag
+              let tagId: string | null = null;
+              const { data: existingTag } = await supabaseClient
+                .from('tags')
+                .select('id')
+                .ilike('name', tagName)
+                .limit(1)
+                .maybeSingle();
+
+              if (existingTag) {
+                tagId = existingTag.id;
+              } else {
+                // Criar tag se não existe
+                const { data: newTag } = await supabaseClient
+                  .from('tags')
+                  .insert({ name: tagName, color: '#6B7280' })
+                  .select('id')
+                  .single();
+                tagId = newTag?.id || null;
+              }
+
+              if (tagId) {
+                // Verificar se já não está vinculada
+                const { data: existingLink } = await supabaseClient
+                  .from('conversation_tags')
+                  .select('id')
+                  .eq('conversation_id', conversationId)
+                  .eq('tag_id', tagId)
+                  .maybeSingle();
+
+                if (!existingLink) {
+                  await supabaseClient
+                    .from('conversation_tags')
+                    .insert({ conversation_id: conversationId, tag_id: tagId });
+                  console.log('[ai-autopilot-chat] 🏷️ Tag aplicada na conversa:', tagName);
+                }
+              }
+            } catch (tagErr) {
+              console.error('[ai-autopilot-chat] ⚠️ Erro ao aplicar tag (não crítico):', tagErr);
+            }
+
             assistantMessage = `Ticket classificado como "${args.category}" e registrado como resolvido.`;
-            console.log('[ai-autopilot-chat] âœ… classify_and_resolve_ticket concluÃ­do:', { ticketId, action: ticketAction, category: args.category });
+            console.log('[ai-autopilot-chat] ✅ classify_and_resolve_ticket concluído:', { ticketId, action: ticketAction, category: args.category });
 
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro em classify_and_resolve_ticket:', error);

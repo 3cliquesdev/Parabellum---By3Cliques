@@ -2312,10 +2312,76 @@ serve(async (req) => {
               }
 
               // CASO 3.5: 🧪 TEST MODE - IA permitida sem fluxo ativo
-              // Quando process-chat-flow retorna test_mode_ai_allowed, chamar ai-autopilot-chat diretamente
+              // Quando process-chat-flow retorna test_mode_ai_allowed, chamar ai-autopilot-chat
+              // 🔧 FIX: Buscar flow_state ativo e montar flow_context para evitar fallback para persona global
               if (flowData.useAI && !flowData.aiNodeActive && flowData.reason === 'test_mode_ai_allowed') {
-                console.log("[meta-whatsapp-webhook] 🧪 TEST MODE: Chamando ai-autopilot-chat sem flow context");
+                // 🆕 Tentar buscar flow_state ativo para montar flow_context
+                let testFlowContext: Record<string, unknown> | undefined = undefined;
                 try {
+                  const { data: activeFlowState } = await supabase
+                    .from('chat_flow_states')
+                    .select('id, flow_id, current_node_id, collected_data, chat_flows(name, flow_definition)')
+                    .eq('conversation_id', conversation.id)
+                    .in('status', ['active', 'waiting_input', 'in_progress'])
+                    .order('started_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                  if (activeFlowState) {
+                    const flowDef = activeFlowState.chat_flows?.flow_definition as any;
+                    const currentNodeId = activeFlowState.current_node_id;
+                    const nodes = flowDef?.nodes || [];
+                    const currentNode = nodes.find((n: any) => n.id === currentNodeId);
+
+                    if (currentNode?.type === 'ai_response') {
+                      testFlowContext = {
+                        flow_id: activeFlowState.flow_id,
+                        node_id: currentNode.id,
+                        node_type: 'ai_response',
+                        allowed_sources: currentNode.data?.allowed_sources || ['kb'],
+                        response_format: 'text_only',
+                        personaId: currentNode.data?.persona_id || null,
+                        kbCategories: currentNode.data?.kb_categories || null,
+                        contextPrompt: currentNode.data?.context_prompt || null,
+                        fallbackMessage: currentNode.data?.fallback_message || null,
+                        objective: currentNode.data?.objective || null,
+                        maxSentences: currentNode.data?.max_sentences ?? 3,
+                        forbidQuestions: currentNode.data?.forbid_questions ?? true,
+                        forbidOptions: currentNode.data?.forbid_options ?? true,
+                        forbidFinancial: currentNode.data?.forbid_financial ?? false,
+                        forbidCommercial: currentNode.data?.forbid_commercial ?? false,
+                        forbidCancellation: currentNode.data?.forbid_cancellation ?? false,
+                        forbidConsultant: currentNode.data?.forbid_consultant ?? false,
+                        returnReasons: currentNode.data?.return_reasons || null,
+                      };
+                      console.log("[meta-whatsapp-webhook] 🧪 TEST MODE: flow_context reconstruído do nó ativo:", {
+                        nodeId: currentNode.id,
+                        personaId: testFlowContext.personaId,
+                        kbCategories: testFlowContext.kbCategories,
+                      });
+                    } else {
+                      console.log("[meta-whatsapp-webhook] 🧪 TEST MODE: nó ativo não é ai_response:", currentNode?.type);
+                    }
+                  } else {
+                    console.log("[meta-whatsapp-webhook] 🧪 TEST MODE: Nenhum flow_state ativo encontrado");
+                  }
+                } catch (flowStateErr) {
+                  console.error("[meta-whatsapp-webhook] ⚠️ TEST MODE: Erro ao buscar flow_state:", flowStateErr);
+                }
+
+                console.log("[meta-whatsapp-webhook] 🧪 TEST MODE: Chamando ai-autopilot-chat", testFlowContext ? "COM flow_context" : "sem flow_context");
+                try {
+                  const autopilotBody: Record<string, unknown> = {
+                    conversationId: conversation.id,
+                    customerMessage: messageContent,
+                    contact_id: contact.id,
+                    whatsapp_provider: "meta",
+                    whatsapp_meta_instance_id: instance.id,
+                  };
+                  if (testFlowContext) {
+                    autopilotBody.flow_context = testFlowContext;
+                  }
+
                   const autopilotResp = await fetch(
                     `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-autopilot-chat`,
                     {
@@ -2324,13 +2390,7 @@ serve(async (req) => {
                         "Content-Type": "application/json",
                         Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
                       },
-                      body: JSON.stringify({
-                        conversationId: conversation.id,
-                        customerMessage: messageContent,
-                        contact_id: contact.id,
-                        whatsapp_provider: "meta",
-                        whatsapp_meta_instance_id: instance.id,
-                      }),
+                      body: JSON.stringify(autopilotBody),
                     }
                   );
                   if (!autopilotResp.ok) {
