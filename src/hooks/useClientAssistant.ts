@@ -39,8 +39,53 @@ export function useClientAssistant() {
     enabled: !!user?.email,
   });
 
+  const invokeAssistant = useCallback(async (conversationId: string, messageText: string, contactName: string) => {
+    const { data, error } = await supabase.functions.invoke("ai-autopilot-chat", {
+      body: {
+        conversationId,
+        customerMessage: messageText,
+        customer_context: {
+          name: contactName,
+          email: user?.email,
+          isVerified: true,
+        },
+        flow_context: {
+          node_type: "ai_response",
+          allowed_sources: ["kb", "crm", "tracking"],
+          contextPrompt:
+            "[ROLE: especialista] Você é um assistente do portal do cliente. Responda dúvidas sobre pedidos, rastreio, devoluções e financeiro. Use a base de conhecimento. Seja direto e objetivo.",
+          forbidQuestions: false,
+          forbidOptions: false,
+          maxSentences: 4,
+        },
+      },
+    });
+
+    if (error) throw error;
+    return data;
+  }, [user?.email]);
+
+  const isConversationStillActive = useCallback(async (conversationId: string) => {
+    const { data, error } = await supabase
+      .from("conversations")
+      .select("id, status, ai_mode")
+      .eq("id", conversationId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.warn("[AssistantWidget] Conversa inválida, criando nova:", conversationId, error);
+      return false;
+    }
+
+    return data.status !== "closed" && data.ai_mode !== "disabled";
+  }, []);
+
   const getOrCreateConversation = useCallback(async (): Promise<string> => {
-    if (conversationIdRef.current) return conversationIdRef.current;
+    if (conversationIdRef.current) {
+      const isActive = await isConversationStillActive(conversationIdRef.current);
+      if (isActive) return conversationIdRef.current;
+      conversationIdRef.current = null;
+    }
 
     if (!contactId?.id) throw new Error("Contato não encontrado");
 
@@ -51,6 +96,7 @@ export function useClientAssistant() {
       .eq("contact_id", contactId.id)
       .eq("channel", "web_chat")
       .neq("status", "closed")
+      .neq("ai_mode", "disabled")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -75,49 +121,35 @@ export function useClientAssistant() {
     if (error) throw error;
     conversationIdRef.current = newConv.id;
     return newConv.id;
-  }, [contactId]);
+  }, [contactId, isConversationStillActive]);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isLoading || handoff) return;
+    const trimmedText = text.trim();
+    if (!trimmedText || isLoading || handoff) return;
 
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
-      content: text.trim(),
+      content: trimmedText,
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
     try {
-      const conversationId = await getOrCreateConversation();
-
       const contactName = contactId
         ? `${contactId.first_name} ${contactId.last_name}`.trim()
         : profile?.full_name || user?.email?.split("@")[0] || "Cliente";
 
-      const { data, error } = await supabase.functions.invoke("ai-autopilot-chat", {
-        body: {
-          conversationId,
-          customerMessage: text.trim(),
-          customer_context: {
-            name: contactName,
-            email: user?.email,
-            isVerified: true,
-          },
-          flow_context: {
-            node_type: "ai_response",
-            allowed_sources: ["kb", "crm", "tracking"],
-            contextPrompt:
-              "[ROLE: especialista] Você é um assistente do portal do cliente. Responda dúvidas sobre pedidos, rastreio, devoluções e financeiro. Use a base de conhecimento. Seja direto e objetivo.",
-            forbidQuestions: false,
-            forbidOptions: false,
-            maxSentences: 4,
-          },
-        },
-      });
+      let conversationId = await getOrCreateConversation();
+      let data = await invokeAssistant(conversationId, trimmedText, contactName);
 
-      if (error) throw error;
+      if (data?.skipped === true && data?.ai_mode === "disabled") {
+        console.warn("[AssistantWidget] Conversa desabilitada detectada, recriando atendimento", conversationId);
+        conversationIdRef.current = null;
+        conversationId = await getOrCreateConversation();
+        data = await invokeAssistant(conversationId, trimmedText, contactName);
+      }
 
       const aiText = data?.response || data?.message || "Desculpe, não consegui processar sua solicitação. Tente novamente.";
 
@@ -151,7 +183,7 @@ export function useClientAssistant() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, handoff, getOrCreateConversation, contactId, profile, user]);
+  }, [isLoading, handoff, getOrCreateConversation, invokeAssistant, contactId, profile, user]);
 
   return {
     messages,
