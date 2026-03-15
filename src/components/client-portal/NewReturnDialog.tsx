@@ -161,7 +161,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   const handleLink = async () => {
     await linkReturn.mutateAsync({
       return_id: duplicateReturnId,
-      email,
+      email: user?.email || "",
     });
     setStep("success");
     setProtocol(duplicateReturnId.substring(0, 8).toUpperCase());
