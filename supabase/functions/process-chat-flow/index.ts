@@ -4583,6 +4583,7 @@ serve(async (req) => {
               forbidInternacional: currentNode.data?.forbid_internacional ?? false,
               onboardingDetection: currentNode.data?.onboarding_detection_enabled ?? false,
               requireOtpForFinancial: currentNode.data?.require_otp_for_financial ?? false,
+              returnReasons: variablesContext['__return_reasons_full'] || null,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
