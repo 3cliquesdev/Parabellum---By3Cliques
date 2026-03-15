@@ -641,15 +641,6 @@ async function sendWhatsAppMessage(
   senderName?: string | null // ðŸ†• Nome do remetente para prefixar mensagem
 ): Promise<{ success: boolean; error?: any }> {
   try {
-    // 🛡️ EMPTY MESSAGE GUARD: Nunca enviar mensagem vazia
-    if (!message || message.trim().length === 0) {
-      console.error('[sendWhatsAppMessage] ⚠️ EMPTY MESSAGE GUARD: Tentativa de enviar mensagem vazia bloqueada', {
-        conversationId,
-        provider: whatsappResult.provider
-      });
-      return { success: false, error: 'empty_message' };
-    }
-
     if (whatsappResult.provider === 'meta') {
       // ðŸ†• CORREÃ‡ÃƒO: Priorizar whatsapp_id sobre phone
       const targetNumber = extractWhatsAppNumber(whatsappId) || phoneNumber?.replace(/\D/g, '');
@@ -1055,7 +1046,7 @@ function generateResponsePrefix(action: 'direct' | 'cautious' | 'handoff'): stri
     case 'direct':
       return ''; // Sem prefixo para respostas diretas
     case 'cautious':
-      return ''; // FIX: Removido prefixo RAG que vazava para o cliente
+      return 'Baseado nas informaÃ§Ãµes disponÃ­veis:\n\n';
     case 'handoff':
       return ''; // Handoff usa mensagem prÃ³pria
   }
@@ -1211,7 +1202,7 @@ interface FlowContext {
   kbCategories?: string[];
   contextPrompt?: string;
   fallbackMessage?: string;
-  // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
+  // ðŸ†• FASE 1: Campos de Controle de Comportamento Anti-AlucinaÃ§Ã£o
   objective?: string;
   maxSentences?: number;
   forbidQuestions?: boolean;
@@ -1221,14 +1212,7 @@ interface FlowContext {
   forbidCancellation?: boolean;
   forbidSupport?: boolean;
   forbidConsultant?: boolean;
-  forbidPedidos?: boolean;
-  forbidDevolucao?: boolean;
-  forbidSaque?: boolean;
-  forbidSistema?: boolean;
   collectedData?: any;
-  onboardingDetection?: boolean;
-  // 🆕 Motivos de devolução dinâmicos
-  returnReasons?: Array<{ key: string; label: string }>;
 }
 
 // ðŸ†• FASE 1: FunÃ§Ã£o para gerar prompt RESTRITIVO baseado no flow_context
@@ -1320,59 +1304,6 @@ Nunca assuma a intenÃ§Ã£o do cliente â€” sempre pergunte quando houver 
 Se o cliente confirmar que quer FALAR COM CONSULTOR â†’ responda com [[FLOW_EXIT:consultor]]
 Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.`;
   }
-
-  const forbidPedidos = flowContext.forbidPedidos ?? false;
-  if (forbidPedidos) {
-    restrictions += `\n\n📦 TRAVA PEDIDOS ATIVA:
-Se o cliente solicitar RASTREIO, STATUS ou informações de PEDIDO (ex: "onde está meu pedido", "rastrear pedido"), responda:
-"Entendi! Vou te encaminhar para o especialista em pedidos."
-E retorne [[FLOW_EXIT:pedidos]] imediatamente.
-
-🔍 DESAMBIGUAÇÃO PEDIDOS OBRIGATÓRIA:
-Se o cliente mencionar termos como pedido, entrega, rastreio sem deixar claro se quer uma INFORMAÇÃO ou precisa de AÇÃO, você DEVE perguntar:
-"Você tem dúvidas sobre como funciona a entrega ou precisa acompanhar um pedido específico?"
-Nunca assuma a intenção do cliente – sempre pergunte quando houver ambiguidade.
-Se o cliente confirmar que precisa de ACOMPANHAMENTO → responda com [[FLOW_EXIT:pedidos]]
-Se for apenas dúvida informativa → responda normalmente usando a Base de Conhecimento.`;
-  }
-
-  const forbidDevolucao = flowContext.forbidDevolucao ?? false;
-  if (forbidDevolucao) {
-    restrictions += `\n\n🔄 TRAVA DEVOLUÇÃO ATIVA:
-Se o cliente solicitar DEVOLUÇÃO, TROCA ou reportar produto defeituoso (ex: "quero devolver", "produto com defeito"), responda:
-"Entendi! Vou te encaminhar para o especialista em devoluções."
-E retorne [[FLOW_EXIT:devolucao]] imediatamente.
-
-🔍 DESAMBIGUAÇÃO DEVOLUÇÃO OBRIGATÓRIA:
-Se o cliente mencionar termos como troca, defeito, devolver sem deixar claro a intenção, você DEVE perguntar:
-"Você tem dúvidas sobre nossa política de trocas ou deseja solicitar uma devolução/troca?"
-Nunca assuma a intenção do cliente – sempre pergunte quando houver ambiguidade.
-Se o cliente confirmar que quer DEVOLVER/TROCAR → responda com [[FLOW_EXIT:devolucao]]
-Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
-  }
-
-  const forbidSaque = flowContext.forbidSaque ?? false;
-  if (forbidSaque) {
-    restrictions += `\n\n💰 TRAVA SAQUE ATIVA:
-Se o cliente solicitar SAQUE ou RETIRADA de saldo (ex: "quero sacar", "retirar meu saldo", "saque"), responda:
-"Entendi! Vou te encaminhar para o especialista de saques."
-E retorne [[FLOW_EXIT:saque]] imediatamente.
-
-🔍 DESAMBIGUAÇÃO SAQUE OBRIGATÓRIA:
-Se o cliente mencionar termos como saque, saldo, carteira sem deixar claro se quer INFORMAÇÃO ou AÇÃO, você DEVE perguntar:
-"Posso te ajudar com informações sobre saque ou você gostaria de realizar um saque agora?"
-Nunca assuma a intenção do cliente – sempre pergunte quando houver ambiguidade.
-Se o cliente confirmar que quer SACAR → responda com [[FLOW_EXIT:saque]]
-Se for apenas dúvida informativa → responda normalmente usando a Base de Conhecimento.`;
-  }
-
-  const forbidSistema = flowContext.forbidSistema ?? false;
-  if (forbidSistema) {
-    restrictions += `\n\n🖥️ TRAVA SUPORTE SISTEMA ATIVA:
-Se o cliente reportar BUG, ERRO ou problema TÉCNICO no sistema (ex: "sistema não funciona", "erro ao acessar", "bug"), responda:
-"Entendi! Vou te encaminhar para o suporte técnico."
-E retorne [[FLOW_EXIT:suporte_sistema]] imediatamente.`;
-  }
   
   restrictions += `
 NÃƒO sugira transferÃªncia para humano.
@@ -1401,19 +1332,9 @@ Status: ${contactStatus}${enrichment?.orgName ? `\nOrganizaÃ§Ã£o: ${enrichme
     restrictions += '\nTom: amigÃ¡vel e consultivo. Foque em entender a necessidade sem pressÃ£o.';
   }
 
-  // Tom empático quando contexto financeiro
+  // Tom empÃ¡tico quando contexto financeiro
   if (forbidFinancial) {
-    restrictions += '\nSe o cliente demonstrar preocupação financeira, responda com empatia e tranquilidade antes de qualquer informação.';
-  }
-
-  // 🆕 Motivos de devolução dinâmicos
-  if (flowContext.returnReasons && flowContext.returnReasons.length > 0) {
-    const reasonsList = flowContext.returnReasons.map((r: any) => `- ${r.label} (${r.key})`).join('\n');
-    restrictions += `\n\n📋 MOTIVOS DE DEVOLUÇÃO DISPONÍVEIS:
-Quando o cliente mencionar devolução, troca ou problema com produto, utilize APENAS os motivos abaixo:
-${reasonsList}
-Se o cliente descrever o motivo, classifique automaticamente no motivo mais adequado da lista acima.
-Use a variável {{reason}} para armazenar o motivo identificado (use o KEY, não o label).`;
+    restrictions += '\nSe o cliente demonstrar preocupaÃ§Ã£o financeira, responda com empatia e tranquilidade antes de qualquer informaÃ§Ã£o.';
   }
 
   return restrictions;
@@ -1423,11 +1344,19 @@ Use a variável {{reason}} para armazenar o motivo identificado (use o KEY, não
 function validateResponseRestrictions(
   response: string, 
   forbidQuestions: boolean, 
-  forbidOptions: boolean
+  forbidOptions: boolean,
+  flowContext?: any // FIX LOOP: contexto para detectar no de triagem
 ): { valid: boolean; violation?: string } {
   // Verificar perguntas â€” sÃ³ bloqueia se uma FRASE termina com ?
   // Evita falso positivo com ? dentro de parÃªnteses ou observaÃ§Ãµes
-  if (forbidQuestions) {
+  // FIX LOOP: No de triagem precisa fazer perguntas - nao bloquear
+  const isTriageCtx = flowContext &&
+    ((flowContext.objective || '').toLowerCase().includes('triag') ||
+     (flowContext.contextPrompt || '').toLowerCase().includes('triag') ||
+     (flowContext.objective || '').toLowerCase().includes('inten') ||
+     (flowContext.contextPrompt || '').toLowerCase().includes('inten'));
+
+  if (forbidQuestions && !isTriageCtx) {
     const hasRealQuestion = response
       .split(/(?<=[.!])\s+/)
       .some(sentence => sentence.trim().endsWith('?'));
@@ -1585,8 +1514,6 @@ serve(async (req) => {
     const flowForbidCancellation: boolean = flow_context?.forbidCancellation ?? false;
     const flowForbidCommercialPrompt: boolean = flow_context?.forbidCommercial ?? false;
     const flowForbidConsultantPrompt: boolean = flow_context?.forbidConsultant ?? false;
-    // 🆕 Onboarding detection: default true sem flow (autopilot puro), false com flow (controlado pelo toggle)
-    const flowOnboardingDetection: boolean = flow_context ? (flow_context.onboardingDetection ?? false) : true;
     
     // ðŸ†• FASE 1: Flag para usar prompt restritivo
     const useRestrictedPrompt = !!(flow_context && (flowObjective || flowForbidQuestions || flowForbidOptions || flowForbidFinancial));
@@ -1884,7 +1811,6 @@ serve(async (req) => {
       let contactConsultantName: string | null = null;
       let contactSellerName: string | null = null;
       let contactTagsList: string[] = [];
-      let onboardingInfo: { status: string; progress: string; nextStep: string; playbookName: string; resumeLink: string } | null = null;
 
       try {
         const enrichPromises: PromiseLike<any>[] = [];
@@ -1934,30 +1860,7 @@ serve(async (req) => {
             .then((r: any) => ({ type: 'tags', data: r.data }))
         );
 
-        // 📋 Onboarding progress (SÓ para clientes com produto contratado E detecção ativa)
-        if (contact.status === 'customer' && flowOnboardingDetection) {
-          enrichPromises.push(
-            supabaseClient
-              .from('playbook_executions')
-              .select('id, status, playbook:onboarding_playbooks(name)')
-              .eq('contact_id', contact.id)
-              .eq('status', 'in_progress')
-              .limit(1)
-              .then((r: any) => ({ type: 'onboarding_execution', data: r.data }))
-          );
-          enrichPromises.push(
-            supabaseClient
-              .from('customer_journey_steps')
-              .select('id, step_name, completed, position')
-              .eq('contact_id', contact.id)
-              .order('position', { ascending: true })
-              .then((r: any) => ({ type: 'onboarding_steps', data: r.data }))
-          );
-        }
-
         const enrichResults = await Promise.all(enrichPromises);
-
-
 
         for (const result of enrichResults) {
           if (result.type === 'org' && result.data?.name) contactOrgName = result.data.name;
@@ -1966,35 +1869,13 @@ serve(async (req) => {
           if (result.type === 'tags' && result.data) {
             contactTagsList = result.data.map((t: any) => t.tags?.name).filter(Boolean);
           }
-          if (result.type === 'onboarding_execution' && result.data?.length > 0) {
-            const exec = result.data[0];
-            onboardingInfo = {
-              status: 'in_progress',
-              progress: '',
-              nextStep: '',
-              playbookName: exec.playbook?.name || 'Onboarding',
-              resumeLink: `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || ''}/public-onboarding/${exec.id}`,
-            };
-          }
-          if (result.type === 'onboarding_steps' && result.data && onboardingInfo) {
-            const steps = result.data;
-            const completed = steps.filter((s: any) => s.completed).length;
-            const total = steps.length;
-            const nextPending = steps.find((s: any) => !s.completed);
-            onboardingInfo.progress = `${completed}/${total} etapas`;
-            onboardingInfo.nextStep = nextPending?.step_name || 'Todas concluídas';
-            if (completed >= total) {
-              onboardingInfo = null;
-            }
-          }
         }
 
-        console.log('[ai-autopilot-chat] 🏷️ Contexto enriquecido:', {
+        console.log('[ai-autopilot-chat] ðŸ·ï¸ Contexto enriquecido:', {
           org: contactOrgName,
           consultant: contactConsultantName,
           seller: contactSellerName,
-          tags: contactTagsList,
-          onboarding: onboardingInfo ? `${onboardingInfo.progress} - next: ${onboardingInfo.nextStep}` : 'N/A',
+          tags: contactTagsList
         });
       } catch (enrichErr) {
         console.error('[ai-autopilot-chat] âš ï¸ Erro ao enriquecer contexto do contato:', enrichErr);
@@ -3372,9 +3253,10 @@ serve(async (req) => {
     // ðŸ†• PRIORIDADE 1: CHAT FLOW - Verificar ANTES da triagem
     // ============================================================
     let flowProcessedEarly = false;
-    // 🔧 FIX: Removido re-declaração de flowPersonaId/flowKbCategories/flowContextPrompt/flowFallbackMessage
-    // Essas variáveis já existem no escopo externo (linhas ~1517-1520) e devem ser reutilizadas
-    // A re-declaração com let criava variáveis locais ao try block que eram descartadas
+    let flowPersonaId: string | null = null;
+    let flowKbCategories: string[] | null = null;
+    let flowContextPrompt: string | null = null;
+    let flowFallbackMessage: string | null = null;
     
     try {
       console.log('[ai-autopilot-chat] ðŸ”„ [PRIORIDADE] Verificando Chat Flow ANTES da triagem...');
@@ -4116,10 +3998,6 @@ serve(async (req) => {
       content: m.content
     })) || [];
 
-    // 🆕 FIX: Aumentar janela de histórico quando há transição entre nós (flow_context)
-    // Isso garante que o agente de destino tenha contexto suficiente da triagem
-    const historySliceSize = flow_context && messageHistory.length > 6 ? 10 : 6;
-
     // Obter API keys antecipadamente
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     // LOVABLE_API_KEY removida - usando OpenAI diretamente
@@ -4311,11 +4189,15 @@ ${a.content}`).join('\n\n---\n\n')}`;
         
         const data = await response.json();
         const aiMessage = data.choices?.[0]?.message?.content || '';
-        
-        // GUARD 1: Empty response guard - força handoff se GPT retornar vazio
+
+        // 🔧 GUARD 1: resposta vazia do modelo → handoff imediato (nunca salvar vazio)
         if (!aiMessage || aiMessage.trim().length === 0) {
-          console.warn('[callStrictRAG] ⚠️ GPT retornou resposta vazia - forçando handoff');
-          return { shouldHandoff: true, reason: 'GPT retornou resposta vazia', response: null };
+          console.warn('[callStrictRAG] ⚠️ GPT-5 retornou resposta vazia - forçando handoff');
+          return {
+            shouldHandoff: true,
+            reason: 'GPT-5 retornou resposta vazia',
+            response: null
+          };
         }
         
         console.log('[callStrictRAG] ðŸ“ Resposta GPT-5 recebida:', aiMessage.substring(0, 100) + '...');
@@ -5007,31 +4889,11 @@ Responda APENAS: skip ou search`
       console.log('[ai-autopilot-chat] âœ… STRICT RAG: Resposta validada com fontes citadas');
       
       const strictResponse = strictResult.response!;
-      
-      // GUARD 2: Fallback para resposta vazia antes de salvar/enviar
+
+      // 🔧 GUARD 2: nunca salvar/enviar resposta vazia mesmo após validação
       if (!strictResponse || strictResponse.trim().length === 0) {
-        console.warn('[ai-autopilot-chat] ⚠️ strictResponse vazio após validação - usando fallback');
+        console.error('[ai-autopilot-chat] ⚠️ strictResponse vazio após validação - usando fallback de saudação');
         const fallbackGreeting = `Olá${contactName ? ', ' + contactName : ''}! Como posso te ajudar hoje? 😊`;
-        
-        // Salvar fallback como mensagem
-        await supabaseClient.from('messages').insert({
-          conversation_id: conversationId,
-          content: fallbackGreeting,
-          sender_type: 'user',
-          is_ai_generated: true,
-          channel: responseChannel
-        });
-        
-        // Log em ai_events
-        Promise.resolve(supabaseClient.from('ai_events').insert({
-          entity_type: 'conversation',
-          entity_id: conversationId,
-          event_type: 'strict_rag_empty_fallback',
-          model: 'system',
-          score: 0,
-          output_json: { reason: 'empty_strict_response', fallback_used: true },
-        })).catch(() => {});
-        
         return new Response(JSON.stringify({
           response: fallbackGreeting,
           source: 'strict_rag_empty_fallback',
@@ -6720,56 +6582,7 @@ Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecime
 ` : ''}
 ` : '';
 
-    // 📋 ONBOARDING: Instrução condicional para IA sobre onboarding incompleto
-    const onboardingGuardInstruction = onboardingInfo ? `
-
-📋 ONBOARDING DO CLIENTE:
-Este cliente tem onboarding incompleto (${onboardingInfo.progress} - Playbook: "${onboardingInfo.playbookName}").
-- NÃO mencione proativamente. Só aborde se:
-  1. Cliente perguntar "o que falta fazer", "próximos passos", "como usar", "como começar"
-  2. O assunto da conversa for diretamente relacionado ao produto/serviço do onboarding
-- Quando relevante, informe o progresso e compartilhe o link para continuar de onde parou.
-- Próxima etapa: "${onboardingInfo.nextStep}"
-- Link: ${onboardingInfo.resumeLink}
-` : '';
-
-    // 🆕 FIX: Instrução de CONTINUIDADE CONVERSACIONAL para transições entre nós/personas
-    // Quando há flow_context e histórico existente, a IA de destino precisa saber que está
-    // assumindo uma conversa em andamento para não repetir saudações ou pedir dados já fornecidos
-    let continuityInstruction = '';
-    if (flow_context && messageHistory.length > 1) {
-      // Gerar mini-resumo das últimas mensagens para injetar no prompt
-      const recentMessages = messageHistory.slice(-historySliceSize);
-      const conversationSummaryParts: string[] = [];
-      for (const msg of recentMessages) {
-        if (msg.role === 'user') {
-          conversationSummaryParts.push(`Cliente: "${(msg.content || '').substring(0, 120)}"`);
-        } else {
-          conversationSummaryParts.push(`Assistente anterior: "${(msg.content || '').substring(0, 120)}"`);
-        }
-      }
-      const conversationSummary = conversationSummaryParts.slice(-6).join('\n');
-      
-      continuityInstruction = `
-⚡ CONTINUIDADE CONVERSACIONAL (REGRA CRÍTICA):
-Você está ASSUMINDO uma conversa em andamento. O cliente já interagiu com outro assistente (triagem/etapa anterior).
-LEIA o histórico de mensagens abaixo e o resumo da conversa para entender o contexto.
-
-📋 Resumo da conversa anterior:
-${conversationSummary}
-
-REGRAS DE CONTINUIDADE:
-- NÃO cumprimente novamente (nada de "Olá!", "Bom dia!", "Como posso ajudar?")
-- NÃO peça informações que o cliente JÁ forneceu no histórico
-- NÃO se apresente novamente
-- Continue a conversa NATURALMENTE de onde o assistente anterior parou
-- Se o cliente já disse o que precisa, vá direto ao ponto
-- Comece respondendo à necessidade do cliente, ex: "Entendi, você precisa de ajuda com X..."
-
-`;
-    }
-
-    const contextualizedSystemPrompt = `${continuityInstruction}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}${onboardingGuardInstruction}
+    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
 
 **ðŸš« REGRA DE HANDOFF (SÃ“ QUANDO CLIENTE PEDIR):**
 TransferÃªncia para humano SÃ“ acontece quando:
@@ -7042,9 +6855,6 @@ ${contactConsultantName ? `- Consultor responsÃ¡vel: ${contactConsultantName}`
 ${contactSellerName ? `- Vendedor responsÃ¡vel: ${contactSellerName}` : ''}
 ${contactTagsList.length > 0 ? `- Tags: ${contactTagsList.join(', ')}` : ''}
 ${customerProducts.length > 0 ? `- Produtos/ServiÃ§os contratados: ${customerProducts.join(', ')}` : '- Produtos/ServiÃ§os contratados: Nenhum identificado'}
-${onboardingInfo ? `- Onboarding: Incompleto (${onboardingInfo.progress})
-- Próxima etapa pendente: "${onboardingInfo.nextStep}"
-- Link para continuar: ${onboardingInfo.resumeLink}` : ''}
 
 Os "Produtos/ServiÃ§os contratados" sÃ£o produtos DIGITAIS (cursos online, mentorias, assinaturas, comunidades) que o cliente COMPROU na plataforma. Use essa informaÃ§Ã£o para personalizar o atendimento e contextualizar respostas sobre acesso, conteÃºdo e suporte dos produtos especÃ­ficos do cliente. NÃ£o confunda com produtos fÃ­sicos.
 ${crossSessionContext}${personaToneInstruction}
@@ -7056,11 +6866,11 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
       messages: [
         { role: 'system', content: contextualizedSystemPrompt },
         ...fewShotMessages,  // âœ¨ Injetar exemplos de treinamento (Few-Shot Learning)
-        ...messageHistory.slice(-historySliceSize), // 🔧 TOKEN OPT: 6 msgs padrão, 10 em transições de nó
+        ...messageHistory.slice(-6), // 🔧 TOKEN OPT: limitar a últimas 6 msgs (3 turnos)
         { role: 'user', content: customerMessage }
       ],
       temperature: persona.temperature ?? 0.7,  // CORRIGIDO: ?? ao invÃ©s de || (temperatura 0 Ã© vÃ¡lida)
-      max_tokens: persona.max_tokens ?? 800    // FIX: Aumentado de 500->800 para evitar truncamento
+      max_tokens: persona.max_tokens ?? 500    // CORRIGIDO: ?? ao invÃ©s de || (consistÃªncia)
     };
 
     console.log('[ai-autopilot-chat] Messages structure:', {
@@ -7311,21 +7121,6 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
     let rawAIContent = aiData.choices?.[0]?.message?.content;
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
 
-    // 🔧 FIX: Detectar truncamento por max_tokens e cortar até última frase completa
-    const finishReason = aiData.choices?.[0]?.finish_reason;
-    if (finishReason === 'length' && rawAIContent) {
-      console.warn('[ai-autopilot-chat] ⚠️ Response truncated by max_tokens — trimming to last complete sentence');
-      const lastPunctuation = Math.max(
-        rawAIContent.lastIndexOf('.'),
-        rawAIContent.lastIndexOf('!'),
-        rawAIContent.lastIndexOf('?')
-      );
-      if (lastPunctuation > rawAIContent.length * 0.3) {
-        rawAIContent = rawAIContent.substring(0, lastPunctuation + 1);
-        console.log('[ai-autopilot-chat] ✅ Trimmed to last complete sentence at position', lastPunctuation);
-      }
-    }
-
     // ðŸ†• FIX B: RETRY â€” Se IA retornou vazio sem tool_calls, tentar com prompt reduzido
     if (!rawAIContent && !toolCalls.length) {
       console.warn('[ai-autopilot-chat] âš ï¸ IA retornou vazio â€” tentando retry com prompt reduzido');
@@ -7339,7 +7134,7 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
           model: selectedModel,
           messages: retryMessages,
           temperature: 0.7,
-          max_tokens: 600,  // FIX: Aumentado de 300→600 para evitar truncamento no retry
+          max_tokens: 300,
         };
         const retryData = await callAIWithFallback(retryPayload);
         rawAIContent = retryData.choices?.[0]?.message?.content;
@@ -7383,37 +7178,24 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
     }
 
     if (!rawAIContent && !toolCalls.length) {
-      console.error('[ai-autopilot-chat] ❌ AI returned empty content after all retries, no tool calls');
-      try {
-        await supabaseClient.from('ai_events').insert({
-          entity_id: conversationId,
-          entity_type: 'conversation',
-          event_type: 'ai_decision',
-          model: ragConfig?.model || 'unknown',
-          output_json: {
-            decision: 'empty_response_fallback',
-            customer_message: customerMessage?.substring(0, 200),
-            had_flow_context: !!flow_context,
-            persona_name: persona?.name || 'unknown'
-          }
-        });
-      } catch (logErr) {
-        console.error('[ai-autopilot-chat] Failed to log empty response event:', logErr);
-      }
+      console.error('[ai-autopilot-chat] âŒ AI returned empty content after all retries, no tool calls');
+    }
+
+    // 🔧 FIX 3: Guard de resposta vazia — normalizar antes de usar
+    const rawAIContentNormalized = (rawAIContent || '').trim();
+    if (rawAIContentNormalized.length === 0 && rawAIContent) {
+      console.warn('[ai-autopilot-chat] ⚠️ FIX 3: AI retornou apenas whitespace, tratando como vazio');
     }
 
     let assistantMessage: string;
-    if (rawAIContent) {
-      assistantMessage = rawAIContent;
+    if (rawAIContentNormalized) {
+      assistantMessage = rawAIContentNormalized;
     } else if (isWithdrawalRequest) {
-      assistantMessage = 'Para solicitar o saque, preciso primeiro confirmar sua identidade. Qual é o seu e-mail de cadastro?';
+      assistantMessage = 'Para solicitar o saque, preciso primeiro confirmar sua identidade. Qual Ã© o seu e-mail de cadastro?';
     } else if (isFinancialRequest) {
-      assistantMessage = 'Entendi sua solicitação financeira. Para prosseguir com segurança, qual é o seu e-mail de cadastro?';
-    } else if (flow_context) {
-      assistantMessage = 'Olá! Como posso te ajudar hoje?';
-      console.warn('[ai-autopilot-chat] ⚠️ EMPTY RESPONSE GUARD: mensagem vazia substituída por fallback (flow context ativo)');
+      assistantMessage = 'Entendi sua solicitaÃ§Ã£o financeira. Para prosseguir com seguranÃ§a, qual Ã© o seu e-mail de cadastro?';
     } else {
-      assistantMessage = 'Pode repetir sua mensagem? Não consegui processar corretamente.';
+      assistantMessage = 'Pode repetir sua mensagem? NÃ£o consegui processar corretamente.';
     }
     const isEmptyAIResponse = !rawAIContent;
 
@@ -8572,41 +8354,28 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
                 assistantMessage = defaultAfterHoursMsg;
               }
 
-              // 4. Adicionar tag configurada (ou fallback pendente_retorno) na conversation_tags
+              // 4. Adicionar tag "pendente_retorno" na conversation_tags
               try {
-                let resolvedTagId: string | null = null;
-                const { data: afterHoursConfig } = await supabaseClient
-                  .from('business_messages_config')
-                  .select('after_hours_tag_id')
-                  .eq('message_key', 'after_hours_handoff')
+                const { data: tagRow } = await supabaseClient
+                  .from('tags')
+                  .select('id')
+                  .eq('name', 'pendente_retorno')
                   .maybeSingle();
 
-                if (afterHoursConfig?.after_hours_tag_id) {
-                  resolvedTagId = afterHoursConfig.after_hours_tag_id;
-                  console.log('[ai-autopilot-chat] Tag configurada encontrada:', resolvedTagId);
-                } else {
-                  const { data: tagRow } = await supabaseClient
-                    .from('tags')
-                    .select('id')
-                    .eq('name', 'pendente_retorno')
-                    .maybeSingle();
-                  resolvedTagId = tagRow?.id || null;
-                  console.log('[ai-autopilot-chat] Fallback pendente_retorno:', resolvedTagId);
-                }
-
-                if (resolvedTagId) {
+                if (tagRow) {
+                  // Upsert para evitar duplicata
                   await supabaseClient
                     .from('conversation_tags')
                     .upsert({
                       conversation_id: conversationId,
-                      tag_id: resolvedTagId,
+                      tag_id: tagRow.id,
                     }, { onConflict: 'conversation_id,tag_id' });
-                  console.log('[ai-autopilot-chat] Tag after-hours aplicada');
+                  console.log('[ai-autopilot-chat] ðŸ·ï¸ Tag pendente_retorno aplicada');
                 } else {
-                  console.warn('[ai-autopilot-chat] Nenhuma tag after-hours encontrada');
+                  console.warn('[ai-autopilot-chat] âš ï¸ Tag pendente_retorno nÃ£o encontrada no banco');
                 }
               } catch (tagErr) {
-                console.error('[ai-autopilot-chat] Erro ao aplicar tag after-hours:', tagErr);
+                console.error('[ai-autopilot-chat] âš ï¸ Erro ao aplicar tag pendente_retorno:', tagErr);
               }
 
               // 5. Salvar metadata na conversa
@@ -8859,72 +8628,8 @@ Conversa: ${conversationId}`;
               output_json: { category: args.category, summary: args.summary, severity: args.severity, tags: args.tags, ticket_id: ticketId, action: ticketAction, shadow_mode: false }
             });
 
-            // 🆕 FIX: Aplicar tag correspondente à categoria na conversa
-            try {
-              // Mapear categoria do ticket para nome de tag
-              const categoryTagMap: Record<string, string> = {
-                'billing': 'Financeiro',
-                'technical': 'Suporte Técnico',
-                'general': 'Suporte Geral',
-                'sales': 'Comercial',
-                'cancellation': 'Cancelamento',
-                'refund': 'Reembolso',
-                'shipping': 'Pedidos/Entregas',
-                'product': 'Produto',
-                'account': 'Conta',
-                'feedback': 'Feedback',
-                'bug': 'Bug/Erro',
-                'feature_request': 'Sugestão',
-                'onboarding': 'Onboarding',
-                'outro': 'Outros',
-                'other': 'Outros',
-              };
-
-              const tagName = categoryTagMap[args.category] || args.category;
-              
-              // Buscar ou criar tag
-              let tagId: string | null = null;
-              const { data: existingTag } = await supabaseClient
-                .from('tags')
-                .select('id')
-                .ilike('name', tagName)
-                .limit(1)
-                .maybeSingle();
-
-              if (existingTag) {
-                tagId = existingTag.id;
-              } else {
-                // Criar tag se não existe
-                const { data: newTag } = await supabaseClient
-                  .from('tags')
-                  .insert({ name: tagName, color: '#6B7280' })
-                  .select('id')
-                  .single();
-                tagId = newTag?.id || null;
-              }
-
-              if (tagId) {
-                // Verificar se já não está vinculada
-                const { data: existingLink } = await supabaseClient
-                  .from('conversation_tags')
-                  .select('id')
-                  .eq('conversation_id', conversationId)
-                  .eq('tag_id', tagId)
-                  .maybeSingle();
-
-                if (!existingLink) {
-                  await supabaseClient
-                    .from('conversation_tags')
-                    .insert({ conversation_id: conversationId, tag_id: tagId });
-                  console.log('[ai-autopilot-chat] 🏷️ Tag aplicada na conversa:', tagName);
-                }
-              }
-            } catch (tagErr) {
-              console.error('[ai-autopilot-chat] ⚠️ Erro ao aplicar tag (não crítico):', tagErr);
-            }
-
             assistantMessage = `Ticket classificado como "${args.category}" e registrado como resolvido.`;
-            console.log('[ai-autopilot-chat] ✅ classify_and_resolve_ticket concluído:', { ticketId, action: ticketAction, category: args.category });
+            console.log('[ai-autopilot-chat] âœ… classify_and_resolve_ticket concluÃ­do:', { ticketId, action: ticketAction, category: args.category });
 
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro em classify_and_resolve_ticket:', error);
@@ -9356,10 +9061,21 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
       const forbidQuestions = flow_context.forbidQuestions ?? true;
       const forbidOptions = flow_context.forbidOptions ?? true;
       const forbidFinancial = flow_context.forbidFinancial ?? false;
-      const restrictionCheck = validateResponseRestrictions(assistantMessage, forbidQuestions, forbidOptions);
+      const restrictionCheck = validateResponseRestrictions(assistantMessage, forbidQuestions, forbidOptions, flow_context); // FIX LOOP: passa contexto para detectar triagem
       
       if (!restrictionCheck.valid) {
         console.warn('[ai-autopilot-chat] âš ï¸ VIOLAÃ‡ÃƒO DE RESTRIÃ‡ÃƒO (prÃ©-save):', restrictionCheck.violation);
+
+        // FIX LOOP: No de triagem PRECISA fazer perguntas para identificar intencao
+        // Nao substituir pelo fallbackMessage (que pode ser a mensagem de boas-vindas)
+        const isTriageNode = (flow_context.objective || '').toLowerCase().includes('triag') ||
+          (flow_context.contextPrompt || '').toLowerCase().includes('triag') ||
+          (flow_context.contextPrompt || '').toLowerCase().includes('inten');
+        if (restrictionCheck.violation === 'question_detected' && isTriageNode) {
+          console.log('[ai-autopilot-chat] FIX LOOP: No de triagem pode perguntar - ignorando forbidQuestions');
+          // Deixar assistantMessage original passar sem substituir
+        } else {
+
         const fallbackMessage = flow_context.fallbackMessage || 'No momento nÃ£o tenho essa informaÃ§Ã£o.';
         
         // ðŸ“Š FIX 4: Telemetria anti-alucinaÃ§Ã£o â€” Restriction violation
@@ -9445,12 +9161,6 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
         
         console.log('[ai-autopilot-chat] âœ… Resposta passou validaÃ§Ã£o anti-escape (prÃ©-save)');
       }
-    }
-
-    // 🛡️ EMPTY RESPONSE GUARD FINAL: Última verificação antes de salvar
-    if (!assistantMessage || assistantMessage.trim().length === 0) {
-      assistantMessage = 'Olá! Como posso te ajudar hoje?';
-      console.warn('[ai-autopilot-chat] ⚠️ EMPTY RESPONSE GUARD (pre-save): mensagem vazia substituída');
     }
 
     // 7. Salvar resposta da IA como mensagem (PRIMEIRO salvar para visibilidade interna)
