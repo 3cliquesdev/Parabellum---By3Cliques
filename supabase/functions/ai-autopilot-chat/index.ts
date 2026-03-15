@@ -1344,9 +1344,19 @@ Status: ${contactStatus}${enrichment?.orgName ? `\nOrganizaÃ§Ã£o: ${enrichme
     restrictions += '\nTom: amigÃ¡vel e consultivo. Foque em entender a necessidade sem pressÃ£o.';
   }
 
-  // Tom empÃ¡tico quando contexto financeiro
+  // Tom empático quando contexto financeiro
   if (forbidFinancial) {
-    restrictions += '\nSe o cliente demonstrar preocupaÃ§Ã£o financeira, responda com empatia e tranquilidade antes de qualquer informaÃ§Ã£o.';
+    restrictions += '\nSe o cliente demonstrar preocupação financeira, responda com empatia e tranquilidade antes de qualquer informação.';
+  }
+
+  // 🆕 Motivos de devolução dinâmicos
+  if (flowContext.returnReasons && flowContext.returnReasons.length > 0) {
+    const reasonsList = flowContext.returnReasons.map((r: any) => `- ${r.label} (${r.key})`).join('\n');
+    restrictions += `\n\n📋 MOTIVOS DE DEVOLUÇÃO DISPONÍVEIS:
+Quando o cliente mencionar devolução, troca ou problema com produto, utilize APENAS os motivos abaixo:
+${reasonsList}
+Se o cliente descrever o motivo, classifique automaticamente no motivo mais adequado da lista acima.
+Use a variável {{reason}} para armazenar o motivo identificado (use o KEY, não o label).`;
   }
 
   return restrictions;
