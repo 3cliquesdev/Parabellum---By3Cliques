@@ -76,7 +76,6 @@ export function useCreateAdminReturn() {
       reason: string;
       description?: string;
       status?: string;
-      contact_id?: string;
     }) => {
       const { error } = await supabase.from("returns").insert({
         external_order_id: data.external_order_id,
