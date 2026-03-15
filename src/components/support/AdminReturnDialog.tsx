@@ -151,23 +151,11 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
             </div>
           </div>
 
-          {/* Dados do comprador e produtos encontrados */}
-          {lookupResult?.found && (buyerName || (lookupResult.product_titles && lookupResult.product_titles.length > 0)) && (
-            <div className="rounded-md bg-muted/50 p-3 text-sm space-y-2">
-              {buyerName && (
-                <div className="space-y-0.5">
-                  <p className="text-xs text-muted-foreground">Seller</p>
-                  <p className="font-medium">{buyerName}</p>
-                </div>
-              )}
-              {lookupResult.product_titles && lookupResult.product_titles.length > 0 && (
-                <div className="space-y-0.5">
-                  <p className="text-xs text-muted-foreground">Produto(s)</p>
-                  {lookupResult.product_titles.map((title, i) => (
-                    <p key={i} className="font-medium">{title}</p>
-                  ))}
-                </div>
-              )}
+          {/* Dados do comprador */}
+          {lookupResult?.found && buyerName && (
+            <div className="rounded-md bg-muted/50 p-3 text-sm">
+              <p className="text-xs text-muted-foreground">Seller</p>
+              <p className="font-medium">{buyerName}</p>
             </div>
           )}
 
@@ -189,6 +177,28 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
               className={!orderIdManual && lookupResult?.found ? "bg-muted/50 cursor-default" : ""}
             />
           </div>
+
+          {/* Produto e SKU - abaixo do número do pedido */}
+          {lookupResult?.found && lookupResult.product_items && lookupResult.product_items.length > 0 && (
+            <div className="rounded-md bg-muted/50 p-3 text-sm space-y-2">
+              {lookupResult.product_items.map((item, i) => (
+                <div key={i} className="space-y-0.5">
+                  {item.title && (
+                    <div>
+                      <span className="text-xs text-muted-foreground">Produto: </span>
+                      <span className="font-medium">{item.title}</span>
+                    </div>
+                  )}
+                  {item.sku && (
+                    <div>
+                      <span className="text-xs text-muted-foreground">SKU: </span>
+                      <span className="font-medium">{item.sku}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* 3. Rastreio Devolução */}
           <div className="space-y-2">

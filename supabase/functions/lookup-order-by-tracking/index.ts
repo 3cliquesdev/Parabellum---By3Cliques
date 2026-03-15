@@ -93,9 +93,8 @@ serve(async (req) => {
         }
       }
 
-      await client.close();
-
       if (!platformOrderId) {
+        await client.close();
         console.log('[lookup-order-by-tracking] ❌ Não encontrado para:', trimmed);
         return new Response(JSON.stringify({ found: false }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
