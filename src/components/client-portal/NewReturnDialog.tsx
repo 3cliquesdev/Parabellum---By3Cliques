@@ -33,6 +33,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   const [step, setStep] = useState<Step>("form");
   
   const [orderId, setOrderId] = useState("");
+  const [trackingOutbound, setTrackingOutbound] = useState("");
   const [trackingReturn, setTrackingReturn] = useState("");
   const [trackingOriginal, setTrackingOriginal] = useState<string | null>(null);
   const [loadingTracking, setLoadingTracking] = useState(false);
