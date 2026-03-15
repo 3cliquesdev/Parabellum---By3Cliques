@@ -3406,13 +3406,18 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🎯 ai_exit_intent salvo: "${intentData.ai_exit_intent}"`);
           
           // 🔴 FIX: Mapear ai_exit_intent para os flags *IntentMatch
-          if (!financialIntentMatch && !cancellationIntentMatch && !commercialIntentMatch && !supportIntentMatch && !consultorIntentMatch) {
+          if (!financialIntentMatch && !cancellationIntentMatch && !commercialIntentMatch && !supportIntentMatch && !consultorIntentMatch && !saqueIntentMatch && !devolucaoIntentMatch && !pedidosIntentMatch && !sistemaIntentMatch && !internacionalIntentMatch) {
             const intent = intentData.ai_exit_intent;
             if (intent === 'financeiro') { financialIntentMatch = true; }
             else if (intent === 'cancelamento') { cancellationIntentMatch = true; }
             else if (intent === 'comercial') { commercialIntentMatch = true; }
             else if (intent === 'suporte') { supportIntentMatch = true; }
             else if (intent === 'consultor') { consultorIntentMatch = true; }
+            else if (intent === 'saque') { saqueIntentMatch = true; }
+            else if (intent === 'devolucao') { devolucaoIntentMatch = true; }
+            else if (intent === 'pedidos') { pedidosIntentMatch = true; }
+            else if (intent === 'sistema' || intent === 'suporte_sistema') { sistemaIntentMatch = true; }
+            else if (intent === 'internacional' || intent === 'comercial_internacional') { internacionalIntentMatch = true; }
             console.log(`[process-chat-flow] 🎯 intentData.ai_exit_intent="${intent}" → *IntentMatch forçado`);
           }
         }
@@ -3437,10 +3442,30 @@ serve(async (req) => {
           collectedData.ai_exit_intent = 'consultor';
           console.log('[process-chat-flow] 🎯 ai_exit_intent=consultor (auto-detect from consultorIntentMatch)');
         }
+        if (saqueIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'saque';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=saque (auto-detect from saqueIntentMatch)');
+        }
+        if (devolucaoIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'devolucao';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=devolucao (auto-detect from devolucaoIntentMatch)');
+        }
+        if (pedidosIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'pedidos';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=pedidos (auto-detect from pedidosIntentMatch)');
+        }
+        if (sistemaIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'suporte_sistema';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=suporte_sistema (auto-detect from sistemaIntentMatch)');
+        }
+        if (internacionalIntentMatch && !collectedData.ai_exit_intent) {
+          collectedData.ai_exit_intent = 'comercial_internacional';
+          console.log('[process-chat-flow] 🎯 ai_exit_intent=comercial_internacional (auto-detect from internacionalIntentMatch)');
+        }
 
-        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || keywordMatch || maxReached || aiExitForced) {
-          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : supportIntentMatch ? 'support_requested' : consultorIntentMatch ? 'consultant_requested' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
-          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} support=${supportIntentMatch} consultant=${consultorIntentMatch} count=${aiCount}`);
+        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || saqueIntentMatch || devolucaoIntentMatch || pedidosIntentMatch || sistemaIntentMatch || internacionalIntentMatch || keywordMatch || maxReached || aiExitForced) {
+          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : supportIntentMatch ? 'support_requested' : consultorIntentMatch ? 'consultant_requested' : saqueIntentMatch ? 'saque_requested' : devolucaoIntentMatch ? 'devolucao_requested' : pedidosIntentMatch ? 'pedidos_requested' : sistemaIntentMatch ? 'sistema_requested' : internacionalIntentMatch ? 'internacional_requested' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
+          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} support=${supportIntentMatch} consultant=${consultorIntentMatch} saque=${saqueIntentMatch} devolucao=${devolucaoIntentMatch} pedidos=${pedidosIntentMatch} sistema=${sistemaIntentMatch} internacional=${internacionalIntentMatch} count=${aiCount}`);
 
           // Log de transferência estruturado em ai_events
           try {
@@ -3507,6 +3532,21 @@ serve(async (req) => {
           } else if (consultorIntentMatch) {
             path = 'consultor';
             console.log('[process-chat-flow] 🎯 consultorIntentMatch → path set to "consultor"');
+          } else if (saqueIntentMatch) {
+            path = 'saque';
+            console.log('[process-chat-flow] 🎯 saqueIntentMatch → path set to "saque"');
+          } else if (devolucaoIntentMatch) {
+            path = 'devolucao';
+            console.log('[process-chat-flow] 🎯 devolucaoIntentMatch → path set to "devolucao"');
+          } else if (pedidosIntentMatch) {
+            path = 'pedidos';
+            console.log('[process-chat-flow] 🎯 pedidosIntentMatch → path set to "pedidos"');
+          } else if (sistemaIntentMatch) {
+            path = 'suporte_sistema';
+            console.log('[process-chat-flow] 🎯 sistemaIntentMatch → path set to "suporte_sistema"');
+          } else if (internacionalIntentMatch) {
+            path = 'comercial_internacional';
+            console.log('[process-chat-flow] 🎯 internacionalIntentMatch → path set to "comercial_internacional"');
           } else if (keywordMatch) {
             path = 'suporte';
             collectedData.ai_exit_intent = 'suporte';
