@@ -10,9 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Loader2, Plus, Pencil } from "lucide-react";
@@ -89,42 +86,34 @@ export default function ReturnReasonsSettings() {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="border border-border rounded-lg overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[200px]">Chave</TableHead>
-                <TableHead>Label</TableHead>
-                <TableHead className="text-center w-[80px]">Ordem</TableHead>
-                <TableHead className="text-center w-[80px]">Ativo</TableHead>
-                <TableHead className="text-right w-[70px]">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {reasons?.map((reason) => (
-                <TableRow key={reason.id} className={!reason.is_active ? "opacity-50" : ""}>
-                  <TableCell>
-                    <span className="inline-block font-mono text-xs bg-muted text-muted-foreground px-2 py-1 rounded-md">
-                      {reason.key}
-                    </span>
-                  </TableCell>
-                  <TableCell className="font-medium">{reason.label}</TableCell>
-                  <TableCell className="text-center">{reason.sort_order}</TableCell>
-                  <TableCell className="text-center">
-                    <Switch
-                      checked={reason.is_active}
-                      onCheckedChange={() => handleToggleActive(reason)}
-                    />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(reason)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div className="space-y-3">
+          {reasons?.map((reason) => (
+            <div
+              key={reason.id}
+              className={`flex items-center justify-between p-4 rounded-lg border border-border bg-card transition-opacity ${!reason.is_active ? "opacity-50" : ""}`}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-semibold text-foreground">{reason.label}</p>
+                <p className="text-sm text-muted-foreground font-mono mt-0.5">
+                  {reason.key}
+                  <span className="mx-2 text-border">·</span>
+                  <span className="font-sans">Ordem: {reason.sort_order}</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-3 ml-4">
+                <Switch
+                  checked={reason.is_active}
+                  onCheckedChange={() => handleToggleActive(reason)}
+                />
+                <Button variant="ghost" size="sm" onClick={() => openEdit(reason)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+          {(!reasons || reasons.length === 0) && (
+            <p className="text-center text-muted-foreground py-8">Nenhum motivo cadastrado</p>
+          )}
         </div>
       )}
 
@@ -143,7 +132,6 @@ export default function ReturnReasonsSettings() {
                 value={formKey}
                 onChange={(e) => setFormKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"))}
                 placeholder="ex: produto_danificado"
-                disabled={!!editingReason}
               />
             </div>
             <div className="space-y-2">
