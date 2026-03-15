@@ -2510,6 +2510,7 @@ serve(async (req) => {
                     forbidSupport: resolvedNode.data?.forbid_support ?? false,
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
                     onboardingDetection: resolvedNode.data?.onboarding_detection_enabled ?? false,
+                    returnReasons: variablesContext['__return_reasons_full'] || null,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
