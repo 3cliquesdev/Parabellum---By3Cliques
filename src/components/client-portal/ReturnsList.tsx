@@ -1,4 +1,5 @@
-import { useClientReturns, REASON_LABELS, STATUS_CONFIG } from "@/hooks/useClientReturns";
+import { useClientReturns, STATUS_CONFIG } from "@/hooks/useClientReturns";
+import { useReasonLabelsMap } from "@/hooks/useReturnReasons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Package, RotateCcw, ChevronRight, Plus } from "lucide-react";
