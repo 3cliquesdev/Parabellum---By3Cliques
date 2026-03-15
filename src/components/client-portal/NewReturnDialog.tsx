@@ -64,7 +64,9 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   };
 
   const lookupOrderByTracking = useCallback(async (trackingVal: string) => {
-    if (!trackingVal.trim()) return;
+    const trimmed = trackingVal.trim();
+    if (!trimmed || trimmed === lastSearchedRef.current) return;
+    lastSearchedRef.current = trimmed;
     setLoadingTracking(true);
     setTrackingSearched(false);
     try {
