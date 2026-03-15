@@ -37,6 +37,7 @@ const routeLabels: Record<string, string> = {
   "/client-portal": "Portal do Cliente",
   "/cadences": "Cadências",
   "/setup-password": "Configurar Senha",
+  "/settings/return-reasons": "Motivos de Devolução",
 };
 
 function getBreadcrumb(pathname: string): string[] {
