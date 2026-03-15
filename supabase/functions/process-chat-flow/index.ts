@@ -2713,6 +2713,10 @@ serve(async (req) => {
                       forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
                       forbidSupport: resolvedNode.data?.forbid_support ?? false,
                       forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
+                      forbidPedidos: resolvedNode.data?.forbid_pedidos ?? false,
+                      forbidDevolucao: resolvedNode.data?.forbid_devolucao ?? false,
+                      forbidSaque: resolvedNode.data?.forbid_saque ?? false,
+                      forbidSistema: resolvedNode.data?.forbid_sistema ?? false,
                       onboardingDetection: resolvedNode.data?.onboarding_detection_enabled ?? false,
                       returnReasons: variablesContext['__return_reasons_full'] || null,
                     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
