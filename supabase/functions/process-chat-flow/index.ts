@@ -5286,6 +5286,7 @@ serve(async (req) => {
             forbidSupport: nextNode.data?.forbid_support ?? false,
             forbidConsultant: nextNode.data?.forbid_consultant ?? false,
             onboardingDetection: nextNode.data?.onboarding_detection_enabled ?? false,
+            returnReasons: variablesContext['__return_reasons_full'] || null,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
