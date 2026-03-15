@@ -71,18 +71,22 @@ export function useCreateAdminReturn() {
   return useMutation({
     mutationFn: async (data: {
       external_order_id: string;
+      tracking_code_original?: string;
       tracking_code_return?: string;
       reason: string;
       description?: string;
       status?: string;
+      contact_id?: string;
     }) => {
       const { error } = await supabase.from("returns").insert({
         external_order_id: data.external_order_id,
+        tracking_code_original: data.tracking_code_original || null,
         tracking_code_return: data.tracking_code_return || null,
         reason: data.reason,
         description: data.description || null,
         status: data.status || "pending",
         created_by: "admin",
+        contact_id: data.contact_id || null,
       });
       if (error) throw error;
     },
