@@ -23,9 +23,40 @@ export function DatePickerWithRange({
   onDateChange,
   className,
 }: DatePickerWithRangeProps) {
+  const [open, setOpen] = React.useState(false);
+  const [draftRange, setDraftRange] = React.useState<DateRange | undefined>(date);
+  const selectionCount = React.useRef(0);
+
+  // Sync draft when prop changes externally
+  React.useEffect(() => {
+    if (!open) {
+      setDraftRange(date);
+    }
+  }, [date, open]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      // Opening: reset counter, sync draft
+      selectionCount.current = 0;
+      setDraftRange(date);
+    }
+    setOpen(nextOpen);
+  };
+
+  const handleSelect = (range: DateRange | undefined) => {
+    selectionCount.current += 1;
+    setDraftRange(range);
+
+    if (selectionCount.current >= 2) {
+      // Second click: propagate and close
+      onDateChange(range);
+      setOpen(false);
+    }
+  };
+
   return (
     <div className={cn("grid gap-2", className)}>
-      <Popover modal={true}>
+      <Popover modal={true} open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
             id="date"
@@ -54,9 +85,9 @@ export function DatePickerWithRange({
           <Calendar
             initialFocus
             mode="range"
-            defaultMonth={date?.from}
-            selected={date}
-            onSelect={onDateChange}
+            defaultMonth={draftRange?.from || date?.from}
+            selected={draftRange}
+            onSelect={handleSelect}
             numberOfMonths={2}
             locale={ptBR}
             className={cn("p-3 pointer-events-auto")}
