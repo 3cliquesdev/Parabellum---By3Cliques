@@ -2590,6 +2590,11 @@ serve(async (req) => {
       let consultorIntentMatch = false;
       let consultorHasConsultant = false;
       let aiExitForced = false;
+      let saqueIntentMatch = false;
+      let devolucaoIntentMatch = false;
+      let pedidosIntentMatch = false;
+      let sistemaIntentMatch = false;
+      let internacionalIntentMatch = false;
 
       // 🔧 FIX CRÍTICO: Nós genéricos ask_* (email, name, phone, cpf, text)
       // Antes, esses nós não entravam em nenhum branch do if/else if chain,
