@@ -100,6 +100,7 @@ const TicketNotificationRulesSettings = lazy(() => import("./pages/TicketNotific
 const PublicOnboarding = lazy(() => import("./pages/PublicOnboarding"));
 const PublicOnboardingForm = lazy(() => import("./pages/PublicOnboardingForm"));
 const SLASettings = lazy(() => import("./pages/SLASettings"));
+const ReturnReasonsSettings = lazy(() => import("./components/support/ReturnReasonsSettings"));
 const ScoringSettings = lazy(() => import("./pages/ScoringSettings"));
 const TicketStatusSettings = lazy(() => import("./pages/TicketStatusSettings"));
 const TicketCategoriesSettings = lazy(() => import("./pages/TicketCategoriesSettings"));
