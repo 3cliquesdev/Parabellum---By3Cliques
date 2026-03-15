@@ -68,7 +68,7 @@ export function useClientOnboarding() {
       for (const exec of executions) {
         const { data: steps, error: stError } = await supabase
           .from("customer_journey_steps")
-          .select("id, name, description, step_type, completed, completed_at, position, is_critical, form_id")
+          .select("id, step_name, notes, step_type, completed, completed_at, position, is_critical, form_id")
           .eq("contact_id", contactId)
           .order("position", { ascending: true });
 

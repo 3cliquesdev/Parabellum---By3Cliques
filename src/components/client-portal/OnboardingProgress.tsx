@@ -151,10 +151,10 @@ function StepItem({
                 : "text-gray-400"
             }`}
           >
-            {step.name}
+            {step.step_name}
           </p>
 
-          {step.description && (
+          {step.notes && (
             <p
               className={`text-xs mt-0.5 ${
                 isCompleted
