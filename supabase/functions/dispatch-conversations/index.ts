@@ -775,6 +775,43 @@ async function handleJobFailure(
       dispatch_status: newStatus === 'escalated' ? 'escalated' : 'pending',
     })
     .eq('id', job.conversation_id);
+
+  // 🆕 Correção 3: Notificação periódica ao cliente em espera longa
+  if (newAttempts >= 3 && newStatus !== 'escalated') {
+    try {
+      // Rate-limit: verificar se já enviamos nos últimos 5 minutos
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: recentMsg } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('conversation_id', job.conversation_id)
+        .eq('is_bot_message', true)
+        .ilike('content', '%procurando um especialista%')
+        .gte('created_at', fiveMinAgo)
+        .limit(1)
+        .maybeSingle();
+
+      if (!recentMsg) {
+        const { data: convData } = await supabase
+          .from('conversations')
+          .select('channel')
+          .eq('id', job.conversation_id)
+          .maybeSingle();
+
+        await supabase.from('messages').insert({
+          conversation_id: job.conversation_id,
+          content: '⏳ Ainda estamos procurando um especialista disponível. Você será atendido em breve!',
+          sender_type: 'user',
+          is_ai_generated: true,
+          is_bot_message: true,
+          channel: convData?.channel || 'web_chat',
+        });
+        console.log(`[dispatch-conversations] 📢 Notificação de espera enviada para ${job.conversation_id.substring(0, 8)}`);
+      }
+    } catch (notifyErr) {
+      console.error('[dispatch-conversations] ⚠️ Erro ao enviar notificação de espera:', notifyErr);
+    }
+  }
 }
 
 /**
