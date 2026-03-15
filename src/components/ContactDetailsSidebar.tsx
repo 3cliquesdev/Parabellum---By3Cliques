@@ -706,7 +706,7 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
                 className="gap-2"
                 disabled={conversationMessages.length === 0}
                 onClick={() => {
-                  const contactName = contact ? displayName(contact) : "Contato";
+                  const contactName = contact ? displayName(contact.first_name, contact.last_name) : "Contato";
                   const status = selectedConversationMeta?.status === "closed" ? "Fechada" : "Aberta";
                   const channel = selectedConversationMeta?.channel || "WhatsApp";
                   const agent = selectedConversationMeta?.assigned_agent_name || "Não atribuído";
