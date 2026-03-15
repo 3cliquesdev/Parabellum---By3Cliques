@@ -1221,6 +1221,10 @@ interface FlowContext {
   forbidCancellation?: boolean;
   forbidSupport?: boolean;
   forbidConsultant?: boolean;
+  forbidPedidos?: boolean;
+  forbidDevolucao?: boolean;
+  forbidSaque?: boolean;
+  forbidSistema?: boolean;
   collectedData?: any;
   onboardingDetection?: boolean;
   // 🆕 Motivos de devolução dinâmicos
