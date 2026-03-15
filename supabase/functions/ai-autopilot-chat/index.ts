@@ -4059,6 +4059,10 @@ serve(async (req) => {
       content: m.content
     })) || [];
 
+    // 🆕 FIX: Aumentar janela de histórico quando há transição entre nós (flow_context)
+    // Isso garante que o agente de destino tenha contexto suficiente da triagem
+    const historySliceSize = flow_context && messageHistory.length > 6 ? 10 : 6;
+
     // Obter API keys antecipadamente
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     // LOVABLE_API_KEY removida - usando OpenAI diretamente
@@ -6672,7 +6676,43 @@ Este cliente tem onboarding incompleto (${onboardingInfo.progress} - Playbook: "
 - Link: ${onboardingInfo.resumeLink}
 ` : '';
 
-    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}${onboardingGuardInstruction}
+    // 🆕 FIX: Instrução de CONTINUIDADE CONVERSACIONAL para transições entre nós/personas
+    // Quando há flow_context e histórico existente, a IA de destino precisa saber que está
+    // assumindo uma conversa em andamento para não repetir saudações ou pedir dados já fornecidos
+    let continuityInstruction = '';
+    if (flow_context && messageHistory.length > 1) {
+      // Gerar mini-resumo das últimas mensagens para injetar no prompt
+      const recentMessages = messageHistory.slice(-historySliceSize);
+      const conversationSummaryParts: string[] = [];
+      for (const msg of recentMessages) {
+        if (msg.role === 'user') {
+          conversationSummaryParts.push(`Cliente: "${(msg.content || '').substring(0, 120)}"`);
+        } else {
+          conversationSummaryParts.push(`Assistente anterior: "${(msg.content || '').substring(0, 120)}"`);
+        }
+      }
+      const conversationSummary = conversationSummaryParts.slice(-6).join('\n');
+      
+      continuityInstruction = `
+⚡ CONTINUIDADE CONVERSACIONAL (REGRA CRÍTICA):
+Você está ASSUMINDO uma conversa em andamento. O cliente já interagiu com outro assistente (triagem/etapa anterior).
+LEIA o histórico de mensagens abaixo e o resumo da conversa para entender o contexto.
+
+📋 Resumo da conversa anterior:
+${conversationSummary}
+
+REGRAS DE CONTINUIDADE:
+- NÃO cumprimente novamente (nada de "Olá!", "Bom dia!", "Como posso ajudar?")
+- NÃO peça informações que o cliente JÁ forneceu no histórico
+- NÃO se apresente novamente
+- Continue a conversa NATURALMENTE de onde o assistente anterior parou
+- Se o cliente já disse o que precisa, vá direto ao ponto
+- Comece respondendo à necessidade do cliente, ex: "Entendi, você precisa de ajuda com X..."
+
+`;
+    }
+
+    const contextualizedSystemPrompt = `${continuityInstruction}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}${onboardingGuardInstruction}
 
 **ðŸš« REGRA DE HANDOFF (SÃ“ QUANDO CLIENTE PEDIR):**
 TransferÃªncia para humano SÃ“ acontece quando:
@@ -6959,7 +6999,7 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
       messages: [
         { role: 'system', content: contextualizedSystemPrompt },
         ...fewShotMessages,  // âœ¨ Injetar exemplos de treinamento (Few-Shot Learning)
-        ...messageHistory.slice(-6), // 🔧 TOKEN OPT: limitar a últimas 6 msgs (3 turnos)
+        ...messageHistory.slice(-historySliceSize), // 🔧 TOKEN OPT: 6 msgs padrão, 10 em transições de nó
         { role: 'user', content: customerMessage }
       ],
       temperature: persona.temperature ?? 0.7,  // CORRIGIDO: ?? ao invÃ©s de || (temperatura 0 Ã© vÃ¡lida)
