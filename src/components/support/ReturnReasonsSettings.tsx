@@ -93,18 +93,22 @@ export default function ReturnReasonsSettings() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Chave</TableHead>
+                <TableHead className="w-[200px]">Chave</TableHead>
                 <TableHead>Label</TableHead>
-                <TableHead className="text-center">Ordem</TableHead>
-                <TableHead className="text-center">Ativo</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead className="text-center w-[80px]">Ordem</TableHead>
+                <TableHead className="text-center w-[80px]">Ativo</TableHead>
+                <TableHead className="text-right w-[70px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {reasons?.map((reason) => (
                 <TableRow key={reason.id} className={!reason.is_active ? "opacity-50" : ""}>
-                  <TableCell className="font-mono text-xs">{reason.key}</TableCell>
-                  <TableCell>{reason.label}</TableCell>
+                  <TableCell>
+                    <span className="inline-block font-mono text-xs bg-muted text-muted-foreground px-2 py-1 rounded-md">
+                      {reason.key}
+                    </span>
+                  </TableCell>
+                  <TableCell className="font-medium">{reason.label}</TableCell>
                   <TableCell className="text-center">{reason.sort_order}</TableCell>
                   <TableCell className="text-center">
                     <Switch
