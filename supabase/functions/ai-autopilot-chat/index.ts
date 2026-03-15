@@ -6999,7 +6999,7 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
       messages: [
         { role: 'system', content: contextualizedSystemPrompt },
         ...fewShotMessages,  // âœ¨ Injetar exemplos de treinamento (Few-Shot Learning)
-        ...messageHistory.slice(-6), // 🔧 TOKEN OPT: limitar a últimas 6 msgs (3 turnos)
+        ...messageHistory.slice(-historySliceSize), // 🔧 TOKEN OPT: 6 msgs padrão, 10 em transições de nó
         { role: 'user', content: customerMessage }
       ],
       temperature: persona.temperature ?? 0.7,  // CORRIGIDO: ?? ao invÃ©s de || (temperatura 0 Ã© vÃ¡lida)
