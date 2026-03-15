@@ -1,6 +1,5 @@
 import { lazy, Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PageContainer } from "@/components/ui/page-container";
 import { ClipboardList, Clock } from "lucide-react";
 import { PageLoadingSkeleton } from "@/components/PageLoadingSkeleton";
 
@@ -9,9 +8,14 @@ const SLASettings = lazy(() => import("@/pages/SLASettings"));
 
 export default function ReturnsConfigSettings() {
   return (
-    <PageContainer title="Conf. de Devoluções" subtitle="Gerencie motivos e SLA de devoluções">
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Conf. de Devoluções</h1>
+        <p className="text-sm text-muted-foreground mt-1">Gerencie motivos e SLA de devoluções</p>
+      </div>
+
       <Tabs defaultValue="reasons" className="w-full">
-        <TabsList className="mb-6">
+        <TabsList className="mb-4">
           <TabsTrigger value="reasons" className="gap-2">
             <ClipboardList className="h-4 w-4" />
             Motivos de Devolução
@@ -24,16 +28,16 @@ export default function ReturnsConfigSettings() {
 
         <TabsContent value="reasons">
           <Suspense fallback={<PageLoadingSkeleton />}>
-            <ReturnReasonsSettings embedded />
+            <ReturnReasonsSettings />
           </Suspense>
         </TabsContent>
 
         <TabsContent value="sla">
           <Suspense fallback={<PageLoadingSkeleton />}>
-            <SLASettings embedded />
+            <SLASettings />
           </Suspense>
         </TabsContent>
       </Tabs>
-    </PageContainer>
+    </div>
   );
 }
