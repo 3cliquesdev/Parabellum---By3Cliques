@@ -47,7 +47,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
 
   const resetForm = () => {
     setStep("form");
-    setEmail(user?.email || "");
+    
     setOrderId("");
     setTrackingReturn("");
     setTrackingOriginal(null);

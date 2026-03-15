@@ -24,24 +24,26 @@ serve(async (req) => {
       });
     }
 
-    const trimmedEmail = String(email).trim().toLowerCase();
     const trimmedOrderId = String(external_order_id).trim();
+    const trimmedEmail = email ? String(email).trim().toLowerCase() : null;
 
-    // Find contact by email
-    const { data: contact } = await supabase
-      .from('contacts')
-      .select('id')
-      .eq('email', trimmedEmail)
-      .maybeSingle();
-
-    // Find deal by external_order_id
+    // Find deal by external_order_id directly
     const dealQuery = supabase
       .from('deals')
       .select('tracking_code, external_order_id')
       .eq('external_order_id', trimmedOrderId);
 
-    if (contact?.id) {
-      dealQuery.eq('contact_id', contact.id);
+    // If email provided, optionally filter by contact
+    if (trimmedEmail) {
+      const { data: contact } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('email', trimmedEmail)
+        .maybeSingle();
+
+      if (contact?.id) {
+        dealQuery.eq('contact_id', contact.id);
+      }
     }
 
     const { data: deal } = await dealQuery.maybeSingle();
