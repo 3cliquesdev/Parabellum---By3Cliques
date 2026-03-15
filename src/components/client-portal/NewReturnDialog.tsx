@@ -31,7 +31,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   const linkReturn = useLinkReturn();
 
   const [step, setStep] = useState<Step>("form");
-  const [email, setEmail] = useState(user?.email || "");
+  
   const [orderId, setOrderId] = useState("");
   const [trackingReturn, setTrackingReturn] = useState("");
   const [trackingOriginal, setTrackingOriginal] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
 
   const resetForm = () => {
     setStep("form");
-    setEmail(user?.email || "");
+    
     setOrderId("");
     setTrackingReturn("");
     setTrackingOriginal(null);
@@ -60,13 +60,13 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
     setPhotos([]);
   };
 
-  const lookupTracking = useCallback(async (emailVal: string, orderVal: string) => {
-    if (!emailVal.trim() || !orderVal.trim()) return;
+  const lookupTracking = useCallback(async (orderVal: string) => {
+    if (!orderVal.trim()) return;
     setLoadingTracking(true);
     setTrackingSearched(false);
     try {
       const { data, error } = await supabase.functions.invoke('lookup-order-tracking', {
-        body: { email: emailVal.trim(), external_order_id: orderVal.trim() },
+        body: { external_order_id: orderVal.trim() },
       });
       if (!error && data?.tracking_code_original) {
         setTrackingOriginal(data.tracking_code_original);
@@ -137,10 +137,11 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   };
 
   const handleSubmit = async () => {
-    if (!email || !orderId || !reason) return;
+    const userEmail = user?.email || "";
+    if (!userEmail || !orderId || !reason) return;
 
     const result = await registerReturn.mutateAsync({
-      email,
+      email: userEmail,
       external_order_id: orderId,
       tracking_code_return: trackingReturn || undefined,
       reason,
@@ -160,7 +161,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   const handleLink = async () => {
     await linkReturn.mutateAsync({
       return_id: duplicateReturnId,
-      email,
+      email: user?.email || "",
     });
     setStep("success");
     setProtocol(duplicateReturnId.substring(0, 8).toUpperCase());
@@ -185,16 +186,6 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
         {step === "form" && (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label>Número do Pedido</Label>
               <Input
                 value={orderId}
@@ -203,7 +194,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
                   setTrackingSearched(false);
                   setTrackingOriginal(null);
                 }}
-                onBlur={() => lookupTracking(email, orderId)}
+                onBlur={() => lookupTracking(orderId)}
                 placeholder="Ex: SA-12345"
               />
             </div>
@@ -328,7 +319,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={!email || !orderId || !reason || registerReturn.isPending || uploading}
+              disabled={!orderId || !reason || registerReturn.isPending || uploading}
             >
               {registerReturn.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
