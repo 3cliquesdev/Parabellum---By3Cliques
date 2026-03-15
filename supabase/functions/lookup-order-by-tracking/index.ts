@@ -122,6 +122,7 @@ serve(async (req) => {
         }
       }
 
+      await client.close();
       console.log('[lookup-order-by-tracking] ✅ Encontrado:', { platformOrderId, buyerName, trackingNumber, productItems });
 
       return new Response(JSON.stringify({
