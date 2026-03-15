@@ -1157,6 +1157,55 @@ async function handlePaidOrder(
     console.warn('[kiwify-webhook] Auth error:', authErr);
   }
 
+  // 2.1 📧 Email de boas-vindas com link de primeiro acesso
+  try {
+    const customerFirstName = nameParts[0];
+    const frontendUrl = Deno.env.get('FRONTEND_URL') || 'https://nexxoai.lovable.app';
+
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email: Customer.email,
+      options: {
+        redirectTo: `${frontendUrl}/client-portal`
+      }
+    });
+
+    if (linkError || !linkData?.properties?.action_link) {
+      console.error('[kiwify-webhook] ⚠️ Failed to generate recovery link:', linkError);
+    } else {
+      const actionLink = linkData.properties.action_link;
+      
+      await supabase.functions.invoke('send-email', {
+        body: {
+          to: Customer.email,
+          to_name: customerFirstName,
+          subject: `✅ Seu acesso ao portal está pronto, ${customerFirstName}!`,
+          html: `<h2>Olá, ${customerFirstName}!</h2>
+<p>Sua compra do <strong>${Product.product_name}</strong> foi confirmada.</p>
+<p>Criamos seu acesso ao portal do cliente onde você pode acompanhar seus tickets, devoluções e progresso do onboarding.</p>
+<h3>Seus dados de acesso:</h3>
+<ul>
+  <li><strong>Login:</strong> ${Customer.email}</li>
+  <li><strong>Produto:</strong> ${Product.product_name}</li>
+  <li><strong>Senha:</strong> clique no botão abaixo para definir sua senha</li>
+</ul>
+<p style="text-align: center; margin: 30px 0;">
+  <a href="${actionLink}" style="background-color: #2c5282; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Definir minha senha e acessar o portal →</a>
+</p>
+<p style="color: #888; font-size: 13px;">O link expira em 24 horas.</p>
+<hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+<p style="color: #999; font-size: 12px; text-align: center;">© Seu Armazém Drop — Todos os direitos reservados</p>`,
+          customer_id: contact.id,
+          is_customer_email: true,
+        }
+      });
+
+      console.log('[kiwify-webhook] ✅ Welcome email sent to:', Customer.email);
+    }
+  } catch (welcomeEmailErr) {
+    console.error('[kiwify-webhook] ⚠️ Welcome email failed (non-blocking):', welcomeEmailErr);
+  }
+
   // 2.5 🆕 CRIAR DEAL AUTOMATICAMENTE PARA VENDA DE NOVO CLIENTE
   const grossValue = Commissions.product_base_price / 100;
   const netValue = (Commissions.my_commission || Commissions.product_base_price) / 100;
