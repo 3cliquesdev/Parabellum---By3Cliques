@@ -6676,7 +6676,43 @@ Este cliente tem onboarding incompleto (${onboardingInfo.progress} - Playbook: "
 - Link: ${onboardingInfo.resumeLink}
 ` : '';
 
-    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}${onboardingGuardInstruction}
+    // 🆕 FIX: Instrução de CONTINUIDADE CONVERSACIONAL para transições entre nós/personas
+    // Quando há flow_context e histórico existente, a IA de destino precisa saber que está
+    // assumindo uma conversa em andamento para não repetir saudações ou pedir dados já fornecidos
+    let continuityInstruction = '';
+    if (flow_context && messageHistory.length > 1) {
+      // Gerar mini-resumo das últimas mensagens para injetar no prompt
+      const recentMessages = messageHistory.slice(-historySliceSize);
+      const conversationSummaryParts: string[] = [];
+      for (const msg of recentMessages) {
+        if (msg.role === 'user') {
+          conversationSummaryParts.push(`Cliente: "${(msg.content || '').substring(0, 120)}"`);
+        } else {
+          conversationSummaryParts.push(`Assistente anterior: "${(msg.content || '').substring(0, 120)}"`);
+        }
+      }
+      const conversationSummary = conversationSummaryParts.slice(-6).join('\n');
+      
+      continuityInstruction = `
+⚡ CONTINUIDADE CONVERSACIONAL (REGRA CRÍTICA):
+Você está ASSUMINDO uma conversa em andamento. O cliente já interagiu com outro assistente (triagem/etapa anterior).
+LEIA o histórico de mensagens abaixo e o resumo da conversa para entender o contexto.
+
+📋 Resumo da conversa anterior:
+${conversationSummary}
+
+REGRAS DE CONTINUIDADE:
+- NÃO cumprimente novamente (nada de "Olá!", "Bom dia!", "Como posso ajudar?")
+- NÃO peça informações que o cliente JÁ forneceu no histórico
+- NÃO se apresente novamente
+- Continue a conversa NATURALMENTE de onde o assistente anterior parou
+- Se o cliente já disse o que precisa, vá direto ao ponto
+- Comece respondendo à necessidade do cliente, ex: "Entendi, você precisa de ajuda com X..."
+
+`;
+    }
+
+    const contextualizedSystemPrompt = `${continuityInstruction}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}${onboardingGuardInstruction}
 
 **ðŸš« REGRA DE HANDOFF (SÃ“ QUANDO CLIENTE PEDIR):**
 TransferÃªncia para humano SÃ“ acontece quando:
