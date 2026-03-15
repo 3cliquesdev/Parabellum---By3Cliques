@@ -20,9 +20,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Workflow, Edit, Trash2, Copy, BarChart3, Sparkles, Package, Link2, ExternalLink, Phone } from "lucide-react";
+import { Plus, Workflow, Edit, Trash2, Copy, BarChart3, Sparkles, Package, Link2, ExternalLink, Phone, Rocket } from "lucide-react";
 import { usePlaybooks } from "@/hooks/usePlaybooks";
 import { useCreatePlaybook } from "@/hooks/useCreatePlaybook";
+import { getOnboardingCompletoTemplate, ONBOARDING_COMPLETO_META } from "@/lib/playbook-templates";
 import { useUpdatePlaybook } from "@/hooks/useUpdatePlaybook";
 import { useDeletePlaybook } from "@/hooks/useDeletePlaybook";
 import { useProducts } from "@/hooks/useProducts";
@@ -282,10 +283,40 @@ export default function OnboardingBuilder() {
                 Comece rápido com templates pré-configurados
               </CardDescription>
             </div>
-            <Button size="sm" variant="outline" onClick={handleCreateNewTemplate} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Novo Template
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="default"
+                className="gap-2"
+                onClick={() => {
+                  const flow = getOnboardingCompletoTemplate();
+                  createPlaybook.mutate(
+                    {
+                      name: ONBOARDING_COMPLETO_META.name,
+                      description: ONBOARDING_COMPLETO_META.description,
+                      flow_definition: flow,
+                      is_active: false,
+                      is_template: true,
+                    },
+                    {
+                      onSuccess: () => {
+                        toast({
+                          title: "Template criado!",
+                          description: "O template 'Onboarding Completo' foi adicionado à biblioteca.",
+                        });
+                      },
+                    }
+                  );
+                }}
+              >
+                <Rocket className="h-4 w-4" />
+                Criar Template Onboarding
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleCreateNewTemplate} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Novo Template
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
