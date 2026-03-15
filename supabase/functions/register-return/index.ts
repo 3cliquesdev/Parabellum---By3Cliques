@@ -71,12 +71,17 @@ serve(async (req) => {
       trackingCodeOriginal = deal.tracking_code;
     }
 
-    // 3. Verificar duplicata (admin já criou para este pedido)
+    // 3. Verificar duplicata (admin já criou para este pedido OU mesmo rastreio)
+    const orFilters = [`external_order_id.eq.${external_order_id}`];
+    if (tracking_code_return) {
+      orFilters.push(`tracking_code_return.eq.${tracking_code_return}`);
+    }
+
     const { data: existingReturn } = await supabase
       .from('returns')
       .select('id')
-      .eq('external_order_id', external_order_id)
       .eq('created_by', 'admin')
+      .or(orFilters.join(','))
       .maybeSingle();
 
     if (existingReturn) {
