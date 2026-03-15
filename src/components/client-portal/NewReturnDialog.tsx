@@ -30,6 +30,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   const { user } = useAuth();
   const registerReturn = useRegisterReturn();
   const linkReturn = useLinkReturn();
+  const { data: reasons } = useReturnReasons();
 
   const [step, setStep] = useState<Step>("form");
   
