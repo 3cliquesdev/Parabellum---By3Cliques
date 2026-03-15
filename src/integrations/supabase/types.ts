@@ -7972,6 +7972,59 @@ export type Database = {
           },
         ]
       }
+      returns: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          external_order_id: string
+          id: string
+          reason: string
+          registered_email: string | null
+          status: string
+          tracking_code_original: string | null
+          tracking_code_return: string | null
+          updated_at: string
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          external_order_id: string
+          id?: string
+          reason: string
+          registered_email?: string | null
+          status?: string
+          tracking_code_original?: string | null
+          tracking_code_return?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          external_order_id?: string
+          id?: string
+          reason?: string
+          registered_email?: string | null
+          status?: string
+          tracking_code_original?: string | null
+          tracking_code_return?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "returns_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rlhf_feedback: {
         Row: {
           created_at: string | null

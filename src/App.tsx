@@ -66,6 +66,7 @@ const AgentQualityDashboard = lazy(() => import("./pages/AgentQualityDashboard")
 const CopilotImpactDashboard = lazy(() => import("./pages/CopilotImpactDashboard"));
 const SalesRepDetail = lazy(() => import("./pages/SalesRepDetail"));
 const OnboardingBuilder = lazy(() => import("./pages/OnboardingBuilder"));
+const ReturnsManagement = lazy(() => import("./components/support/ReturnsManagement"));
 const PlaybookExecutions = lazy(() => import("./pages/PlaybookExecutions"));
 const KnowledgeImport = lazy(() => import("./pages/KnowledgeImport"));
 const DeliveryGroups = lazy(() => import("./pages/DeliveryGroups"));
@@ -235,6 +236,7 @@ const App = () => {
               <Route path="/sales-tasks" element={<ProtectedRoute requiredPermission="sales.view_workzone"><Layout><SalesTasks /></Layout></ProtectedRoute>} />
               <Route path="/support" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><Support /></Layout></ProtectedRoute>} />
               <Route path="/support/:ticketId" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><TicketDetail /></Layout></ProtectedRoute>} />
+              <Route path="/returns" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><ReturnsManagement /></Layout></ProtectedRoute>} />
               <Route path="/support-dashboard" element={<Navigate to="/?tab=support" replace />} />
               <Route path="/knowledge" element={<ProtectedRoute requiredPermission="inbox.view_knowledge"><Layout><Knowledge /></Layout></ProtectedRoute>} />
               <Route path="/knowledge/curation" element={<ProtectedRoute requiredPermission="knowledge.manage_articles"><Layout><KnowledgeCuration /></Layout></ProtectedRoute>} />
