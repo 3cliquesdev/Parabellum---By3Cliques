@@ -50,6 +50,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
     setStep("form");
     
     setOrderId("");
+    setTrackingOutbound("");
     setTrackingReturn("");
     setTrackingOriginal(null);
     setLoadingTracking(false);
