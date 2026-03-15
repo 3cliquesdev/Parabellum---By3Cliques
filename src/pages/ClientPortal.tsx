@@ -163,6 +163,7 @@ export default function ClientPortal() {
       </div>
 
       <NewReturnDialog open={showNewReturn} onOpenChange={setShowNewReturn} />
+      <AssistantWidget />
     </div>
   );
 }
