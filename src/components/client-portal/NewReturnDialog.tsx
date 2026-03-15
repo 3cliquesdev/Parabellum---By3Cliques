@@ -63,6 +63,8 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
     setProtocol("");
     setDuplicateReturnId("");
     setPhotos([]);
+    setBuyerName(null);
+    setProductItems([]);
   };
 
   const lookupOrderByTracking = useCallback(async (trackingVal: string) => {
