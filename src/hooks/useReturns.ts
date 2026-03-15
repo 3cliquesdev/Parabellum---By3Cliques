@@ -85,7 +85,6 @@ export function useCreateAdminReturn() {
         description: data.description || null,
         status: data.status || "pending",
         created_by: "admin",
-        contact_id: data.contact_id || null,
       });
       if (error) throw error;
     },
