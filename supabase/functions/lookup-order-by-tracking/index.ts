@@ -102,30 +102,35 @@ serve(async (req) => {
         });
       }
 
-      // 3. Buscar títulos dos produtos na mabang_order_item
-      let productTitles: string[] = [];
+      // 3. Buscar títulos e SKUs dos produtos na mabang_order_item
+      let productItems: { title: string; sku: string }[] = [];
       if (platformOrderId) {
         try {
           const itemResults = await client.query(
-            `SELECT title FROM mabang_order_item WHERE platform_order_id = ? AND title IS NOT NULL`,
+            `SELECT title, stock_sku FROM mabang_order_item WHERE platform_order_id = ?`,
             [platformOrderId]
           );
           if (itemResults && itemResults.length > 0) {
-            productTitles = itemResults.map((item: any) => item.title).filter(Boolean);
+            productItems = itemResults
+              .filter((item: any) => item.title || item.stock_sku)
+              .map((item: any) => ({
+                title: item.title || '',
+                sku: item.stock_sku || '',
+              }));
           }
         } catch (e) {
           console.log('[lookup-order-by-tracking] ℹ️ Erro query mabang_order_item:', e);
         }
       }
 
-      console.log('[lookup-order-by-tracking] ✅ Encontrado:', { platformOrderId, buyerName, trackingNumber, productTitles });
+      console.log('[lookup-order-by-tracking] ✅ Encontrado:', { platformOrderId, buyerName, trackingNumber, productItems });
 
       return new Response(JSON.stringify({
         found: true,
         external_order_id: platformOrderId,
         tracking_code: trackingNumber,
         buyer_name: buyerName,
-        product_titles: productTitles,
+        product_items: productItems,
       }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
