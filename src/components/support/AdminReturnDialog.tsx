@@ -49,7 +49,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
     setStatus("pending");
     setSearching(false);
     setLookupResult(null);
-    setContactId(null);
+    setBuyerName(null);
   };
 
   const handleTrackingBlur = async () => {
