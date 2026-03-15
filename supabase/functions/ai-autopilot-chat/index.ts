@@ -7214,6 +7214,21 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
     let rawAIContent = aiData.choices?.[0]?.message?.content;
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
 
+    // 🔧 FIX: Detectar truncamento por max_tokens e cortar até última frase completa
+    const finishReason = aiData.choices?.[0]?.finish_reason;
+    if (finishReason === 'length' && rawAIContent) {
+      console.warn('[ai-autopilot-chat] ⚠️ Response truncated by max_tokens — trimming to last complete sentence');
+      const lastPunctuation = Math.max(
+        rawAIContent.lastIndexOf('.'),
+        rawAIContent.lastIndexOf('!'),
+        rawAIContent.lastIndexOf('?')
+      );
+      if (lastPunctuation > rawAIContent.length * 0.3) {
+        rawAIContent = rawAIContent.substring(0, lastPunctuation + 1);
+        console.log('[ai-autopilot-chat] ✅ Trimmed to last complete sentence at position', lastPunctuation);
+      }
+    }
+
     // ðŸ†• FIX B: RETRY â€” Se IA retornou vazio sem tool_calls, tentar com prompt reduzido
     if (!rawAIContent && !toolCalls.length) {
       console.warn('[ai-autopilot-chat] âš ï¸ IA retornou vazio â€” tentando retry com prompt reduzido');
