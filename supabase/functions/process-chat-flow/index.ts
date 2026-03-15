@@ -4219,14 +4219,35 @@ serve(async (req) => {
 
         // 🆕 CONTRATO ANTI-ALUCINAÇÃO: Retornar aiNodeActive = true
         // Isso autoriza o message-listener/useAutopilotTrigger a chamar a IA
-        // 🔧 FIX CONTEXTO: Enriquecer contextPrompt com intent detectado pela triagem
+        // FIX 3: Montar agent_context com role explícito — define comportamento da IA no nó
         const detectedIntent = collectedData?.ai_exit_intent || null;
         const lastUserMsg = userMessage ? userMessage.substring(0, 200) : null;
         const baseContextPrompt = nextNode.data?.context_prompt || '';
-        const intentContext = detectedIntent
-          ? `\n\n[CONTEXTO DA TRIAGEM] O cliente foi direcionado para este atendimento com intenção identificada: "${detectedIntent}". Última mensagem do cliente: "${lastUserMsg}". Não peça para o cliente repetir o motivo — você já sabe o contexto. Inicie o atendimento de forma direta e contextualizada.`
-          : (lastUserMsg ? `\n\n[CONTEXTO] Última mensagem do cliente antes da transferência: "${lastUserMsg}". Não peça para o cliente repetir — continue o atendimento de forma natural.` : '');
-        const enrichedContextPrompt = (baseContextPrompt + intentContext).trim() || null;
+
+        // Role determina se a IA pode fazer perguntas e como deve se comportar
+        const nodeRole = nextNode.data?.agent_role || (
+          detectedIntent ? 'specialist' :
+          nextNode.data?.forbid_financial || nextNode.data?.forbid_cancellation ? 'specialist' :
+          'triage'
+        );
+
+        const historySummary = collectedData?.ai_exit_intent
+          ? `Intenção identificada na triagem: "${collectedData.ai_exit_intent}".`
+          : '';
+
+        const agentRoleInstruction =
+          nodeRole === 'triage'
+            ? `[ROLE: triagem] Você está identificando a intenção do cliente. PODE e DEVE fazer perguntas para entender o que o cliente precisa. Seja direto e objetivo.`
+            : nodeRole === 'specialist'
+            ? `[ROLE: especialista] Você já sabe o que o cliente precisa: "${detectedIntent || 'suporte'}". ${historySummary} NÃO peça para o cliente repetir o motivo. Resolva diretamente.`
+            : `[ROLE: atendimento] Continue o atendimento de forma natural. ${historySummary}`;
+
+        const intentContext = lastUserMsg
+          ? `\nÚltima mensagem do cliente: "${lastUserMsg}".`
+          : '';
+
+        const enrichedContextPrompt = [baseContextPrompt, agentRoleInstruction, intentContext]
+          .filter(Boolean).join('\n').trim() || null;
 
         return new Response(
           JSON.stringify({

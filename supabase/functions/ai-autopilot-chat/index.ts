@@ -6582,7 +6582,12 @@ Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecime
 ` : ''}
 ` : '';
 
-    const contextualizedSystemPrompt = `${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
+    // FIX 2: Injetar agent_context (intent da triagem + contexto acumulado) no system prompt
+    const agentContextBlock = flowContextPrompt
+      ? `\n\n**CONTEXTO DO AGENTE (triagem anterior):**\n${flowContextPrompt}\n`
+      : '';
+
+    const contextualizedSystemPrompt = `${agentContextBlock}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
 
 **ðŸš« REGRA DE HANDOFF (SÃ“ QUANDO CLIENTE PEDIR):**
 TransferÃªncia para humano SÃ“ acontece quando:
