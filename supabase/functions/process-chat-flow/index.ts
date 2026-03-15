@@ -130,163 +130,6 @@ function buildAllowedSources(nodeData: any): string[] {
 }
 
 // ============================================================
-// 🆕 HELPER: Verificação de horário comercial antes de handoff_to_human
-// Intercepta transferências fora do horário: envia mensagem, aplica tag, fecha conversa
-// ============================================================
-async function checkAfterHoursAndIntercept(
-  supabaseClient: any,
-  conversationId: string,
-  transitionType: string,
-  departmentId?: string | null,
-): Promise<{ intercepted: boolean; afterHoursMessage?: string }> {
-  // Só interceptar handoff_to_human — copilot/autopilot passam direto
-  if (transitionType !== 'handoff_to_human') {
-    return { intercepted: false };
-  }
-
-  try {
-    const bhInfo = await getBusinessHoursInfo(supabaseClient);
-    
-    if (bhInfo.within_hours) {
-      console.log('[process-chat-flow] ✅ Dentro do horário comercial - transferência normal');
-      // 🆕 Enviar mensagem proativa pós-handoff (non-blocking)
-      sendProactiveHandoffMessage(supabaseClient, conversationId, departmentId || null).catch(() => {});
-      return { intercepted: false };
-    }
-
-    console.log('[process-chat-flow] 🌙 FORA do horário comercial - interceptando transferência');
-
-    // 1. Buscar template de mensagem after-hours
-    const { data: msgRow } = await supabaseClient
-      .from('business_messages_config')
-      .select('message_template, after_hours_tag_id')
-      .eq('message_key', 'after_hours_handoff')
-      .maybeSingle();
-
-    const template = msgRow?.message_template || 'Nosso atendimento humano funciona {schedule}. Retornaremos {next_open}.';
-    const afterHoursMsg = template
-      .replace(/\{schedule\}/g, bhInfo.schedule_summary)
-      .replace(/\{next_open\}/g, bhInfo.next_open_text);
-
-    // 2. Buscar canal da conversa
-    const { data: convData } = await supabaseClient
-      .from('conversations')
-      .select('channel, contact_id')
-      .eq('id', conversationId)
-      .maybeSingle();
-
-    // 3. Inserir mensagem de horário comercial
-    await supabaseClient.from('messages').insert({
-      conversation_id: conversationId,
-      content: afterHoursMsg,
-      sender_type: 'user',
-      is_ai_generated: true,
-      is_bot_message: true,
-      channel: convData?.channel || 'web_chat',
-    });
-
-    // 4. Aplicar tag configurada (se existir)
-    if (msgRow?.after_hours_tag_id && convData?.contact_id) {
-      await supabaseClient.from('contact_tags').upsert(
-        { contact_id: convData.contact_id, tag_id: msgRow.after_hours_tag_id },
-        { onConflict: 'contact_id,tag_id' }
-      ).then(() => {
-        console.log('[process-chat-flow] 🏷️ Tag after-hours aplicada:', msgRow.after_hours_tag_id);
-      });
-    }
-
-    // 5. Fechar conversa com motivo after_hours
-    await supabaseClient.from('conversations').update({
-      status: 'closed',
-      ai_mode: 'autopilot',
-      assigned_to: null,
-      auto_closed: true,
-      closed_reason: 'after_hours_handoff',
-      updated_at: new Date().toISOString(),
-    }).eq('id', conversationId);
-
-    // 6. Registrar nota interna
-    if (convData?.contact_id) {
-      await supabaseClient.from('interactions').insert({
-        customer_id: convData.contact_id,
-        type: 'internal_note',
-        content: `🌙 Transferência interceptada fora do horário comercial. Mensagem enviada: "${afterHoursMsg}". Conversa fechada automaticamente.`,
-        channel: 'system',
-      });
-    }
-
-    // 7. Completar flow state como transferred
-    // (chamador fará isso em muitos casos, mas garantir aqui tb)
-
-    console.log('[process-chat-flow] ✅ Conversa fechada por after_hours_handoff');
-    return { intercepted: true, afterHoursMessage: afterHoursMsg };
-  } catch (err) {
-    console.error('[process-chat-flow] ❌ Erro ao verificar horário comercial:', err);
-    // Em caso de erro, NÃO interceptar — deixar transferência acontecer normalmente
-    return { intercepted: false };
-  }
-}
-
-// ============================================================
-// 🆕 HELPER: Mensagem proativa pós-handoff
-// Verifica agentes online no departamento e envia msg ao cliente
-// ============================================================
-async function sendProactiveHandoffMessage(
-  supabaseClient: any,
-  conversationId: string,
-  departmentId: string | null,
-): Promise<void> {
-  try {
-    // Buscar canal da conversa
-    const { data: convData } = await supabaseClient
-      .from('conversations')
-      .select('channel')
-      .eq('id', conversationId)
-      .maybeSingle();
-
-    const channel = convData?.channel || 'web_chat';
-
-    // Verificar se há agentes online no departamento
-    let hasOnlineAgents = false;
-    if (departmentId) {
-      const { count } = await supabaseClient
-        .from('profiles')
-        .select('id, agent_departments!inner(department_id)', { count: 'exact', head: true })
-        .eq('availability_status', 'online')
-        .eq('is_blocked', false)
-        .eq('agent_departments.department_id', departmentId);
-      hasOnlineAgents = (count ?? 0) > 0;
-    } else {
-      // Sem departamento específico: verificar qualquer agente online
-      const { count } = await supabaseClient
-        .from('profiles')
-        .select('id', { count: 'exact', head: true })
-        .eq('availability_status', 'online')
-        .eq('is_blocked', false);
-      hasOnlineAgents = (count ?? 0) > 0;
-    }
-
-    const proactiveMsg = hasOnlineAgents
-      ? '💬 Estou te conectando com um especialista. Aguarde um momento! 🙂'
-      : '⏳ Nosso time de atendimento está momentaneamente indisponível. Assim que um especialista ficar online, você será atendido automaticamente. 🙏';
-
-    await supabaseClient.from('messages').insert({
-      conversation_id: conversationId,
-      content: proactiveMsg,
-      sender_type: 'user',
-      is_ai_generated: true,
-      is_bot_message: true,
-      channel,
-    });
-
-    console.log(`[process-chat-flow] 📢 Mensagem proativa pós-handoff enviada (agentes online: ${hasOnlineAgents})`);
-  } catch (err) {
-    // Non-blocking: não interromper fluxo se falhar
-    console.error('[process-chat-flow] ⚠️ Erro ao enviar mensagem proativa pós-handoff:', err);
-  }
-}
-
-// ============================================================
 // 🆕 MATCHER ESTRITO PARA ask_options (Contrato v2.3)
 // ============================================================
 interface AskOption {
@@ -646,23 +489,6 @@ async function buildVariablesContext(
     }
   }
 
-  // 🆕 Return reasons (motivos de devolução dinâmicos)
-  if (supabaseClient) {
-    try {
-      const { data: returnReasons } = await supabaseClient
-        .from('return_reasons')
-        .select('key, label')
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true });
-      if (returnReasons && returnReasons.length > 0) {
-        ctx['return_reasons_list'] = returnReasons.map((r: any) => r.label).join(', ');
-        ctx['__return_reasons_full'] = returnReasons; // Internal: array completo para IA
-      }
-    } catch (e) {
-      console.warn('[process-chat-flow] ⚠️ Failed to load return_reasons:', e);
-    }
-  }
-
   return ctx;
 }
 
@@ -947,7 +773,7 @@ serve(async (req) => {
     );
 
     const body = await req.json();
-    const { conversationId, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck, inactivityTimeout, forceFinancialExit, forceCommercialExit, forceCancellationExit, forceAIExit, forcePedidosExit, forceDevolucaoExit, forceSaqueExit, forceSistemaexit, forceInternacionalExit, intentData } = body;
+    const { conversationId, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck, inactivityTimeout, forceFinancialExit, forceCommercialExit, forceCancellationExit, forceAIExit, intentData } = body;
     const userMessage = body.userMessage || body.customerMessage;
     
     if (!conversationId) {
@@ -1060,20 +886,6 @@ serve(async (req) => {
       
       const transferMessage = 'Vou transferir você para um atendente humano.';
       
-      // 🆕 Verificar horário comercial antes de handoff
-      const ahCheck1 = await checkAfterHoursAndIntercept(supabaseClient, conversationId, 'handoff_to_human');
-      if (ahCheck1.intercepted) {
-        console.log('[process-chat-flow] 🌙 Contract violation transfer interceptado por after-hours');
-        return new Response(JSON.stringify({
-          useAI: false,
-          aiNodeActive: false,
-          transferActivated: false,
-          afterHours: true,
-          reason: 'after_hours_handoff',
-          message: ahCheck1.afterHoursMessage,
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-
       // ✅ FIX 14: Usar transition-conversation-state centralizado
       await fetch(
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
@@ -1093,16 +905,14 @@ serve(async (req) => {
       );
       console.log('[process-chat-flow] ✅ Estado transicionado via transition-conversation-state');
       
-      // Inserir mensagem de transferência (guard: conteúdo vazio)
-      if (transferMessage && String(transferMessage).trim().length > 0) {
-        await supabaseClient.from('messages').insert({
-          conversation_id: conversationId,
-          content: String(transferMessage).trim(),
-          sender_type: 'user',
-          is_ai_generated: true,
-          channel: conversation?.channel || 'web_chat'
-        });
-      }
+      // Inserir mensagem de transferência
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: transferMessage,
+        sender_type: 'user',
+        is_ai_generated: true,
+        channel: conversation?.channel || 'web_chat'
+      });
       
       console.log('[process-chat-flow] ✅ TransferNode ativado pelo fluxo (soberano)');
       
@@ -1584,13 +1394,10 @@ serve(async (req) => {
           textLength: finalText.length 
         });
 
-        // 1. Salvar na tabela messages (guard: conteúdo vazio)
-        if (!finalText || String(finalText).trim().length === 0) {
-          console.warn('[process-chat-flow] ⚠️ Empty finalText for manual trigger, skipping insert');
-        } else {
+        // 1. Salvar na tabela messages
         const { error: insertError } = await supabaseClient.from('messages').insert({
           conversation_id: conversationId,
-          content: String(finalText).trim(),
+          content: finalText,
           sender_type: 'user',
           sender_id: null,
           is_ai_generated: true,
@@ -1624,7 +1431,6 @@ serve(async (req) => {
             console.warn('[process-chat-flow] ⚠️ No WhatsApp Meta instance for delivery');
           }
         }
-        } // end else (non-empty finalText guard)
       }
 
       // Montar resposta baseada no tipo do nó de conteúdo alcançado
@@ -2157,15 +1963,6 @@ serve(async (req) => {
                     otpNcAiMode === 'copilot'   ? 'set_copilot' :
                     otpNcAiMode === 'autopilot' ? 'engage_ai' :
                     'handoff_to_human';
-                  // 🆕 Verificar horário comercial antes de handoff OTP not_customer
-                  const ahCheckOtpNc = await checkAfterHoursAndIntercept(supabaseClient, conversationId, otpNcTransType);
-                  if (ahCheckOtpNc.intercepted) {
-                    return new Response(JSON.stringify({
-                      useAI: false, response: ahCheckOtpNc.afterHoursMessage,
-                      afterHours: true, flowCompleted: true, collectedData,
-                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                  }
-
                   await fetch(
                     `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
                     {
@@ -2271,12 +2068,6 @@ serve(async (req) => {
                     forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
                     forbidSupport: resolvedNode.data?.forbid_support ?? false,
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
-                    forbidPedidos: resolvedNode.data?.forbid_pedidos ?? false,
-                    forbidDevolucao: resolvedNode.data?.forbid_devolucao ?? false,
-                    forbidSaque: resolvedNode.data?.forbid_saque ?? false,
-                    forbidSistema: resolvedNode.data?.forbid_sistema ?? false,
-                    onboardingDetection: resolvedNode.data?.onboarding_detection_enabled ?? false,
-                    returnReasons: variablesContext['__return_reasons_full'] || null,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
@@ -2401,15 +2192,6 @@ serve(async (req) => {
                     otpOkAiMode === 'copilot'   ? 'set_copilot' :
                     otpOkAiMode === 'autopilot' ? 'engage_ai' :
                     'handoff_to_human';
-                  // 🆕 Verificar horário comercial antes de handoff OTP verified
-                  const ahCheckOtpOk = await checkAfterHoursAndIntercept(supabaseClient, conversationId, otpOkTransType);
-                  if (ahCheckOtpOk.intercepted) {
-                    return new Response(JSON.stringify({
-                      useAI: false, response: ahCheckOtpOk.afterHoursMessage,
-                      afterHours: true, flowCompleted: true, collectedData,
-                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                  }
-
                   await fetch(
                     `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
                     {
@@ -2513,12 +2295,6 @@ serve(async (req) => {
                     forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
                     forbidSupport: resolvedNode.data?.forbid_support ?? false,
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
-                    forbidPedidos: resolvedNode.data?.forbid_pedidos ?? false,
-                    forbidDevolucao: resolvedNode.data?.forbid_devolucao ?? false,
-                    forbidSaque: resolvedNode.data?.forbid_saque ?? false,
-                    forbidSistema: resolvedNode.data?.forbid_sistema ?? false,
-                    onboardingDetection: resolvedNode.data?.onboarding_detection_enabled ?? false,
-                    returnReasons: variablesContext['__return_reasons_full'] || null,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
@@ -2593,15 +2369,6 @@ serve(async (req) => {
                       otpMaxAiMode === 'copilot'   ? 'set_copilot' :
                       otpMaxAiMode === 'autopilot' ? 'engage_ai' :
                       'handoff_to_human';
-                    // 🆕 Verificar horário comercial antes de handoff OTP max_attempts
-                    const ahCheckOtpMax = await checkAfterHoursAndIntercept(supabaseClient, conversationId, otpMaxTransType);
-                    if (ahCheckOtpMax.intercepted) {
-                      return new Response(JSON.stringify({
-                        useAI: false, response: ahCheckOtpMax.afterHoursMessage,
-                        afterHours: true, flowCompleted: true, collectedData,
-                      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                    }
-
                     await fetch(
                       `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
                       {
@@ -2713,12 +2480,6 @@ serve(async (req) => {
                       forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
                       forbidSupport: resolvedNode.data?.forbid_support ?? false,
                       forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
-                      forbidPedidos: resolvedNode.data?.forbid_pedidos ?? false,
-                      forbidDevolucao: resolvedNode.data?.forbid_devolucao ?? false,
-                      forbidSaque: resolvedNode.data?.forbid_saque ?? false,
-                      forbidSistema: resolvedNode.data?.forbid_sistema ?? false,
-                      onboardingDetection: resolvedNode.data?.onboarding_detection_enabled ?? false,
-                      returnReasons: variablesContext['__return_reasons_full'] || null,
                     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                   }
 
@@ -2829,12 +2590,6 @@ serve(async (req) => {
       let consultorIntentMatch = false;
       let consultorHasConsultant = false;
       let aiExitForced = false;
-      // 🆕 Novos intents especializados
-      let pedidosIntentMatch = false;
-      let devolucaoIntentMatch = false;
-      let saqueIntentMatch = false;
-      let sistemaIntentMatch = false;
-      let internacionalIntentMatch = false;
 
       // 🔧 FIX CRÍTICO: Nós genéricos ask_* (email, name, phone, cpf, text)
       // Antes, esses nós não entravam em nenhum branch do if/else if chain,
@@ -3120,12 +2875,6 @@ serve(async (req) => {
             const transferDeptId = nextNode.data?.department_id || null;
             const transferAiMode = nextNode.data?.ai_mode || 'waiting_human';
             const transitionType = transferAiMode === 'copilot' ? 'set_copilot' : transferAiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
-            // 🆕 Verificar horário comercial antes de handoff
-            const ahCheck2 = await checkAfterHoursAndIntercept(supabaseClient, conversationId, transitionType);
-            if (ahCheck2.intercepted) {
-              const transferMsg = replaceVariables(nextNode.data?.message || "Transferindo...", variablesContext);
-              return new Response(JSON.stringify({ useAI: false, response: ahCheck2.afterHoursMessage, afterHours: true, flowCompleted: true, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-            }
             await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
@@ -3138,7 +2887,7 @@ serve(async (req) => {
           if (nextNode.type === 'ai_response') {
             collectedData.__ai = { interaction_count: 0 };
             await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'active', updated_at: new Date().toISOString() }).eq('id', activeState.id);
-            return new Response(JSON.stringify({ useAI: true, aiNodeActive: true, nodeId: nextNode.id, flowId: activeState.flow_id, contextPrompt: nextNode.data?.context_prompt, useKnowledgeBase: nextNode.data?.use_knowledge_base !== false, collectedData, returnReasons: variablesContext['__return_reasons_full'] || null }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify({ useAI: true, aiNodeActive: true, nodeId: nextNode.id, flowId: activeState.flow_id, contextPrompt: nextNode.data?.context_prompt, useKnowledgeBase: nextNode.data?.use_knowledge_base !== false, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
           // 🆕 BUG 4 FIX (2nd check): verify_customer_otp after auto-advance
           if (nextNode.type === 'verify_customer_otp') {
@@ -3262,584 +3011,6 @@ serve(async (req) => {
         // O nó ai_response "segura" a conversa até condição de saída
         // ============================================================
 
-        // ============================================================
-        // 🔐 INLINE OTP: Se __otp_step existe, executar máquina de estados OTP
-        // dentro do nó ai_response (antes de qualquer lógica de IA)
-        // ============================================================
-        if (collectedData.__otp_step && collectedData.__otp_from_ai_intent) {
-          const otpStep = collectedData.__otp_step;
-          const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-          const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-          const maxAttempts = currentNode.data?.otp_max_attempts || 3;
-
-          console.log(`[process-chat-flow] 🔐 Inline OTP (ai_response) step: ${otpStep} | msg: "${(userMessage || '').slice(0, 40)}"`);
-
-          // --- SUB-ESTADO: ask_email ---
-          if (otpStep === 'ask_email') {
-            const emailInput = (userMessage || '').trim().toLowerCase();
-            const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput);
-            if (!emailValid) {
-              return new Response(JSON.stringify({
-                useAI: false,
-                response: "Por favor, informe um email válido (exemplo@email.com)",
-                retry: true,
-                flowId: activeState.flow_id,
-              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-            }
-
-            collectedData.__otp_email = emailInput;
-            collectedData.__otp_step = 'check_email';
-
-            try {
-              const verifyRes = await fetch(`${supabaseUrl}/functions/v1/verify-customer-email`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                body: JSON.stringify({ email: emailInput }),
-              });
-              const verifyData = await verifyRes.json();
-
-              if (verifyData.found) {
-                console.log('[process-chat-flow] 🔐 Inline OTP: Customer found, sending OTP to:', emailInput);
-                collectedData.__otp_customer_name = verifyData.customer?.name || '';
-                collectedData.__otp_customer_id = verifyData.customer?.id || '';
-
-                await fetch(`${supabaseUrl}/functions/v1/send-verification-code`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                  body: JSON.stringify({ email: emailInput, type: 'customer' }),
-                });
-
-                collectedData.__otp_step = 'wait_code';
-                collectedData.__otp_attempts = 0;
-
-                await supabaseClient.from('chat_flow_states').update({
-                  collected_data: collectedData,
-                  status: 'waiting_input',
-                }).eq('id', activeState.id);
-
-                const otpMsg = (currentNode.data?.otp_message_sent || "Enviamos um código de 6 dígitos para {{email}}. Digite o código:")
-                  .replace(/\{\{email\}\}/g, emailInput);
-
-                return new Response(JSON.stringify({
-                  useAI: false,
-                  response: otpMsg,
-                  retry: false,
-                  flowId: activeState.flow_id,
-                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-              } else {
-                console.log('[process-chat-flow] 🔐 Inline OTP: Email not found:', emailInput);
-                collectedData.__otp_step = 'confirm_email';
-
-                await supabaseClient.from('chat_flow_states').update({
-                  collected_data: collectedData,
-                  status: 'waiting_input',
-                }).eq('id', activeState.id);
-
-                return new Response(JSON.stringify({
-                  useAI: false,
-                  response: "Não encontramos este email em nossa base. O email está correto? Envie novamente ou digite 'não' para cancelar.",
-                  retry: false,
-                  flowId: activeState.flow_id,
-                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-              }
-            } catch (err) {
-              console.error('[process-chat-flow] ❌ Inline OTP: Error verifying email:', err);
-              collectedData.__otp_step = 'confirm_email';
-              await supabaseClient.from('chat_flow_states').update({
-                collected_data: collectedData,
-                status: 'waiting_input',
-              }).eq('id', activeState.id);
-
-              return new Response(JSON.stringify({
-                useAI: false,
-                response: "Ocorreu um erro ao verificar o email. Tente novamente.",
-                retry: false,
-                flowId: activeState.flow_id,
-              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-            }
-          }
-
-          // --- SUB-ESTADO: confirm_email ---
-          if (otpStep === 'confirm_email') {
-            const input = (userMessage || '').trim().toLowerCase();
-            const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
-            if (looksLikeEmail) {
-              collectedData.__otp_email = input;
-              collectedData.__otp_step = 'ask_email';
-              await supabaseClient.from('chat_flow_states').update({
-                collected_data: collectedData,
-                status: 'waiting_input',
-              }).eq('id', activeState.id);
-              return new Response(JSON.stringify({
-                useAI: false,
-                response: "Ok, vou verificar esse email. Aguarde...",
-                flowId: activeState.flow_id,
-                reprocess: true,
-                reprocessMessage: input,
-              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-            }
-
-            const negativePatterns = ['nao', 'não', 'no', 'n', 'nope', 'cancelar'];
-            const isNegative = negativePatterns.some(p => input.includes(p));
-
-            if (isNegative) {
-              // Cancelar OTP → avançar com customer_verified=false
-              collectedData.customer_verified = false;
-              collectedData.__otp_result = 'not_customer';
-              collectedData.customer_verified_email = '';
-              const savedPath = collectedData.__otp_from_ai_intent;
-              delete collectedData.__otp_step;
-              delete collectedData.__otp_from_ai_intent;
-              delete collectedData.__otp_email;
-              delete collectedData.__ai;
-
-              // 🆕 Tentar handle otp_failed primeiro, fallback para savedPath
-              const nextNode = findNextNode(flowDef, currentNode, 'otp_failed') || findNextNode(flowDef, currentNode, savedPath);
-              if (nextNode) {
-                let resolvedNode = nextNode;
-                while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
-                  if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
-                    const condPath = resolvedNode.type === 'condition_v2'
-                      ? evaluateConditionV2Path(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
-                      : evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
-                    resolvedNode = findNextNode(flowDef, resolvedNode, condPath);
-                  } else {
-                    resolvedNode = findNextNode(flowDef, resolvedNode);
-                  }
-                }
-
-                if (resolvedNode) {
-                  const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2' || resolvedNode.type === 'verify_customer_otp'
-                    ? 'waiting_input' : 'active';
-                  await supabaseClient.from('chat_flow_states').update({
-                    collected_data: collectedData,
-                    current_node_id: resolvedNode.id,
-                    status: nextStatus,
-                  }).eq('id', activeState.id);
-
-                  if (resolvedNode.type === 'transfer') {
-                    await supabaseClient.from('chat_flow_states').update({
-                      status: 'transferred',
-                      completed_at: new Date().toISOString(),
-                    }).eq('id', activeState.id);
-
-                    const deptId = resolvedNode.data?.department_id || null;
-                    const aiMode = resolvedNode.data?.ai_mode || 'waiting_human';
-                    const transType = aiMode === 'copilot' ? 'set_copilot' : aiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
-                    // 🆕 Verificar horário comercial antes de handoff inline OTP not_customer
-                    const ahCheckInlineNc = await checkAfterHoursAndIntercept(supabaseClient, conversationId, transType);
-                    if (ahCheckInlineNc.intercepted) {
-                      return new Response(JSON.stringify({
-                        useAI: false, response: ahCheckInlineNc.afterHoursMessage,
-                        afterHours: true, flowCompleted: true, collectedData,
-                      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                    }
-
-                    await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                      body: JSON.stringify({ conversationId, transition: transType, departmentId: deptId, reason: 'inline_otp_not_customer', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id } })
-                    });
-
-                    return new Response(JSON.stringify({
-                      useAI: false,
-                      response: "Sem problemas. Vou te encaminhar para nosso time.",
-                      transfer: true,
-                      departmentId: deptId,
-                      collectedData,
-                      flowId: activeState.flow_id,
-                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                  }
-
-                  variablesContext = await rebuildCtx();
-                  const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
-                  return new Response(JSON.stringify({
-                    useAI: false,
-                    response: ["Sem problemas.", nextMsg].filter(Boolean).join('\n\n'),
-                    flowId: activeState.flow_id,
-                    collectedData,
-                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                }
-              }
-
-              // Fallback: sem próximo nó
-              await supabaseClient.from('chat_flow_states').update({
-                collected_data: collectedData,
-                status: 'completed',
-                completed_at: new Date().toISOString(),
-              }).eq('id', activeState.id);
-
-              return new Response(JSON.stringify({
-                useAI: false,
-                response: "Sem problemas. Vou te encaminhar para nosso time.",
-                flowCompleted: true,
-                collectedData,
-              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-            }
-
-            // Resposta ambígua → pedir email novamente
-            collectedData.__otp_step = 'ask_email';
-            await supabaseClient.from('chat_flow_states').update({
-              collected_data: collectedData,
-              status: 'waiting_input',
-            }).eq('id', activeState.id);
-
-            return new Response(JSON.stringify({
-              useAI: false,
-              response: "Ok, por favor informe novamente seu email:",
-              flowId: activeState.flow_id,
-            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-          }
-
-          // --- SUB-ESTADO: wait_code ---
-          if (otpStep === 'wait_code') {
-            const codeInput = (userMessage || '').trim();
-            const email = collectedData.__otp_email;
-            const attempts = (collectedData.__otp_attempts || 0) + 1;
-            collectedData.__otp_attempts = attempts;
-
-            try {
-              const verifyRes = await fetch(`${supabaseUrl}/functions/v1/verify-code`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                body: JSON.stringify({ email, code: codeInput }),
-              });
-              const verifyData = await verifyRes.json();
-
-              if (verifyData.success) {
-                console.log('[process-chat-flow] 🔐 Inline OTP verified successfully for:', email);
-                collectedData.customer_verified = true;
-                collectedData.__otp_result = 'verified';
-                collectedData.customer_verified_email = email;
-                collectedData.customer_verified_name = collectedData.__otp_customer_name || '';
-
-                if (collectedData.__otp_customer_id && activeConversationData?.contact_id) {
-                  await supabaseClient.from('contacts').update({
-                    kiwify_validated: true,
-                  }).eq('id', activeConversationData.contact_id);
-                }
-
-                const savedPath = collectedData.__otp_from_ai_intent;
-                delete collectedData.__otp_step;
-                delete collectedData.__otp_from_ai_intent;
-                delete collectedData.__ai;
-
-                // 🆕 Tentar handle otp_verified primeiro, fallback para savedPath
-                const nextAfterOtp = findNextNode(flowDef, currentNode, 'otp_verified') || findNextNode(flowDef, currentNode, savedPath);
-                let resolvedNode = nextAfterOtp;
-                while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
-                  if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
-                    const condPath = resolvedNode.type === 'condition_v2'
-                      ? evaluateConditionV2Path(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
-                      : evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
-                    resolvedNode = findNextNode(flowDef, resolvedNode, condPath);
-                  } else {
-                    resolvedNode = findNextNode(flowDef, resolvedNode);
-                  }
-                }
-
-                if (resolvedNode) {
-                  const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2' || resolvedNode.type === 'verify_customer_otp'
-                    ? 'waiting_input' : 'active';
-                  await supabaseClient.from('chat_flow_states').update({
-                    collected_data: collectedData,
-                    current_node_id: resolvedNode.id,
-                    status: nextStatus,
-                  }).eq('id', activeState.id);
-
-                  variablesContext = await rebuildCtx();
-                  const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
-
-                  if (resolvedNode.type === 'transfer') {
-                    await supabaseClient.from('chat_flow_states').update({
-                      status: 'transferred',
-                      completed_at: new Date().toISOString(),
-                    }).eq('id', activeState.id);
-
-                    const deptId = resolvedNode.data?.department_id || null;
-                    const aiMode = resolvedNode.data?.ai_mode || 'waiting_human';
-                    const transType = aiMode === 'copilot' ? 'set_copilot' : aiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
-                    // 🆕 Verificar horário comercial antes de handoff inline OTP verified
-                    const ahCheckInlineOk = await checkAfterHoursAndIntercept(supabaseClient, conversationId, transType);
-                    if (ahCheckInlineOk.intercepted) {
-                      return new Response(JSON.stringify({
-                        useAI: false, response: ahCheckInlineOk.afterHoursMessage,
-                        afterHours: true, flowCompleted: true, collectedData,
-                      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                    }
-
-                    await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                      body: JSON.stringify({ conversationId, transition: transType, departmentId: deptId, reason: 'inline_otp_verified', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id } })
-                    });
-
-                    const otpVerifiedMsg = currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.";
-                    return new Response(JSON.stringify({
-                      useAI: false,
-                      response: otpVerifiedMsg + "\n\n" + (nextMsg || "Transferindo..."),
-                      transfer: true,
-                      departmentId: deptId,
-                      collectedData,
-                      flowId: activeState.flow_id,
-                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                  }
-
-                  if (resolvedNode.type === 'end') {
-                    await supabaseClient.from('chat_flow_states').update({
-                      collected_data: collectedData,
-                      current_node_id: resolvedNode.id,
-                      status: 'completed',
-                      completed_at: new Date().toISOString(),
-                    }).eq('id', activeState.id);
-
-                    if (resolvedNode.data?.end_action === 'create_ticket') {
-                      variablesContext = await rebuildCtx();
-                      const actionData = resolvedNode.data.action_data || {};
-                      const subject = replaceVariables(actionData.subject || resolvedNode.data.subject_template || 'Ticket do Fluxo', variablesContext);
-                      const description = replaceVariables(actionData.description || resolvedNode.data.description_template || '', variablesContext);
-                      const internalNote = (actionData.internal_note || resolvedNode.data.internal_note)
-                        ? replaceVariables(actionData.internal_note || resolvedNode.data.internal_note, variablesContext) : null;
-                      await createTicketFromFlow(supabaseClient, {
-                        conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
-                        contactId: activeContactData?.id || null,
-                        subject, description,
-                        category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
-                        priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
-                        departmentId: actionData.department_id || resolvedNode.data.department_id || null,
-                        internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
-                        collectedData,
-                      });
-                    }
-
-                    const endMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext || await rebuildCtx());
-                    const otpVerifiedMsgEnd = currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.";
-                    return new Response(JSON.stringify({
-                      useAI: false,
-                      response: otpVerifiedMsgEnd + "\n\n" + (endMsg || ''),
-                      flowCompleted: true,
-                      flowId: activeState.flow_id,
-                      collectedData,
-                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                  }
-
-                  if (resolvedNode.type === 'ai_response') {
-                    collectedData.__ai = { interaction_count: 0 };
-                    await supabaseClient.from('chat_flow_states').update({
-                      collected_data: collectedData,
-                      current_node_id: resolvedNode.id,
-                      status: 'active',
-                      updated_at: new Date().toISOString(),
-                    }).eq('id', activeState.id);
-
-                    return new Response(JSON.stringify({
-                      useAI: true,
-                      aiNodeActive: true,
-                      nodeId: resolvedNode.id,
-                      response: currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.",
-                      flowId: activeState.flow_id,
-                      flowName: activeState.chat_flows?.name || null,
-                      contextPrompt: resolvedNode.data?.context_prompt,
-                      useKnowledgeBase: resolvedNode.data?.use_knowledge_base !== false,
-                      collectedData,
-                      allowedSources: buildAllowedSources(resolvedNode.data),
-                      responseFormat: 'text_only',
-                      personaId: resolvedNode.data?.persona_id || null,
-                      personaName: resolvedNode.data?.persona_name || null,
-                      kbCategories: resolvedNode.data?.kb_categories || null,
-                      fallbackMessage: resolvedNode.data?.fallback_message || null,
-                      objective: resolvedNode.data?.objective || null,
-                      maxSentences: resolvedNode.data?.max_sentences ?? 3,
-                      forbidQuestions: resolvedNode.data?.forbid_questions ?? true,
-                      forbidOptions: resolvedNode.data?.forbid_options ?? true,
-                      returnReasons: variablesContext['__return_reasons_full'] || null,
-                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                  }
-
-                  const otpVerifiedMsgGeneric = currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.";
-                  return new Response(JSON.stringify({
-                    useAI: false,
-                    response: otpVerifiedMsgGeneric + "\n\n" + (nextMsg || ''),
-                    flowId: activeState.flow_id,
-                    collectedData,
-                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                }
-
-                // Sem próximo nó → handoff
-                await supabaseClient.from('chat_flow_states').update({
-                  collected_data: collectedData,
-                  status: 'transferred',
-                  completed_at: new Date().toISOString(),
-                }).eq('id', activeState.id);
-
-                // 🆕 Verificar horário comercial antes de handoff inline OTP verified no next node
-                const ahCheckInlineNoNext = await checkAfterHoursAndIntercept(supabaseClient, conversationId, 'handoff_to_human');
-                if (ahCheckInlineNoNext.intercepted) {
-                  return new Response(JSON.stringify({
-                    useAI: false, response: ahCheckInlineNoNext.afterHoursMessage,
-                    afterHours: true, flowCompleted: true, collectedData,
-                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                }
-
-                await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                  body: JSON.stringify({ conversationId, transition: 'handoff_to_human', reason: 'inline_otp_verified_no_next_node', metadata: { node_id: currentNode.id, flow_id: activeState.flow_id } })
-                });
-
-                return new Response(JSON.stringify({
-                  useAI: false,
-                  response: (currentNode.data?.otp_message_verified || "✅ Verificação concluída! Agora vou processar sua solicitação.") + " Vou te transferir para um atendente agora.",
-                  transfer: true,
-                  collectedData,
-                  flowId: activeState.flow_id,
-                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-              } else {
-                // Código incorreto
-                if (attempts >= maxAttempts) {
-                  console.log('[process-chat-flow] 🔐 Inline OTP: Max attempts reached');
-                  collectedData.customer_verified = false;
-                  collectedData.__otp_result = 'failed';
-                  const savedPath = collectedData.__otp_from_ai_intent;
-                  delete collectedData.__otp_step;
-                  delete collectedData.__otp_from_ai_intent;
-                  delete collectedData.__ai;
-
-                  // 🆕 Tentar handle otp_failed primeiro, fallback para savedPath
-                  const nextNode = findNextNode(flowDef, currentNode, 'otp_failed') || findNextNode(flowDef, currentNode, savedPath);
-                  if (nextNode) {
-                    let resolvedNode = nextNode;
-                    while (resolvedNode && ['condition', 'condition_v2', 'input', 'start'].includes(resolvedNode.type)) {
-                      if (resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2') {
-                        const condPath = resolvedNode.type === 'condition_v2'
-                          ? evaluateConditionV2Path(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData, flowDef.edges || [])
-                          : evaluateConditionPath(resolvedNode.data, collectedData, userMessage, undefined, activeContactData, activeConversationData);
-                        resolvedNode = findNextNode(flowDef, resolvedNode, condPath);
-                      } else {
-                        resolvedNode = findNextNode(flowDef, resolvedNode);
-                      }
-                    }
-
-                    if (resolvedNode) {
-                      const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2'
-                        ? 'waiting_input' : 'active';
-                      await supabaseClient.from('chat_flow_states').update({
-                        collected_data: collectedData,
-                        current_node_id: resolvedNode.id,
-                        status: nextStatus,
-                      }).eq('id', activeState.id);
-
-                      if (resolvedNode.type === 'transfer') {
-                        await supabaseClient.from('chat_flow_states').update({
-                          status: 'transferred',
-                          completed_at: new Date().toISOString(),
-                        }).eq('id', activeState.id);
-
-                        const deptId = resolvedNode.data?.department_id || null;
-                        const aiMode = resolvedNode.data?.ai_mode || 'waiting_human';
-                        const transType = aiMode === 'copilot' ? 'set_copilot' : aiMode === 'autopilot' ? 'engage_ai' : 'handoff_to_human';
-                        // 🆕 Verificar horário comercial antes de handoff inline OTP failed
-                        const ahCheckInlineFail = await checkAfterHoursAndIntercept(supabaseClient, conversationId, transType);
-                        if (ahCheckInlineFail.intercepted) {
-                          return new Response(JSON.stringify({
-                            useAI: false, response: ahCheckInlineFail.afterHoursMessage,
-                            afterHours: true, flowCompleted: true, collectedData,
-                          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                        }
-
-                        await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                          body: JSON.stringify({ conversationId, transition: transType, departmentId: deptId, reason: 'inline_otp_failed', metadata: { node_id: resolvedNode.id, flow_id: activeState.flow_id } })
-                        });
-
-                        const otpFailedMsgTransfer = currentNode.data?.otp_message_failed || "Não foi possível verificar. Vou te encaminhar para um atendente.";
-                        return new Response(JSON.stringify({
-                          useAI: false,
-                          response: otpFailedMsgTransfer,
-                          transfer: true,
-                          departmentId: deptId,
-                          collectedData,
-                          flowId: activeState.flow_id,
-                        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                      }
-
-                      variablesContext = await rebuildCtx();
-                      const nextMsg = replaceVariables(resolvedNode.data?.message || '', variablesContext);
-                      const otpFailedMsgNext = currentNode.data?.otp_message_failed || "Não foi possível verificar. Vou te encaminhar para um atendente.";
-                      return new Response(JSON.stringify({
-                        useAI: false,
-                        response: [otpFailedMsgNext, nextMsg].filter(Boolean).join('\n\n'),
-                        flowId: activeState.flow_id,
-                        collectedData,
-                      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                    }
-                  }
-
-                  // Fallback handoff
-                  await supabaseClient.from('chat_flow_states').update({
-                    collected_data: collectedData,
-                    status: 'transferred',
-                    completed_at: new Date().toISOString(),
-                  }).eq('id', activeState.id);
-
-                  // 🆕 Verificar horário comercial antes de handoff inline OTP max_attempts
-                  const ahCheckInlineMax = await checkAfterHoursAndIntercept(supabaseClient, conversationId, 'handoff_to_human');
-                  if (ahCheckInlineMax.intercepted) {
-                    return new Response(JSON.stringify({
-                      useAI: false, response: ahCheckInlineMax.afterHoursMessage,
-                      afterHours: true, flowCompleted: true, collectedData,
-                    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                  }
-
-                  await fetch(`${supabaseUrl}/functions/v1/transition-conversation-state`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-                    body: JSON.stringify({ conversationId, transition: 'handoff_to_human', reason: 'inline_otp_max_attempts', metadata: { node_id: currentNode.id, flow_id: activeState.flow_id } })
-                  });
-
-                  const otpFailedMsgFallback = currentNode.data?.otp_message_failed || "Não foi possível verificar. Vou te encaminhar para um atendente.";
-                  return new Response(JSON.stringify({
-                    useAI: false,
-                    response: otpFailedMsgFallback,
-                    transfer: true,
-                    collectedData,
-                    flowId: activeState.flow_id,
-                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                }
-
-                await supabaseClient.from('chat_flow_states').update({
-                  collected_data: collectedData,
-                  status: 'waiting_input',
-                }).eq('id', activeState.id);
-
-                return new Response(JSON.stringify({
-                  useAI: false,
-                  response: (verifyData.error || "Código inválido.") + ` Tentativa ${attempts}/${maxAttempts}. Tente novamente:`,
-                  retry: false,
-                  flowId: activeState.flow_id,
-                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-              }
-            } catch (err) {
-              console.error('[process-chat-flow] ❌ Inline OTP verify-code error:', err);
-              await supabaseClient.from('chat_flow_states').update({
-                collected_data: collectedData,
-                status: 'waiting_input',
-              }).eq('id', activeState.id);
-
-              return new Response(JSON.stringify({
-                useAI: false,
-                response: "Erro ao verificar o código. Tente novamente:",
-                retry: false,
-                flowId: activeState.flow_id,
-              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-            }
-          }
-        }
-        // ============================================================
-        // FIM DO INLINE OTP
-        // ============================================================
-
         // 🆕 AUTO VALIDATE CUSTOMER: Triagem silenciosa antes de responder
         if (currentNode.data?.auto_validate_customer === true && activeContactData && !activeContactData.kiwify_validated) {
           const validateFields: string[] = currentNode.data?.validate_fields || ['phone', 'email', 'cpf'];
@@ -3918,7 +3089,7 @@ serve(async (req) => {
         // ==================================================================
 
         const exitKeywords: string[] = currentNode.data?.exit_keywords || [];
-        const maxInteractions: number = currentNode.data?.max_ai_interactions ?? currentNode.data?.max_interactions ?? 0;
+        const maxInteractions: number = currentNode.data?.max_ai_interactions ?? currentNode.data?.max_interactions ?? 0; // 🔧 FIX 1: fallback para campo legado max_interactions
         let forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
         const forbidCommercial: boolean = currentNode.data?.forbid_commercial ?? false;
         const forbidCancellation: boolean = currentNode.data?.forbid_cancellation ?? false;
@@ -4075,141 +3246,6 @@ serve(async (req) => {
           }
         }
 
-        // 📦 TRAVA PEDIDOS: Rastreio, status de entrega, código de rastreio
-        const pedidosActionPattern = /rastrear|rastreio|c[oó]digo\s*de\s*rastreio|status\s*(do\s*)?(pedido|entrega|envio)|onde\s*(est[aá]|ficou|anda)\s*(meu\s*)?(pedido|entrega|encomenda)|meu\s*pedido\s*(n[ãa]o\s*)?(chegou|aparece|saiu)|prazo\s*de\s*entrega|previs[ãa]o\s*de\s*entrega|entrega\s*atrasada|pedido\s*atrasado|n[ãa]o\s+recebi\s*(meu\s*)?(pedido|produto|encomenda|pacote)|quando\s*(chega|vai\s*chegar|ser[aá]\s*entregue)|c[oó]digo\s*(BR|LP|SB|PB|CA)[0-9]/i;
-        const pedidosAmbiguousPattern = /\b(pedido|entrega|encomenda|rastreio|envio|frete)\b/i;
-        const isPedidosAction = pedidosActionPattern.test(userMessage || '');
-        const isPedidosAmbiguous = !isPedidosAction && pedidosAmbiguousPattern.test(userMessage || '');
-        const forbidPedidos: boolean = currentNode.data?.forbid_pedidos ?? false;
-
-        if (isPedidosAmbiguous && forbidPedidos) {
-          console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO PEDIDOS: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
-        }
-
-        pedidosIntentMatch = (forcePedidosExit && forbidPedidos) || (forbidPedidos && msgLower.length > 0 && isPedidosAction);
-
-        if (pedidosIntentMatch) {
-          console.log(`[process-chat-flow] 📦 TRAVA PEDIDOS: Intenção de rastreio/pedido detectada | msg="${(userMessage || '').substring(0, 100)}"`);
-          try {
-            await supabaseClient.from('ai_events').insert({
-              entity_type: 'conversation',
-              entity_id: conversationId,
-              event_type: 'ai_blocked_pedidos',
-              model: 'process-chat-flow',
-              output_json: { phase: 'flow_node_exit', node_id: currentNode.id, flow_id: activeState.flow_id, interaction_count: aiCount, message_preview: (userMessage || '').substring(0, 200) },
-              input_summary: (userMessage || '').substring(0, 200),
-            });
-          } catch (logErr) { console.error('[process-chat-flow] ⚠️ Failed to log pedidos block:', logErr); }
-        }
-
-        // 🔄 TRAVA DEVOLUÇÃO: Produto com defeito, troca, produto errado
-        const devolucaoActionPattern = /produto\s*(com\s*)?(defeito|errado|danificado|quebrado|estragado|diferente)|veio\s*(errado|diferente|quebrado|danificado|defeituoso)|quero\s*(trocar|devolver)\s*(o\s*)?(produto|item|mercadoria)|troca\s*(de\s*)?(produto|item)|devolu[çc][ãa]o\s*(de\s*)?(produto|item|mercadoria)|(chegou|recebi)\s*(um\s*)?(produto|item)\s*(errado|diferente|quebrado|defeituoso|danificado)|n[ãa]o\s+(era|[ée])\s*(isso|esse|o\s+produto)\s*que\s*(pedi|comprei|queria)/i;
-        const devolucaoAmbiguousPattern = /\b(defeito|trocar|troca|devolu[çc][ãa]o|devolver|produto\s+errado)\b/i;
-        const isDevolucaoAction = devolucaoActionPattern.test(userMessage || '');
-        const isDevolucaoAmbiguous = !isDevolucaoAction && devolucaoAmbiguousPattern.test(userMessage || '');
-        const forbidDevolucao: boolean = currentNode.data?.forbid_devolucao ?? false;
-
-        if (isDevolucaoAmbiguous && forbidDevolucao) {
-          console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO DEVOLUÇÃO: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
-        }
-
-        devolucaoIntentMatch = (forceDevolucaoExit && forbidDevolucao) || (forbidDevolucao && msgLower.length > 0 && isDevolucaoAction);
-
-        if (devolucaoIntentMatch) {
-          console.log(`[process-chat-flow] 🔄 TRAVA DEVOLUÇÃO: Intenção de troca/devolução detectada | msg="${(userMessage || '').substring(0, 100)}"`);
-          try {
-            await supabaseClient.from('ai_events').insert({
-              entity_type: 'conversation',
-              entity_id: conversationId,
-              event_type: 'ai_blocked_devolucao',
-              model: 'process-chat-flow',
-              output_json: { phase: 'flow_node_exit', node_id: currentNode.id, flow_id: activeState.flow_id, interaction_count: aiCount, message_preview: (userMessage || '').substring(0, 200) },
-              input_summary: (userMessage || '').substring(0, 200),
-            });
-          } catch (logErr) { console.error('[process-chat-flow] ⚠️ Failed to log devolucao block:', logErr); }
-        }
-
-        // 💰 TRAVA SAQUE: Saque de saldo da carteira interna
-        const saqueActionPattern = /(quero|preciso|vou|pode|fa[çc]a)\s*(fazer\s*)?(um\s*)?(saque|retirada)|sacar\s*(meu\s*)?(saldo|dinheiro|valor)|saque\s*(de\s*)?(saldo|carteira|dinheiro)|(meu\s*)?saldo\s*(disponível|para\s*saque)|pix\s*(do\s*)?saldo|retirar\s*(meu\s*)?(saldo|dinheiro\s*da\s*carteira)/i;
-        const saqueAmbiguousPattern = /\b(saque|sacar|carteira\s*interna|saldo\s*disponível)\b/i;
-        const isSaqueAction = saqueActionPattern.test(userMessage || '');
-        const isSaqueAmbiguous = !isSaqueAction && saqueAmbiguousPattern.test(userMessage || '');
-        const forbidSaque: boolean = currentNode.data?.forbid_saque ?? false;
-
-        if (isSaqueAmbiguous && forbidSaque) {
-          console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO SAQUE: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
-        }
-
-        saqueIntentMatch = (forceSaqueExit && forbidSaque) || (forbidSaque && msgLower.length > 0 && isSaqueAction);
-
-        if (saqueIntentMatch) {
-          console.log(`[process-chat-flow] 💰 TRAVA SAQUE: Intenção de saque detectada | msg="${(userMessage || '').substring(0, 100)}"`);
-          try {
-            await supabaseClient.from('ai_events').insert({
-              entity_type: 'conversation',
-              entity_id: conversationId,
-              event_type: 'ai_blocked_saque',
-              model: 'process-chat-flow',
-              output_json: { phase: 'flow_node_exit', node_id: currentNode.id, flow_id: activeState.flow_id, interaction_count: aiCount, message_preview: (userMessage || '').substring(0, 200) },
-              input_summary: (userMessage || '').substring(0, 200),
-            });
-          } catch (logErr) { console.error('[process-chat-flow] ⚠️ Failed to log saque block:', logErr); }
-        }
-
-        // 🖥️ TRAVA SUPORTE SISTEMA: Bugs, erros técnicos, acesso bloqueado
-        const sistemaActionPattern = /sistema\s*(fora\s*do\s*ar|n[ãa]o\s*(abre|carrega|funciona|responde)|com\s*(erro|bug|problema)|travado|lento)|erro\s*(no\s*sistema|de\s*acesso|ao\s*acessar|ao\s*entrar)|n[ãa]o\s*(consigo|estou\s+conseguindo)\s*(acessar|entrar|logar|abrir|usar)\s*(o\s*)?(sistema|plataforma|app|aplicativo|painel)|tela\s*(em\s*branco|travada|preta)|bug\s*(no\s*)?(sistema|plataforma|app)|acesso\s*(bloqueado|negado|expirado)|senha\s*(n[ãa]o\s*funciona|errada|bloqueada)/i;
-        const sistemaAmbiguousPattern = /\b(bug|erro|sistema|plataforma|acesso|senha|travado)\b/i;
-        const isSistemaAction = sistemaActionPattern.test(userMessage || '');
-        const isSistemaAmbiguous = !isSistemaAction && sistemaAmbiguousPattern.test(userMessage || '');
-        const forbidSistema: boolean = currentNode.data?.forbid_sistema ?? false;
-
-        if (isSistemaAmbiguous && forbidSistema) {
-          console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO SISTEMA: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
-        }
-
-        sistemaIntentMatch = (forceSistemaexit && forbidSistema) || (forbidSistema && msgLower.length > 0 && isSistemaAction);
-
-        if (sistemaIntentMatch) {
-          console.log(`[process-chat-flow] 🖥️ TRAVA SISTEMA: Problema técnico detectado | msg="${(userMessage || '').substring(0, 100)}"`);
-          try {
-            await supabaseClient.from('ai_events').insert({
-              entity_type: 'conversation',
-              entity_id: conversationId,
-              event_type: 'ai_blocked_sistema',
-              model: 'process-chat-flow',
-              output_json: { phase: 'flow_node_exit', node_id: currentNode.id, flow_id: activeState.flow_id, interaction_count: aiCount, message_preview: (userMessage || '').substring(0, 200) },
-              input_summary: (userMessage || '').substring(0, 200),
-            });
-          } catch (logErr) { console.error('[process-chat-flow] ⚠️ Failed to log sistema block:', logErr); }
-        }
-
-        // 🌍 TRAVA COMERCIAL INTERNACIONAL: Operação fora do Brasil
-        const internacionalActionPattern = /operação\s*internacional|vender\s*(fora\s*do\s*brasil|no\s*exterior|em\s*(outro\s*pa[íi]s|outros\s*pa[íi]ses))|plano\s*internacional|atendimento\s*internacional|pa[íi]s\s*(diferente|outro|estrangeiro)|fora\s*do\s*brasil|exterior|moeda\s*(estrangeira|internacional|d[oó]lar|euro)|opera[çc][ãa]o\s*(global|no\s*exterior)/i;
-        const internacionalAmbiguousPattern = /\b(internacional|exterior|global|dólar|euro|outro\s*pa[íi]s)\b/i;
-        const isInternacionalAction = internacionalActionPattern.test(userMessage || '');
-        const isInternacionalAmbiguous = !isInternacionalAction && internacionalAmbiguousPattern.test(userMessage || '');
-        const forbidInternacional: boolean = currentNode.data?.forbid_internacional ?? false;
-
-        if (isInternacionalAmbiguous && forbidInternacional) {
-          console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO INTERNACIONAL: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
-        }
-
-        internacionalIntentMatch = (forceInternacionalExit && forbidInternacional) || (forbidInternacional && msgLower.length > 0 && isInternacionalAction);
-
-        if (internacionalIntentMatch) {
-          console.log(`[process-chat-flow] 🌍 TRAVA INTERNACIONAL: Operação internacional detectada | msg="${(userMessage || '').substring(0, 100)}"`);
-          try {
-            await supabaseClient.from('ai_events').insert({
-              entity_type: 'conversation',
-              entity_id: conversationId,
-              event_type: 'ai_blocked_internacional',
-              model: 'process-chat-flow',
-              output_json: { phase: 'flow_node_exit', node_id: currentNode.id, flow_id: activeState.flow_id, interaction_count: aiCount, message_preview: (userMessage || '').substring(0, 200) },
-              input_summary: (userMessage || '').substring(0, 200),
-            });
-          } catch (logErr) { console.error('[process-chat-flow] ⚠️ Failed to log internacional block:', logErr); }
-        }
-
         if (financialIntentMatch) {
           console.log(`[process-chat-flow] 🔒 TRAVA FINANCEIRA: Intenção financeira AÇÃO detectada no nó AI, tratando como exit | msg="${(userMessage || '').substring(0, 100)}" | forceExit=${forceFinancialExit} | actionMatch=${isFinancialAction} | infoMatch=${isFinancialInfo}`);
           
@@ -4334,6 +3370,25 @@ serve(async (req) => {
         // Verificar max interações
         const maxReached = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && !supportIntentMatch && !consultorIntentMatch && maxInteractions > 0 && aiCount >= maxInteractions;
 
+        // 🔧 FIX 2: Guard anti-saudação — bloquear exit intent se for a 1ª interação e mensagem for saudação
+        // Evita que "Boa noite" / "Tudo bem?" dispare saída prematura do nó de triagem
+        const isGreetingOnly = /^(oi|ol\u00e1|ola|boa\s*(noite|tarde|manha|manh\u00e3)|tudo\s*(bem|bom|certo|ok)|e\s*ai|e a\u00ed|hey|hello|bom\s*dia|hi|opa|oi\s+tudo\s+bem)[!?.,\s]*$/i.test((userMessage || '').trim());
+        const greetingExitBlocked = isGreetingOnly && aiCount <= 1;
+        
+        if (greetingExitBlocked && (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || saqueIntentMatch || devolucaoIntentMatch || pedidosIntentMatch || sistemaIntentMatch || internacionalIntentMatch || keywordMatch || aiExitForced)) {
+          console.log('[process-chat-flow] \uD83D\uDEE1\uFE0F FIX 2: Exit bloqueado \u2014 sauda\u00e7\u00e3o na 1\u00aa intera\u00e7\u00e3o (aiCount=' + aiCount + '). Triagem deve perguntar a inten\u00e7\u00e3o.');
+          financialIntentMatch = false;
+          cancellationIntentMatch = false;
+          commercialIntentMatch = false;
+          supportIntentMatch = false;
+          consultorIntentMatch = false;
+          saqueIntentMatch = false;
+          devolucaoIntentMatch = false;
+          pedidosIntentMatch = false;
+          sistemaIntentMatch = false;
+          internacionalIntentMatch = false;
+        }
+
         // 🆕 forceAIExit: IA detectou handoff (strict RAG ou confidence) e quer sair do nó
         if (forceAIExit) {
           console.log('[process-chat-flow] 🔄 forceAIExit=true recebido do webhook, forçando exit do nó AI (IA não conseguiu resolver)');
@@ -4346,43 +3401,16 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🎯 ai_exit_intent salvo: "${intentData.ai_exit_intent}"`);
           
           // 🔴 FIX: Mapear ai_exit_intent para os flags *IntentMatch
-          if (!financialIntentMatch && !cancellationIntentMatch && !commercialIntentMatch && !supportIntentMatch && !consultorIntentMatch && !pedidosIntentMatch && !devolucaoIntentMatch && !saqueIntentMatch && !sistemaIntentMatch && !internacionalIntentMatch) {
+          if (!financialIntentMatch && !cancellationIntentMatch && !commercialIntentMatch && !supportIntentMatch && !consultorIntentMatch) {
             const intent = intentData.ai_exit_intent;
             if (intent === 'financeiro') { financialIntentMatch = true; }
             else if (intent === 'cancelamento') { cancellationIntentMatch = true; }
-            else if (intent === 'comercial' || intent === 'comercial_nacional') { commercialIntentMatch = true; }
-            else if (intent === 'suporte_pedidos') { pedidosIntentMatch = true; }
+            else if (intent === 'comercial') { commercialIntentMatch = true; }
             else if (intent === 'suporte') { supportIntentMatch = true; }
-            else if (intent === 'suporte_sistema') { sistemaIntentMatch = true; }
             else if (intent === 'consultor') { consultorIntentMatch = true; }
-            else if (intent === 'pedidos') { pedidosIntentMatch = true; }
-            else if (intent === 'devolucao') { devolucaoIntentMatch = true; }
-            else if (intent === 'saque') { saqueIntentMatch = true; }
-            else if (intent === 'comercial_internacional') { internacionalIntentMatch = true; }
-            else if (intent === 'humano') { supportIntentMatch = true; }
             console.log(`[process-chat-flow] 🎯 intentData.ai_exit_intent="${intent}" → *IntentMatch forçado`);
           }
         }
-        // 🛡️ Guard anti-saudação — bloquear exit intent se for a 1ª interação e mensagem for saudação
-        const isGreetingOnly = /^(oi|olá|ola|boa\s*(noite|tarde|manha|manhã)|tudo\s*(bem|bom|certo|ok)|e\s*ai|e aí|hey|hello|bom\s*dia|hi|opa|oi\s+tudo\s+bem)[!?.,\s]*$/i.test((userMessage || '').trim());
-        const greetingExitBlocked = isGreetingOnly && aiCount <= 1;
-
-        if (greetingExitBlocked && (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || saqueIntentMatch || devolucaoIntentMatch || pedidosIntentMatch || sistemaIntentMatch || internacionalIntentMatch || keywordMatch || aiExitForced)) {
-          console.log(`[process-chat-flow] 🛡️ Exit bloqueado — saudação na 1ª interação (aiCount=${aiCount}). Triagem deve perguntar a intenção.`);
-          financialIntentMatch = false;
-          cancellationIntentMatch = false;
-          commercialIntentMatch = false;
-          supportIntentMatch = false;
-          consultorIntentMatch = false;
-          saqueIntentMatch = false;
-          devolucaoIntentMatch = false;
-          pedidosIntentMatch = false;
-          sistemaIntentMatch = false;
-          internacionalIntentMatch = false;
-          keywordMatch = false;
-          aiExitForced = false;
-        }
-
         // Salvar intent automático
         if (financialIntentMatch && !collectedData.ai_exit_intent) {
           collectedData.ai_exit_intent = 'financeiro';
@@ -4404,30 +3432,10 @@ serve(async (req) => {
           collectedData.ai_exit_intent = 'consultor';
           console.log('[process-chat-flow] 🎯 ai_exit_intent=consultor (auto-detect from consultorIntentMatch)');
         }
-        if (pedidosIntentMatch && !collectedData.ai_exit_intent) {
-          collectedData.ai_exit_intent = 'pedidos';
-          console.log('[process-chat-flow] 🎯 ai_exit_intent=pedidos (auto-detect from pedidosIntentMatch)');
-        }
-        if (devolucaoIntentMatch && !collectedData.ai_exit_intent) {
-          collectedData.ai_exit_intent = 'devolucao';
-          console.log('[process-chat-flow] 🎯 ai_exit_intent=devolucao (auto-detect from devolucaoIntentMatch)');
-        }
-        if (saqueIntentMatch && !collectedData.ai_exit_intent) {
-          collectedData.ai_exit_intent = 'saque';
-          console.log('[process-chat-flow] 🎯 ai_exit_intent=saque (auto-detect from saqueIntentMatch)');
-        }
-        if (sistemaIntentMatch && !collectedData.ai_exit_intent) {
-          collectedData.ai_exit_intent = 'suporte_sistema';
-          console.log('[process-chat-flow] 🎯 ai_exit_intent=suporte_sistema (auto-detect from sistemaIntentMatch)');
-        }
-        if (internacionalIntentMatch && !collectedData.ai_exit_intent) {
-          collectedData.ai_exit_intent = 'comercial_internacional';
-          console.log('[process-chat-flow] 🎯 ai_exit_intent=comercial_internacional (auto-detect from internacionalIntentMatch)');
-        }
 
-        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || pedidosIntentMatch || devolucaoIntentMatch || saqueIntentMatch || sistemaIntentMatch || internacionalIntentMatch || keywordMatch || maxReached || aiExitForced) {
-          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : supportIntentMatch ? 'support_requested' : consultorIntentMatch ? 'consultant_requested' : pedidosIntentMatch ? 'pedidos_requested' : devolucaoIntentMatch ? 'devolucao_requested' : saqueIntentMatch ? 'saque_requested' : sistemaIntentMatch ? 'sistema_requested' : internacionalIntentMatch ? 'internacional_requested' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
-          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} support=${supportIntentMatch} consultant=${consultorIntentMatch} pedidos=${pedidosIntentMatch} devolucao=${devolucaoIntentMatch} saque=${saqueIntentMatch} sistema=${sistemaIntentMatch} internacional=${internacionalIntentMatch} count=${aiCount}`);
+        if (financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || keywordMatch || maxReached || aiExitForced) {
+          const exitReason = financialIntentMatch ? 'financial_blocked' : cancellationIntentMatch ? 'cancellation_blocked' : commercialIntentMatch ? 'commercial_blocked' : supportIntentMatch ? 'support_requested' : consultorIntentMatch ? 'consultant_requested' : aiExitForced ? 'ai_handoff_exit' : keywordMatch ? 'exit_keyword' : 'max_interactions';
+          console.log(`[process-chat-flow] 🔄 AI persistent EXIT: reason=${exitReason} keyword=${keywordMatch} maxReached=${maxReached} financial=${financialIntentMatch} cancellation=${cancellationIntentMatch} commercial=${commercialIntentMatch} support=${supportIntentMatch} consultant=${consultorIntentMatch} count=${aiCount}`);
 
           // Log de transferência estruturado em ai_events
           try {
@@ -4479,30 +3487,15 @@ serve(async (req) => {
           }
 
           // 🆕 Paths dedicados por intenção (handles separados no nó IA)
-          if (saqueIntentMatch) {
-            path = 'saque';
-            console.log('[process-chat-flow] 🎯 saqueIntentMatch → path set to "saque"');
-          } else if (financialIntentMatch) {
+          if (financialIntentMatch) {
             path = 'financeiro';
             console.log('[process-chat-flow] 🎯 financialIntentMatch → path set to "financeiro"');
-          } else if (devolucaoIntentMatch) {
-            path = 'devolucao';
-            console.log('[process-chat-flow] 🎯 devolucaoIntentMatch → path set to "devolucao"');
-          } else if (pedidosIntentMatch) {
-            path = 'pedidos';
-            console.log('[process-chat-flow] 🎯 pedidosIntentMatch → path set to "pedidos"');
           } else if (cancellationIntentMatch) {
             path = 'cancelamento';
             console.log('[process-chat-flow] 🎯 cancellationIntentMatch → path set to "cancelamento"');
-          } else if (internacionalIntentMatch) {
-            path = 'comercial_internacional';
-            console.log('[process-chat-flow] 🎯 internacionalIntentMatch → path set to "comercial_internacional"');
           } else if (commercialIntentMatch) {
             path = 'comercial';
             console.log('[process-chat-flow] 🎯 commercialIntentMatch → path set to "comercial"');
-          } else if (sistemaIntentMatch) {
-            path = 'suporte_sistema';
-            console.log('[process-chat-flow] 🎯 sistemaIntentMatch → path set to "suporte_sistema"');
           } else if (supportIntentMatch) {
             path = 'suporte';
             console.log('[process-chat-flow] 🎯 supportIntentMatch → path set to "suporte"');
@@ -4517,30 +3510,9 @@ serve(async (req) => {
             path = 'default';
             console.log(`[process-chat-flow] 🎯 aiExitForced → path set to "default"`);
           } else {
+            // maxReached sem intent específico → saída pelo handle default
             path = 'default';
             console.log(`[process-chat-flow] 🎯 maxReached sem intent → path set to "default"`);
-          }
-
-          // 🔐 INLINE OTP: Interceptar saque/financeiro quando require_otp_for_financial=true
-          if ((saqueIntentMatch || financialIntentMatch) && currentNode.data?.require_otp_for_financial === true && !collectedData.__otp_step) {
-            console.log(`[process-chat-flow] 🔐 Inline OTP START: Intercepting ${path} intent, starting OTP flow`);
-            collectedData.__otp_step = 'ask_email';
-            collectedData.__otp_from_ai_intent = path;
-
-            await supabaseClient.from('chat_flow_states').update({
-              collected_data: collectedData,
-              status: 'waiting_input',
-              updated_at: new Date().toISOString(),
-            }).eq('id', activeState.id);
-
-            const askEmailMsg = currentNode.data?.otp_message_ask_email || "Para sua segurança, preciso verificar sua identidade. Por favor, informe seu email cadastrado:";
-
-            return new Response(JSON.stringify({
-              useAI: false,
-              response: askEmailMsg,
-              retry: false,
-              flowId: activeState.flow_id,
-            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
 
           // Em ambos os casos (keyword ou max), limpa __ai e deixa o fluxo seguir
@@ -4591,15 +3563,6 @@ serve(async (req) => {
               forbidCancellation: currentNode.data?.forbid_cancellation ?? false,
               forbidSupport: currentNode.data?.forbid_support ?? false,
               forbidConsultant: currentNode.data?.forbid_consultant ?? false,
-              // 🆕 Novos forbid flags
-              forbidPedidos: currentNode.data?.forbid_pedidos ?? false,
-              forbidDevolucao: currentNode.data?.forbid_devolucao ?? false,
-              forbidSaque: currentNode.data?.forbid_saque ?? false,
-              forbidSistema: currentNode.data?.forbid_sistema ?? false,
-              forbidInternacional: currentNode.data?.forbid_internacional ?? false,
-              onboardingDetection: currentNode.data?.onboarding_detection_enabled ?? false,
-              requireOtpForFinancial: currentNode.data?.require_otp_for_financial ?? false,
-              returnReasons: variablesContext['__return_reasons_full'] || null,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -4611,36 +3574,37 @@ serve(async (req) => {
       // findNextNode já tem fallback hierárquico (path → ai_exit → default → any)
       console.log(`[process-chat-flow] ➡️ Transition: from=${currentNode.type}(${currentNode.id}) path=${path || 'default'} → next=${nextNode?.type || 'null'}(${nextNode?.id || 'none'})`);
 
-      // 🔒 FIX: Intent exit SEM próximo nó → forçar handoff
-      if (!nextNode && (financialIntentMatch || commercialIntentMatch || cancellationIntentMatch || supportIntentMatch || consultorIntentMatch || pedidosIntentMatch || devolucaoIntentMatch || saqueIntentMatch || sistemaIntentMatch || internacionalIntentMatch)) {
-        const exitType = saqueIntentMatch ? 'saque' : financialIntentMatch ? 'financial' : devolucaoIntentMatch ? 'devolucao' : pedidosIntentMatch ? 'pedidos' : cancellationIntentMatch ? 'cancellation' : internacionalIntentMatch ? 'internacional' : commercialIntentMatch ? 'commercial' : sistemaIntentMatch ? 'sistema' : consultorIntentMatch ? 'consultant' : 'support';
+      // 🔒 FIX: Financial/Commercial/Support/Cancellation exit SEM próximo nó → forçar handoff
+      if (!nextNode && (financialIntentMatch || commercialIntentMatch || cancellationIntentMatch || supportIntentMatch || consultorIntentMatch)) {
+        const exitType = financialIntentMatch ? 'financial' : cancellationIntentMatch ? 'cancellation' : commercialIntentMatch ? 'commercial' : consultorIntentMatch ? 'consultant' : 'support';
         console.log(`[process-chat-flow] 🔒 ${exitType} exit com nextNode=null → forçando handoff`);
         
         // Buscar departamento dinamicamente
         let targetDeptId: string | null = null;
-        const deptSearchName = saqueIntentMatch ? '%saque%' : financialIntentMatch ? '%financ%' : devolucaoIntentMatch ? '%devolu%' : pedidosIntentMatch ? '%pedido%' : cancellationIntentMatch ? '%cancel%' : internacionalIntentMatch ? '%internac%' : commercialIntentMatch ? '%comerci%' : sistemaIntentMatch ? '%sistema%' : consultorIntentMatch ? '%consult%' : '%suporte%';
+        const deptSearchName = financialIntentMatch ? '%financ%' : cancellationIntentMatch ? '%cancel%' : commercialIntentMatch ? '%comerci%' : consultorIntentMatch ? '%consult%' : '%suporte%';
+        try {
+          const { data: deptRow } = await supabaseClient
+            .from('departments')
+            .select('id')
+            .ilike('name', deptSearchName)
+            .eq('is_active', true)
+            .limit(1)
+            .maybeSingle();
+          targetDeptId = deptRow?.id || null;
+          console.log(`[process-chat-flow] 🏢 Departamento ${exitType} encontrado:`, targetDeptId || 'nenhum (handoff genérico)');
+        } catch (deptErr) {
+          console.error(`[process-chat-flow] ⚠️ Erro buscando departamento ${exitType}:`, deptErr);
+        }
 
-        const handoffMsg = saqueIntentMatch
-          ? 'Entendi. Para realizar o saque, vou te encaminhar para um atendente humano agora.'
-          : financialIntentMatch
+        const handoffMsg = financialIntentMatch
           ? 'Entendi. Para assuntos financeiros, vou te encaminhar para um atendente humano agora.'
-          : devolucaoIntentMatch
-          ? 'Entendi que deseja trocar ou devolver um produto. Vou te conectar com um atendente para resolver isso.'
-          : pedidosIntentMatch
-          ? 'Vou te transferir para a equipe de pedidos para ajudar com o rastreio/status da sua entrega.'
           : cancellationIntentMatch
           ? 'Entendi que deseja cancelar. Vou te conectar com um atendente para resolver isso.'
-          : internacionalIntentMatch
-          ? 'Entendi que precisa de suporte para operação internacional. Vou te conectar com o time especializado.'
-          : commercialIntentMatch
-          ? 'Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso.'
-          : sistemaIntentMatch
-          ? 'Entendi que está com um problema técnico. Vou te transferir para o suporte técnico agora.'
           : supportIntentMatch
           ? 'Claro! Vou te transferir para um atendente humano agora.'
           : consultorIntentMatch
           ? 'Certo! Vou te conectar com seu consultor agora.'
-          : 'Claro! Vou te transferir para um atendente humano agora.';
+          : 'Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso.';
 
         // Completar flow state como transferred
         await supabaseClient
@@ -4654,13 +3618,6 @@ serve(async (req) => {
           })
           .eq('id', activeState.id);
 
-        // 🆕 Verificar horário comercial antes de handoff
-        const ahCheck5 = await checkAfterHoursAndIntercept(supabaseClient, conversationId, 'handoff_to_human');
-        if (ahCheck5.intercepted) {
-          return new Response(JSON.stringify({
-            useAI: false, response: ahCheck5.afterHoursMessage, afterHours: true, flowCompleted: true, collectedData,
-          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
         // ✅ FIX 14: Usar transition-conversation-state centralizado
         await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
@@ -4711,13 +3668,6 @@ serve(async (req) => {
           })
           .eq('id', activeState.id);
 
-        // 🆕 Verificar horário comercial antes de handoff
-        const ahCheck6 = await checkAfterHoursAndIntercept(supabaseClient, conversationId, 'handoff_to_human');
-        if (ahCheck6.intercepted) {
-          return new Response(JSON.stringify({
-            useAI: false, response: ahCheck6.afterHoursMessage, afterHours: true, flowCompleted: true, collectedData,
-          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
         // ✅ FIX 14: Usar transition-conversation-state centralizado
         await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
@@ -5220,13 +4170,6 @@ serve(async (req) => {
           transferAiMode === 'copilot'   ? 'set_copilot' :
           transferAiMode === 'autopilot' ? 'engage_ai' :
           'handoff_to_human';
-        // 🆕 Verificar horário comercial antes de handoff
-        const ahCheck3 = await checkAfterHoursAndIntercept(supabaseClient, conversationId, transitionType);
-        if (ahCheck3.intercepted) {
-          return new Response(JSON.stringify({
-            useAI: false, response: ahCheck3.afterHoursMessage, afterHours: true, flowCompleted: true, collectedData, flowId: activeState.flow_id,
-          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
         await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
           {
@@ -5276,6 +4219,15 @@ serve(async (req) => {
 
         // 🆕 CONTRATO ANTI-ALUCINAÇÃO: Retornar aiNodeActive = true
         // Isso autoriza o message-listener/useAutopilotTrigger a chamar a IA
+        // 🔧 FIX CONTEXTO: Enriquecer contextPrompt com intent detectado pela triagem
+        const detectedIntent = collectedData?.ai_exit_intent || null;
+        const lastUserMsg = userMessage ? userMessage.substring(0, 200) : null;
+        const baseContextPrompt = nextNode.data?.context_prompt || '';
+        const intentContext = detectedIntent
+          ? `\n\n[CONTEXTO DA TRIAGEM] O cliente foi direcionado para este atendimento com intenção identificada: "${detectedIntent}". Última mensagem do cliente: "${lastUserMsg}". Não peça para o cliente repetir o motivo — você já sabe o contexto. Inicie o atendimento de forma direta e contextualizada.`
+          : (lastUserMsg ? `\n\n[CONTEXTO] Última mensagem do cliente antes da transferência: "${lastUserMsg}". Não peça para o cliente repetir — continue o atendimento de forma natural.` : '');
+        const enrichedContextPrompt = (baseContextPrompt + intentContext).trim() || null;
+
         return new Response(
           JSON.stringify({
             useAI: true,
@@ -5283,7 +4235,7 @@ serve(async (req) => {
             nodeId: nextNode.id,
             flowId: activeState.flow_id,
             flowName: activeState.chat_flows?.name || null,
-            contextPrompt: nextNode.data?.context_prompt,
+            contextPrompt: enrichedContextPrompt,
             useKnowledgeBase: nextNode.data?.use_knowledge_base !== false,
             collectedData,
             allowedSources: buildAllowedSources(nextNode.data),
@@ -5301,8 +4253,6 @@ serve(async (req) => {
             forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
             forbidSupport: nextNode.data?.forbid_support ?? false,
             forbidConsultant: nextNode.data?.forbid_consultant ?? false,
-            onboardingDetection: nextNode.data?.onboarding_detection_enabled ?? false,
-            returnReasons: variablesContext['__return_reasons_full'] || null,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -5566,13 +4516,6 @@ serve(async (req) => {
           chainTransferAiMode === 'copilot'   ? 'set_copilot' :
           chainTransferAiMode === 'autopilot' ? 'engage_ai' :
           'handoff_to_human';
-        // 🆕 Verificar horário comercial antes de handoff
-        const ahCheck4 = await checkAfterHoursAndIntercept(supabaseClient, conversationId, chainTransitionType);
-        if (ahCheck4.intercepted) {
-          return new Response(JSON.stringify({
-            useAI: false, response: ahCheck4.afterHoursMessage, afterHours: true, flowCompleted: true, collectedData, flowId: activeState.flow_id,
-          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
         await fetch(
           `${Deno.env.get('SUPABASE_URL')}/functions/v1/transition-conversation-state`,
           {
@@ -5636,7 +4579,6 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-
 
 
     } // end if (activeState)
@@ -6202,8 +5144,6 @@ serve(async (req) => {
               forbidCancellation: node.data?.forbid_cancellation ?? false,
               forbidSupport: node.data?.forbid_support ?? false,
               forbidConsultant: node.data?.forbid_consultant ?? false,
-              onboardingDetection: node.data?.onboarding_detection_enabled ?? false,
-              returnReasons: masterVariablesContext['__return_reasons_full'] || null,
               debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -6539,8 +5479,6 @@ serve(async (req) => {
           forbidCancellation: startNode.data?.forbid_cancellation ?? false,
           forbidSupport: startNode.data?.forbid_support ?? false,
           forbidConsultant: startNode.data?.forbid_consultant ?? false,
-          onboardingDetection: startNode.data?.onboarding_detection_enabled ?? false,
-          returnReasons: trigVarCtx['__return_reasons_full'] || null,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
