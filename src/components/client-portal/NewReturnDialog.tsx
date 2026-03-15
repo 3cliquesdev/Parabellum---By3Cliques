@@ -243,6 +243,32 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
               )}
             </div>
 
+            {/* Dados do pedido encontrado */}
+            {trackingOriginal && (buyerName || productItems.length > 0) && (
+              <div className="rounded-md bg-muted/50 border border-border p-3 text-sm space-y-2">
+                {buyerName && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Seller</p>
+                    <p className="font-medium text-foreground">{buyerName}</p>
+                  </div>
+                )}
+                {productItems.map((item, i) => (
+                  <div key={i} className="space-y-0.5">
+                    {item.title && (
+                      <p className="text-xs text-muted-foreground">
+                        Produto: <span className="font-medium text-foreground">{item.title}</span>
+                      </p>
+                    )}
+                    {item.sku && (
+                      <p className="text-xs text-muted-foreground">
+                        SKU: <span className="font-medium text-foreground">{item.sku}</span>
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>Código de Rastreio da Devolução (opcional)</Label>
               <Input
