@@ -23,8 +23,7 @@ interface LookupResult {
   found: boolean;
   external_order_id?: string;
   tracking_code?: string;
-  contact_id?: string;
-  contact?: { first_name: string; last_name: string; email: string | null } | null;
+  buyer_name?: string | null;
 }
 
 export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps) {
@@ -38,7 +37,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
   const [status, setStatus] = useState("pending");
   const [searching, setSearching] = useState(false);
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
-  const [contactId, setContactId] = useState<string | null>(null);
+  const [buyerName, setBuyerName] = useState<string | null>(null);
 
   const resetForm = () => {
     setTrackingOriginal("");
@@ -50,7 +49,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
     setStatus("pending");
     setSearching(false);
     setLookupResult(null);
-    setContactId(null);
+    setBuyerName(null);
   };
 
   const handleTrackingBlur = async () => {
@@ -59,7 +58,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
       setLookupResult(null);
       setOrderId("");
       setOrderIdManual(false);
-      setContactId(null);
+      setBuyerName(null);
       return;
     }
 
@@ -81,11 +80,11 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
 
       if (result.found && result.external_order_id) {
         setOrderId(result.external_order_id);
-        setContactId(result.contact_id || null);
+        setBuyerName(result.buyer_name || null);
         setOrderIdManual(false);
       } else {
         setOrderId("");
-        setContactId(null);
+        setBuyerName(null);
         setOrderIdManual(true);
       }
     } catch (err) {
@@ -106,7 +105,6 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
       reason,
       description: description || undefined,
       status,
-      contact_id: contactId || undefined,
     });
     resetForm();
     onOpenChange(false);
@@ -147,15 +145,10 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
             </div>
           </div>
 
-          {/* Dados do cliente encontrado */}
-          {lookupResult?.found && lookupResult.contact && (
+          {/* Dados do comprador encontrado */}
+          {lookupResult?.found && buyerName && (
             <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1">
-              <p className="font-medium">
-                {lookupResult.contact.first_name} {lookupResult.contact.last_name}
-              </p>
-              {lookupResult.contact.email && (
-                <p className="text-muted-foreground">{lookupResult.contact.email}</p>
-              )}
+              <p className="font-medium">{buyerName}</p>
             </div>
           )}
 
