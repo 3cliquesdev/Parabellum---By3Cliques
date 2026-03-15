@@ -9,6 +9,7 @@ import { usePublicTicketPortalConfig } from "@/hooks/usePublicTicketPortal";
 import { ReturnsList } from "@/components/client-portal/ReturnsList";
 import { NewReturnDialog } from "@/components/client-portal/NewReturnDialog";
 import { ClientTicketsList } from "@/components/client-portal/ClientTicketsList";
+import { OnboardingProgress } from "@/components/client-portal/OnboardingProgress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { displayInitials } from "@/lib/displayName";
 import { cn } from "@/lib/utils";
