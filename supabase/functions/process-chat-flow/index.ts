@@ -6187,6 +6187,7 @@ serve(async (req) => {
               forbidSupport: node.data?.forbid_support ?? false,
               forbidConsultant: node.data?.forbid_consultant ?? false,
               onboardingDetection: node.data?.onboarding_detection_enabled ?? false,
+              returnReasons: masterVariablesContext['__return_reasons_full'] || null,
               debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
