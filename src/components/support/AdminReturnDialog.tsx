@@ -40,7 +40,10 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
   const [searching, setSearching] = useState(false);
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
   const [buyerName, setBuyerName] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const lastSearchedRef = useRef<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
     setTrackingOriginal("");
