@@ -135,7 +135,6 @@ export default function ReturnReasonsSettings() {
                 value={formKey}
                 onChange={(e) => setFormKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"))}
                 placeholder="ex: produto_danificado"
-                disabled={!!editingReason}
               />
             </div>
             <div className="space-y-2">
