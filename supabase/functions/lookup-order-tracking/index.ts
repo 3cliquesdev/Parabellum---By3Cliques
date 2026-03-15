@@ -18,7 +18,7 @@ serve(async (req) => {
 
     const { email, external_order_id } = await req.json();
 
-    if (!email || !external_order_id) {
+    if (!external_order_id) {
       return new Response(JSON.stringify({ tracking_code_original: null }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
