@@ -6524,6 +6524,7 @@ serve(async (req) => {
           forbidSupport: startNode.data?.forbid_support ?? false,
           forbidConsultant: startNode.data?.forbid_consultant ?? false,
           onboardingDetection: startNode.data?.onboarding_detection_enabled ?? false,
+          returnReasons: trigVarCtx['__return_reasons_full'] || null,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
