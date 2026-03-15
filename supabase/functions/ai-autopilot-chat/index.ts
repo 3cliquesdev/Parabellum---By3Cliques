@@ -9120,6 +9120,7 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
         })).catch((e: any) => console.error('[ai-autopilot-chat] âš ï¸ Falha ao logar restriction_violation:', e));
         
         // Continua execuÃ§Ã£o â€” mensagem serÃ¡ persistida abaixo
+        }
       } else if (forbidFinancial) {
         // ðŸ†• Apenas bloquear se a IA tentou EXECUTAR uma aÃ§Ã£o financeira (nÃ£o informaÃ§Ãµes)
         const financialResolutionPattern = /(j[Ã¡a] processei|foi estornado|solicitei reembolso|vou reembolsar|pode sacar|liberei o saque|reembolso aprovado|estorno realizado|cancelamento confirmado|pagamento devolvido|jÃ¡ estornei|processando.*reembolso|aprovei.*devolu[Ã§c][Ã£a]o|sacar.*saldo|saque.*(realizado|solicitado)|para\s+prosseguir\s+com\s+o\s+(saque|reembolso|estorno)|confirmar.*dados.*(saque|reembolso|estorno)|devolver.*dinheiro)/i;
