@@ -60,13 +60,13 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
     setPhotos([]);
   };
 
-  const lookupTracking = useCallback(async (emailVal: string, orderVal: string) => {
-    if (!emailVal.trim() || !orderVal.trim()) return;
+  const lookupTracking = useCallback(async (orderVal: string) => {
+    if (!orderVal.trim()) return;
     setLoadingTracking(true);
     setTrackingSearched(false);
     try {
       const { data, error } = await supabase.functions.invoke('lookup-order-tracking', {
-        body: { email: emailVal.trim(), external_order_id: orderVal.trim() },
+        body: { external_order_id: orderVal.trim() },
       });
       if (!error && data?.tracking_code_original) {
         setTrackingOriginal(data.tracking_code_original);
