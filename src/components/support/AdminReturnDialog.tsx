@@ -152,6 +152,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
       reason,
       description: description || undefined,
       status,
+      photos: photos.length > 0 ? photos : undefined,
     });
     resetForm();
     onOpenChange(false);
