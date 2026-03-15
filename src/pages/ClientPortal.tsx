@@ -42,7 +42,7 @@ export default function ClientPortal() {
   return (
     <div className="light min-h-screen bg-gray-50" style={{ colorScheme: 'light' }}>
       {/* Header com gradiente */}
-      <div className="w-full bg-gradient-to-r from-primary to-purple-600 px-4 py-8">
+      <div className="w-full bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-8">
         <div className="mx-auto max-w-2xl flex items-center gap-4">
           <Avatar className="h-16 w-16 border-2 border-white/30 shadow-lg">
             <AvatarFallback className="bg-white/20 text-white text-xl font-bold">
@@ -76,8 +76,8 @@ export default function ClientPortal() {
                   className={cn(
                     "flex-1 flex items-center justify-center gap-1.5 py-3 px-2 text-sm transition-all border-b-2",
                     isActive
-                      ? "border-primary text-primary font-semibold"
-                      : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                      ? "border-blue-600 text-blue-600 font-semibold"
+                      : "border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100"
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -93,20 +93,20 @@ export default function ClientPortal() {
           {activeTab === "info" && (
             <div className="space-y-5">
               <div className="text-center py-2">
-                <p className="text-muted-foreground text-sm">Sua conta está ativa e em dia.</p>
+                <p className="text-gray-500 text-sm">Sua conta está ativa e em dia.</p>
               </div>
 
-              <div className="border-t border-border pt-4 space-y-3">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider text-center">
+              <div className="border-t border-gray-200 pt-4 space-y-3">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider text-center">
                   Atendimento
                 </p>
 
                 {portalLoading ? (
                   <div className="flex justify-center py-2">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
                   </div>
                 ) : whatsappNumber ? (
-                  <Button variant="outline" className="w-full" asChild>
+                  <Button variant="outline" className="w-full border-gray-200 text-gray-900 hover:bg-gray-100" asChild>
                     <a
                       href={`https://wa.me/${whatsappNumber.replace(/\D/g, "")}`}
                       target="_blank"
@@ -124,7 +124,7 @@ export default function ClientPortal() {
           {activeTab === "returns" && (
             <div>
               <div className="flex items-center justify-between mb-5">
-                <h2 className="text-base font-semibold text-foreground">Minhas Devoluções</h2>
+                <h2 className="text-base font-semibold text-gray-900">Minhas Devoluções</h2>
                 <Button size="sm" onClick={() => setShowNewReturn(true)}>
                   <Plus className="h-4 w-4 mr-1.5" />
                   Nova Devolução
@@ -136,15 +136,15 @@ export default function ClientPortal() {
 
           {activeTab === "onboarding" && (
             <div className="text-center py-8">
-              <BookOpen className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-              <p className="text-muted-foreground text-sm">Em breve disponível.</p>
+              <BookOpen className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">Em breve disponível.</p>
             </div>
           )}
 
           {activeTab === "tickets" && (
             <div className="text-center py-8">
-              <Ticket className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-              <p className="text-muted-foreground text-sm">Em breve disponível.</p>
+              <Ticket className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">Em breve disponível.</p>
             </div>
           )}
         </div>
@@ -153,7 +153,7 @@ export default function ClientPortal() {
         <div className="text-center pb-8">
           <button
             onClick={handleLogout}
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-500 transition-colors"
           >
             <LogOut className="h-3.5 w-3.5" />
             Sair da conta
