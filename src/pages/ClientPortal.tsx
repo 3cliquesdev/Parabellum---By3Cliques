@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { usePublicTicketPortalConfig } from "@/hooks/usePublicTicketPortal";
 import { ReturnsList } from "@/components/client-portal/ReturnsList";
 import { NewReturnDialog } from "@/components/client-portal/NewReturnDialog";
+import { ClientTicketsList } from "@/components/client-portal/ClientTicketsList";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { displayInitials } from "@/lib/displayName";
 import { cn } from "@/lib/utils";
