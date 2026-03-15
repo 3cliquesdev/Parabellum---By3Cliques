@@ -1211,7 +1211,7 @@ interface FlowContext {
   kbCategories?: string[];
   contextPrompt?: string;
   fallbackMessage?: string;
-  // ðŸ†• FASE 1: Campos de Controle de Comportamento Anti-AlucinaÃ§Ã£o
+  // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
   objective?: string;
   maxSentences?: number;
   forbidQuestions?: boolean;
@@ -1223,6 +1223,8 @@ interface FlowContext {
   forbidConsultant?: boolean;
   collectedData?: any;
   onboardingDetection?: boolean;
+  // 🆕 Motivos de devolução dinâmicos
+  returnReasons?: Array<{ key: string; label: string }>;
 }
 
 // ðŸ†• FASE 1: FunÃ§Ã£o para gerar prompt RESTRITIVO baseado no flow_context
