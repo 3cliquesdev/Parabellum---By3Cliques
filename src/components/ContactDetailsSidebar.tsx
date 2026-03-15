@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket, MessageSquare, ExternalLink, Loader2, AlertTriangle, ChevronRight, Pencil, Trophy, XCircle, ArrowRightLeft, MoreHorizontal } from "lucide-react";
+import { Mail, Phone, Building2, Plus, Clock, AlertCircle, TrendingUp, Ticket, MessageSquare, ExternalLink, Loader2, AlertTriangle, ChevronRight, Pencil, Trophy, XCircle, ArrowRightLeft, MoreHorizontal, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ContactTagsSection from "./inbox/ContactTagsSection";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -683,11 +683,11 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
               )}
             </div>
 
-            <div className="flex-none px-6 py-3 border-t border-border">
+            <div className="flex-none px-6 py-3 border-t border-border flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full gap-2"
+                className="flex-1 gap-2"
                 onClick={() => {
                   const convId = selectedConversationId;
                   const convStatus = selectedConversationMeta?.status;
@@ -699,6 +699,53 @@ export default function ContactDetailsSidebar({ conversation }: ContactDetailsSi
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 Abrir no Inbox
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={conversationMessages.length === 0}
+                onClick={() => {
+                  const contactName = contact ? displayName(contact.first_name, contact.last_name) : "Contato";
+                  const status = selectedConversationMeta?.status === "closed" ? "Fechada" : "Aberta";
+                  const channel = selectedConversationMeta?.channel || "WhatsApp";
+                  const agent = selectedConversationMeta?.assigned_agent_name || "Não atribuído";
+                  const date = selectedConversationMeta?.created_at
+                    ? format(new Date(selectedConversationMeta.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
+                    : format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+
+                  let text = `Conversa ${channel} - ${contactName}\n`;
+                  text += `Status: ${status} | Data: ${date}\n`;
+                  text += `Atendente: ${agent}\n`;
+                  text += `${"=".repeat(40)}\n\n`;
+
+                  conversationMessages.forEach((msg: any) => {
+                    const time = format(new Date(msg.created_at), "HH:mm");
+                    const isContact = msg.sender_type === "contact";
+                    const isInternal = msg.is_internal === true;
+                    const sender = isInternal
+                      ? "📝 Nota Interna"
+                      : isContact
+                      ? "Cliente"
+                      : msg.is_ai_generated
+                      ? "IA"
+                      : msg.sender?.full_name || "Agente";
+                    text += `[${time}] ${sender}: ${msg.content || ""}\n\n`;
+                  });
+
+                  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `conversa_${contactName.replace(/\s+/g, "_")}_${format(new Date(), "yyyy-MM-dd")}.txt`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  setTimeout(() => URL.revokeObjectURL(url), 60000);
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Baixar
               </Button>
             </div>
           </div>
