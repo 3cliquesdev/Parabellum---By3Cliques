@@ -42,6 +42,7 @@ interface RegisterReturnData {
   tracking_code_return?: string;
   reason: string;
   description?: string;
+  photos?: string[];
 }
 
 export function useRegisterReturn() {

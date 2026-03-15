@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -11,7 +11,9 @@ import {
 } from "@/components/ui/select";
 import { useRegisterReturn, useLinkReturn, REASON_LABELS } from "@/hooks/useClientReturns";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, CheckCircle, AlertTriangle } from "lucide-react";
+import { Loader2, CheckCircle, AlertTriangle, Upload, X, ImageIcon } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface NewReturnDialogProps {
   open: boolean;
@@ -19,6 +21,9 @@ interface NewReturnDialogProps {
 }
 
 type Step = "form" | "success" | "duplicate";
+
+const MAX_PHOTOS = 5;
+const MAX_SIZE_MB = 5;
 
 export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   const { user } = useAuth();
@@ -33,6 +38,9 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
   const [description, setDescription] = useState("");
   const [protocol, setProtocol] = useState("");
   const [duplicateReturnId, setDuplicateReturnId] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
     setStep("form");
@@ -43,11 +51,62 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
     setDescription("");
     setProtocol("");
     setDuplicateReturnId("");
+    setPhotos([]);
   };
 
   const handleOpenChange = (open: boolean) => {
     if (!open) resetForm();
     onOpenChange(open);
+  };
+
+  const handleUploadPhoto = async (file: File) => {
+    if (photos.length >= MAX_PHOTOS) {
+      toast.error(`Máximo de ${MAX_PHOTOS} fotos permitidas`);
+      return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Tipo não permitido. Use JPEG, PNG ou WebP.");
+      return;
+    }
+
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      toast.error(`Arquivo muito grande. Máximo ${MAX_SIZE_MB}MB.`);
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const { data, error } = await supabase.functions.invoke('upload-return-photo', {
+        body: formData,
+      });
+
+      if (error) throw error;
+      if (data?.url) {
+        setPhotos(prev => [...prev, data.url]);
+      }
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      toast.error(err?.message || "Erro ao enviar imagem");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach(handleUploadPhoto);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async () => {
@@ -59,6 +118,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
       tracking_code_return: trackingReturn || undefined,
       reason,
       description: description || undefined,
+      photos: photos.length > 0 ? photos : undefined,
     });
 
     if (result.duplicate) {
@@ -81,7 +141,7 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {step === "form" && "Nova Devolução"}
@@ -151,10 +211,69 @@ export function NewReturnDialog({ open, onOpenChange }: NewReturnDialogProps) {
               />
             </div>
 
+            {/* Upload de Fotos */}
+            <div className="space-y-2">
+              <Label>Fotos do produto (opcional)</Label>
+              <p className="text-xs text-muted-foreground">
+                Até {MAX_PHOTOS} fotos, máx. {MAX_SIZE_MB}MB cada (JPEG, PNG, WebP)
+              </p>
+
+              {photos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {photos.map((url, index) => (
+                    <div key={index} className="relative group rounded-lg overflow-hidden border border-border">
+                      <img
+                        src={url}
+                        alt={`Foto ${index + 1}`}
+                        className="w-full h-20 object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePhoto(index)}
+                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {photos.length < MAX_PHOTOS && (
+                <div
+                  className="border-2 border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      <span className="text-xs text-muted-foreground">Enviando...</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1">
+                      <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">
+                        Clique para adicionar fotos
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </div>
+
             <Button
               className="w-full"
               onClick={handleSubmit}
-              disabled={!email || !orderId || !reason || registerReturn.isPending}
+              disabled={!email || !orderId || !reason || registerReturn.isPending || uploading}
             >
               {registerReturn.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />

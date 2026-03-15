@@ -105,6 +105,7 @@ serve(async (req) => {
         tracking_code_return: tracking_code_return || null,
         reason,
         description: description || null,
+        photos,
         status: 'pending',
         created_by: 'customer',
         registered_email: email,
