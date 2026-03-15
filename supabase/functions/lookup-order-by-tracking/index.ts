@@ -102,13 +102,30 @@ serve(async (req) => {
         });
       }
 
-      console.log('[lookup-order-by-tracking] ✅ Encontrado:', { platformOrderId, buyerName, trackingNumber });
+      // 3. Buscar títulos dos produtos na mabang_order_item
+      let productTitles: string[] = [];
+      if (platformOrderId) {
+        try {
+          const itemResults = await client.query(
+            `SELECT title FROM mabang_order_item WHERE platform_order_id = ? AND title IS NOT NULL`,
+            [platformOrderId]
+          );
+          if (itemResults && itemResults.length > 0) {
+            productTitles = itemResults.map((item: any) => item.title).filter(Boolean);
+          }
+        } catch (e) {
+          console.log('[lookup-order-by-tracking] ℹ️ Erro query mabang_order_item:', e);
+        }
+      }
+
+      console.log('[lookup-order-by-tracking] ✅ Encontrado:', { platformOrderId, buyerName, trackingNumber, productTitles });
 
       return new Response(JSON.stringify({
         found: true,
         external_order_id: platformOrderId,
         tracking_code: trackingNumber,
         buyer_name: buyerName,
+        product_titles: productTitles,
       }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

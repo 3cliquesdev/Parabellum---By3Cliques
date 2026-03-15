@@ -24,6 +24,7 @@ interface LookupResult {
   external_order_id?: string;
   tracking_code?: string;
   buyer_name?: string | null;
+  product_titles?: string[];
 }
 
 export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps) {
@@ -150,11 +151,23 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
             </div>
           </div>
 
-          {/* Dados do comprador encontrado */}
-           {lookupResult?.found && buyerName && (
-            <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1">
-              <p className="text-xs text-muted-foreground">Seller</p>
-              <p className="font-medium">{buyerName}</p>
+          {/* Dados do comprador e produtos encontrados */}
+          {lookupResult?.found && (buyerName || (lookupResult.product_titles && lookupResult.product_titles.length > 0)) && (
+            <div className="rounded-md bg-muted/50 p-3 text-sm space-y-2">
+              {buyerName && (
+                <div className="space-y-0.5">
+                  <p className="text-xs text-muted-foreground">Seller</p>
+                  <p className="font-medium">{buyerName}</p>
+                </div>
+              )}
+              {lookupResult.product_titles && lookupResult.product_titles.length > 0 && (
+                <div className="space-y-0.5">
+                  <p className="text-xs text-muted-foreground">Produto(s)</p>
+                  {lookupResult.product_titles.map((title, i) => (
+                    <p key={i} className="font-medium">{title}</p>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
