@@ -13,6 +13,7 @@ import { OnboardingProgress } from "@/components/client-portal/OnboardingProgres
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { displayInitials } from "@/lib/displayName";
 import { cn } from "@/lib/utils";
+import { AssistantWidget } from "@/components/client-portal/AssistantWidget";
 
 const TABS = [
   { key: "info", label: "Conta", icon: User },
@@ -162,6 +163,7 @@ export default function ClientPortal() {
       </div>
 
       <NewReturnDialog open={showNewReturn} onOpenChange={setShowNewReturn} />
+      <AssistantWidget />
     </div>
   );
 }
