@@ -47,7 +47,7 @@ export function ReturnsList({ onRequestNew }: ReturnsListProps) {
         return (
           <div
             key={ret.id}
-            className="border border-gray-200 rounded-xl p-4 bg-white hover:shadow-md transition-all group cursor-default"
+            className="client-portal-card border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all group cursor-default"
           >
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">

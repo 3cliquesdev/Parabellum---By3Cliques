@@ -103,27 +103,37 @@
     --z-tooltip: 1700;
   }
 
-  /* Force light mode on elements with .light class, even inside .dark */
-  .light, .light * {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 215 16% 43%;
-    --accent: 220 14% 96%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 221 83% 53%;
+  /* === CLIENT PORTAL: force light theme on html level === */
+  html.client-portal-force-light {
+    color-scheme: light !important;
+  }
+  html.client-portal-force-light body,
+  html.client-portal-force-light #root {
+    background-color: #f9fafb !important;
+  }
+  .client-portal-card {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    border-color: #e5e7eb !important;
+  }
+  .client-portal-tabbar {
+    background-color: #ffffff !important;
+    border-color: #e5e7eb !important;
+  }
+  .client-portal-tabbar button {
+    color: #6b7280 !important;
+  }
+  .client-portal-tabbar button.client-portal-tab-active {
+    color: #2563eb !important;
+    border-bottom-color: #2563eb !important;
+  }
+  .client-portal-btn-outline {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    border-color: #e5e7eb !important;
+  }
+  .client-portal-btn-outline:hover {
+    background-color: #f3f4f6 !important;
   }
 
   .dark {

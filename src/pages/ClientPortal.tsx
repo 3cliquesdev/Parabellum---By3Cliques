@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,14 @@ export default function ClientPortal() {
   const [showNewReturn, setShowNewReturn] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
 
+  // Force light theme at html level so dark CSS vars don't apply
+  useEffect(() => {
+    document.documentElement.classList.add("client-portal-force-light");
+    return () => {
+      document.documentElement.classList.remove("client-portal-force-light");
+    };
+  }, []);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/auth");
@@ -40,7 +48,7 @@ export default function ClientPortal() {
   const initials = displayInitials(nameParts[0], nameParts[nameParts.length - 1]);
 
   return (
-    <div className="light min-h-screen bg-gray-50" style={{ colorScheme: 'light' }}>
+    <div className="min-h-screen" style={{ backgroundColor: '#f9fafb' }}>
       {/* Header com gradiente */}
       <div className="w-full bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-8">
         <div className="mx-auto max-w-2xl flex items-center gap-4">
@@ -64,7 +72,7 @@ export default function ClientPortal() {
       {/* Conteúdo */}
       <div className="mx-auto max-w-2xl px-4 -mt-4">
         {/* Navegação por abas */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 overflow-hidden">
+        <div className="client-portal-tabbar rounded-xl shadow-sm border mb-4 overflow-hidden">
           <div className="flex">
             {TABS.map((tab) => {
               const Icon = tab.icon;
@@ -76,7 +84,7 @@ export default function ClientPortal() {
                   className={cn(
                     "flex-1 flex items-center justify-center gap-1.5 py-3 px-2 text-sm transition-all border-b-2",
                     isActive
-                      ? "border-blue-600 text-blue-600 font-semibold"
+                      ? "client-portal-tab-active border-blue-600 text-blue-600 font-semibold"
                       : "border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100"
                   )}
                 >
@@ -89,7 +97,7 @@ export default function ClientPortal() {
         </div>
 
         {/* Conteúdo da aba */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4">
+        <div className="client-portal-card rounded-xl shadow-sm border p-5 mb-4">
           {activeTab === "info" && (
             <div className="space-y-5">
               <div className="text-center py-2">
@@ -106,7 +114,7 @@ export default function ClientPortal() {
                     <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
                   </div>
                 ) : whatsappNumber ? (
-                  <Button variant="outline" className="w-full border-gray-200 text-gray-900 hover:bg-gray-100" asChild>
+                  <Button variant="outline" className="w-full client-portal-btn-outline" asChild>
                     <a
                       href={`https://wa.me/${whatsappNumber.replace(/\D/g, "")}`}
                       target="_blank"
