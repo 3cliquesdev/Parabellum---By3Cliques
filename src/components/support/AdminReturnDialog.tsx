@@ -58,7 +58,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
       setLookupResult(null);
       setOrderId("");
       setOrderIdManual(false);
-      setContactId(null);
+      setBuyerName(null);
       return;
     }
 
