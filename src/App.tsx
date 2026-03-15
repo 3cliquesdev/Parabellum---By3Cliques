@@ -101,6 +101,7 @@ const PublicOnboarding = lazy(() => import("./pages/PublicOnboarding"));
 const PublicOnboardingForm = lazy(() => import("./pages/PublicOnboardingForm"));
 const SLASettings = lazy(() => import("./pages/SLASettings"));
 const ReturnReasonsSettings = lazy(() => import("./components/support/ReturnReasonsSettings"));
+const ReturnsConfigSettings = lazy(() => import("./pages/ReturnsConfigSettings"));
 const ScoringSettings = lazy(() => import("./pages/ScoringSettings"));
 const TicketStatusSettings = lazy(() => import("./pages/TicketStatusSettings"));
 const TicketCategoriesSettings = lazy(() => import("./pages/TicketCategoriesSettings"));
@@ -270,7 +271,8 @@ const App = () => {
               <Route path="/settings/ai-messages" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AIMessagesSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/ticket-notifications" element={<ProtectedRoute requiredPermission="email.manage_templates"><Layout><TicketNotificationRulesSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/sla" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SLASettings /></Layout></ProtectedRoute>} />
-              <Route path="/settings/return-reasons" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ReturnReasonsSettings /></Layout></ProtectedRoute>} />
+              <Route path="/settings/return-reasons" element={<Navigate to="/settings/returns-config" replace />} />
+              <Route path="/settings/returns-config" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ReturnsConfigSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/scoring" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ScoringSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/sales-channels" element={<ProtectedRoute requiredPermission="sales.manage_pipelines"><Layout><SalesChannelsSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/ticket-statuses" element={<ProtectedRoute requiredPermission="settings.view"><Layout><TicketStatusSettings /></Layout></ProtectedRoute>} />
