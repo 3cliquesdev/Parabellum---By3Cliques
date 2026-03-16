@@ -70,7 +70,7 @@ interface FetchOptions {
   tags?: string[];
 }
 
-const INBOX_COUNTS_DEDUPE_MS = 2_500;
+const INBOX_COUNTS_DEDUPE_MS = 5_000;
 const inboxCountsInflight = new Map<string, Promise<InboxCounts>>();
 const inboxCountsSnapshots = new Map<string, { fetchedAt: number; data: InboxCounts }>();
 
