@@ -99,6 +99,7 @@ serve(async (req) => {
 
     // 3. Determine assignee based on distribution rule
     let assigned_to: string | null = null;
+    let pipeline_id: string | undefined = undefined;
     
     // Field-based routing: look up answer in mappings
     if (form.distribution_rule === "field_based") {
@@ -111,7 +112,7 @@ serve(async (req) => {
       }
     } else {
       // Determinar o pipeline_id para round robin
-      let pipeline_id = form.target_pipeline_id;
+      pipeline_id = form.target_pipeline_id;
       if (!pipeline_id && form.target_type === "deal") {
         const { data: defaultPipeline } = await supabase
           .from("pipelines")
