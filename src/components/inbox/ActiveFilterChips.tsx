@@ -44,6 +44,7 @@ const WAITING_LABELS: Record<string, string> = {
 export function ActiveFilterChips({ filters, onFiltersChange }: ActiveFilterChipsProps) {
   const { data: tags } = useTags();
   const { data: users } = useUsers();
+  const { data: departments } = useDepartments({ activeOnly: true });
 
   const chips: { key: string; label: string; onRemove: () => void }[] = [];
 
