@@ -1217,6 +1217,7 @@ serve(async (req) => {
                             response_format: 'text_only',
                             personaId: (flowData as any).personaId || null,
                             kbCategories: (flowData as any).kbCategories || null,
+                            kbProductFilter: (flowData as any).kbProductFilter || null,
                             contextPrompt: (flowData as any).contextPrompt || null,
                             fallbackMessage: (flowData as any).fallbackMessage || null,
                             objective: (flowData as any).objective || null,
