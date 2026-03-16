@@ -2493,6 +2493,7 @@ serve(async (req) => {
                       personaId: resolvedNode.data?.persona_id || null,
                       personaName: resolvedNode.data?.persona_name || null,
                       kbCategories: resolvedNode.data?.kb_categories || null,
+                      kbProductFilter: mapProductToKbFilter(collectedData || {}),
                       fallbackMessage: resolvedNode.data?.fallback_message || null,
                       objective: resolvedNode.data?.objective ? replaceVariables(resolvedNode.data.objective, variablesContext || await rebuildCtx()) : null,
                       maxSentences: resolvedNode.data?.max_sentences ?? 3,
