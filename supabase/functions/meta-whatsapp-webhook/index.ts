@@ -840,8 +840,8 @@ serve(async (req) => {
                     // 🆕 FIX #2: Verificar se há agentes ONLINE no departamento
                     let queueMessage = "💬 Sua conversa já está na fila de atendimento.\n\nFique tranquilo, em breve um especialista irá te atender. 🙂";
                     
-                    if ((conversation as any).department_id || (conversation as any).department) {
-                      const deptId = (conversation as any).department_id || (conversation as any).department;
+                    if (conversation.department) {
+                      const deptId = conversation.department;
                       const { data: deptAgentIds } = await supabase
                         .from("agent_departments")
                         .select("profile_id")
