@@ -2922,6 +2922,8 @@ serve(async (req) => {
           if (nextNode.type === 'ai_response') {
             collectedData.__ai = { interaction_count: 0 };
             await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'active', updated_at: new Date().toISOString() }).eq('id', activeState.id);
+            // 🆕 FIX: Detectar primeira entrada no AI node vindo de ask_options
+            const isFirstEntryFromMenu = currentNode.type === 'ask_options' && selectedOption;
             return new Response(JSON.stringify({
               useAI: true,
               aiNodeActive: true,
