@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
-import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign, Store, Briefcase, Truck, RotateCcw, Wallet, Monitor, Globe } from "lucide-react";
+import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign, Store, Briefcase, Truck, RotateCcw, Wallet, Monitor, Globe, Ticket } from "lucide-react";
 import { ChatFlowNodeWrapper } from "../ChatFlowNodeWrapper";
 import { Badge } from "@/components/ui/badge";
 
