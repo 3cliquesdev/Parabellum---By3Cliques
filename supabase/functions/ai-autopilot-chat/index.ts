@@ -7497,7 +7497,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
             // Cliente CONFIRMOU que email estÃ¡ correto - TRANSFERIR PARA COMERCIAL
             console.log('[ai-autopilot-chat] âœ… Email confirmado pelo cliente, transferindo para comercial');
             
-            const emailInformado = pendingEmail || 'nÃ£o informado';
+            const emailInformado = pendingEmail || 'não informado';
             
             // âœ… CRIAR DEAL COM DADOS DO LEAD (contact_id = NULL)
             let dealId: string | null = null;
