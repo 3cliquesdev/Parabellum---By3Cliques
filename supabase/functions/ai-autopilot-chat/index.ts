@@ -1237,18 +1237,9 @@ Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;
   if (forbidOptions) {
     restrictions += '\nNÃO ofereça opções ou múltipla escolha.';
   }
-  
 
   if (forbidFinancial) {
-Use APENAS as fontes permitidas: ${flowContext.allowed_sources.join(', ')}.
-Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;
-Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;ÃXIMO ${maxSentences} frases.`;
-
-  if (forbidQuestions) {
-    restrictions += '\nNÃO faça perguntas ao cliente.';
-  }
-  
-
+    restrictions += `\n\n🔒 TRAVA FINANCEIRA ATIVA:
 
     restrictions += `\n\n🔒 TRAVA FINANCEIRA ATIVA:
 Você PODE responder perguntas INFORMATIVAS sobre finanças (prazos, como funciona, onde consultar saldo, políticas).
