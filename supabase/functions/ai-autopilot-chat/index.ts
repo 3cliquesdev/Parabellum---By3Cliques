@@ -8455,7 +8455,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
                 })
                 .eq('id', conversationId);
               
-              assistantMessage = 'Fico feliz em ter ajudado! ðŸ˜Š Posso encerrar seu atendimento?';
+              assistantMessage = 'Fico feliz em ter ajudado! 😊 Posso encerrar seu atendimento?';
               console.log('[ai-autopilot-chat] â³ Aguardando confirmaÃ§Ã£o do cliente para encerrar');
             }
             // Se customer_confirmed=true, o detector de confirmaÃ§Ã£o cuida na prÃ³xima mensagem
