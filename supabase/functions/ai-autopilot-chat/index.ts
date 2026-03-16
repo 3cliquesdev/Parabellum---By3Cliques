@@ -8409,14 +8409,14 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
               await supabaseClient.from('interactions').insert({
                 customer_id: contact.id,
                 type: 'internal_note',
-                content: `**Handoff Fora do HorÃ¡rio (Pendente Retorno)**
+                content: `**Handoff Fora do Horário (Pendente Retorno)**
 
 **Motivo:** ${handoffReason}
 **Contexto:** ${handoffNote}
-**HorÃ¡rio:** ${businessHoursInfo?.current_time || 'N/A'}
-**PrÃ³xima abertura:** ${nextOpenText}
+**Horário:** ${businessHoursInfo?.current_time || 'N/A'}
+**Próxima abertura:** ${nextOpenText}
 
-**AÃ§Ã£o:** Conversa marcada com pendente_retorno. SerÃ¡ redistribuÃ­da automaticamente no prÃ³ximo expediente.`,
+**Ação:** Conversa marcada com pendente_retorno. Será redistribuída automaticamente no próximo expediente.`,
                 channel: responseChannel,
                 metadata: {
                   source: 'ai_autopilot_after_hours_handoff',
