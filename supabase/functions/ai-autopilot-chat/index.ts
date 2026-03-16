@@ -352,10 +352,10 @@ function safeParseToolArgs(rawArgs: string): any {
 function formatOptionsAsText(options: Array<{label: string; value: string}> | null | undefined): string {
   if (!options || options.length === 0) return '';
   
-  const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']; ['1ï¸âƒ£', '2ï¸âƒ£', '3ï¸âƒ£', '4ï¸âƒ£', '5ï¸âƒ£', '6ï¸âƒ£', '7ï¸âƒ£', '8ï¸âƒ£', '9ï¸âƒ£', 'ðŸ”Ÿ'];
+  const numberEmojis = ['1\uFE0F\u20E3', '2\uFE0F\u20E3', '3\uFE0F\u20E3', '4\uFE0F\u20E3', '5\uFE0F\u20E3', '6\uFE0F\u20E3', '7\uFE0F\u20E3', '8\uFE0F\u20E3', '9\uFE0F\u20E3', '\uD83D\uDD1F'];
   
   const formatted = options.map((opt, idx) => {
-    const emoji = emojis[idx] || `${idx + 1}.`;
+    const emoji = numberEmojis[idx] || `${idx + 1}.`;
     return `${emoji} ${opt.label}`;
   }).join('\n');
   
