@@ -1424,6 +1424,30 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                     </Select>
                   </div>
                   <div className="space-y-1.5">
+                    <Label className="text-xs">Departamento</Label>
+                    <Select
+                      value={selectedNode.data.department_id || "none"}
+                      onValueChange={(v) => {
+                        if (v === "none") {
+                          updateNodeData("department_id", null);
+                          updateNodeData("department_name", null);
+                        } else {
+                          const dept = departments.find(d => d.id === v);
+                          updateNodeData("department_id", v);
+                          updateNodeData("department_name", dept?.name || null);
+                        }
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Sem departamento" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem departamento</SelectItem>
+                        {departments.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
                     <Label className="text-xs">Nota interna</Label>
                     <VariableAutocomplete
                       value={selectedNode.data.internal_note || ""}
