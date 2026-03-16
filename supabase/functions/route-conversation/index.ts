@@ -423,6 +423,7 @@ serve(async (req) => {
             full_name,
             availability_status,
             department,
+            agent_departments(department_id),
             profiles_skills!inner(
               skill_id,
               skills!inner(name)

@@ -394,7 +394,7 @@ Deno.serve(async (req) => {
             .eq('id', item.execution_id);
           
           // 🧪 Update test_run status if test mode (with error message)
-          if (failedExecution?.execution_context?.is_test_mode) {
+          if ((failedExecution as any)?.execution_context?.is_test_mode) {
             await supabaseAdmin
               .from('playbook_test_runs')
               .update({ 
