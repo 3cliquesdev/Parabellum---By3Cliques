@@ -6582,15 +6582,15 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
     // ðŸ’¼ TRAVA CONSULTOR: Injetar instruÃ§Ãµes diretamente no prompt da LLM
     const consultorGuardInstruction = flowForbidConsultantPrompt ? `
 
-ðŸ’¼ TRAVA CONSULTOR ATIVA â€” REGRAS OBRIGATÃ“RIAS:
+💼 TRAVA CONSULTOR ATIVA — REGRAS OBRIGATÓRIAS:
 - Se o cliente pedir para FALAR COM SEU CONSULTOR/ASSESSOR/GERENTE, responda: "Entendi! Vou te conectar com seu consultor." e retorne [[FLOW_EXIT:consultor]].
 - Responda perguntas gerais normalmente usando a base de conhecimento.
 ${ambiguousConsultorDetected ? `
-âš ï¸ DESAMBIGUAÃ‡ÃƒO OBRIGATÃ“RIA: O cliente mencionou um termo relacionado a consultor sem deixar claro se quer falar com ele ou tem uma dÃºvida geral.
-VocÃª DEVE perguntar de forma natural e empÃ¡tica: "VocÃª gostaria de falar diretamente com seu consultor ou posso te ajudar com sua dÃºvida?"
-Nunca assuma a intenÃ§Ã£o do cliente. Essa pergunta Ã© OBRIGATÃ“RIA antes de qualquer resposta.
-Se o cliente confirmar que quer FALAR COM O CONSULTOR â†’ responda com [[FLOW_EXIT:consultor]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo relacionado a consultor sem deixar claro se quer falar com ele ou tem uma dúvida geral.
+Você DEVE perguntar de forma natural e empática: "Você gostaria de falar diretamente com seu consultor ou posso te ajudar com sua dúvida?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+Se o cliente confirmar que quer FALAR COM O CONSULTOR → responda com [[FLOW_EXIT:consultor]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
