@@ -1318,6 +1318,12 @@ serve(async (req) => {
         console.log('[process-chat-flow] 🧹 Cleaned up old flow states for manual trigger');
       }
 
+      // 🔄 Resetar ai_mode para autopilot no trigger manual (para que o novo fluxo processe mensagens)
+      await supabaseClient.from('conversations')
+        .update({ ai_mode: 'autopilot', assigned_to: null })
+        .eq('id', conversationId);
+      console.log('[process-chat-flow] 🔄 Reset ai_mode → autopilot para trigger manual');
+
       // Criar estado do fluxo no nó de conteúdo (não no start)
       // Add inactivity metadata if stopped at inactivity condition
       const collectedDataForState: Record<string, any> = { ...manualCollectedData, __manual_test: true };
