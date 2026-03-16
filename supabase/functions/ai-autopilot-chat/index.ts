@@ -1426,6 +1426,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Wrapper: garante charset=utf-8 em TODAS as responses JSON
+  const rawHandler = async (): Promise<Response> => {
   try {
     // Handler de warmup rÃ¡pido (sem processamento de IA)
     const bodyText = await req.text();
