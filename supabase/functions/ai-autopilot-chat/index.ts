@@ -3256,10 +3256,14 @@ serve(async (req) => {
     // ðŸ†• PRIORIDADE 1: CHAT FLOW - Verificar ANTES da triagem
     // ============================================================
     let flowProcessedEarly = false;
-    let flowPersonaId: string | null = null;
-    let flowKbCategories: string[] | null = null;
-    let flowContextPrompt: string | null = null;
-    let flowFallbackMessage: string | null = null;
+    // Só resetar variáveis de flow se NÃO veio flow_context explícito (widget/portal)
+    // Preserva valores definidos na extração inicial (linhas ~1506-1509)
+    if (!flow_context) {
+      flowPersonaId = null;
+      flowKbCategories = null;
+      flowContextPrompt = null;
+      flowFallbackMessage = null;
+    }
     
     // GUARD: Se flow_context foi fornecido explicitamente (ex: widget do portal),
     // NAO chamar process-chat-flow - usar o contexto direto do request
