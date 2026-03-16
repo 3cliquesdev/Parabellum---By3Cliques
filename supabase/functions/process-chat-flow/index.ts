@@ -2471,7 +2471,7 @@ serve(async (req) => {
                       personaName: resolvedNode.data?.persona_name || null,
                       kbCategories: resolvedNode.data?.kb_categories || null,
                       fallbackMessage: resolvedNode.data?.fallback_message || null,
-                      objective: resolvedNode.data?.objective || null,
+                      objective: resolvedNode.data?.objective ? replaceVariables(resolvedNode.data.objective, variablesContext || await rebuildCtx()) : null,
                       maxSentences: resolvedNode.data?.max_sentences ?? 3,
                       forbidQuestions: resolvedNode.data?.forbid_questions ?? true,
                       forbidOptions: resolvedNode.data?.forbid_options ?? true,
