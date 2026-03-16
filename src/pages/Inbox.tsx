@@ -80,6 +80,7 @@ export default function Inbox() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDistributeDialog, setShowDistributeDialog] = useState(false);
+  const [showReengageDialog, setShowReengageDialog] = useState(false);
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(true);
   const bulkReactivate = useBulkReactivateAI();
   const bulkClose = useBulkCloseConversations();
