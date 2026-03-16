@@ -1,39 +1,37 @@
 
 
-# Barrinhas estilo WhatsApp já estão implementadas
+# Correção: Fluxo Manual Bloqueado pelo Master Flow
 
-Analisando o código, o sistema **já possui** o componente `MessageStatusIndicator` com os 4 estados do WhatsApp:
+## Problema
 
-- ✓ `sent` = 1 check cinza (enviado ao servidor)
-- ✓✓ `delivered` = 2 checks cinza (entregue ao cliente)
-- ✓✓ `read` = 2 checks azuis (lido)
-- ⏳ `sending` = relógio pulsante
-- ❌ `failed` = ícone de erro com tooltip
+Quando você clica em "Iniciar fluxo manual" após o Master Flow ter transferido para humano, o novo fluxo não inicia porque:
 
-E o `MessageBubble` já renderiza esse indicador para mensagens de agente/IA (linha 268-276).
+1. **Guarda de `ai_mode` bloqueia**: Após transferência, a conversa fica em modo `waiting_human`. O código rejeita qualquer processamento de fluxo nesse estado — mas não faz exceção para trigger manual.
+2. **Estado antigo não é limpo**: O DELETE só remove estados `active`, `waiting_input`, `in_progress`, `cancelled` — mas NÃO remove `transferred` nem `completed`. O Master Flow fica "preso" ali.
 
-**O que pode estar acontecendo**: As mensagens estão sendo salvas com `status = 'sent'` mas nunca atualizadas para `delivered` ou `read` quando o webhook do WhatsApp retorna os status updates. Preciso verificar se o webhook `meta-whatsapp-webhook` está salvando os status `delivered` e `read` corretamente na tabela `messages`.
+## Correção (3 mudanças no mesmo arquivo)
 
-## Verificação necessária
+**Arquivo:** `supabase/functions/process-chat-flow/index.ts`
 
-Vou checar se o webhook processa os eventos de status (`delivered`, `read`) e atualiza o campo `status` na tabela `messages`.
+### 1. Permitir trigger manual mesmo em `waiting_human`
+Na linha ~853, adicionar `&& !manualTrigger` à condição que bloqueia:
+```typescript
+if ((currentAiMode === 'waiting_human' || ...) && !isTestMode && !manualTrigger) {
+```
 
----
+### 2. Limpar TODOS os estados antigos (incluir `transferred` e `completed`)
+Na linha ~1313, expandir o filtro de status no DELETE:
+```typescript
+.in('status', ['active', 'waiting_input', 'in_progress', 'cancelled', 'transferred', 'completed']);
+```
 
-Após análise do `meta-whatsapp-webhook`, o fluxo de status updates do WhatsApp já existe no código. As "barrinhas" já funcionam visualmente. O problema provável é que:
+### 3. Resetar ai_mode para autopilot no trigger manual
+Após o DELETE (~linha 1319), resetar a conversa para que o novo fluxo funcione:
+```typescript
+await supabaseClient.from('conversations')
+  .update({ ai_mode: 'autopilot', assigned_to: null })
+  .eq('id', conversationId);
+```
 
-1. O campo `status` nas mensagens não está sendo populado corretamente ao enviar
-2. Ou os webhooks de status update (`delivered`/`read`) não estão chegando/processando
-
-## Plano
-
-### 1. Confirmar que `send-meta-whatsapp` salva status `sent` após envio bem-sucedido
-- Verificar se após enviar via API Meta, o status da mensagem é atualizado de `sending` → `sent`
-
-### 2. Confirmar que `meta-whatsapp-webhook` processa status updates
-- Verificar se eventos `statuses` do webhook atualizam o campo `status` para `delivered` e `read`
-
-### 3. Se faltar algo, corrigir o pipeline de status
-
-Preciso ler os arquivos das Edge Functions para confirmar o diagnóstico antes de propor correções específicas.
+### 4. Deploy da função `process-chat-flow`
 
