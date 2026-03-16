@@ -7260,16 +7260,17 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     if (!rawAIContent && !toolCalls.length) {
       console.warn('[ai-autopilot-chat] âš ï¸ IA retornou vazio â€” tentando retry com prompt reduzido');
       try {
+        // Pegar últimas 5 mensagens do payload original (já contêm a mensagem do user)
+        const lastMessages = aiPayload.messages.slice(-5);
+        // Evitar duplicação: NÃO adicionar customerMessage novamente
         const retryMessages = [
           { role: 'system' as const, content: contextualizedSystemPrompt.substring(0, 4000) },
-          ...aiPayload.messages.slice(-5),
-          { role: 'user' as const, content: customerMessage }
+          ...lastMessages,
         ];
+        // NÃO passar temperature nem max_tokens — callAIWithFallback normaliza automaticamente
         const retryPayload: any = {
-          model: (ragConfig as any)?.model || 'gpt-4o-mini',
           messages: retryMessages,
-          temperature: 0.7,
-          max_tokens: 300,
+          max_completion_tokens: 300,
         };
         const retryData = await callAIWithFallback(retryPayload);
         rawAIContent = retryData.choices?.[0]?.message?.content;
