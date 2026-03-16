@@ -1341,13 +1341,7 @@ Status: ${contactStatus}${enrichment?.orgName ? `\nOrganização: ${enrichment.o
   return restrictions;
 }
 
-    restrictions += '\nSe o cliente demonstrar preocupaÃ§Ã£o financeira, responda com empatia e tranquilidade antes de qualquer informaÃ§Ã£o.';
-  }
 
-  return restrictions;
-}
-
-// ðŸ†• FASE 1: FunÃ§Ã£o para validar se IA violou restriÃ§Ãµes de comportamento
 function validateResponseRestrictions(
   response: string, 
   forbidQuestions: boolean, 
