@@ -52,6 +52,8 @@ interface MessagesWithMediaProps {
   messagesEndRef: React.RefObject<HTMLDivElement>;
   /** Tick counter from parent — forces re-render for relative timestamps */
   _tick?: number;
+  /** Callback to retry a failed message */
+  onRetryMessage?: (messageId: string, conversationId: string) => void;
 }
 
 // Helper: Extrair MIME type do attachment_type
