@@ -1047,7 +1047,7 @@ function generateResponsePrefix(action: 'direct' | 'cautious' | 'handoff'): stri
     case 'direct':
       return ''; // Sem prefixo para respostas diretas
     case 'cautious':
-      return 'Baseado nas informaÃ§Ãµes disponÃ­veis:\n\n';
+      return ''; // Removido: prefixo cauteloso vazava metadados internos
     case 'handoff':
       return ''; // Handoff usa mensagem prÃ³pria
   }
@@ -7217,14 +7217,8 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
     }
     const isEmptyAIResponse = !rawAIContent;
 
-    // ðŸŽ¯ FIX A: PREFIXO DE RESPOSTA CAUTELOSA â€” SÃ“ se a IA realmente gerou conteÃºdo
-    if (confidenceResult.action === 'cautious' && !toolCalls.length && !isEmptyAIResponse && !isWithdrawalRequest && !isFinancialRequest) {
-      const cautiousPrefix = generateResponsePrefix('cautious');
-      if (cautiousPrefix && !assistantMessage.startsWith('Baseado nas informaÃ§Ãµes')) {
-        assistantMessage = cautiousPrefix + assistantMessage;
-        console.log('[ai-autopilot-chat] âš ï¸ Prefixo cauteloso adicionado Ã  resposta');
-      }
-    }
+    // Prefixo cauteloso removido - vazava metadados internos para o cliente
+
 
     // ============================================================
     // FASE 3: TOOL CALLING - Execute first to prevent duplicates
