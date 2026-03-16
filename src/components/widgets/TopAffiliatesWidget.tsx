@@ -44,6 +44,7 @@ export function TopAffiliatesWidget({ startDate, endDate }: TopAffiliatesWidgetP
   };
 
   const affiliates = data?.topAffiliates || [];
+  const totalSales = affiliates.reduce((sum, a) => sum + a.salesCount, 0);
 
   return (
     <Card>
