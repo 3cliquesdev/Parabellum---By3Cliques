@@ -372,7 +372,7 @@ function detectIntentCategory(message: string): string | null {
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   
   // Cancelamento
-  if (/cancel|assinatura|desinscrever|cancela|desinscriÃ§Ã£o/.test(msgLower)) return 'cancellation';
+  if (/cancel|assinatura|desinscrever|cancela|desinscricao/.test(msgLower)) return 'cancellation';
   
   // Reembolso
   if (/reembolso|devol|devolucao|trocar|estorno/.test(msgLower)) return 'refund';
