@@ -36,6 +36,7 @@ export interface InboxFilters {
   hasAudio?: boolean;
   hasAttachments?: boolean;
   aiMode?: string;
+  departmentId?: string;
   includeArchived?: boolean;
   // Filtro de tempo de espera para priorização
   waitingTime?: 'all' | 'newest' | 'oldest' | '1h' | '4h' | '24h' | '7d';
