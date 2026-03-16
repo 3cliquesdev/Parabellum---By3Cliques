@@ -3480,17 +3480,19 @@ serve(async (req) => {
         if (flowResult.useAI === true) {
           flowPersonaId = flowResult.personaId || null;
           flowKbCategories = flowResult.kbCategories || null;
+          flowKbProductFilter = flowResult.kbProductFilter || null;
           flowContextPrompt = flowResult.contextPrompt || null;
           flowFallbackMessage = flowResult.fallbackMessage || null;
           
-          // ðŸ†• MASTER FLOW: Log especÃ­fico quando vem do Master Flow
+          // 🆕 MASTER FLOW: Log específico quando vem do Master Flow
           const source = flowResult.masterFlowId ? 'Master Flow' : 'Chat Flow';
-          console.log(`[ai-autopilot-chat] ðŸŽ¯ ${source} definiu configuraÃ§Ãµes para IA:`, {
+          console.log(`[ai-autopilot-chat] 🎯 ${source} definiu configurações para IA:`, {
             source,
             masterFlowId: flowResult.masterFlowId || null,
             masterFlowName: flowResult.masterFlowName || null,
             personaId: flowPersonaId,
             kbCategories: flowKbCategories,
+            kbProductFilter: flowKbProductFilter,
             hasContextPrompt: !!flowContextPrompt
           });
         }
