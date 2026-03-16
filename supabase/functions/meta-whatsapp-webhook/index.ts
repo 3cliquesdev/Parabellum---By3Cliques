@@ -1308,7 +1308,10 @@ serve(async (req) => {
                         },
                         body: JSON.stringify({
                           conversationId: conversation.id,
-                          customerMessage: messageContent,
+                          // 🆕 FIX: Se firstEntry (vindo de menu), substituir mensagem crua pelo contexto
+                          customerMessage: (flowData as any).firstEntry 
+                            ? `Cliente selecionou: ${(flowData as any).selectedOption || 'opção do menu'}` 
+                            : messageContent,
                           contact_id: contact.id,
                           whatsapp_provider: "meta",
                           whatsapp_meta_instance_id: instance.id,
