@@ -704,6 +704,7 @@ function BusinessMessagesSection() {
                       ))}
                     </SelectContent>
                   </Select>
+                  </div>
                 </div>
               )}
               <div className="flex items-center gap-2">
