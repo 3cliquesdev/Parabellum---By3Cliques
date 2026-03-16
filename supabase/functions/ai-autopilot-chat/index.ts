@@ -402,11 +402,11 @@ function getIntentCategoryLabel(category: string | null): string {
     'refund': 'reembolso',
     'withdrawal': 'saque',
     'tracking': 'seu pedido/entrega',
-    'technical': 'problema tÃ©cnico',
-    'access': 'acesso Ã  plataforma',
-    'billing': 'cobranÃ§a'
+    'technical': 'problema técnico',
+    'access': 'acesso à plataforma',
+    'billing': 'cobrança'
   };
-  return category ? labels[category] || 'sua dÃºvida' : 'sua dÃºvida';
+  return category ? labels[category] || 'sua dúvida' : 'sua dúvida';
 }
 
 // ============================================================
