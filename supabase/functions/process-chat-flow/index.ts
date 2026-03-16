@@ -5226,6 +5226,7 @@ serve(async (req) => {
               responseFormat: 'text_only',
               personaId: node.data?.persona_id || null,
               kbCategories: node.data?.kb_categories || null,
+              kbProductFilter: mapProductToKbFilter(collectedData || {}),
               contextPrompt: node.data?.context_prompt || null,
               fallbackMessage: node.data?.fallback_message || null,
               objective: node.data?.objective || null,
