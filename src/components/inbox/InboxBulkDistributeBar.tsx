@@ -10,9 +10,11 @@ interface InboxBulkDistributeBarProps {
   onDistribute: () => void;
   onReactivateAI: () => void;
   onCloseConversations?: () => void;
+  onReengage?: () => void;
   isDistributing?: boolean;
   isReactivating?: boolean;
   isClosing?: boolean;
+  isArchived?: boolean;
 }
 
 export function InboxBulkDistributeBar({
