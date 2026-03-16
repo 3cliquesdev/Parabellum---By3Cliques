@@ -8432,7 +8432,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
 
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro ao executar handoff manual:', error);
-            assistantMessage = 'Vou transferir vocÃª para um atendente humano. Por favor, aguarde um momento.';
+            assistantMessage = 'Vou transferir você para um atendente humano. Por favor, aguarde um momento.';
           }
         }
         // TOOL: close_conversation - Encerramento autÃ´nomo com confirmaÃ§Ã£o
