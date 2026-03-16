@@ -42,6 +42,7 @@ const PublicChatWindow = lazy(() => import("./pages/PublicChatWindow"));
 const ChatLinksSettings = lazy(() => import("./pages/ChatLinksSettings"));
 const WidgetBuilder = lazy(() => import("./pages/WidgetBuilder"));
 const Auth = lazy(() => import("./pages/Auth"));
+const ClientLogin = lazy(() => import("./pages/ClientLogin"));
 const Automations = lazy(() => import("./pages/Automations"));
 // Analytics removed — now inline redirect
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
