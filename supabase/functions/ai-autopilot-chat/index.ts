@@ -1238,8 +1238,8 @@ Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;
     restrictions += '\nNÃO ofereça opções ou múltipla escolha.';
   }
   
-  let restrictions = `Você é um assistente corporativo.
-Responda SOMENTE ao seguinte objetivo: "${objective}"
+
+  if (forbidFinancial) {
 Use APENAS as fontes permitidas: ${flowContext.allowed_sources.join(', ')}.
 Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;
 Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;ÃXIMO ${maxSentences} frases.`;
