@@ -1310,7 +1310,7 @@ serve(async (req) => {
         .from('chat_flow_states')
         .delete()
         .eq('conversation_id', conversationId)
-        .in('status', ['active', 'waiting_input', 'in_progress', 'cancelled']);
+        .in('status', ['active', 'waiting_input', 'in_progress', 'cancelled', 'transferred', 'completed']);
 
       if (deleteError) {
         console.error('[process-chat-flow] Error cleaning up old states:', deleteError);
