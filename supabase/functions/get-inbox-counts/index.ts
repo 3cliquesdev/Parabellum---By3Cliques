@@ -319,13 +319,15 @@ Deno.serve(async (req: Request) => {
     
     const unread = inbox.reduce((sum: number, i: any) => sum + (i.unread_count || 0), 0);
 
-    // -------- byDepartment (active) — ✅ UMA query agrupada em vez de N queries sequenciais
+    // -------- byDepartment + byTag — ✅ UMA query para IDs+dept, reusar para tags
     const { data: activeConvWithDept } = await applyVisibility(
-      supabaseAdmin.from("conversations").select("department")
-    ).neq("status", "closed");
+      supabaseAdmin.from("conversations").select("id, department")
+    ).neq("status", "closed").limit(5000);
 
     const deptCountMap = new Map<string, number>();
+    const activeIds: string[] = [];
     for (const row of activeConvWithDept || []) {
+      activeIds.push(row.id);
       if (row.department) {
         deptCountMap.set(row.department, (deptCountMap.get(row.department) || 0) + 1);
       }
@@ -337,19 +339,7 @@ Deno.serve(async (req: Request) => {
       count: deptCountMap.get(dept.id) || 0,
     }));
 
-    // -------- byTag (active) — ✅ Reusar IDs do activeConvWithDept (elimina 1 query)
-    const activeIds = (activeConvWithDept || [])
-      .filter((r: any) => r.department !== undefined || true) // todas as rows tem id implícito
-      .map((r: any) => r.department) // Precisa buscar IDs separado pois select("department") não retorna id
-      .length; // dummy — precisamos dos IDs reais
-
-    // Como select("department") não inclui id, fazemos 1 query extra mas com limit
-    const { data: activeConvIdRows } = await applyVisibility(
-      supabaseAdmin.from("conversations").select("id")
-    ).neq("status", "closed").limit(5000);
-
-    const realActiveIds = (activeConvIdRows || []).map((r: any) => r.id);
-
+    // -------- byTag — reusar activeIds (zero queries extras para IDs)
     let tagCounts = new Map<string, number>();
     if (activeIds.length > 0) {
       const { data: convTags } = await supabaseAdmin
