@@ -249,9 +249,7 @@ export function useSendMessageInstant() {
                 evolutionPayload.message = contentToSend;
               }
               
-              const { error: evolutionError } = await supabase.functions.invoke('send-whatsapp-message', {
-                body: evolutionPayload
-              });
+              const { error: evolutionError } = await invokeWithRetry('send-whatsapp-message', evolutionPayload);
               
               if (evolutionError) throw new Error(evolutionError.message || 'Evolution API failed');
               

@@ -274,6 +274,18 @@ export function MessageBubble({
                 }
               />
             )}
+
+            {/* Botão Reenviar para mensagens falhadas */}
+            {!isCustomer && status === "failed" && onRetry && (
+              <button
+                onClick={onRetry}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-destructive hover:text-destructive/80 transition-colors ml-1"
+                title="Reenviar mensagem"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Reenviar
+              </button>
+            )}
           </div>
         </div>
       </div>

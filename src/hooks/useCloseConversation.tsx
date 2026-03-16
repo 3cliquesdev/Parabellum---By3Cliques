@@ -14,13 +14,32 @@ export function useCloseConversation() {
 
   return useMutation({
     mutationFn: async ({ conversationId, userId, sendSurvey }: CloseConversationParams) => {
-      const { data, error } = await supabase.functions.invoke("close-conversation", {
-        body: {
-          conversationId,
-          userId,
-          sendCsat: sendSurvey,
-        },
+      const payload = {
+        conversationId,
+        userId,
+        sendCsat: sendSurvey,
+      };
+
+      let result = await supabase.functions.invoke("close-conversation", {
+        body: payload,
       });
+
+      // Retry 1x após 2s em caso de erro transiente (503/timeout)
+      if (result.error) {
+        const errMsg = result.error?.message || String(result.error);
+        const isTransient = errMsg.includes('Failed to send') || 
+                            errMsg.includes('503') ||
+                            errMsg.includes('EDGE_RUNTIME');
+        if (isTransient) {
+          console.warn('[closeConversation] ⚠️ Retry em 2s...');
+          await new Promise(r => setTimeout(r, 2000));
+          result = await supabase.functions.invoke("close-conversation", {
+            body: payload,
+          });
+        }
+      }
+
+      const { data, error } = result;
 
       if (error) throw error;
       
