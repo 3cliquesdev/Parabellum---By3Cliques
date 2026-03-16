@@ -5156,7 +5156,7 @@ Responda APENAS: skip ou search`
               if (info.is_packed) {
                 directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
 ðŸ“¦ Embalado em: ${packedAt}
-ðŸšš CÃ³digo de rastreio: ${trackingNum}
+ðŸšš CÃ³🚚 Código de rastreio: ${trackingNum}
 âœ… Status: ${status}
 
 `;
