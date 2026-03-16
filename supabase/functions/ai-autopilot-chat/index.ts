@@ -7464,7 +7464,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
             });
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro ao enviar OTP financeiro:', error);
-            assistantMessage = 'Ocorreu um erro ao enviar o cÃ³digo. Por favor, tente novamente.';
+            assistantMessage = 'Ocorreu um erro ao enviar o código. Por favor, tente novamente.';
           }
         }
         // TOOL: Confirmar email nÃ£o encontrado - transferir para comercial ou pedir novo email
