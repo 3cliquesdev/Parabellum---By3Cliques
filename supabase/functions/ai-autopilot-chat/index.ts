@@ -3476,7 +3476,7 @@ serve(async (req) => {
           );
         }
         
-        // Se o fluxo precisa de IA, popular variÃ¡veis para uso posterior
+        // Se o fluxo precisa de IA, popular variáveis para uso posterior
         if (flowResult.useAI === true) {
           flowPersonaId = flowResult.personaId || null;
           flowKbCategories = flowResult.kbCategories || null;
@@ -3493,8 +3493,44 @@ serve(async (req) => {
             personaId: flowPersonaId,
             kbCategories: flowKbCategories,
             kbProductFilter: flowKbProductFilter,
-            hasContextPrompt: !!flowContextPrompt
+            hasContextPrompt: !!flowContextPrompt,
+            hasCollectedData: !!flowResult.collectedData
           });
+          
+          // 🆕 FIX: Garantir que collectedData do fluxo chega ao flow_context
+          // Quando ai-autopilot-chat chama process-chat-flow internamente,
+          // flow_context pode não existir ainda. Criá-lo com collectedData para
+          // que o bloco flowCollectedDataBlock no prompt funcione corretamente.
+          if (flowResult.collectedData) {
+            if (flow_context) {
+              // flow_context já existe (veio do webhook) - apenas adicionar collectedData
+              (flow_context as any).collectedData = flowResult.collectedData;
+            } else {
+              // flow_context não existe (chamada interna) - criar com dados do fluxo
+              flow_context = {
+                flow_id: flowResult.flowId || '',
+                node_id: flowResult.nodeId || '',
+                node_type: 'ai_response',
+                allowed_sources: flowResult.allowedSources || ['kb'],
+                response_format: 'text_only',
+                personaId: flowResult.personaId || null,
+                kbCategories: flowResult.kbCategories || null,
+                kbProductFilter: flowResult.kbProductFilter || null,
+                contextPrompt: flowResult.contextPrompt || null,
+                fallbackMessage: flowResult.fallbackMessage || null,
+                objective: flowResult.objective || null,
+                maxSentences: flowResult.maxSentences ?? 3,
+                forbidQuestions: flowResult.forbidQuestions ?? true,
+                forbidOptions: flowResult.forbidOptions ?? true,
+                forbidFinancial: flowResult.forbidFinancial ?? false,
+                forbidCommercial: flowResult.forbidCommercial ?? false,
+                forbidCancellation: flowResult.forbidCancellation ?? false,
+                forbidConsultant: flowResult.forbidConsultant ?? false,
+                collectedData: flowResult.collectedData,
+              } as FlowContext;
+            }
+            console.log('[ai-autopilot-chat] 📋 collectedData injetado no flow_context:', JSON.stringify(flowResult.collectedData));
+          }
         }
       }
     } catch (flowError) {
