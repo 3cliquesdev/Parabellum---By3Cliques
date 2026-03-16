@@ -7411,7 +7411,7 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o cÃ³digo que voc�
             const emailToUse = contact.email || verifiedEmail;
             
             if (!emailToUse) {
-              assistantMessage = 'NÃ£o encontrei seu email cadastrado. Por favor, informe seu email para que eu possa enviar o cÃ³digo de verificaÃ§Ã£o.';
+              assistantMessage = 'Não encontrei seu email cadastrado. Por favor, informe seu email para que eu possa enviar o código de verificação.';
               continue;
             }
 
