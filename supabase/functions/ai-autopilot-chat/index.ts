@@ -4521,6 +4521,11 @@ Responda APENAS: skip ou search`
                   query = query.in('category', personaCategories);
                 }
                 
+                // Product filter for keyword fallback
+                if (hasProductFilter) {
+                  query = query.or(`product_tags.cs.{${activeProductFilter.join(',')}},product_tags.eq.{}`);
+                }
+                
                 const { data: keywordResults } = await query.limit(3);
                 
                 if (keywordResults && keywordResults.length > 0) {
