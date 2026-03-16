@@ -5175,11 +5175,11 @@ Responda APENAS: skip ou search`
           // Adicionar mensagem para códigos não encontrados
           if (codesNotFound.length > 0) {
             if (codesNotFound.length === 1) {
-              directResponse += `\nâ“ O cÃ³digo **${codesNotFound[0]}** nÃ£o foi encontrado no sistema.
-Este nÃºmero estÃ¡ correto? Se sim, pode ser que o pedido ainda nÃ£o tenha entrado em preparaÃ§Ã£o.`;
+              directResponse += `\n❓ O código **${codesNotFound[0]}** não foi encontrado no sistema.
+Este número está correto? Se sim, pode ser que o pedido ainda não tenha entrado em preparação.`;
             } else {
-              directResponse += `\nâ“ Os seguintes cÃ³digos nÃ£o foram encontrados: ${codesNotFound.join(', ')}
-Esses nÃºmeros estÃ£o corretos? Se sim, pode ser que ainda nÃ£o tenham entrado em preparaÃ§Ã£o.`;
+              directResponse += `\n❓ Os seguintes códigos não foram encontrados: ${codesNotFound.join(', ')}
+Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado em preparação.`;
             }
           }
           
