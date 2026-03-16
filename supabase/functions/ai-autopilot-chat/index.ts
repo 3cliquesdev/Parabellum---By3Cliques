@@ -848,7 +848,7 @@ const HALLUCINATION_INDICATORS = [
 ];
 
 // Indicadores de conflito
-const CONFLICT_INDICATORS = ['porÃ©m', 'entretanto', 'no entanto', 'diferente', 'contrÃ¡rio', 'atualizado', 'novo', 'antigo'];
+const CONFLICT_INDICATORS = ['porém', 'entretanto', 'no entanto', 'diferente', 'contrário', 'atualizado', 'novo', 'antigo'];
 
 // ðŸ†• GATILHOS REMOVIDOS: IA nÃ£o faz mais handoff automÃ¡tico por keywords
 // A IA agora SEMPRE tenta responder e sÃ³ transfere se cliente PEDIR EXPLICITAMENTE
