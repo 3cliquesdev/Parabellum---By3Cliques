@@ -744,20 +744,82 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
             }
           );
           
-          // REMOVED `inbox-counts` invalidation here: if it changes unread, `inbox-view` trigger will update `inbox_view` anyway and trigger Canal 1.
-          // Invalidation here was globally DDOSing the edge function on every generic message.
+          queryClient.invalidateQueries({ queryKey: ["inbox-counts"], exact: false });
         }
       )
       .subscribe((status) => {
         console.log("[Realtime] messages global subscription status:", status);
       });
 
+    // Canal 3: conversations para detectar NOVAS conversas imediatamente
+    const conversationsChannel = supabase
+      .channel("inbox-conversations-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "conversations",
+        },
+        async (payload) => {
+          const newConv = payload.new as any;
+          if (!newConv?.id) return;
+          
+          console.log("[Realtime] NOVA conversa detectada:", newConv.id);
+          
+          queryClient.invalidateQueries({ queryKey: ["inbox-view"], exact: false });
+          queryClient.invalidateQueries({ queryKey: ["inbox-counts"], exact: false });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversations",
+        },
+        async (payload) => {
+          const updatedConv = payload.new as any;
+          if (!updatedConv?.id) return;
+          
+          console.log("[Realtime] Conversa atualizada:", updatedConv.id, {
+            status: updatedConv.status,
+            ai_mode: updatedConv.ai_mode,
+            assigned_to: updatedConv.assigned_to?.slice(0, 8)
+          });
+          
+          // Atualizar campos críticos inline no cache (sem refetch)
+          queryClient.setQueriesData<InboxViewItem[]>(
+            { queryKey: ["inbox-view"], exact: false },
+            (prev = []) => {
+              const updated = prev.map(item => 
+                item.conversation_id === updatedConv.id 
+                  ? { 
+                      ...item, 
+                      status: updatedConv.status,
+                      ai_mode: updatedConv.ai_mode,
+                      assigned_to: updatedConv.assigned_to,
+                      department: updatedConv.department,
+                      updated_at: updatedConv.last_message_at || new Date().toISOString(),
+                    } 
+                  : item
+              );
+              return sortInboxItemsByPriority(updated);
+            }
+          );
 
+          queryClient.invalidateQueries({ queryKey: ["inbox-counts"], exact: false });
+        }
+      )
+      .subscribe((status) => {
+        console.log("[Realtime] conversations subscription status:", status);
+      });
 
     return () => {
-      console.log("[Realtime] Removing inbox_view + messages channels");
+      console.log("[Realtime] Removing inbox_view + messages + conversations channels");
       supabase.removeChannel(inboxChannel);
       supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(conversationsChannel);
     };
   }, [queryClient, user?.id]);
 

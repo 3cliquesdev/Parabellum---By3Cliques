@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/ai-config-cache.ts";
+import { getBusinessHoursInfo } from "../_shared/business-hours.ts";
 
 // ============================================
 // 📦 MESSAGE BATCHING HELPERS
@@ -547,7 +548,7 @@ serve(async (req) => {
               // Buscar conversa existente (QUALQUER provider) - priorizar aberta
               let { data: conversation } = await supabase
                 .from("conversations")
-                .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
+.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department")
                 .eq("contact_id", contact.id)
                 .neq("status", "closed")
                 .order("created_at", { ascending: false })
@@ -568,23 +569,22 @@ serve(async (req) => {
                     whatsapp_provider: "meta",
                     whatsapp_meta_instance_id: instance.id,
                   })
-                  .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
+.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department")
                   .single();
 
                 if (newConvError) {
                   console.error("[meta-whatsapp-webhook] ❌ ERRO AO CRIAR CONVERSA (possível race condition):", newConvError);
-                  // Em caso de envio múltiplo simultâneo (ex: imagem), outro node pode ter criado a conversa milissegundos antes
+                  // Race condition fallback: outro webhook criou a conversa milissegundos antes
                   const { data: existingRaceConv } = await supabase
                     .from("conversations")
-                    .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
+.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department")
                     .eq("contact_id", contact.id)
                     .neq("status", "closed")
                     .order("created_at", { ascending: false })
                     .limit(1)
                     .single();
-                  
                   conversation = existingRaceConv;
-                  console.log("[meta-whatsapp-webhook] 💬 Conversa recuperada via fallback após race condition:", conversation?.id);
+                  console.log("[meta-whatsapp-webhook] 💬 Conversa recuperada via fallback após colisão:", conversation?.id);
                 } else {
                   conversation = newConv;
                   console.log("[meta-whatsapp-webhook] 💬 New conversation created:", conversation?.id);
@@ -841,8 +841,8 @@ serve(async (req) => {
                     // 🆕 FIX #2: Verificar se há agentes ONLINE no departamento
                     let queueMessage = "💬 Sua conversa já está na fila de atendimento.\n\nFique tranquilo, em breve um especialista irá te atender. 🙂";
                     
-                    if ((conversation as any).department_id || (conversation as any).department) {
-                      const deptId = (conversation as any).department_id || (conversation as any).department;
+                    if (conversation.department) {
+                      const deptId = conversation.department;
                       const { data: deptAgentIds } = await supabase
                         .from("agent_departments")
                         .select("profile_id")
@@ -863,7 +863,7 @@ serve(async (req) => {
                         const { data: deptAgents } = await supabase
                           .from("agent_departments")
                           .select("profile_id, profiles!inner(availability_status)")
-                          .eq("department_id", conversation.department_id)
+                          .eq("department_id", conversation.department)
                           .eq("profiles.availability_status", "online")
                           .limit(1);
                         
@@ -871,8 +871,90 @@ serve(async (req) => {
                       }
                       
                       if (!hasOnlineAgents) {
-                        console.log("[meta-whatsapp-webhook] ⚠️ Nenhum agente online no departamento:", conversation.department_id);
-                        queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";
+                        console.log("[meta-whatsapp-webhook] ⚠️ Nenhum agente online no departamento:", conversation.department);
+                        
+                        // 🆕 Verificar horário comercial para usar template configurado
+                        const bhInfo = await getBusinessHoursInfo(supabase);
+                        
+                        if (!bhInfo.within_hours) {
+                          console.log("[meta-whatsapp-webhook] 🕐 Fora do horário comercial — usando template configurado");
+                          
+                          // Buscar template de after_hours_handoff e configuração keep_open
+                          const [afterHoursMsgRes, keepOpenRes] = await Promise.all([
+                            supabase
+                              .from("business_messages_config")
+                              .select("message_template, after_hours_tag_id")
+                              .eq("message_key", "after_hours_handoff")
+                              .single(),
+                            supabase
+                              .from("system_configurations")
+                              .select("value")
+                              .eq("key", "after_hours_keep_open")
+                              .maybeSingle(),
+                          ]);
+                          
+                          const afterHoursMsg = afterHoursMsgRes.data;
+                          const keepOpen = keepOpenRes.data?.value !== "false"; // default: true (manter aberta)
+                          
+                          if (afterHoursMsg?.message_template) {
+                            // Substituir variáveis no template
+                            queueMessage = afterHoursMsg.message_template
+                              .replace(/\{schedule\}/g, bhInfo.schedule_summary)
+                              .replace(/\{next_open\}/g, bhInfo.next_open_text);
+                            
+                            // Aplicar tag de after_hours se configurada
+                            if (afterHoursMsg.after_hours_tag_id) {
+                              try {
+                                await supabase
+                                  .from("conversation_tags")
+                                  .upsert({
+                                    conversation_id: conversation.id,
+                                    tag_id: afterHoursMsg.after_hours_tag_id,
+                                  }, { onConflict: "conversation_id,tag_id" });
+                                console.log("[meta-whatsapp-webhook] 🏷️ Tag after_hours aplicada");
+                              } catch (tagErr) {
+                                console.error("[meta-whatsapp-webhook] ⚠️ Erro ao aplicar tag:", tagErr);
+                              }
+                            }
+                            
+                            if (keepOpen) {
+                              // MANTER ABERTA — salvar metadata de pending para redistribuição
+                              console.log("[meta-whatsapp-webhook] 📂 Mantendo conversa aberta na fila (after_hours_keep_open=true)");
+                              await supabase
+                                .from("conversations")
+                                .update({
+                                  metadata: {
+                                    ...(conversation.metadata || {}),
+                                    after_hours_handoff_requested_at: new Date().toISOString(),
+                                    after_hours_next_open_text: bhInfo.next_open_text,
+                                    pending_department_id: conversation.department || null,
+                                  },
+                                })
+                                .eq("id", conversation.id);
+                            } else {
+                              // FECHAR — comportamento anterior
+                              console.log("[meta-whatsapp-webhook] 🔒 Fechando conversa — after_hours_keep_open=false");
+                              await supabase
+                                .from("conversations")
+                                .update({
+                                  status: "closed",
+                                  ai_mode: "autopilot",
+                                  closed_at: new Date().toISOString(),
+                                  metadata: {
+                                    ...(conversation.metadata || {}),
+                                    close_reason: "after_hours_handoff",
+                                  },
+                                })
+                                .eq("id", conversation.id);
+                            }
+                          } else {
+                            // Fallback se template não configurado
+                            queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";
+                          }
+                        } else {
+                          // Dentro do horário mas sem agentes → mensagem de indisponibilidade momentânea
+                          queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";
+                        }
                       }
                     }
                     
@@ -1171,7 +1253,11 @@ serve(async (req) => {
                     console.log(`[meta-whatsapp-webhook] 📦 BATCHING: Salvando mensagem no buffer (delay: ${batchDelaySeconds}s) - flow AI node`);
                     
                     try {
-                      await bufferAndSchedule(supabase, conversation.id, messageContent, batchDelaySeconds, {
+                      // 🆕 FIX: Se firstEntry (vindo de menu), substituir mensagem crua pelo contexto
+                      const bufferMessage = (flowData as any).firstEntry 
+                        ? `Cliente selecionou: ${(flowData as any).selectedOption || 'opção do menu'}` 
+                        : messageContent;
+                      await bufferAndSchedule(supabase, conversation.id, bufferMessage, batchDelaySeconds, {
                         contactId: contact.id,
                         instanceId: instance.id,
                         fromNumber,
@@ -1196,6 +1282,8 @@ serve(async (req) => {
                           forbidCancellation: (flowData as any).forbidCancellation,
                           forbidConsultant: (flowData as any).forbidConsultant,
                           collectedData: (flowData as any).collectedData || null,
+                          firstEntry: (flowData as any).firstEntry || false,
+                          selectedOption: (flowData as any).selectedOption || null,
                         },
                       });
                     } catch (bufferErr) {
@@ -1222,7 +1310,10 @@ serve(async (req) => {
                         },
                         body: JSON.stringify({
                           conversationId: conversation.id,
-                          customerMessage: messageContent,
+                          // 🆕 FIX: Se firstEntry (vindo de menu), substituir mensagem crua pelo contexto
+                          customerMessage: (flowData as any).firstEntry 
+                            ? `Cliente selecionou: ${(flowData as any).selectedOption || 'opção do menu'}` 
+                            : messageContent,
                           contact_id: contact.id,
                           whatsapp_provider: "meta",
                           whatsapp_meta_instance_id: instance.id,

@@ -100,27 +100,23 @@ export function useContacts(filters?: ContactFilters) {
         }
       }
 
-      // Tag filtering BEFORE executing query to save bandwidth
-      if (filters?.tags && filters.tags.length > 0) {
-        const { data: taggedContacts } = await supabase
-          .from("customer_tags")
-          .select("customer_id")
-          .in("tag_id", filters.tags);
-        
-        const taggedIds = taggedContacts?.map(t => t.customer_id) || [];
-        if (taggedIds.length === 0) {
-          return []; // No contacts match these tags
-        }
-        query = query.in("id", taggedIds);
-      }
-
       // Aplicar limite para otimização de performance
       query = query.limit(1000);
 
       const { data, error } = await query;
       if (error) throw error;
 
-      // Client-side block removed, already filtered at DB level
+      // Client-side tag filtering (requires JOIN that's complex in Supabase)
+      if (filters?.tags && filters.tags.length > 0) {
+        const { data: taggedContacts } = await supabase
+          .from("customer_tags")
+          .select("customer_id")
+          .in("tag_id", filters.tags);
+        
+        const taggedIds = new Set(taggedContacts?.map(t => t.customer_id) || []);
+        return data?.filter(c => taggedIds.has(c.id)) || [];
+      }
+
       return data;
     },
     enabled: !roleLoading,
@@ -215,25 +211,23 @@ export function useContactsPaginated(
         }
       }
 
-      // Tag filtering BEFORE executing query to fix pagination count
+      const { data, error, count } = await query;
+      if (error) throw error;
+
+      // Client-side tag filtering
+      let filteredData = data || [];
       if (filters?.tags && filters.tags.length > 0) {
         const { data: taggedContacts } = await supabase
           .from("customer_tags")
           .select("customer_id")
           .in("tag_id", filters.tags);
         
-        const taggedIds = taggedContacts?.map(t => t.customer_id) || [];
-        if (taggedIds.length === 0) {
-          return { data: [], totalCount: 0, page, pageSize, totalPages: 0 };
-        }
-        query = query.in("id", taggedIds);
+        const taggedIds = new Set(taggedContacts?.map(t => t.customer_id) || []);
+        filteredData = filteredData.filter(c => taggedIds.has(c.id));
       }
 
-      const { data, error, count } = await query;
-      if (error) throw error;
-
       return {
-        data: data || [],
+        data: filteredData,
         totalCount: count || 0,
         page,
         pageSize,

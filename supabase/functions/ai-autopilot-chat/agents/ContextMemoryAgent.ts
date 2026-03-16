@@ -85,9 +85,18 @@ export class ContextMemoryAgent {
    * "Escriba Interno": Envia as mensagens velhas para a API estruturada
    * afim de resumi-las e extrair chaves de dados críticos, retornando um JSON estrito.
    */
+  // Modelos que NÃO suportam temperature e exigem max_completion_tokens
+  private static readonly REASONING_MODELS = new Set([
+    'o3', 'o3-mini', 'o4-mini', 'o4',
+    'gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-5.2',
+  ]);
+
+  // Modelo fixo para compressão — tarefa background que não precisa do modelo principal
+  private static readonly COMPRESSION_MODEL = 'gpt-4o-mini';
+
   private static async compressDeepHistory(
     messagesToCompress: ChatMessage[],
-    model: string,
+    _model: string, // ignorado — usamos modelo fixo para compressão
     openAiApiKey: string,
     previousSummary?: string | null
   ): Promise<string> {
@@ -106,6 +115,48 @@ Resumo Prévio Existente: ${previousSummary || 'NENHUM'}
 Transcrições Velhas Novas Para Compactar:
 ${rawTranscript}`;
 
+    // Sempre usar gpt-4o-mini para compressão — barato, rápido e sem restrições de parâmetros
+    const compressionModel = this.COMPRESSION_MODEL;
+    const isReasoningModel = this.REASONING_MODELS.has(compressionModel);
+
+    const requestBody: any = {
+      model: compressionModel,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPayload }
+      ],
+      response_format: {
+        "type": "json_schema",
+        "json_schema": {
+          "name": "compressed_memory",
+          "strict": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "executive_summary": { "type": "string" },
+              "current_goal": { "type": "string" },
+              "extracted_entities": { 
+                "type": "array", 
+                "items": { "type": "string" }
+              }
+            },
+            "required": ["executive_summary", "current_goal", "extracted_entities"],
+            "additionalProperties": false
+          }
+        }
+      },
+    };
+
+    // Normalizar parâmetros conforme o modelo
+    if (isReasoningModel) {
+      requestBody.max_completion_tokens = 500;
+      // NÃO adicionar temperature — modelos reasoning não suportam
+    } else {
+      requestBody.temperature = 0.1;
+    }
+
+    console.log(`[ContextMemoryAgent] Comprimindo com modelo: ${compressionModel}`);
+
     try {
        const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -113,34 +164,7 @@ ${rawTranscript}`;
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${openAiApiKey}`
         },
-        body: JSON.stringify({
-          model: model, // GPT-4o-mini é soberano para tarefas background
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPayload }
-          ],
-          response_format: {
-            "type": "json_schema",
-            "json_schema": {
-              "name": "compressed_memory",
-              "strict": true,
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "executive_summary": { "type": "string" },
-                  "current_goal": { "type": "string" },
-                  "extracted_entities": { 
-                    "type": "array", 
-                    "items": { "type": "string" }
-                  }
-                },
-                "required": ["executive_summary", "current_goal", "extracted_entities"],
-                "additionalProperties": false
-              }
-            }
-          },
-          // temperature: 0.1 // ❌ REMOVIDO: Modelos O1/O3-mini não suportam "temperature" como campo direto no payload
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {

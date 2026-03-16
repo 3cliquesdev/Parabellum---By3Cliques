@@ -2922,6 +2922,8 @@ serve(async (req) => {
           if (nextNode.type === 'ai_response') {
             collectedData.__ai = { interaction_count: 0 };
             await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'active', updated_at: new Date().toISOString() }).eq('id', activeState.id);
+            // 🆕 FIX: Detectar primeira entrada no AI node vindo de ask_options
+            const isFirstEntryFromMenu = currentNode.type === 'ask_options' && selectedOption;
             return new Response(JSON.stringify({
               useAI: true,
               aiNodeActive: true,
@@ -2947,6 +2949,7 @@ serve(async (req) => {
               forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
               forbidSupport: nextNode.data?.forbid_support ?? false,
               forbidConsultant: nextNode.data?.forbid_consultant ?? false,
+              ...(isFirstEntryFromMenu ? { firstEntry: true, selectedOption: selectedOption.label } : {}),
             }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
           // 🆕 BUG 4 FIX (2nd check): verify_customer_otp after auto-advance
@@ -4305,6 +4308,8 @@ serve(async (req) => {
       // Se é um nó de resposta IA
       if (nextNode.type === 'ai_response') {
         console.log(`[process-chat-flow] 🤖 AI response node: id=${nextNode.id} persona=${nextNode.data?.persona_id || 'default'} maxInteractions=${nextNode.data?.max_ai_interactions || 0} exitKeywords=[${(nextNode.data?.exit_keywords || []).join(',')}]`);
+        // 🆕 FIX: Detectar primeira entrada vindo de ask_options
+        const isFirstEntryFromMenuMain = currentNode.type === 'ask_options' && selectedOption;
         // Reinicializar contador de interações para novo nó AI
         collectedData.__ai = { interaction_count: 0 };
         // 🆕 BUG 5 FIX: Adicionado status 'active' no ai_response re-entry
@@ -4376,6 +4381,7 @@ serve(async (req) => {
             forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
             forbidSupport: nextNode.data?.forbid_support ?? false,
             forbidConsultant: nextNode.data?.forbid_consultant ?? false,
+            ...(isFirstEntryFromMenuMain ? { firstEntry: true, selectedOption: selectedOption.label } : {}),
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
