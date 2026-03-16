@@ -841,7 +841,7 @@ const HALLUCINATION_INDICATORS = [
   'geralmente',
   'pode ser que',
   'talvez',
-  'Ã© possÃ­vel que',
+  'é possível que',
   'me parece que',
   'suponho que',
   'imagino que'
