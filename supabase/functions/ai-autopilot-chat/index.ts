@@ -4266,7 +4266,7 @@ ${a.content}`).join('\n\n---\n\n')}`;
               { role: 'system', content: strictPrompt },
               { role: 'user', content: `${contactName}: ${customerMessage}` }
             ],
-            max_completion_tokens: 400
+            max_completion_tokens: 1200
           }),
         });
         
