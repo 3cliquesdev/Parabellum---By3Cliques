@@ -244,9 +244,9 @@ async function generateQuestionHash(message: string): Promise<string> {
 // ========== SECURITY HELPERS - LGPD DATA MASKING ==========
 
 function maskEmail(email: string | null | undefined): string {
-  if (!email) return 'NÃ£o identificado';
+  if (!email) return 'Não identificado';
   const [user, domain] = email.split('@');
-  if (!domain) return 'Email invÃ¡lido';
+  if (!domain) return 'Email inválido';
   const maskedUser = user.length > 3 
     ? user.slice(0, 2) + '***' 
     : user.slice(0, 1) + '***';
@@ -254,7 +254,7 @@ function maskEmail(email: string | null | undefined): string {
 }
 
 function maskPhone(phone: string | null | undefined): string {
-  if (!phone) return 'NÃ£o cadastrado';
+  if (!phone) return 'Não cadastrado';
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 4) return '***';
   return `***-${digits.slice(-4)}`;
@@ -1225,123 +1225,123 @@ function generateRestrictedPrompt(flowContext: FlowContext, contactName: string,
   const forbidOptions = flowContext.forbidOptions ?? true;
   const forbidFinancial = flowContext.forbidFinancial ?? false;
   
-  let restrictions = `VocÃª Ã© um assistente corporativo.
+  let restrictions = `Você é um assistente corporativo.
 Responda SOMENTE ao seguinte objetivo: "${objective}"
 Use APENAS as fontes permitidas: ${flowContext.allowed_sources.join(', ')}.
-Sua resposta deve ter NO MÃXIMO ${maxSentences} frases.`;
+Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;
 
   if (forbidQuestions) {
-    restrictions += '\nNÃƒO faÃ§a perguntas ao cliente.';
+    restrictions += '\nNÃO faça perguntas ao cliente.';
   }
   
   if (forbidOptions) {
-    restrictions += '\nNÃƒO ofereÃ§a opÃ§Ãµes ou mÃºltipla escolha.';
+    restrictions += '\nNÃO ofereça opções ou múltipla escolha.';
   }
 
   if (forbidFinancial) {
-    restrictions += `\n\nðŸ”’ TRAVA FINANCEIRA ATIVA:
-VocÃª PODE responder perguntas INFORMATIVAS sobre finanÃ§as (prazos, como funciona, onde consultar saldo, polÃ­ticas).
-VocÃª NÃƒO PODE executar ou prometer AÃ‡Ã•ES financeiras (saque, reembolso, estorno, devoluÃ§Ã£o, cancelamento de cobranÃ§a, transferÃªncia de saldo).
-Se o cliente solicitar uma AÃ‡ÃƒO financeira (ex: "quero sacar", "faz meu reembolso", "quero meu dinheiro de volta"), responda:
-"Entendi sua solicitaÃ§Ã£o. Vou te encaminhar para o setor responsÃ¡vel que poderÃ¡ te ajudar com isso."
+    restrictions += `\n\n🔒 TRAVA FINANCEIRA ATIVA:
+Você PODE responder perguntas INFORMATIVAS sobre finanças (prazos, como funciona, onde consultar saldo, políticas).
+Você NÃO PODE executar ou prometer AÇÕES financeiras (saque, reembolso, estorno, devolução, cancelamento de cobrança, transferência de saldo).
+Se o cliente solicitar uma AÇÃO financeira (ex: "quero sacar", "faz meu reembolso", "quero meu dinheiro de volta"), responda:
+"Entendi sua solicitação. Vou te encaminhar para o setor responsável que poderá te ajudar com isso."
 E retorne [[FLOW_EXIT:financeiro]] imediatamente.
-VocÃª PODE: coletar dados (email, CPF, ID do pedido), resumir o caso, e responder dÃºvidas informativas. NÃƒO PODE: instruir processos financeiros, prometer resoluÃ§Ã£o ou executar aÃ§Ãµes.
+Você PODE: coletar dados (email, CPF, ID do pedido), resumir o caso, e responder dúvidas informativas. NÃO PODE: instruir processos financeiros, prometer resolução ou executar ações.
 
-âš ï¸ ANTI-ALUCINAÃ‡ÃƒO FINANCEIRA (REGRA ABSOLUTA):
-Quando o assunto for financeiro, sua PRIMEIRA aÃ§Ã£o deve ser verificar se a base de conhecimento contÃ©m a informaÃ§Ã£o EXATA solicitada.
-NÃƒO cite valores monetÃ¡rios, prazos em dias, datas especÃ­ficas ou percentuais sobre saques, reembolsos, estornos ou devoluÃ§Ãµes A MENOS que essa informaÃ§Ã£o EXATA exista na base de conhecimento fornecida.
-Se a KB nÃ£o contiver a informaÃ§Ã£o, responda: "NÃ£o tenho essa informaÃ§Ã£o no momento. O setor financeiro poderÃ¡ te orientar com detalhes."
-NUNCA invente, deduza ou estime valores, prazos ou condiÃ§Ãµes financeiras.
+⚠️ ANTI-ALUCINAÇÃO FINANCEIRA (REGRA ABSOLUTA):
+Quando o assunto for financeiro, sua PRIMEIRA ação deve ser verificar se a base de conhecimento contém a informação EXATA solicitada.
+NÃO cite valores monetários, prazos em dias, datas específicas ou percentuais sobre saques, reembolsos, estornos ou devoluções A MENOS que essa informação EXATA exista na base de conhecimento fornecida.
+Se a KB não contiver a informação, responda: "Não tenho essa informação no momento. O setor financeiro poderá te orientar com detalhes."
+NUNCA invente, deduza ou estime valores, prazos ou condições financeiras.
 
-ðŸ” DESAMBIGUAÃ‡ÃƒO FINANCEIRA OBRIGATÃ“RIA:
-Se o cliente mencionar termos como saque, saldo, reembolso, estorno ou devoluÃ§Ã£o sem deixar claro se quer uma INFORMAÃ‡ÃƒO ou realizar uma AÃ‡ÃƒO, vocÃª DEVE perguntar de forma natural e empÃ¡tica:
-"Posso te ajudar com informaÃ§Ãµes sobre [tema] ou vocÃª gostaria de fazer uma solicitaÃ§Ã£o?"
-Nunca assuma a intenÃ§Ã£o do cliente â€” sempre pergunte quando houver ambiguidade.
-Se o cliente confirmar que quer SOLICITAR ou REALIZAR uma aÃ§Ã£o financeira â†’ responda com [[FLOW_EXIT:financeiro]]
-Se for apenas uma dÃºvida informativa â†’ responda normalmente usando a Base de Conhecimento.`;
+🔍 DESAMBIGUAÇÃO FINANCEIRA OBRIGATÓRIA:
+Se o cliente mencionar termos como saque, saldo, reembolso, estorno ou devolução sem deixar claro se quer uma INFORMAÇÃO ou realizar uma AÇÃO, você DEVE perguntar de forma natural e empática:
+"Posso te ajudar com informações sobre [tema] ou você gostaria de fazer uma solicitação?"
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer SOLICITAR ou REALIZAR uma ação financeira → responda com [[FLOW_EXIT:financeiro]]
+Se for apenas uma dúvida informativa → responda normalmente usando a Base de Conhecimento.`;
   }
 
   const forbidCancellation = flowContext.forbidCancellation ?? false;
   if (forbidCancellation) {
-    restrictions += `\n\nðŸš« TRAVA CANCELAMENTO ATIVA:
+    restrictions += `\n\n🚫 TRAVA CANCELAMENTO ATIVA:
 Se o cliente solicitar CANCELAR claramente (ex: "quero cancelar meu plano"), responda:
-"Entendi sua solicitaÃ§Ã£o de cancelamento. Vou te encaminhar para o setor responsÃ¡vel."
+"Entendi sua solicitação de cancelamento. Vou te encaminhar para o setor responsável."
 E retorne [[FLOW_EXIT:cancelamento]] imediatamente.
 
-ðŸ” DESAMBIGUAÃ‡ÃƒO CANCELAMENTO OBRIGATÃ“RIA:
-Se o cliente mencionar termos como cancelar, cancelamento, desistir ou encerrar sem deixar claro se quer uma INFORMAÃ‡ÃƒO ou realizar uma AÃ‡ÃƒO, vocÃª DEVE perguntar:
-"VocÃª tem dÃºvidas sobre cancelamento ou deseja cancelar um produto/serviÃ§o?"
-Nunca assuma a intenÃ§Ã£o do cliente â€” sempre pergunte quando houver ambiguidade.
-Se o cliente confirmar que quer CANCELAR â†’ responda com [[FLOW_EXIT:cancelamento]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.`;
+🔍 DESAMBIGUAÇÃO CANCELAMENTO OBRIGATÓRIA:
+Se o cliente mencionar termos como cancelar, cancelamento, desistir ou encerrar sem deixar claro se quer uma INFORMAÇÃO ou realizar uma AÇÃO, você DEVE perguntar:
+"Você tem dúvidas sobre cancelamento ou deseja cancelar um produto/serviço?"
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
   }
 
   const forbidCommercial = flowContext.forbidCommercial ?? false;
   if (forbidCommercial) {
-    restrictions += `\n\nðŸ›’ TRAVA COMERCIAL ATIVA:
+    restrictions += `\n\n🛒 TRAVA COMERCIAL ATIVA:
 Se o cliente solicitar COMPRAR claramente (ex: "quero comprar", "quanto custa"), responda:
-"Ã“timo interesse! Vou te conectar com nosso time comercial."
+"Ótimo interesse! Vou te conectar com nosso time comercial."
 E retorne [[FLOW_EXIT:comercial]] imediatamente.
 
-ðŸ” DESAMBIGUAÃ‡ÃƒO COMERCIAL OBRIGATÃ“RIA:
-Se o cliente mencionar termos como plano, compra, preÃ§o ou assinatura sem deixar claro se quer uma INFORMAÃ‡ÃƒO ou realizar uma COMPRA, vocÃª DEVE perguntar:
-"VocÃª deseja comprar algum plano ou tem dÃºvidas sobre seu plano atual?"
-Nunca assuma a intenÃ§Ã£o do cliente â€” sempre pergunte quando houver ambiguidade.
-Se o cliente confirmar que quer COMPRAR â†’ responda com [[FLOW_EXIT:comercial]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.`;
+🔍 DESAMBIGUAÇÃO COMERCIAL OBRIGATÓRIA:
+Se o cliente mencionar termos como plano, compra, preço ou assinatura sem deixar claro se quer uma INFORMAÇÃO ou realizar uma COMPRA, você DEVE perguntar:
+"Você deseja comprar algum plano ou tem dúvidas sobre seu plano atual?"
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer COMPRAR → responda com [[FLOW_EXIT:comercial]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
   }
 
   const forbidConsultant = flowContext.forbidConsultant ?? false;
   if (forbidConsultant) {
-    restrictions += `\n\nðŸ’¼ TRAVA CONSULTOR ATIVA:
+    restrictions += `\n\n💼 TRAVA CONSULTOR ATIVA:
 Se o cliente solicitar FALAR COM CONSULTOR claramente (ex: "quero meu consultor", "falar com consultor"), responda:
 "Certo! Vou te conectar com seu consultor."
 E retorne [[FLOW_EXIT:consultor]] imediatamente.
 
-ðŸ” DESAMBIGUAÃ‡ÃƒO CONSULTOR OBRIGATÃ“RIA:
-Se o cliente mencionar termos como consultor, assessor, gestor ou estratÃ©gia sem deixar claro a intenÃ§Ã£o, vocÃª DEVE perguntar:
-"VocÃª deseja falar com um consultor para saber estratÃ©gias de vendas? Ou quer um atendimento normal pela equipe de suporte?"
-Nunca assuma a intenÃ§Ã£o do cliente â€” sempre pergunte quando houver ambiguidade.
-Se o cliente confirmar que quer FALAR COM CONSULTOR â†’ responda com [[FLOW_EXIT:consultor]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.`;
+🔍 DESAMBIGUAÇÃO CONSULTOR OBRIGATÓRIA:
+Se o cliente mencionar termos como consultor, assessor, gestor ou estratégia sem deixar claro a intenção, você DEVE perguntar:
+"Você deseja falar com um consultor para saber estratégias de vendas? Ou quer um atendimento normal pela equipe de suporte?"
+Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
+Se o cliente confirmar que quer FALAR COM CONSULTOR → responda com [[FLOW_EXIT:consultor]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
   }
   
   restrictions += `
-NÃƒO sugira transferÃªncia para humano.
-NÃƒO invente informaÃ§Ãµes.
-NÃƒO use markdown: sem negrito (**), sem # tÃ­tulos, sem listas com - ou *.
-Use apenas texto simples, sem formataÃ§Ã£o.
-Se nÃ£o houver dados suficientes, responda exatamente:
-"No momento nÃ£o tenho essa informaÃ§Ã£o."
+NÃO sugira transferência para humano.
+NÃO invente informações.
+NÃO use markdown: sem negrito (**), sem # títulos, sem listas com - ou *.
+Use apenas texto simples, sem formatação.
+Se não houver dados suficientes, responda exatamente:
+"No momento não tenho essa informação."
 
-ðŸ“¦ CONSULTA DE PEDIDOS (REGRA ABSOLUTA):
-Para consultar pedidos, SEMPRE peÃ§a o NÃšMERO DO PEDIDO ou CÃ“DIGO DE RASTREIO.
-NUNCA peÃ§a email, CPF ou telefone para consultar pedidos.
-Exemplo correto: "Por favor, me informe o nÃºmero do pedido ou o cÃ³digo de rastreio."
+📦 CONSULTA DE PEDIDOS (REGRA ABSOLUTA):
+Para consultar pedidos, SEMPRE peça o NÚMERO DO PEDIDO ou CÓDIGO DE RASTREIO.
+NUNCA peça email, CPF ou telefone para consultar pedidos.
+Exemplo correto: "Por favor, me informe o número do pedido ou o código de rastreio."
 Exemplo PROIBIDO: "Me informe seu email para eu consultar."
 
 A resposta deve ser curta, clara e objetiva.
 
 Contexto do Cliente:
 Nome: ${contactName}
-Status: ${contactStatus}${enrichment?.orgName ? `\nOrganizaÃ§Ã£o: ${enrichment.orgName}` : ''}${enrichment?.consultantName ? `\nConsultor: ${enrichment.consultantName}` : ''}${enrichment?.sellerName ? `\nVendedor: ${enrichment.sellerName}` : ''}${enrichment?.tags && enrichment.tags.length > 0 ? `\nTags: ${enrichment.tags.join(', ')}` : ''}`;
+Status: ${contactStatus}${enrichment?.orgName ? `\nOrganização: ${enrichment.orgName}` : ''}${enrichment?.consultantName ? `\nConsultor: ${enrichment.consultantName}` : ''}${enrichment?.sellerName ? `\nVendedor: ${enrichment.sellerName}` : ''}${enrichment?.tags && enrichment.tags.length > 0 ? `\nTags: ${enrichment.tags.join(', ')}` : ''}`;
 
   // Persona contextual baseada em perfil do contato
   if (contactStatus === 'customer' || contactStatus === 'vip') {
-    restrictions += '\nTom: cordial e proativo. Este Ã© um cliente ativo â€” priorize resoluÃ§Ã£o Ã¡gil.';
+    restrictions += '\nTom: cordial e proativo. Este é um cliente ativo — priorize resolução ágil.';
   } else if (contactStatus === 'lead') {
-    restrictions += '\nTom: amigÃ¡vel e consultivo. Foque em entender a necessidade sem pressÃ£o.';
+    restrictions += '\nTom: amigável e consultivo. Foque em entender a necessidade sem pressão.';
   }
 
-  // Tom empÃ¡tico quando contexto financeiro
+  // Tom empático quando contexto financeiro
   if (forbidFinancial) {
-    restrictions += '\nSe o cliente demonstrar preocupaÃ§Ã£o financeira, responda com empatia e tranquilidade antes de qualquer informaÃ§Ã£o.';
+    restrictions += '\nSe o cliente demonstrar preocupação financeira, responda com empatia e tranquilidade antes de qualquer informação.';
   }
 
   return restrictions;
 }
 
-// ðŸ†• FASE 1: FunÃ§Ã£o para validar se IA violou restriÃ§Ãµes de comportamento
+
 function validateResponseRestrictions(
   response: string, 
   forbidQuestions: boolean, 
@@ -1371,8 +1371,8 @@ function validateResponseRestrictions(
     const optionPatterns = [
       /1ï¸âƒ£|2ï¸âƒ£|3ï¸âƒ£|4ï¸âƒ£|5ï¸âƒ£/,
       /\*\*A\)\*\*|\*\*B\)\*\*|\*\*C\)\*\*/i,
-      /opÃ§Ã£o.*[:\-]/i,
-      /escolha.*opÃ§Ã£o/i,
+      /opção.*[:\-]/i,
+      /escolha.*opção/i,
       /selecione/i,
       /qual.*prefere/i,
     ];
@@ -5369,8 +5369,7 @@ Se foram pagos recentemente, pode ser que ainda nÃ£o tenham entrado em prepara
       // ForÃ§ar modo cautious em vez de sair do nÃ³
       confidenceResult.action = 'cautious';
       // Continua execuÃ§Ã£o normalmente â€” a IA serÃ¡ chamada com persona + contexto
-    }
-
+}
 
     // ðŸ†• MUDANÃ‡A CRÃTICA: SÃ³ fazer handoff se cliente PEDIR EXPLICITAMENTE
     // OU se action Ã© 'handoff' E cliente pediu humano
@@ -6602,109 +6601,109 @@ Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecime
 
     const contextualizedSystemPrompt = `${agentContextBlock}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
 
-**ðŸš« REGRA DE HANDOFF (SÃ“ QUANDO CLIENTE PEDIR):**
-TransferÃªncia para humano SÃ“ acontece quando:
+**🚫 REGRA DE HANDOFF (SÓ QUANDO CLIENTE PEDIR):**
+Transferência para humano SÓ acontece quando:
 - Cliente pedir EXPLICITAMENTE: "quero falar com humano", "atendente", "transferir"
 - E cliente estiver IDENTIFICADO (tem email verificado)
 
-SE cliente pedir atendente mas NÃƒO estÃ¡ identificado:
-â†’ Responda: "Claro! Para conectar vocÃª com um atendente, preciso primeiro confirmar sua identidade. Qual Ã© o seu email de cadastro?"
-â†’ AGUARDE o email
-â†’ Use verify_customer_email para validar
-â†’ SÃ“ ENTÃƒO pode usar request_human_agent
+SE cliente pedir atendente mas NÃO está identificado:
+→ Responda: "Claro! Para conectar você com um atendente, preciso primeiro confirmar sua identidade. Qual é o seu email de cadastro?"
+→ AGUARDE o email
+→ Use verify_customer_email para validar
+→ SÓ ENTÃO pode usar request_human_agent
 
-**âš ï¸ ANTI-ALUCINAÃ‡ÃƒO - MAS NÃƒO TRANSFERIR:**
-Se vocÃª NÃƒO encontrar informaÃ§Ã£o na BASE DE CONHECIMENTO:
-1. NÃƒO INVENTE informaÃ§Ãµes
-2. NÃƒO transfira automaticamente
-3. Responda: "NÃ£o encontrei informaÃ§Ã£o sobre isso na minha base. Pode me dar mais detalhes ou perguntar de outra forma?"
-4. SÃ“ ofereÃ§a transferÃªncia se cliente pedir ou insistir muito
+**⚠️ ANTI-ALUCINAÇÃO - MAS NÃO TRANSFERIR:**
+Se você NÃO encontrar informação na BASE DE CONHECIMENTO:
+1. NÃO INVENTE informações
+2. NÃO transfira automaticamente
+3. Responda: "Não encontrei informação sobre isso na minha base. Pode me dar mais detalhes ou perguntar de outra forma?"
+4. SÓ ofereça transferência se cliente pedir ou insistir muito
 
-Ã‰ MELHOR admitir que nÃ£o sabe e perguntar mais do que TRANSFERIR sem necessidade.
+É MELHOR admitir que não sabe e perguntar mais do que TRANSFERIR sem necessidade.
 
 ---
 
-**DIRETRIZ DE SEGURANÃ‡A E PRIVACIDADE (LGPD - IMPORTANTE):**
+**DIRETRIZ DE SEGURANÇA E PRIVACIDADE (LGPD - IMPORTANTE):**
 - NUNCA escreva o e-mail completo, telefone ou CPF do cliente na resposta
 - Se precisar confirmar a conta, use APENAS o formato mascarado fornecido (ex: ro***@gmail.com)
 - Proteja os dados do cliente como se fossem seus
-- O nome do cliente (${contactName}) Ã© seguro para usar
+- O nome do cliente (${contactName}) é seguro para usar
 
-**REGRAS DE PROTEÃ‡ÃƒO DE DADOS - CRÃTICO:**
+**REGRAS DE PROTEÇÃO DE DADOS - CRÍTICO:**
 1. NUNCA mostre emails completos - sempre use formato mascarado (ex: ko***@gm***.com)
 2. NUNCA mostre CPF completo, telefone completo ou documentos completos
-3. Se cliente disser "nÃ£o recebi email", "nÃ£o chegou cÃ³digo", ou "reenviar":
-   - âŒ NÃƒO use verify_customer_email (essa ferramenta Ã© sÃ³ para email NOVO)
-   - âœ… USE resend_otp para reenviar ao email JÃ cadastrado
-   - Responda: "Vou reenviar o cÃ³digo para seu email cadastrado. Aguarde..."
-4. A ferramenta verify_customer_email sÃ³ deve ser usada quando cliente FORNECER um email novo pela primeira vez
+3. Se cliente disser "não recebi email", "não chegou código", ou "reenviar":
+   - ❌ NÃO use verify_customer_email (essa ferramenta é só para email NOVO)
+   - ✅ USE resend_otp para reenviar ao email JÁ cadastrado
+   - Responda: "Vou reenviar o código para seu email cadastrado. Aguarde..."
+4. A ferramenta verify_customer_email só deve ser usada quando cliente FORNECER um email novo pela primeira vez
 
 ---
 
-VocÃª Ã© a Lais, assistente virtual inteligente da Parabellum / 3Cliques.
-Sua missÃ£o Ã© AJUDAR o cliente, nÃ£o se livrar dele.
+Você é a Lais, assistente virtual inteligente da Parabellum / 3Cliques.
+Sua missão é AJUDAR o cliente, não se livrar dele.
 
 **COMO RESPONDER:**
 
-1. **SaudaÃ§Ãµes e Small Talk (Oi, Bom dia, Obrigado):**
+1. **Saudações e Small Talk (Oi, Bom dia, Obrigado):**
    - Responda de forma calorosa e natural
-   - NÃƒO busque na base de conhecimento
-   - NÃƒO crie ticket
-   - Exemplo: "OlÃ¡! Bom dia! Como posso te ajudar hoje?"
+   - NÃO busque na base de conhecimento
+   - NÃO crie ticket
+   - Exemplo: "Olá! Bom dia! Como posso te ajudar hoje?"
 
-2. **DÃºvidas e Perguntas (Como funciona...? O que Ã©...?):**
+2. **Dúvidas e Perguntas (Como funciona...? O que é...?):**
    - Use seu conhecimento geral e a base de conhecimento fornecida
-   - Se nÃ£o tiver certeza, faÃ§a perguntas para esclarecer
-   - NÃƒO crie ticket para dÃºvidas - tente responder primeiro
+   - Se não tiver certeza, faça perguntas para esclarecer
+   - NÃO crie ticket para dúvidas - tente responder primeiro
 
-3. **CriaÃ§Ã£o de Ticket - USE SOMENTE QUANDO:**
+3. **Criação de Ticket - USE SOMENTE QUANDO:**
    - O cliente PEDIR EXPLICITAMENTE: "Quero falar com humano", "Abre um chamado"
-   - For problema financeiro CONCRETO com intenÃ§Ã£o de aÃ§Ã£o: "Quero sacar", "CadÃª meu dinheiro?", "Preciso de reembolso"
-   - VocÃª REALMENTE nÃ£o souber responder APÃ“S tentar ajudar
+   - For problema financeiro CONCRETO com intenção de ação: "Quero sacar", "Cadê meu dinheiro?", "Preciso de reembolso"
+   - Você REALMENTE não souber responder APÓS tentar ajudar
 
 4. **PROIBIDO:**
    - Criar ticket para perguntas informativas ("Como funciona o pagamento?")
-   - Dizer "NÃ£o consegui processar" de cara - TENTE ajudar primeiro
+   - Dizer "Não consegui processar" de cara - TENTE ajudar primeiro
    - Transferir para humano sem motivo real
 
 ---
 
-**CÃ‰REBRO FINANCEIRO - FLUXOGRAMA OBRIGATÃ“RIO:**
+**CÉREBRO FINANCEIRO - FLUXOGRAMA OBRIGATÓRIO:**
 
 QUANDO cliente mencionar "reembolso", "cancelamento", "saque", "devolver dinheiro":
 
 **PASSO 1: IDENTIFICAR O TIPO DE PEDIDO**
 Pergunte ao cliente de forma clara e direta:
-"Entendi que vocÃª quer resolver uma questÃ£o financeira. Para te ajudar corretamente, preciso saber:
+"Entendi que você quer resolver uma questão financeira. Para te ajudar corretamente, preciso saber:
 
-VocÃª quer:
+Você quer:
 **A)** Cancelar sua assinatura/curso (comprado na Kiwify)?
-**B)** Sacar o saldo da sua carteira (Seu ArmazÃ©m Drop)?"
+**B)** Sacar o saldo da sua carteira (Seu Armazém Drop)?"
 
-â†’ AGUARDE a resposta do cliente antes de prosseguir
+→ AGUARDE a resposta do cliente antes de prosseguir
 
 ---
 
-**CENÃRIO A: CANCELAMENTO KIWIFY (Assinatura/Curso)**
+**CENÁRIO A: CANCELAMENTO KIWIFY (Assinatura/Curso)**
 
-1. **RETENÃ‡ÃƒO BREVE** (opcional):
-   "Posso saber o motivo? Talvez eu consiga te ajudar antes de vocÃª cancelar."
+1. **RETENÇÃO BREVE** (opcional):
+   "Posso saber o motivo? Talvez eu consiga te ajudar antes de você cancelar."
 
 2. **SE CLIENTE INSISTIR EM CANCELAR:**
-   - âŒ NÃƒO CRIE TICKET
-   - Informe que o cancelamento Ã© feito direto na plataforma:
+   - ❌ NÃO CRIE TICKET
+   - Informe que o cancelamento é feito direto na plataforma:
    
-   "Entendi! O cancelamento de cursos/assinaturas Ã© feito diretamente pela plataforma Kiwify.
+   "Entendi! O cancelamento de cursos/assinaturas é feito diretamente pela plataforma Kiwify.
    
-   ðŸ“Œ VocÃª tem **7 dias de garantia** a partir da compra para solicitar reembolso.
+   📌 Você tem **7 dias de garantia** a partir da compra para solicitar reembolso.
    
-   ðŸ”— **Acesse aqui para cancelar:** https://reembolso.kiwify.com.br/login
+   🔗 **Acesse aqui para cancelar:** https://reembolso.kiwify.com.br/login
    
    Use o mesmo email da compra para fazer login e solicitar o reembolso.
    
    Posso ajudar em mais alguma coisa?"
 
-3. **ENCERRE O ASSUNTO** - NÃ£o crie ticket, nÃ£o transfira para humano
+3. **ENCERRE O ASSUNTO** - Não crie ticket, não transfira para humano
 
 ---
 
@@ -7270,9 +7269,9 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
               
               console.log('[ai-autopilot-chat] ðŸ“§ Email salvo para confirmaÃ§Ã£o:', emailInformado);
               
-              assistantMessage = `NÃ£o encontrei o email **${emailInformado}** na nossa base de clientes.
+              assistantMessage = `Não encontrei o email **${emailInformado}** na nossa base de clientes.
 
-Poderia confirmar se esse email estÃ¡ correto?
+Poderia confirmar se esse email está correto?
 
 Se estiver correto, vou te transferir para nosso time comercial. Se digitou errado, me informe o email correto.`;
               continue;
@@ -7337,7 +7336,7 @@ Como posso te ajudar hoje?`;
             
             const contactEmail = contact.email;
             if (!contactEmail) {
-              assistantMessage = 'NÃ£o encontrei seu email cadastrado. Por favor, informe seu email para que eu possa enviar o cÃ³digo.';
+              assistantMessage = 'Não encontrei seu email cadastrado. Por favor, informe seu email para que eu possa enviar o código.';
               continue;
             }
 
@@ -7348,7 +7347,7 @@ Como posso te ajudar hoje?`;
 
             if (otpError || !otpData?.success) {
               console.error('[ai-autopilot-chat] âŒ Erro ao reenviar OTP:', otpError);
-              assistantMessage = 'NÃ£o consegui reenviar o cÃ³digo. Por favor, tente novamente em alguns instantes.';
+              assistantMessage = 'Não consegui reenviar o código. Por favor, tente novamente em alguns instantes.';
               continue;
             }
 
@@ -7375,11 +7374,11 @@ Como posso te ajudar hoje?`;
               supabaseClient,
               'otp_reenvio',
               { masked_email: safeEmail }
-            ) || `CÃ³digo reenviado com sucesso!
+            ) || `Código reenviado com sucesso!
 
-Enviei um novo cÃ³digo de 6 dÃ­gitos para **${safeEmail}**.
+Enviei um novo código de 6 dígitos para **${safeEmail}**.
 
-Por favor, verifique sua caixa de entrada (e spam) e digite o cÃ³digo que vocÃª recebido.`;
+Por favor, verifique sua caixa de entrada (e spam) e digite o código que você recebeu.`;
 
             // Log dev mode internally (never show code to client)
             if (otpData.dev_mode) {
@@ -7599,7 +7598,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
               
               console.log('[ai-autopilot-chat] ðŸ”” NotificaÃ§Ã£o enviada ao vendedor');
               
-              assistantMessage = `Entendi! Como nÃ£o localizei uma assinatura ativa com seu e-mail, vou te transferir para um **especialista comercial** que poderÃ¡ te ajudar. Aguarde um momento!`;
+              assistantMessage = `Entendi! Como não localizei uma assinatura ativa com seu e-mail, vou te transferir para um **especialista comercial** que poderá te ajudar. Aguarde um momento!`;
             } else {
               // Nenhum vendedor online
               const { data: onlineSalesReps } = await supabaseClient
@@ -7632,10 +7631,10 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
                 console.log('[ai-autopilot-chat] ðŸ”” NotificaÃ§Ãµes broadcast enviadas');
               }
               
-              assistantMessage = `Entendi! Como nÃ£o localizei uma assinatura ativa com seu e-mail, vou te transferir para nosso time comercial.
+              assistantMessage = `Entendi! Como não localizei uma assinatura ativa com seu e-mail, vou te transferir para nosso time comercial.
 
-Nosso **time de vendas** estÃ¡ offline no momento.
-**HorÃ¡rio:** Segunda a Sexta, 09h Ã s 18h.
+Nosso **time de vendas** está offline no momento.
+**Horário:** Segunda a Sexta, 09h às 18h.
 
 Assim que retornarmos, um consultor vai te ajudar!`;
             }
@@ -7680,7 +7679,7 @@ Assim que retornarmos, um consultor vai te ajudar!`;
                   .eq('id', verification.id);
               }
               
-              assistantMessage = 'CÃ³digo invÃ¡lido ou expirado. Por favor, verifique o cÃ³digo ou solicite um novo informando seu email novamente.';
+              assistantMessage = 'Código inválido ou expirado. Por favor, verifique o código ou solicite um novo informando seu email novamente.';
               continue;
             }
 
@@ -7705,9 +7704,9 @@ Assim que retornarmos, um consultor vai te ajudar!`;
               
               assistantMessage = `Sua identidade foi confirmada, ${verifiedContact?.first_name || contactName}!
 
-PorÃ©m, seu cadastro estÃ¡ **incompleto** (CPF nÃ£o cadastrado).
+Porém, seu cadastro está **incompleto** (CPF não cadastrado).
 
-Para liberar operaÃ§Ãµes financeiras como saque, preciso transferir vocÃª para um especialista que vai atualizar seus dados. Aguarde um momento!`;
+Para liberar operações financeiras como saque, preciso transferir você para um especialista que vai atualizar seus dados. Aguarde um momento!`;
 
               // Handoff para humano
               await supabaseClient
@@ -7732,11 +7731,11 @@ Para liberar operaÃ§Ãµes financeiras como saque, preciso transferir vocÃª 
               
               assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}!
 
-Agora posso te ajudar com operaÃ§Ãµes financeiras. VocÃª mencionou algo sobre saque ou reembolso. 
+Agora posso te ajudar com operações financeiras. Você mencionou algo sobre saque ou reembolso. 
 
-VocÃª quer:
+Você quer:
 **A)** Cancelar sua assinatura/curso (comprado na Kiwify)?
-**B)** Sacar o saldo da sua carteira (Seu ArmazÃ©m Drop)?`;
+**B)** Sacar o saldo da sua carteira (Seu Armazém Drop)?`;
               
               // Log interaction
               await supabaseClient.from('interactions').insert({
@@ -7749,7 +7748,7 @@ VocÃª quer:
             }
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro ao verificar OTP:', error);
-            assistantMessage = 'Ocorreu um erro ao verificar o cÃ³digo. Por favor, tente novamente.';
+            assistantMessage = 'Ocorreu um erro ao verificar o código. Por favor, tente novamente.';
           }
         }
         else if (toolCall.function.name === 'create_ticket') {
@@ -7984,7 +7983,7 @@ Via: Atendimento Automatizado (IA)`;
               .maybeSingle();
 
             if (contactError || !customerContact) {
-              assistantMessage = `NÃ£o encontrei nenhum cliente cadastrado com o email ${customerEmail}. Poderia verificar se Ã© o email correto de compra?`;
+              assistantMessage = `Não encontrei nenhum cliente cadastrado com o email ${customerEmail}. Poderia verificar se é o email correto de compra?`;
               continue;
             }
 
@@ -8001,7 +8000,7 @@ Via: Atendimento Automatizado (IA)`;
               .limit(5);
 
             if (!deals || deals.length === 0) {
-              assistantMessage = `OlÃ¡ ${customerContact.first_name}! Encontrei seu cadastro, mas nÃ£o hÃ¡ pedidos registrados para este email. Posso te ajudar com outra coisa?`;
+              assistantMessage = `Olá ${customerContact.first_name}! Encontrei seu cadastro, mas não há pedidos registrados para este email. Posso te ajudar com outra coisa?`;
               continue;
             }
 
@@ -8014,7 +8013,7 @@ Via: Atendimento Automatizado (IA)`;
               
               const statusLabels: Record<string, string> = {
                 'open': 'Em andamento',
-                'won': 'ConcluÃ­do',
+                'won': 'Concluído',
                 'lost': 'Cancelado'
               };
               const statusLabel = statusLabels[d.status] || d.status;
@@ -8024,13 +8023,13 @@ Via: Atendimento Automatizado (IA)`;
               return `â€¢ **${product}** - ${statusLabel}\n  Valor: ${value}`;
             }).join('\n\n');
 
-            assistantMessage = `OlÃ¡ ${customerContact.first_name}! 
+            assistantMessage = `Olá ${customerContact.first_name}! 
 
 Encontrei os seguintes pedidos vinculados ao seu email:
 
 ${dealsFormatted}
 
-Sobre qual pedido vocÃª gostaria de saber mais?`;
+Sobre qual pedido você gostaria de saber mais?`;
 
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro ao consultar pedidos:', error);
@@ -8073,7 +8072,7 @@ Sobre qual pedido vocÃª gostaria de saber mais?`;
                 .maybeSingle();
 
               if (contactError || !customerContact) {
-                assistantMessage = `NÃ£o encontrei nenhum cliente cadastrado com o email ${customerEmail}. Poderia verificar se Ã© o email correto?`;
+                assistantMessage = `Não encontrei nenhum cliente cadastrado com o email ${customerEmail}. Poderia verificar se é o email correto?`;
                 continue;
               }
 
@@ -8087,7 +8086,7 @@ Sobre qual pedido vocÃª gostaria de saber mais?`;
                 .limit(10);
 
               if (!dealsWithTracking || dealsWithTracking.length === 0) {
-                assistantMessage = `OlÃ¡ ${customerContact.first_name}! Encontrei seu cadastro, mas nÃ£o hÃ¡ pedidos com cÃ³digo de rastreio registrado. VocÃª tem o cÃ³digo de rastreio em mÃ£os para eu consultar?`;
+                assistantMessage = `Olá ${customerContact.first_name}! Encontrei seu cadastro, mas não há pedidos com código de rastreio registrado. Você tem o código de rastreio em mãos para eu consultar?`;
                 continue;
               }
 
@@ -8095,7 +8094,7 @@ Sobre qual pedido vocÃª gostaria de saber mais?`;
             }
 
             if (codesToQuery.length === 0) {
-              assistantMessage = 'Para consultar o rastreio, preciso do cÃ³digo de rastreio ou do email cadastrado na compra. Poderia me informar?';
+              assistantMessage = 'Para consultar o rastreio, preciso do código de rastreio ou do email cadastrado na compra. Poderia me informar?';
               continue;
             }
 
