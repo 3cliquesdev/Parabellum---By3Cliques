@@ -63,6 +63,19 @@ function prepareContactData(contact: ContactRow, consultantMap: Map<string, stri
   let firstName = contact.first_name?.trim() || '';
   let lastName = contact.last_name?.trim() || '';
 
+  // Detectar nome de produto no first_name (length > 50 ou palavras-chave)
+  const PRODUCT_KEYWORDS = /unidade|stick|câmera|smart tv|retrô|lâmpada|fone|relógio|caixa de som|kit |wi-fi|hdmi|bluetooth|android|streaming/i;
+  if (firstName && lastName && (firstName.length > 50 || PRODUCT_KEYWORDS.test(firstName))) {
+    console.warn(`[Bulk Import] Product name detected in first_name: "${firstName.substring(0, 40)}..." — swapping with last_name`);
+    // Guardar produto e usar last_name como nome real
+    const productName = firstName;
+    const realNameParts = lastName.split(' ');
+    firstName = realNameParts[0];
+    lastName = realNameParts.slice(1).join(' ') || '';
+    // O nome do produto será salvo em external_ids no retorno
+    (contact as any)._detected_product_name = productName;
+  }
+
   // Corrigir nomes duplicados (ex: "Ronildo Oliveira" / "Ronildo Oliveira")
   if (firstName && lastName && firstName === lastName) {
     const parts = firstName.split(' ');
@@ -107,6 +120,9 @@ function prepareContactData(contact: ContactRow, consultantMap: Map<string, stri
       ? parseFloat(String(contact.account_balance).replace(',', '.')) 
       : 0,
     ...(consultantId ? { consultant_id: consultantId } : {}),
+    ...((contact as any)._detected_product_name ? { 
+      external_ids: { imported_product_name: (contact as any)._detected_product_name } 
+    } : {}),
     source: 'csv_import',
     last_contact_date: new Date().toISOString(),
   };
