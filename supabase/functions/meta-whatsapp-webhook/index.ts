@@ -1160,7 +1160,7 @@ serve(async (req) => {
                         instanceId: instance.id,
                         fromNumber,
                         flowContext: flowData.flow_context as Record<string, unknown> || undefined,
-                        flowData: {
+                      flowData: {
                           useAI: flowData.useAI,
                           aiNodeActive: flowData.aiNodeActive,
                           flowId: flowData.flowId,
@@ -1179,6 +1179,7 @@ serve(async (req) => {
                           forbidCommercial: (flowData as any).forbidCommercial,
                           forbidCancellation: (flowData as any).forbidCancellation,
                           forbidConsultant: (flowData as any).forbidConsultant,
+                          collectedData: (flowData as any).collectedData || null,
                         },
                       });
                     } catch (bufferErr) {
