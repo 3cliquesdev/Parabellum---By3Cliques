@@ -827,7 +827,7 @@ const EXPLICIT_HUMAN_REQUEST_PATTERNS = [
   /me\s+(transfere|transfira|passa)\s+(para|a)\s+(um\s+)?(atendente|humano|pessoa)/i,
   /transferir\s+(para)?\s*(um\s*)?(atendente|humano)/i,
   /chamar?\s*(um\s*)?(atendente|humano|pessoa)/i,
-  /nÃ£o\s*consigo\s*resolver\s*(sozinho)?/i,
+  /não\s*consigo\s*resolver\s*(sozinho)?/i,
   /atendimento\s*humano/i,
   /pessoa\s*real/i,
   /suporte\s*humano/i,
