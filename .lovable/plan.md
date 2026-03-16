@@ -1,77 +1,74 @@
 
 
-# V5 Master — Menu + Especialistas
+# V5 Enterprise — Menu + Especialistas (2 Níveis)
 
 ## Resumo
 
-Criar um novo chat flow "V5 Master — Menu + Especialistas" com estrutura baseada em menu fixo (ask_options) em vez de triagem NLP. Cada ramo tem uma IA especialista + menu de escape. O V4 permanece intacto para comparação.
+Criar novo chat flow "V5 Enterprise — Menu + Especialistas" com **2 níveis de menu** (Produto → Assunto), 7 IAs especialistas com contexto do produto propagado via `collectedData.produto`, tickets automáticos com carimbo, e escape elegante em cada ramo. V4 e V5 anterior permanecem intactos.
 
-## Estrutura do Fluxo (27 nós)
+## Estrutura (30 nós, ~40 edges)
 
 ```text
-START → Boas-vindas (message) → Menu Principal (ask_options)
-                                    ├── pedidos    → IA Pedidos → Escape → menu/humano
-                                    ├── sistema    → IA Sistema → Escape → menu/humano
-                                    ├── comercial  → IA Comercial → Escape → menu/humano
-                                    ├── duvidas    → IA Suporte Geral → Escape → menu/humano
-                                    │                  ├── financeiro → IA Financeiro → Escape
-                                    │                  └── cancelamento → IA Cancelamento → Escape
-                                    └── consultor  → IA Customer Success → Escape → menu/humano
+START → Boas-vindas → MENU PRODUTO (3 opções) → MENU ASSUNTO (6 opções)
+                                                    ├── pedidos    → IA Pedidos → [devolução → IA Ticket Devolução → Encerramento]
+                                                    │                           → Escape → menu/humano
+                                                    ├── financeiro → IA Financeiro → Escape → menu/humano
+                                                    ├── sistema    → IA Sistema → Escape → menu/humano
+                                                    ├── comercial  → IA Comercial → [internacional → Transfer] → Escape → menu/humano
+                                                    ├── duvidas    → IA Geral → [financeiro → IA Fin] [cancelamento → IA Cancel] → Escape
+                                                    └── consultor  → IA CS Ana → Escape → menu/humano
 ```
 
-## Mapeamento de Personas e Departamentos
+## Nós Detalhados
 
-| Ramo | Persona | Transfer → Departamento |
-|------|---------|------------------------|
-| Pedidos | Helper Pedidos (`8b5a5acb`) | Suporte Pedidos (`2dd0ee5c`) |
-| Sistema | Helper Sistema (`49810ef3`) | Suporte Sistema (`fd4fcc90`) |
-| Comercial | Hunter (`31f82776`) | Comercial Nacional (`f446e202`) |
-| Comercial Int. | Hunter Internacional (`338fdd11`) | Comercial Internacional (`68195a0f`) |
-| Dúvidas | Helper (`0d2f4c7c`) | Suporte (`36ce66cd`) |
-| Financeiro | Helper Financeiro (`2001b4a1`) | Financeiro (`af3c75a9`) |
-| Saque (sub-fin) | — | Financeiro (`af3c75a9`) |
-| Cancelamento | Helper Cancelamento (`f97f23e6`) | Suporte (`36ce66cd`) |
-| Consultor | Customer Success Ana (`dcf5c52f`) | Customer Success (`b7149bf4`) |
+| ID | Tipo | Descrição |
+|----|------|-----------|
+| `start` | input | Nó inicial padrão |
+| `node_welcome` | message | Boas-vindas |
+| `node_menu_produto` | ask_options | Menu 1: Drop Nacional / Internacional / Híbrido → salva em `collectedData.produto` via `save_as: "produto"` |
+| `node_menu_assunto` | ask_options | Menu 2: 6 opções (pedidos/financeiro/sistema/comercial/duvidas/consultor) |
+| `node_ia_pedidos` | ai_response | Helper Pedidos, max:4, switches: pedidos+devolução+suporte, objective com `${produto}` |
+| `node_ticket_devolucao` | ai_response | Helper Pedidos, max:10, objective de coleta de dados + create_ticket |
+| `node_escape_pedidos` | ask_options | menu → node_menu_assunto / humano → transfer |
+| `node_ia_financeiro` | ai_response | Helper Financeiro, max:15, switches: financeiro+saque, OTP, objective com `${produto}` |
+| `node_escape_financeiro` | ask_options | menu / humano |
+| `node_ia_sistema` | ai_response | Helper Sistema, max:5, switches: sistema+suporte, objective com `${produto}` |
+| `node_escape_sistema` | ask_options | menu / humano |
+| `node_ia_comercial` | ai_response | Hunter, max:5, switches: comercial+internacional, objective com `${produto}` |
+| `node_escape_comercial` | ask_options | menu / humano |
+| `node_ia_duvidas` | ai_response | Helper, max:4, switches: financeiro+cancelamento+suporte |
+| `node_escape_duvidas` | ask_options | menu / humano |
+| `node_ia_cancelamento` | ai_response | Helper Cancelamento, max:8, switch: cancelamento |
+| `node_escape_cancelamento` | ask_options | menu / humano |
+| `node_ia_consultor` | ai_response | CS Ana, max:5, switch: consultor |
+| `node_escape_consultor` | ask_options | menu / humano |
+| `node_encerramento` | message + close_conversation | Despedida |
+| 7x transfer nodes | transfer | Um por departamento, ai_mode: disabled |
+
+## Diferenças do V5 anterior
+
+1. **Menu Produto** (novo nó ask_options antes do menu de assunto) — salva `produto` no `collectedData`
+2. **Nó Ticket Devolução** (ai_response dedicado) — coleta dados e cria ticket com `issue_type=devolucao`
+3. **Nó Encerramento** — com `close_conversation` para protocolo
+4. **Objectives** em todos os nós de IA incluem `${produto}` para contexto
+5. **Escapes voltam ao Menu Assunto** (nó 4), não ao Menu Produto
+6. **Financeiro com max:15** e OTP inline
+7. **Cancelamento com max:8** e objetivo de retenção
 
 ## Implementação
 
-Gerar o `flow_definition` JSON completo com ~27 nós e ~30 edges, e inserir como novo registro na tabela `chat_flows` via código. Os nós seguem exatamente a estrutura de dados do V4 (mesmos campos: `persona_id`, `persona_name`, `forbid_*`, `max_ai_interactions`, `kb_categories`, etc.).
+Inserir um novo registro na tabela `chat_flows` com o `flow_definition` JSON completo contendo os ~30 nós e ~40 edges. Usar a mesma estrutura de dados do V5 existente. `is_active: false` até homologação. Nenhum arquivo de código será alterado.
 
-### Nós detalhados
+### Personas e Departamentos (mesmo mapeamento)
 
-1. **start** — nó input padrão
-2. **node_welcome** — message: "Olá! Seja bem-vindo ao atendimento 3Cliques..."
-3. **node_menu** — ask_options com 5 opções (pedidos/sistema/comercial/duvidas/consultor)
-4. **node_ia_pedidos** — ai_response, Helper Pedidos, switches: pedidos+devolução, max:3
-5. **node_escape_pedidos** — ask_options (menu/humano)
-6. **node_ia_sistema** — ai_response, Helper Sistema, max:3
-7. **node_escape_sistema** — ask_options (menu/humano)
-8. **node_ia_comercial** — ai_response, Hunter, switches: comercial+internacional, max:3
-9. **node_escape_comercial** — ask_options (menu/humano)
-10. **node_ia_duvidas** — ai_response, Helper, switches: financeiro+cancelamento+suporte, max:4
-11. **node_escape_duvidas** — ask_options (menu/humano)
-12. **node_ia_consultor** — ai_response, Customer Success Ana, max:3
-13. **node_escape_consultor** — ask_options (menu/humano)
-14. **node_ia_financeiro** — ai_response, Helper Financeiro, switches: financeiro+saque, max:3
-15. **node_escape_financeiro** — ask_options (menu/humano)
-16. **node_ia_cancelamento** — ai_response, Helper Cancelamento, switch: cancelamento, max:3
-17. **node_escape_cancelamento** — ask_options (menu/humano)
-18-27. **transfer nodes** — 1 por departamento destino (Suporte Pedidos, Suporte Sistema, Comercial Nacional, Comercial Internacional, Suporte, Financeiro, Customer Success)
-
-### Edges
-- Cada ask_options tem 2 saídas: `menu` → node_menu, `humano` → transfer correspondente
-- Cada ai_response tem `default` → escape, e switches de intenção → sub-nós ou transfers
-- Comercial: `comercial_internacional` → Transfer Comercial Internacional
-- Dúvidas: `financeiro` → node_ia_financeiro, `cancelamento` → node_ia_cancelamento
-- Financeiro: `saque` → Transfer Financeiro (saque direto)
-- Pedidos: `devolucao` → node_ia_devolucoes (ou transfer direto)
-
-### Ações pós-criação
-- Marcar o novo fluxo como `is_active: true`
-- Vincular ao canal WhatsApp principal (`support_channel_id`)
-- **Não** marcar como master_flow ainda (manter V4 como referência para homologação)
-
-## Arquivos modificados
-
-Nenhum arquivo de código será alterado. O fluxo será criado via `useCreateChatFlow` ou inserção direta, gerando apenas um registro na tabela `chat_flows` com o JSON completo do `flow_definition`.
+| Ramo | persona_id | Transfer → dept_id |
+|------|-----------|-------------------|
+| Pedidos | `8b5a5acb` | `2dd0ee5c` |
+| Ticket Devolução | `8b5a5acb` | — (encerra) |
+| Financeiro | `2001b4a1` | `af3c75a9` |
+| Sistema | `49810ef3` | `fd4fcc90` |
+| Comercial | `31f82776` | Nacional: `f446e202` / Int: `68195a0f` |
+| Dúvidas | `0d2f4c7c` | `36ce66cd` |
+| Cancelamento | `f97f23e6` | `36ce66cd` |
+| Consultor | `dcf5c52f` | `b7149bf4` |
 
