@@ -5375,8 +5375,7 @@ Se foram pagos recentemente, pode ser que ainda nÃ£o tenham entrado em prepara
       // ForÃ§ar modo cautious em vez de sair do nÃ³
       confidenceResult.action = 'cautious';
       // Continua execuÃ§Ã£o normalmente â€” a IA serÃ¡ chamada com persona + contexto
-    }
-
+}
 
     // ðŸ†• MUDANÃ‡A CRÃTICA: SÃ³ fazer handoff se cliente PEDIR EXPLICITAMENTE
     // OU se action Ã© 'handoff' E cliente pediu humano
