@@ -115,7 +115,7 @@ export function ReengageTemplateDialog({
         .from("conversations")
         .update({
           status: "open",
-          ai_mode: "waiting_human",
+          ai_mode: "copilot",
           assigned_to: user?.id,
           closed_at: null,
           closed_by: null,
