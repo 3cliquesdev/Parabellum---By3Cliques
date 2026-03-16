@@ -1394,7 +1394,7 @@ const ESCAPE_PATTERNS = [
   // AÃ§Ã£o em andamento (estou/estarei + gerÃºndio)
   /(estou|estarei)\s+(te\s+)?(direcionando|redirecionando|transferindo|encaminhando|conectando)/i,
   // MenÃ§Ã£o a humano/atendente com contexto de espera
-  /\b(aguarde|sÃ³ um instante).*(atendente|especialista|consultor)\b/i,
+  /\b(aguarde|só um instante).*(atendente|especialista|consultor)\b/i,
   // Chamar/acionar humano
   /\b(chamar|acionar).*(atendente|especialista|consultor)\b/i,
   // Menu de atendimento (caso especÃ­fico)
