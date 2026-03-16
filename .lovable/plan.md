@@ -1,178 +1,78 @@
 
-# 6 Correções Cirúrgicas no process-chat-flow — CONCLUÍDO (10/03/2026)
 
-## Arquivo: `supabase/functions/process-chat-flow/index.ts`
+# Bug: IA perde contexto do fluxo (collectedData nao chega ao prompt)
 
-### FIX 1 ✅ — Proteção contra loop flow-to-flow
-### FIX 2 ✅ — condition_v2 reconhecido como waiting_input
-### FIX 3 ✅ — Auto-traverse cobre condition_v2
-### FIX 4 ✅ — Transfer node atualiza conversations.department
-### FIX 5 ✅ — startMessage com replaceVariables
-### FIX 6 ✅ — financialIntentPattern simplificado
+## Causa Raiz
 
----
+O `process-chat-flow` retorna `collectedData` como campo **top-level** na resposta (ex: `{ useAI: true, aiNodeActive: true, collectedData: { produto: "Drop Nacional", assunto: "Pedidos" }, ... }`).
 
-# FIX 7 ✅ — aiExitForced segue próximo nó do chat flow (10/03/2026)
+Porem o `meta-whatsapp-webhook` (linha ~1212) constroi o `flow_context` que sera enviado ao `ai-autopilot-chat` **sem incluir o `collectedData`**:
 
-## Problema
-Quando a IA no nó `ia_entrada` faz handoff (`forceAIExit`), o `findNextNode` busca edge `ai_exit` que não existe no Master Flow → conversa fica presa.
-
-## Correções aplicadas
-
-### 7a — Fallback edge default (process-chat-flow ~L2273)
-Se `aiExitForced && !nextNode && path === 'ai_exit'`, tenta `findNextNode` com `path=undefined` (edge default).
-
-### 7b — Guard final sem nó (process-chat-flow ~L2336)
-Se mesmo com fallback não encontrou próximo nó, força handoff genérico com `department_id` do nó ou null.
-
-### 7c — Safety net IA falha (process-buffered-messages ~L383)
-Quando `ai-autopilot-chat` retorna HTTP error com flow ativo, re-invoca `process-chat-flow` com `forceAIExit: true`.
-
-### 7d — Safety net IA falha (handle-whatsapp-event ~L1272)
-Mesmo safety net no webhook Evolution: se `aiError` com flow context, re-invoca e envia mensagem do próximo nó.
-
----
-
-# FIX 8 ✅ — pg_cron matando flows prematuramente (11/03/2026)
-
-## Problema
-O pg_cron `cleanup-stuck-flow-states` usava `started_at < now() - 3 min`, mas `started_at` é imutável. Flows com múltiplos passos (>3min) eram mortos antes de chegar ao nó de transfer.
-
-## Correções aplicadas
-
-### 8a — Coluna `updated_at` em `chat_flow_states`
-Nova coluna `updated_at timestamptz DEFAULT now()` adicionada via migration. Registros existentes backfilled com `COALESCE(completed_at, started_at)`.
-
-### 8b — `updated_at` em todos os `.update()` do process-chat-flow
-21 pontos de atualização no `process-chat-flow/index.ts` agora incluem `updated_at: new Date().toISOString()`, renovando o timestamp a cada interação.
-
-### 8c — pg_cron atualizado
-Cron usa `updated_at < now() - INTERVAL '15 minutes'` em vez de `started_at < now() - 3 min`.
-
----
-
-# FIX 9 ✅ — IA não responde: safety net mata flow em quota error (11/03/2026)
-
-## Problema
-O `process-buffered-messages` tratava erros 429/503 (quota/rate limit) como falha fatal, disparando `forceAIExit` e matando o flow antes da IA ter chance de responder.
-
-## Correções aplicadas
-
-### 9a — Distinguir quota error de erro técnico real
-Na safety net do `process-buffered-messages`, erros 429/503 com `quota_error` ou `retry_suggested: true` NÃO disparam `forceAIExit`. Buffer fica como `processed=false` para retry no próximo ciclo.
-
-### 9b — Refresh `updated_at` do flow state após buffer processing com sucesso
-Após `ai-autopilot-chat` retornar OK via buffer, o `updated_at` do `chat_flow_states` é atualizado para evitar morte prematura pelo cron de 15 min.
-
-### 9c — Anti-retry infinito (3 ciclos)
-Buffers que falham por quota por 3+ ciclos de cron (~3 min) enviam mensagem de "alta demanda" ao contato e são marcados como processed.
-
----
-
-# FIX 10 ✅ — Auditoria IA Semana 1: Quick wins (11/03/2026)
-
-## Correções aplicadas
-
-### 10a — auto-handoff: UUID dinâmico
-Substituído UUID hardcoded `36ce66cd-...` por busca dinâmica do departamento "Suporte" via `departments.ilike('name', '%suporte%')`. Se não encontrado, loga warning e aplica handoff sem forçar departamento.
-
-### 10b — auto-handoff: Markdown removido das notas internas
-Removido `**bold**` de todas as notas internas (linhas 78, 97, 174-181). Notas agora usam texto plano com emojis para compatibilidade cross-canal (WhatsApp).
-
-### 10c — ai-autopilot-chat: Memória cross-session
-Busca últimas 3 conversas fechadas do mesmo contact_id e injeta última mensagem de agente/sistema no system prompt. IA agora lembra conversas anteriores do mesmo cliente.
-
-### 10d — ai-autopilot-chat: Persona contextual
-Tom da IA varia automaticamente baseado no status do contato:
-- VIP/assinante → tom premium e proativo
-- Churn risk/inativo → tom empático e acolhedor
-- Lead quente (score ≥ 80) → tom entusiasmado e consultivo
-
----
-
-# FIX 11 ✅ — Passive Learning ativado + Cron Job (11/03/2026)
-
-## O que foi feito
-
-### 11a — Flag `ai_passive_learning_enabled` = true
-Inserido na tabela `system_configurations` com categoria `ai`.
-
-### 11b — Cron job `passive-learning-hourly`
-pg_cron agendado para rodar a cada hora (`0 * * * *`), invocando a edge function `passive-learning-cron` via `net.http_post`.
-
-### Estado confirmado
-- `ai_global_enabled` = true
-- `ai_shadow_mode` = false
-- `ai_passive_learning_enabled` = true
-
----
-
-# FIX 12 ✅ — Cron job corrigido: anon key no gateway (11/03/2026)
-
-## Problema
-`current_setting('supabase.service_role_key', true)` retorna NULL neste projeto → cron enviava `Authorization: Bearer null` → edge function não autenticava.
-
-## Correção
-Recriado cron job `passive-learning-hourly` (jobid 13) usando anon key no header Authorization. A anon key é suficiente para passar pelo API gateway; a função internamente usa `SUPABASE_SERVICE_ROLE_KEY` do ambiente Deno para operações admin.
-
----
-
-# FIX 13 ✅ — Auto-KB Gap Detection (11/03/2026)
-
-## O que foi feito
-
-### 13a — Edge function `detect-kb-gaps`
-Criada edge function que:
-1. Busca eventos de IA das últimas 24h onde a IA fez handoff/exit (tipos: `ai_handoff_exit`, `contract_violation_blocked`, `flow_exit_clean`, `ai_exit_intent`)
-2. Clusteriza por similaridade textual (primeiras 3 palavras normalizadas)
-3. Filtra clusters com >= 2 ocorrências (gaps recorrentes)
-4. Cria `knowledge_candidates` com `status: 'pending'` + tag `'gap_detected'` (CHECK constraint impede valor custom)
-5. Notifica admins/managers via tabela `notifications`
-
-### 13b — Cron job `detect-kb-gaps-daily`
-Agendado para rodar diariamente às 8h UTC (`0 8 * * *`) usando anon key no gateway.
-
-### 13c — Workaround CHECK constraint
-`knowledge_candidates.status` só aceita `pending | approved | rejected`. Gaps usam `status: 'pending'` com tag `'gap_detected'` no array de tags para diferenciação.
-
----
-
-# FIX 14 ✅ — transition-conversation-state: State Machine centralizado (11/03/2026)
-
-## Problema
-Mudanças de estado de conversas (ai_mode, department, assigned_to, dispatch jobs) eram feitas em múltiplos pontos do código (auto-handoff, process-chat-flow, etc.), causando inconsistências como conversa sem departamento, ai_mode errado, ou dispatch job desatualizado.
-
-## Correções aplicadas
-
-### 14a — Edge function `transition-conversation-state`
-Nova edge function que é a ÚNICA fonte da verdade para transições de estado. Suporta 7 tipos:
-- `handoff_to_human`: autopilot → waiting_human + cria dispatch job
-- `assign_agent`: qualquer → copilot + atribui agente + fecha dispatch
-- `unassign_agent`: copilot → waiting_human + reabre dispatch
-- `engage_ai`: qualquer → autopilot + fecha dispatch
-- `set_copilot`: qualquer → copilot
-- `update_department`: atualiza dept + dispatch job
-- `close`: qualquer → closed + fecha dispatch
-
-Cada transição:
-1. Busca estado atual da conversa
-2. Aplica update atômico
-3. Gerencia dispatch jobs (create/close/reopen)
-4. Loga em `ai_events` como `state_transition_{tipo}`
-5. Fallback dinâmico para dept "Suporte"
-
-### 14b — auto-handoff refatorado
-Substituída toda lógica de update direto (fallback dept + update ai_mode) por chamada única:
-```typescript
-supabaseClient.functions.invoke('transition-conversation-state', {
-  body: { conversationId, transition: 'handoff_to_human', reason, metadata }
-});
+```text
+flow_context: {
+  flow_id, node_id, node_type, allowed_sources,
+  personaId, kbCategories, contextPrompt, objective,
+  forbidQuestions, forbidOptions, forbidFinancial, ...
+  // ❌ collectedData AUSENTE!
+}
 ```
 
-### 14c — process-chat-flow: 5 blocos de transfer refatorados
-Todos os blocos de update direto de `conversations` em transfer nodes substituídos por `fetch()` para `transition-conversation-state`:
-1. Contract violation handler (~L726)
-2. Handoff sem próximo nó (~L2326)
-3. aiExitForced sem nó (~L2365)
-4. Transfer node principal (~L2808)
-5. Transfer node msg chain (~L3061)
+No `ai-autopilot-chat` (linha ~6616), o bloco `flowCollectedDataBlock` tenta ler `flow_context?.collectedData` e nao encontra nada. Resultado: o contexto "produto escolhido", "assunto escolhido", e quaisquer dados coletados nos menus **nunca chegam ao system prompt da IA**.
+
+A IA entao "alucina" porque nao sabe qual produto/assunto o cliente escolheu.
+
+## Correcao
+
+### 1. `supabase/functions/meta-whatsapp-webhook/index.ts` (~linha 1212)
+
+Adicionar `collectedData` ao objeto `flow_context` passado para `ai-autopilot-chat`:
+
+```
+collectedData: (flowData as any).collectedData || null,
+```
+
+Isso precisa ser adicionado em **3 locais**:
+- Chamada direta ao ai-autopilot-chat (linha ~1212, dentro do objeto flow_context)
+- Buffer de batching (linha ~1162, dentro de `flowData`)
+
+### 2. `supabase/functions/process-buffered-messages/index.ts` (se existir)
+
+Verificar se o cron de batching tambem reconstroi `flow_context` com `collectedData` a partir do `flowData` salvo no buffer.
+
+### 3. Verificar `ai-autopilot-chat` interno (linha ~3480)
+
+Quando `ai-autopilot-chat` chama `process-chat-flow` internamente e recebe `flowResult.useAI === true`, ele popula `flowPersonaId`, `flowKbCategories`, etc. mas **tambem nao popula `flow_context.collectedData`** - porque nao cria um objeto `flow_context` nesse caminho (usa as variaveis individuais). O bloco `flowCollectedDataBlock` na linha 6616 depende de `flow_context?.collectedData`, que so existe quando `flow_context` veio no body do request.
+
+**Solucao**: No caminho interno (linha ~3480), alem de popular as variaveis individuais, tambem criar/complementar o `flow_context` com os dados do fluxo:
+
+```typescript
+if (flowResult.useAI === true) {
+  // ... codigo existente ...
+  // 🆕 Garantir que collectedData chega ao prompt
+  if (!flow_context && flowResult.collectedData) {
+    flow_context = {
+      flow_id: flowResult.flowId,
+      node_id: flowResult.nodeId,
+      node_type: 'ai_response',
+      allowed_sources: flowResult.allowedSources || ['kb'],
+      response_format: 'text_only',
+      collectedData: flowResult.collectedData,
+      // ... demais campos
+    };
+  }
+}
+```
+
+## Resumo de Arquivos
+
+| Arquivo | Acao |
+|---|---|
+| `supabase/functions/meta-whatsapp-webhook/index.ts` | Adicionar `collectedData` ao `flow_context` (linha ~1212 e ~1162) |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Criar `flow_context` no caminho interno quando `process-chat-flow` retorna `useAI: true` (linha ~3480) |
+
+## Impacto
+
+- A IA passara a saber qual produto, assunto e outros dados o cliente ja escolheu nos menus
+- Elimina alucinacoes por falta de contexto
+- Nenhuma mudanca no frontend ou no process-chat-flow (ja retorna tudo corretamente)
+
