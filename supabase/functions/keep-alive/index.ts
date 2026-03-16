@@ -147,6 +147,29 @@ serve(async (req) => {
           return { status: 'error', time: Date.now() - start };
         }
       }
+    },
+    // 6. close-conversation (encerramento de conversas pelos atendentes)
+    {
+      name: 'close-conversation',
+      fn: async () => {
+        const start = Date.now();
+        try {
+          const response = await fetch(
+            `${supabaseUrl}/functions/v1/get-inbox-counts`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${serviceKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ warmup: true })
+            }
+          );
+          return { status: response.ok ? 'warm' : 'error', time: Date.now() - start };
+        } catch (error) {
+          return { status: 'error', time: Date.now() - start };
+        }
+      }
     }
   ];
 
