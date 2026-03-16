@@ -97,6 +97,7 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
     filters.hasAudio ? 1 : 0,
     filters.hasAttachments ? 1 : 0,
     filters.aiMode ? 1 : 0,
+    filters.departmentId ? 1 : 0,
     filters.waitingTime && !['all', 'oldest', 'newest'].includes(filters.waitingTime) ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
