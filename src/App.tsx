@@ -12,6 +12,7 @@ import RealtimeNotifications from "./components/RealtimeNotifications";
 import { WhatsAppDisconnectMonitor } from "./components/WhatsAppDisconnectMonitor";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner";
+import { ErrorTrackerInit } from "./components/ErrorTrackerInit";
 import { TourProvider } from "./components/tour/TourProvider";
 
 import { PageLoadingSkeleton } from "./components/PageLoadingSkeleton";
