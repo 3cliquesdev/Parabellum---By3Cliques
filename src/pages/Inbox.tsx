@@ -57,6 +57,7 @@ const DEFAULT_FILTERS: InboxFilters = {
   hasAudio: undefined,
   hasAttachments: undefined,
   aiMode: undefined,
+  departmentId: undefined,
   includeArchived: undefined,
   waitingTime: 'oldest', // Por padrão, mostrar mais antigas primeiro para priorização
 };
@@ -111,13 +112,13 @@ export default function Inbox() {
     hasAudio: filters.hasAudio,
     hasAttachments: filters.hasAttachments,
     aiMode: filters.aiMode as InboxViewFiltersType['aiMode'],
-    department: departmentFilter || undefined,
+    department: filters.departmentId || departmentFilter || undefined,
     tags: filters.tags && filters.tags.length > 0
       ? filters.tags
       : (tagFilter ? [tagFilter] : undefined),
   }), [filters.dateRange, filters.channels, filters.status, filters.assignedTo,
        filters.search, filters.slaExpired, filters.hasAudio, filters.hasAttachments,
-       filters.aiMode, departmentFilter, tagFilter, filters.tags]);
+       filters.aiMode, filters.departmentId, departmentFilter, tagFilter, filters.tags]);
   
   // ✅ FIX: Passar scope explícito — 2 caches brutos (active/archived)
   const isArchived = filter === "archived";

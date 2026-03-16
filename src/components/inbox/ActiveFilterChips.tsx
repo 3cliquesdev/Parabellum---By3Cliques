@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useTags } from "@/hooks/useTags";
 import { useUsers } from "@/hooks/useUsers";
+import { useDepartments } from "@/hooks/useDepartments";
 import type { InboxFilters } from "./InboxFilterPopover";
 
 interface ActiveFilterChipsProps {
@@ -43,6 +44,7 @@ const WAITING_LABELS: Record<string, string> = {
 export function ActiveFilterChips({ filters, onFiltersChange }: ActiveFilterChipsProps) {
   const { data: tags } = useTags();
   const { data: users } = useUsers();
+  const { data: departments } = useDepartments({ activeOnly: true });
 
   const chips: { key: string; label: string; onRemove: () => void }[] = [];
 
@@ -76,6 +78,16 @@ export function ActiveFilterChips({ filters, onFiltersChange }: ActiveFilterChip
         onFiltersChange({ ...filters, tags: filters.tags.filter((t) => t !== tagId) }),
     });
   });
+
+  // Department
+  if (filters.departmentId) {
+    const dept = departments?.find((d) => d.id === filters.departmentId);
+    chips.push({
+      key: "dept",
+      label: `Depto: ${dept?.name || "..."}`,
+      onRemove: () => onFiltersChange({ ...filters, departmentId: undefined }),
+    });
+  }
 
   // Assigned
   if (filters.assignedTo) {

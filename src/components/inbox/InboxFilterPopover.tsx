@@ -21,6 +21,7 @@ import {
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { useUsers } from "@/hooks/useUsers";
 import { useTags } from "@/hooks/useTags";
+import { useDepartments } from "@/hooks/useDepartments";
 import type { DateRange } from "react-day-picker";
 
 export interface InboxFilters {
@@ -35,6 +36,7 @@ export interface InboxFilters {
   hasAudio?: boolean;
   hasAttachments?: boolean;
   aiMode?: string;
+  departmentId?: string;
   includeArchived?: boolean;
   // Filtro de tempo de espera para priorização
   waitingTime?: 'all' | 'newest' | 'oldest' | '1h' | '4h' | '24h' | '7d';
@@ -81,6 +83,7 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
   const [open, setOpen] = useState(false);
   const { data: users } = useUsers();
   const { data: tags } = useTags();
+  const { data: departments } = useDepartments({ activeOnly: true });
 
   // Contagem de filtros ativos - search NÃO é contado (é campo separado, não "filtro")
   const activeFiltersCount = [
@@ -94,6 +97,7 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
     filters.hasAudio ? 1 : 0,
     filters.hasAttachments ? 1 : 0,
     filters.aiMode ? 1 : 0,
+    filters.departmentId ? 1 : 0,
     filters.waitingTime && !['all', 'oldest', 'newest'].includes(filters.waitingTime) ? 1 : 0,
   ].reduce((a, b) => a + b, 0);
 
@@ -130,6 +134,7 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
       hasAudio: undefined,
       hasAttachments: undefined,
       aiMode: undefined,
+      departmentId: undefined,
       includeArchived: undefined,
       waitingTime: 'all',
     });
@@ -293,6 +298,39 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Department */}
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Departamento</Label>
+                <Select
+                  value={filters.departmentId || "all"}
+                  onValueChange={(v) => onFiltersChange({ ...filters, departmentId: v === "all" ? undefined : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos os departamentos" />
+                  </SelectTrigger>
+                  <SelectContent 
+                    position="popper" 
+                    side="bottom" 
+                    align="start"
+                    sideOffset={4}
+                    className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                  >
+                    <SelectItem value="all">Todos os departamentos</SelectItem>
+                    {departments?.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: dept.color }}
+                          />
+                          {dept.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* AI Mode */}
