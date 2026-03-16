@@ -1843,6 +1843,36 @@ export type Database = {
           },
         ]
       }
+      client_error_logs: {
+        Row: {
+          created_at: string
+          error_type: Database["public"]["Enums"]["client_error_type"]
+          id: string
+          message: string
+          metadata: Json | null
+          stack: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_type: Database["public"]["Enums"]["client_error_type"]
+          id?: string
+          message: string
+          metadata?: Json | null
+          stack?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_type?: Database["public"]["Enums"]["client_error_type"]
+          id?: string
+          message?: string
+          metadata?: Json | null
+          stack?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       contact_tags: {
         Row: {
           contact_id: string
@@ -4034,6 +4064,36 @@ export type Database = {
           expires_at?: string
           id?: string
           verified?: boolean | null
+        }
+        Relationships: []
+      }
+      error_digests: {
+        Row: {
+          created_at: string
+          digest_date: string
+          edge_function_failures: Json | null
+          errors_by_type: Json | null
+          id: string
+          top_errors: Json | null
+          total_errors: number
+        }
+        Insert: {
+          created_at?: string
+          digest_date: string
+          edge_function_failures?: Json | null
+          errors_by_type?: Json | null
+          id?: string
+          top_errors?: Json | null
+          total_errors?: number
+        }
+        Update: {
+          created_at?: string
+          digest_date?: string
+          edge_function_failures?: Json | null
+          errors_by_type?: Json | null
+          id?: string
+          top_errors?: Json | null
+          total_errors?: number
         }
         Relationships: []
       }
@@ -10114,6 +10174,7 @@ export type Database = {
       }
       cleanup_expired_insights_cache: { Args: never; Returns: number }
       cleanup_invalid_consultant_ids: { Args: never; Returns: number }
+      cleanup_old_error_logs: { Args: never; Returns: undefined }
       cleanup_single_contact_test: {
         Args: { p_contact_id: string }
         Returns: Json
@@ -10912,6 +10973,12 @@ export type Database = {
         | "contact_created"
         | "contact_inactive"
       availability_status: "online" | "busy" | "away" | "offline"
+      client_error_type:
+        | "runtime"
+        | "network"
+        | "edge_function"
+        | "chunk"
+        | "unhandled_rejection"
       communication_channel:
         | "email"
         | "phone"
@@ -11156,6 +11223,13 @@ export const Constants = {
         "contact_inactive",
       ],
       availability_status: ["online", "busy", "away", "offline"],
+      client_error_type: [
+        "runtime",
+        "network",
+        "edge_function",
+        "chunk",
+        "unhandled_rejection",
+      ],
       communication_channel: [
         "email",
         "phone",
