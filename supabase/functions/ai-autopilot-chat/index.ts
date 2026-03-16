@@ -1201,6 +1201,7 @@ interface FlowContext {
   response_format: 'text_only';
   personaId?: string;
   kbCategories?: string[];
+  kbProductFilter?: string[];
   contextPrompt?: string;
   fallbackMessage?: string;
   // ðŸ†• FASE 1: Campos de Controle de Comportamento Anti-AlucinaÃ§Ã£o
