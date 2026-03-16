@@ -213,6 +213,7 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
         affiliateEmail: string;
         salesCount: number;
         totalCommission: number;
+        totalGrossRevenue: number;
       }>();
 
       events.forEach(event => {
