@@ -724,7 +724,7 @@ const FALLBACK_PHRASES = [
   'encaminhar para um humano',
   'chamar um atendente',
   'não consigo te ajudar com isso',
-  'não consigo resolver por aqui',
+  
   'não posso ajudar',
   'sorry',
   'i cannot',
@@ -5138,7 +5138,7 @@ Responda APENAS: skip ou search`
         
         // Se encontrou resultados, retornar resposta direta SEM chamar IA
         if (fetchResult?.success && fetchResult?.found > 0 && fetchResult?.data) {
-          console.log('[ai-autopilot-chat] ðŸšš BYPASS IA: Retornando dados de rastreio diretamente');
+          console.log('[ai-autopilot-chat] 🚚 BYPASS IA: Retornando dados de rastreio diretamente');
           
           let directResponse = '';
           const codesFound: string[] = [];
