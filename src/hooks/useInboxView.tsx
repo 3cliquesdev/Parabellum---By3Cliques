@@ -70,6 +70,67 @@ interface FetchOptions {
   tags?: string[];
 }
 
+const INBOX_COUNTS_DEDUPE_MS = 2_500;
+const inboxCountsInflight = new Map<string, Promise<InboxCounts>>();
+const inboxCountsSnapshots = new Map<string, { fetchedAt: number; data: InboxCounts }>();
+
+function getInboxCountsRequestKey(userId?: string, role?: string | null, deptKey = "all") {
+  return `${userId ?? "anonymous"}:${role ?? "no-role"}:${deptKey}`;
+}
+
+async function fetchInboxCountsWithDedupe(userId?: string, role?: string | null, deptKey = "all"): Promise<InboxCounts> {
+  const requestKey = getInboxCountsRequestKey(userId, role, deptKey);
+  const now = Date.now();
+  const snapshot = inboxCountsSnapshots.get(requestKey);
+
+  if (snapshot && now - snapshot.fetchedAt < INBOX_COUNTS_DEDUPE_MS) {
+    return snapshot.data;
+  }
+
+  const inflight = inboxCountsInflight.get(requestKey);
+  if (inflight) {
+    return inflight;
+  }
+
+  const request = (async () => {
+    const { data, error } = await supabase.functions.invoke("get-inbox-counts");
+
+    if (error) {
+      const status = (error as any)?.status;
+      const message = (error as any)?.message || "";
+      const isBootError = status === 503 || String(message).includes("BOOT_ERROR");
+
+      if (isBootError) {
+        console.warn("[useInboxCounts] BOOT_ERROR (cold start), will retry via React Query...");
+        throw Object.assign(new Error("BOOT_ERROR: Function failed to start"), { status: 503 });
+      }
+
+      throw error;
+    }
+
+    const counts = (data?.counts || {
+      total: 0, mine: 0, aiQueue: 0, humanQueue: 0,
+      slaCritical: 0, slaWarning: 0, notResponded: 0, myNotResponded: 0,
+      unassigned: 0, unread: 0, closed: 0, byDepartment: [], byTag: [],
+    }) as InboxCounts;
+
+    inboxCountsSnapshots.set(requestKey, {
+      fetchedAt: Date.now(),
+      data: counts,
+    });
+
+    return counts;
+  })();
+
+  inboxCountsInflight.set(requestKey, request);
+
+  try {
+    return await request;
+  } finally {
+    inboxCountsInflight.delete(requestKey);
+  }
+}
+
 // Função para buscar dados do inbox com filtros de role
 async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem[]> {
   const { cursor, userId, role, departmentIds, scope = 'active', aiMode, dateRange, channels, department, assignedTo, tags } = options;
@@ -835,31 +896,18 @@ export function useInboxCounts(userId?: string) {
 
   const isRoleReady = !roleLoading && role !== null && role !== undefined;
   const effectiveRole = isRoleReady ? role : null;
+  const deptKey = useMemo(
+    () => (departmentIds ? [...departmentIds].sort().join(",") : "all"),
+    [departmentIds]
+  );
 
   return useQuery<InboxCounts>({
-    queryKey: ["inbox-counts", userId, effectiveRole, departmentIds],
+    queryKey: ["inbox-counts", userId, effectiveRole, deptKey],
     enabled: !!userId && isRoleReady && !deptLoading,
-    queryFn: async (): Promise<InboxCounts> => {
-      const { data, error } = await supabase.functions.invoke("get-inbox-counts");
-      if (error) {
-        const status = (error as any)?.status;
-        const message = (error as any)?.message || "";
-        const isBootError = status === 503 || message.includes("BOOT_ERROR");
-        if (isBootError) {
-          console.warn("[useInboxCounts] BOOT_ERROR (cold start), will retry via React Query...");
-          // Throw para ativar o retry do React Query ao invés de retornar dados vazios
-          throw Object.assign(new Error("BOOT_ERROR: Function failed to start"), { status: 503 });
-        }
-        throw error;
-      }
-      return (data?.counts || {
-        total: 0, mine: 0, aiQueue: 0, humanQueue: 0,
-        slaCritical: 0, slaWarning: 0, notResponded: 0, myNotResponded: 0,
-        unassigned: 0, unread: 0, closed: 0, byDepartment: [], byTag: [],
-      }) as InboxCounts;
-    },
+    queryFn: () => fetchInboxCountsWithDedupe(userId, effectiveRole, deptKey),
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
+    refetchOnWindowFocus: false,
     retry: (failureCount, error: any) => {
       const status = error?.status;
       const message = error?.message || "";
