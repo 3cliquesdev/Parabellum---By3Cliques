@@ -2916,7 +2916,32 @@ serve(async (req) => {
           if (nextNode.type === 'ai_response') {
             collectedData.__ai = { interaction_count: 0 };
             await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'active', updated_at: new Date().toISOString() }).eq('id', activeState.id);
-            return new Response(JSON.stringify({ useAI: true, aiNodeActive: true, nodeId: nextNode.id, flowId: activeState.flow_id, contextPrompt: nextNode.data?.context_prompt, useKnowledgeBase: nextNode.data?.use_knowledge_base !== false, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify({
+              useAI: true,
+              aiNodeActive: true,
+              nodeId: nextNode.id,
+              flowId: activeState.flow_id,
+              flowName: activeState.chat_flows?.name || null,
+              contextPrompt: nextNode.data?.context_prompt,
+              useKnowledgeBase: nextNode.data?.use_knowledge_base !== false,
+              collectedData,
+              allowedSources: buildAllowedSources(nextNode.data),
+              responseFormat: 'text_only',
+              personaId: nextNode.data?.persona_id || null,
+              personaName: nextNode.data?.persona_name || null,
+              kbCategories: nextNode.data?.kb_categories || null,
+              kbProductFilter: mapProductToKbFilter(collectedData || {}),
+              fallbackMessage: nextNode.data?.fallback_message || null,
+              objective: nextNode.data?.objective ? replaceVariables(nextNode.data.objective, variablesContext || await rebuildCtx()) : null,
+              maxSentences: nextNode.data?.max_sentences ?? 3,
+              forbidQuestions: nextNode.data?.forbid_questions ?? true,
+              forbidOptions: nextNode.data?.forbid_options ?? true,
+              forbidFinancial: nextNode.data?.forbid_financial ?? false,
+              forbidCommercial: nextNode.data?.forbid_commercial ?? false,
+              forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
+              forbidSupport: nextNode.data?.forbid_support ?? false,
+              forbidConsultant: nextNode.data?.forbid_consultant ?? false,
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
           // 🆕 BUG 4 FIX (2nd check): verify_customer_otp after auto-advance
           if (nextNode.type === 'verify_customer_otp') {

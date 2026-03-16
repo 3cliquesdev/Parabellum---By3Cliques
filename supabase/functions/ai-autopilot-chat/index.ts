@@ -6612,7 +6612,28 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
       ? `\n\n**CONTEXTO DO AGENTE (triagem anterior):**\n${flowContextPrompt}\n`
       : '';
 
-    const contextualizedSystemPrompt = `${agentContextBlock}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
+    // FIX: Injetar collectedData relevante no system prompt para dar contexto à IA
+    const flowCollectedDataBlock = (() => {
+      const cd = flow_context?.collectedData;
+      if (!cd || typeof cd !== 'object') return '';
+      const lines: string[] = [];
+      if (cd.produto) lines.push(`- Produto escolhido: ${cd.produto}`);
+      if (cd.assunto) lines.push(`- Assunto escolhido: ${cd.assunto}`);
+      if (cd.customer_name_found) lines.push(`- Nome do cliente: ${cd.customer_name_found}`);
+      if (cd.customer_email_found) lines.push(`- Email do cliente: ${cd.customer_email_found}`);
+      if (cd.customer_verified_name) lines.push(`- Nome verificado: ${cd.customer_verified_name}`);
+      // Adicionar outras variáveis coletadas (exceto internas __ e objetos)
+      for (const [key, val] of Object.entries(cd)) {
+        if (key.startsWith('__') || key === 'produto' || key === 'assunto' || key === 'customer_name_found' || key === 'customer_email_found' || key === 'customer_verified_name' || key === 'customer_validated' || key === 'customer_verified' || typeof val === 'object') continue;
+        if (val && !lines.some(l => l.includes(String(val)))) {
+          lines.push(`- ${key}: ${val}`);
+        }
+      }
+      if (lines.length === 0) return '';
+      return `\n\n**📋 CONTEXTO DO FLUXO (dados já coletados do cliente):**\n${lines.join('\n')}\nUse estas informações para contextualizar suas respostas. O cliente já passou por menus e escolheu essas opções — NÃO pergunte novamente o que ele já informou.\n`;
+    })();
+
+    const contextualizedSystemPrompt = `${agentContextBlock}${flowCollectedDataBlock}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
 
 **🚫 REGRA DE HANDOFF (SÓ QUANDO CLIENTE PEDIR):**
 Transferência para humano SÓ acontece quando:
