@@ -19,6 +19,7 @@ import { ActiveFilterChips } from "@/components/inbox/ActiveFilterChips";
 import { BulkActionsBar } from "@/components/inbox/BulkActionsBar";
 import { InboxBulkDistributeBar } from "@/components/inbox/InboxBulkDistributeBar";
 import { InboxBulkDistributeDialog } from "@/components/inbox/InboxBulkDistributeDialog";
+import { BulkReengageDialog } from "@/components/inbox/BulkReengageDialog";
 import { BroadcastAIQueueButton } from "@/components/inbox/BroadcastAIQueueButton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +80,7 @@ export default function Inbox() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDistributeDialog, setShowDistributeDialog] = useState(false);
+  const [showReengageDialog, setShowReengageDialog] = useState(false);
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(true);
   const bulkReactivate = useBulkReactivateAI();
   const bulkClose = useBulkCloseConversations();
@@ -676,14 +678,24 @@ export default function Inbox() {
         onDistribute={() => setShowDistributeDialog(true)}
         onReactivateAI={handleBulkReactivateAI}
         onCloseConversations={handleBulkCloseConversations}
+        onReengage={() => setShowReengageDialog(true)}
         isReactivating={bulkReactivate.isPending}
         isClosing={bulkClose.isPending}
+        isArchived={isArchived}
       />
 
       {/* Bulk Distribute Dialog */}
       <InboxBulkDistributeDialog
         open={showDistributeDialog}
         onOpenChange={setShowDistributeDialog}
+        conversationIds={Array.from(selectedIds)}
+        onSuccess={handleClearSelection}
+      />
+
+      {/* Bulk Reengage Dialog */}
+      <BulkReengageDialog
+        open={showReengageDialog}
+        onOpenChange={setShowReengageDialog}
         conversationIds={Array.from(selectedIds)}
         onSuccess={handleClearSelection}
       />
