@@ -1160,28 +1160,28 @@ async function createTicketSuccessMessage(
     
     if (saqueTemplate) return saqueTemplate;
     
-    // Fallback se template nÃ£o existir
-    return `SolicitaÃ§Ã£o de saque registrada!
+    // Fallback se template não existir
+    return `Solicitação de saque registrada!
 
 Protocolo: #${formattedId}
 Valor Solicitado: R$ ${withdrawalData.amount.toFixed(2)}
 ${withdrawalData.cpf_last4 ? `CPF (final): ...${withdrawalData.cpf_last4}` : ''}
-Prazo: atÃ© 7 dias Ãºteis
+Prazo: até 7 dias úteis
 
-VocÃª receberÃ¡ um email confirmando a abertura do chamado.
-Quando o saque for processado, vocÃª serÃ¡ notificado por email tambÃ©m.
+Você receberá um email confirmando a abertura do chamado.
+Quando o saque for processado, você será notificado por email também.
 
-IMPORTANTE: O saque serÃ¡ creditado via PIX na chave informada, vinculada ao seu CPF. NÃ£o Ã© possÃ­vel transferir para conta de terceiros.`;
+IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu CPF. Não é possível transferir para conta de terceiros.`;
   }
   
   const ticketMessages: Record<string, string> = {
-    'financeiro': `Entendi sua solicitaÃ§Ã£o financeira. Abri o ticket #${formattedId} para nossa equipe resolver.`,
+    'financeiro': `Entendi sua solicitação financeira. Abri o ticket #${formattedId} para nossa equipe resolver.`,
     'reembolso': `Registrei seu pedido de reembolso no ticket #${formattedId}. Vamos analisar e retornar.`,
-    'devolucao': `Registrei seu pedido de devoluÃ§Ã£o no ticket #${formattedId}. Vamos processar e retornar.`,
-    'troca': `Registrei sua solicitaÃ§Ã£o de troca no ticket #${formattedId}. Nossa equipe vai cuidar disso.`,
-    'defeito': `Criei o ticket #${formattedId} para nossa equipe tÃ©cnica analisar seu caso.`,
-    'tecnico': `Criei o ticket #${formattedId} para nossa equipe tÃ©cnica analisar seu caso.`,
-    'default': `Abri o ticket #${formattedId}. Nossa equipe vai cuidar disso para vocÃª.`
+    'devolucao': `Registrei seu pedido de devolução no ticket #${formattedId}. Vamos processar e retornar.`,
+    'troca': `Registrei sua solicitação de troca no ticket #${formattedId}. Nossa equipe vai cuidar disso.`,
+    'defeito': `Criei o ticket #${formattedId} para nossa equipe técnica analisar seu caso.`,
+    'tecnico': `Criei o ticket #${formattedId} para nossa equipe técnica analisar seu caso.`,
+    'default': `Abri o ticket #${formattedId}. Nossa equipe vai cuidar disso para você.`
   };
   
   const baseMessage = ticketMessages[issueType] || ticketMessages['default'];
