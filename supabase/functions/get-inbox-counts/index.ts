@@ -63,6 +63,24 @@ Deno.serve(async (req: Request) => {
 
   try {
     const startedAt = Date.now();
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error("[get-inbox-counts] Missing required environment variables");
+      return new Response(JSON.stringify({ error: "Configuração do servidor incompleta." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const maybeWarmup = req.method === "POST" ? await req.json().catch(() => null) : null;
+    if (maybeWarmup?.warmup === true) {
+      return new Response(JSON.stringify({ success: true, warmed: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -73,8 +91,8 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      supabaseUrl,
+      serviceRoleKey,
       {
         auth: { autoRefreshToken: false, persistSession: false },
         db: { schema: "public" },
