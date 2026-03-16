@@ -9,6 +9,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// 🆕 HELPER: Mapear produto escolhido no fluxo para tags de filtro de KB
+function mapProductToKbFilter(collectedData: Record<string, any>): string[] {
+  const produto = collectedData?.produto;
+  if (!produto) return [];
+  
+  const produtoLower = String(produto).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  if (produtoLower.includes('nacional') && !produtoLower.includes('internacional')) {
+    return ['drop_nacional'];
+  }
+  if (produtoLower.includes('internacional')) {
+    return ['drop_internacional'];
+  }
+  if (produtoLower.includes('hibrido') || produtoLower.includes('híbrido')) {
+    return ['drop_hibrido'];
+  }
+  
+  return [];
+}
+
 // ============================================================
 // 🆕 HELPER: Construir allowedSources a partir dos toggles individuais do nó
 // Fontes: use_knowledge_base, use_crm_data, use_kiwify_data, use_tracking, use_sandbox_data
