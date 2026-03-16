@@ -760,8 +760,6 @@ const FINANCIAL_BARRIER_KEYWORDS = [
   'estorno',
   'cancelar',
   'cancelamento',
-  'devolução',
-  'devolver',
   'meu dinheiro'
 ];
 
