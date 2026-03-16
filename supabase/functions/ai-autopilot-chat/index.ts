@@ -4366,7 +4366,7 @@ Responda APENAS: skip ou search`
           { role: 'user', content: customerMessage }
         ],
         temperature: 0.1,
-        max_tokens: 10
+        max_completion_tokens: 50
       });
 
       intentType = intentData.choices?.[0]?.message?.content?.trim().toLowerCase() || 'search';
@@ -7003,7 +7003,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         { role: 'user', content: customerMessage }
       ],
       temperature: persona.temperature ?? 0.7,
-      max_tokens: persona.max_tokens ?? 500
+      max_tokens: persona.max_tokens ?? 800
     };
 
     console.log('[ai-autopilot-chat] Messages structure:', {
