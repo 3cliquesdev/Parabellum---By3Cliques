@@ -181,8 +181,8 @@ const App = () => {
               <Route path="/meu-cadastro" element={<CustomerFiscalData />} />
               <Route path="/onboarding-form" element={<PublicOnboardingForm />} />
               
-              {/* Client portal - for users with role 'user' */}
-              <Route path="/client-portal" element={<ProtectedRoute><ClientPortal /></ProtectedRoute>} />
+              {/* Client portal - protected by PortalGuard (only role 'user') */}
+              <Route path="/client-portal" element={<PortalGuard><ClientPortal /></PortalGuard>} />
 
               {/* Debug routes - dev only */}
               <Route path="/debug/routes" element={<DebugRoutes />} />

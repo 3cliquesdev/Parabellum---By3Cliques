@@ -31,6 +31,12 @@ export default function ProtectedRoute({ children, allowedRoles, requiredPermiss
     return <Navigate to="/auth" replace />;
   }
 
+  // SEGURANÇA: Clientes (role 'user') NUNCA acessam rotas admin
+  // Redireciona para o portal independente de qualquer permissão
+  if (role === "user") {
+    return <Navigate to="/client-portal" replace />;
+  }
+
   // CRITICAL: Force password setup if needed (except if already on that page)
   const mustChangePassword = user?.user_metadata?.must_change_password === true;
   if (mustChangePassword && location.pathname !== "/setup-password") {
