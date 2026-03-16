@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/business-hours.ts";
-import { TriageRouterAgent } from "./agents/TriageRouterAgent.ts";
+import { ContextMemoryAgent, type ChatMessage } from "./agents/ContextMemoryAgent.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -4036,22 +4036,56 @@ serve(async (req) => {
 
     console.log(`[ai-autopilot-chat] ${enabledTools.length} tools disponÃ­veis para esta persona`);
 
-    // 4. Buscar histÃ³rico de mensagens
+    // 4. Buscar histÃ³rico de mensagens (expandido para compressÃ£o)
+    const expandedHistoryLimit = Math.max(maxHistory, 30); // Buscar mais para comprimir
     const { data: messages, error: messagesError } = await supabaseClient
       .from('messages')
-      .select('content, sender_type, created_at')
+      .select('id, content, sender_type, created_at')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: false })
-      .limit(maxHistory);
+      .limit(expandedHistoryLimit);
 
     if (messagesError) {
       console.error('[ai-autopilot-chat] Erro ao buscar histÃ³rico:', messagesError);
     }
 
-    const messageHistory = messages?.reverse().map(m => ({
-      role: m.sender_type === 'contact' ? 'user' : 'assistant',
-      content: m.content
+    const allMessages: ChatMessage[] = messages?.reverse().map(m => ({
+      id: m.id,
+      role: (m.sender_type === 'contact' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.content,
+      created_at: m.created_at
     })) || [];
+
+    // 🧠 Compressão de memória: janela deslizante + resumo LLM para conversas longas
+    let messageHistory: Array<{ role: string; content: string }>;
+    let longTermSummary: string | null = null;
+
+    const OPENAI_API_KEY_EARLY = Deno.env.get('OPENAI_API_KEY');
+    if (allMessages.length > 6 && OPENAI_API_KEY_EARLY) {
+      try {
+        const compressed = await ContextMemoryAgent.buildCompressedContext(
+          allMessages,
+          sanitizeModelName(ragConfig.model),
+          OPENAI_API_KEY_EARLY,
+          null // No existing summary yet
+        );
+        messageHistory = compressed.shortTermMessages.map(m => ({
+          role: m.role,
+          content: m.content
+        }));
+        longTermSummary = compressed.longTermSummary;
+        console.log('[ai-autopilot-chat] 🧠 ContextMemoryAgent: compressão aplicada', {
+          totalMessages: allMessages.length,
+          shortTermKept: compressed.shortTermMessages.length,
+          hasLongTermSummary: !!longTermSummary
+        });
+      } catch (compressErr) {
+        console.warn('[ai-autopilot-chat] ⚠️ ContextMemoryAgent falhou, usando fallback:', compressErr);
+        messageHistory = allMessages.map(m => ({ role: m.role, content: m.content }));
+      }
+    } else {
+      messageHistory = allMessages.map(m => ({ role: m.role, content: m.content }));
+    }
 
     // Obter API keys antecipadamente
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
@@ -6950,21 +6984,34 @@ ${crossSessionContext}${personaToneInstruction}
 Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 
     // 6. Gerar resposta final
+    // 🧠 Montar mensagens com memória comprimida (se disponível)
+    const contextMessages: Array<{ role: string; content: string }> = [];
+    
+    // Injetar resumo de longo prazo como mensagem de sistema auxiliar
+    if (longTermSummary) {
+      contextMessages.push({ role: 'system', content: longTermSummary });
+    }
+    
+    // Adicionar histórico de curto prazo (já comprimido pelo ContextMemoryAgent)
+    contextMessages.push(...messageHistory.slice(-6));
+
     const aiPayload: any = {
       messages: [
         { role: 'system', content: contextualizedSystemPrompt },
-        ...fewShotMessages,  // âœ¨ Injetar exemplos de treinamento (Few-Shot Learning)
-        ...messageHistory.slice(-6), // 🔧 TOKEN OPT: limitar a últimas 6 msgs (3 turnos)
+        ...fewShotMessages,  // ✨ Injetar exemplos de treinamento (Few-Shot Learning)
+        ...contextMessages,
         { role: 'user', content: customerMessage }
       ],
-      temperature: persona.temperature ?? 0.7,  // CORRIGIDO: ?? ao invÃ©s de || (temperatura 0 Ã© vÃ¡lida)
-      max_tokens: persona.max_tokens ?? 500    // CORRIGIDO: ?? ao invÃ©s de || (consistÃªncia)
+      temperature: persona.temperature ?? 0.7,
+      max_tokens: persona.max_tokens ?? 500
     };
 
     console.log('[ai-autopilot-chat] Messages structure:', {
       system: 1,
+      longTermSummary: !!longTermSummary,
       fewShot: fewShotMessages.length,
       history: messageHistory.length,
+      historyUsed: Math.min(messageHistory.length, 6),
       current: 1,
       total: aiPayload.messages.length
     });
