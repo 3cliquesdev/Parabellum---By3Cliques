@@ -8516,19 +8516,43 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
                 console.error('[ai-autopilot-chat] âš ï¸ Erro ao aplicar tag pendente_retorno:', tagErr);
               }
 
-              // 5. Salvar metadata na conversa
+              // 5. Verificar configuração after_hours_keep_open
+              const { data: keepOpenConfig } = await supabaseClient
+                .from('system_configurations')
+                .select('value')
+                .eq('key', 'after_hours_keep_open')
+                .maybeSingle();
+              
+              const keepOpen = keepOpenConfig?.value !== 'false'; // default: true
+
+              // 6. Salvar metadata na conversa (e fechar se configurado)
               const existingMeta = conversation.customer_metadata || {};
+              const updateData: any = {
+                customer_metadata: {
+                  ...existingMeta,
+                  after_hours_handoff_requested_at: new Date().toISOString(),
+                  after_hours_next_open_text: nextOpenText,
+                  pending_department_id: conversation.department || null,
+                  handoff_reason: handoffReason,
+                }
+              };
+
+              if (!keepOpen) {
+                // FECHAR conversa
+                updateData.status = 'closed';
+                updateData.closed_at = new Date().toISOString();
+                updateData.metadata = {
+                  ...(conversation.metadata || {}),
+                  close_reason: 'after_hours_handoff',
+                };
+                console.log('[ai-autopilot-chat] 🔒 Fechando conversa — after_hours_keep_open=false');
+              } else {
+                console.log('[ai-autopilot-chat] 📂 Mantendo conversa aberta na fila (after_hours_keep_open=true)');
+              }
+
               await supabaseClient
                 .from('conversations')
-                .update({
-                  customer_metadata: {
-                    ...existingMeta,
-                    after_hours_handoff_requested_at: new Date().toISOString(),
-                    after_hours_next_open_text: nextOpenText,
-                    pending_department_id: conversation.department || null,
-                    handoff_reason: handoffReason,
-                  }
-                })
+                .update(updateData)
                 .eq('id', conversationId);
 
               // 6. Registrar nota interna

@@ -879,12 +879,22 @@ serve(async (req) => {
                         if (!bhInfo.within_hours) {
                           console.log("[meta-whatsapp-webhook] 🕐 Fora do horário comercial — usando template configurado");
                           
-                          // Buscar template de after_hours_handoff
-                          const { data: afterHoursMsg } = await supabase
-                            .from("business_messages_config")
-                            .select("message_template, after_hours_tag_id")
-                            .eq("message_key", "after_hours_handoff")
-                            .single();
+                          // Buscar template de after_hours_handoff e configuração keep_open
+                          const [afterHoursMsgRes, keepOpenRes] = await Promise.all([
+                            supabase
+                              .from("business_messages_config")
+                              .select("message_template, after_hours_tag_id")
+                              .eq("message_key", "after_hours_handoff")
+                              .single(),
+                            supabase
+                              .from("system_configurations")
+                              .select("value")
+                              .eq("key", "after_hours_keep_open")
+                              .maybeSingle(),
+                          ]);
+                          
+                          const afterHoursMsg = afterHoursMsgRes.data;
+                          const keepOpen = keepOpenRes.data?.value !== "false"; // default: true (manter aberta)
                           
                           if (afterHoursMsg?.message_template) {
                             // Substituir variáveis no template
@@ -907,20 +917,36 @@ serve(async (req) => {
                               }
                             }
                             
-                            // Fechar conversa com motivo after_hours_handoff
-                            await supabase
-                              .from("conversations")
-                              .update({
-                                status: "closed",
-                                ai_mode: "autopilot",
-                                closed_at: new Date().toISOString(),
-                                metadata: {
-                                  ...(conversation.metadata || {}),
-                                  close_reason: "after_hours_handoff",
-                                },
-                              })
-                              .eq("id", conversation.id);
-                            console.log("[meta-whatsapp-webhook] 🔒 Conversa fechada — after_hours_handoff");
+                            if (keepOpen) {
+                              // MANTER ABERTA — salvar metadata de pending para redistribuição
+                              console.log("[meta-whatsapp-webhook] 📂 Mantendo conversa aberta na fila (after_hours_keep_open=true)");
+                              await supabase
+                                .from("conversations")
+                                .update({
+                                  metadata: {
+                                    ...(conversation.metadata || {}),
+                                    after_hours_handoff_requested_at: new Date().toISOString(),
+                                    after_hours_next_open_text: bhInfo.next_open_text,
+                                    pending_department_id: conversation.department || null,
+                                  },
+                                })
+                                .eq("id", conversation.id);
+                            } else {
+                              // FECHAR — comportamento anterior
+                              console.log("[meta-whatsapp-webhook] 🔒 Fechando conversa — after_hours_keep_open=false");
+                              await supabase
+                                .from("conversations")
+                                .update({
+                                  status: "closed",
+                                  ai_mode: "autopilot",
+                                  closed_at: new Date().toISOString(),
+                                  metadata: {
+                                    ...(conversation.metadata || {}),
+                                    close_reason: "after_hours_handoff",
+                                  },
+                                })
+                                .eq("id", conversation.id);
+                            }
                           } else {
                             // Fallback se template não configurado
                             queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";

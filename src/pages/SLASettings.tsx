@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useTags } from "@/hooks/useTags";
 import { useBusinessMessages, useUpdateBusinessMessage } from "@/hooks/useBusinessMessages";
+import { useAfterHoursKeepOpen } from "@/hooks/useAfterHoursKeepOpen";
 import { 
   useSLAPolicies, 
   useCreateSLAPolicy, 
@@ -559,6 +560,7 @@ function BusinessMessagesSection() {
   const { data: messages = [], isLoading } = useBusinessMessages();
   const { data: allTags = [] } = useTags();
   const updateMessage = useUpdateBusinessMessage();
+  const { keepOpen, isLoading: isLoadingKeepOpen, updateKeepOpen } = useAfterHoursKeepOpen();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [tagInitialized, setTagInitialized] = useState(false);
@@ -662,8 +664,26 @@ function BusinessMessagesSection() {
                 </Alert>
               )}
               {msg.message_key === 'after_hours_handoff' && (
-                <div className="space-y-1.5 pt-2">
-                  <Label className="text-sm font-medium">Tag aplicada ao encerrar fora do horário</Label>
+                <div className="space-y-4 pt-2">
+                  {/* Toggle: manter aberta ou fechar */}
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm font-medium">Manter conversa aberta fora do horário</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {keepOpen 
+                          ? "A conversa permanece na fila e será distribuída quando o expediente começar."
+                          : "A conversa é encerrada automaticamente fora do horário comercial."}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={keepOpen}
+                      onCheckedChange={(checked) => updateKeepOpen(checked)}
+                      disabled={isLoadingKeepOpen}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Tag aplicada fora do horário</Label>
                   <p className="text-xs text-muted-foreground">Selecione a tag que será adicionada automaticamente à conversa quando encerrada fora do horário comercial</p>
                   <Select
                     value={selectedTagId || "none"}
@@ -684,6 +704,7 @@ function BusinessMessagesSection() {
                       ))}
                     </SelectContent>
                   </Select>
+                  </div>
                 </div>
               )}
               <div className="flex items-center gap-2">
