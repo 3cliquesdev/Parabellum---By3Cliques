@@ -5138,7 +5138,7 @@ Responda APENAS: skip ou search`
         
         // Se encontrou resultados, retornar resposta direta SEM chamar IA
         if (fetchResult?.success && fetchResult?.found > 0 && fetchResult?.data) {
-          console.log('[ai-autopilot-chat] ðŸšš BYPASS IA: Retornando dados de rastreio diretamente');
+          console.log('[ai-autopilot-chat] 🚚 BYPASS IA: Retornando dados de rastreio diretamente');
           
           let directResponse = '';
           const codesFound: string[] = [];
