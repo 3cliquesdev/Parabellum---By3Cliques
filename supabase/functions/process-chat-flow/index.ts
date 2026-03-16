@@ -9,6 +9,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// 🆕 HELPER: Mapear produto escolhido no fluxo para tags de filtro de KB
+function mapProductToKbFilter(collectedData: Record<string, any>): string[] {
+  const produto = collectedData?.produto;
+  if (!produto) return [];
+  
+  const produtoLower = String(produto).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  if (produtoLower.includes('nacional') && !produtoLower.includes('internacional')) {
+    return ['drop_nacional'];
+  }
+  if (produtoLower.includes('internacional')) {
+    return ['drop_internacional'];
+  }
+  if (produtoLower.includes('hibrido') || produtoLower.includes('híbrido')) {
+    return ['drop_hibrido'];
+  }
+  
+  return [];
+}
+
 // ============================================================
 // 🆕 HELPER: Construir allowedSources a partir dos toggles individuais do nó
 // Fontes: use_knowledge_base, use_crm_data, use_kiwify_data, use_tracking, use_sandbox_data
@@ -1461,6 +1481,7 @@ serve(async (req) => {
             manualTrigger: true,
             personaId: contentNode.data?.persona_id || null,
             kbCategories: contentNode.data?.kb_categories || null,
+            kbProductFilter: mapProductToKbFilter(collectedData || {}),
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -2058,6 +2079,7 @@ serve(async (req) => {
                     personaId: resolvedNode.data?.persona_id || null,
                     personaName: resolvedNode.data?.persona_name || null,
                     kbCategories: resolvedNode.data?.kb_categories || null,
+                    kbProductFilter: mapProductToKbFilter(collectedData || {}),
                     fallbackMessage: resolvedNode.data?.fallback_message || null,
                     objective: resolvedNode.data?.objective ? replaceVariables(resolvedNode.data.objective, variablesContext || await rebuildCtx()) : null,
                     maxSentences: resolvedNode.data?.max_sentences ?? 3,
@@ -2285,6 +2307,7 @@ serve(async (req) => {
                     personaId: resolvedNode.data?.persona_id || null,
                     personaName: resolvedNode.data?.persona_name || null,
                     kbCategories: resolvedNode.data?.kb_categories || null,
+                    kbProductFilter: mapProductToKbFilter(collectedData || {}),
                     fallbackMessage: resolvedNode.data?.fallback_message || null,
                     objective: resolvedNode.data?.objective ? replaceVariables(resolvedNode.data.objective, variablesContext || await rebuildCtx()) : null,
                     maxSentences: resolvedNode.data?.max_sentences ?? 3,
@@ -2470,6 +2493,7 @@ serve(async (req) => {
                       personaId: resolvedNode.data?.persona_id || null,
                       personaName: resolvedNode.data?.persona_name || null,
                       kbCategories: resolvedNode.data?.kb_categories || null,
+                      kbProductFilter: mapProductToKbFilter(collectedData || {}),
                       fallbackMessage: resolvedNode.data?.fallback_message || null,
                       objective: resolvedNode.data?.objective ? replaceVariables(resolvedNode.data.objective, variablesContext || await rebuildCtx()) : null,
                       maxSentences: resolvedNode.data?.max_sentences ?? 3,
@@ -3598,6 +3622,7 @@ serve(async (req) => {
               personaId: currentNode.data?.persona_id || null,
               personaName: currentNode.data?.persona_name || null,
               kbCategories: currentNode.data?.kb_categories || null,
+              kbProductFilter: mapProductToKbFilter(collectedData || {}),
               fallbackMessage: currentNode.data?.fallback_message || null,
               objective: currentNode.data?.objective ? replaceVariables(currentNode.data.objective, variablesContext || await rebuildCtx()) : null,
               maxSentences: currentNode.data?.max_sentences ?? 3,
@@ -4309,6 +4334,7 @@ serve(async (req) => {
             personaId: nextNode.data?.persona_id || null,
             personaName: nextNode.data?.persona_name || null,
             kbCategories: nextNode.data?.kb_categories || null,
+            kbProductFilter: mapProductToKbFilter(collectedData || {}),
             fallbackMessage: nextNode.data?.fallback_message || null,
             objective: nextNode.data?.objective ? replaceVariables(nextNode.data.objective, variablesContext || await rebuildCtx()) : null,
             maxSentences: nextNode.data?.max_sentences ?? 3,
@@ -4882,6 +4908,7 @@ serve(async (req) => {
               masterFlowId: masterFlow.id,
               personaId: aiNode?.data?.persona_id || null,
               kbCategories: aiNode?.data?.kb_categories || null,
+              kbProductFilter: mapProductToKbFilter(collectedData || {}),
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -5199,6 +5226,7 @@ serve(async (req) => {
               responseFormat: 'text_only',
               personaId: node.data?.persona_id || null,
               kbCategories: node.data?.kb_categories || null,
+              kbProductFilter: mapProductToKbFilter(collectedData || {}),
               contextPrompt: node.data?.context_prompt || null,
               fallbackMessage: node.data?.fallback_message || null,
               objective: node.data?.objective || null,
@@ -5533,6 +5561,7 @@ serve(async (req) => {
           responseFormat: 'text_only',
           personaId: startNode.data?.persona_id || null,
           kbCategories: startNode.data?.kb_categories || null,
+          kbProductFilter: mapProductToKbFilter(collectedData || {}),
           contextPrompt: startNode.data?.context_prompt || null,
           fallbackMessage: startNode.data?.fallback_message || null,
           // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação

@@ -1168,6 +1168,7 @@ serve(async (req) => {
                           allowedSources: (flowData as any).allowedSources,
                           personaId: (flowData as any).personaId,
                           kbCategories: (flowData as any).kbCategories,
+                          kbProductFilter: (flowData as any).kbProductFilter,
                           contextPrompt: (flowData as any).contextPrompt,
                           fallbackMessage: (flowData as any).fallbackMessage,
                           objective: (flowData as any).objective,
@@ -1216,6 +1217,7 @@ serve(async (req) => {
                             response_format: 'text_only',
                             personaId: (flowData as any).personaId || null,
                             kbCategories: (flowData as any).kbCategories || null,
+                            kbProductFilter: (flowData as any).kbProductFilter || null,
                             contextPrompt: (flowData as any).contextPrompt || null,
                             fallbackMessage: (flowData as any).fallbackMessage || null,
                             objective: (flowData as any).objective || null,
@@ -2342,6 +2344,7 @@ serve(async (req) => {
                         response_format: 'text_only',
                         personaId: currentNode.data?.persona_id || null,
                         kbCategories: currentNode.data?.kb_categories || null,
+                        kbProductFilter: [], // Test mode - no product context available
                         contextPrompt: currentNode.data?.context_prompt || null,
                         fallbackMessage: currentNode.data?.fallback_message || null,
                         objective: currentNode.data?.objective || null,

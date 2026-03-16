@@ -1201,6 +1201,7 @@ interface FlowContext {
   response_format: 'text_only';
   personaId?: string;
   kbCategories?: string[];
+  kbProductFilter?: string[];
   contextPrompt?: string;
   fallbackMessage?: string;
   // ðŸ†• FASE 1: Campos de Controle de Comportamento Anti-AlucinaÃ§Ã£o
@@ -1505,6 +1506,7 @@ serve(async (req) => {
     // ðŸ†• Chat Flow: variÃ¡veis para persona/KB especÃ­ficas do fluxo
     let flowPersonaId: string | null = flow_context?.personaId || null;
     let flowKbCategories: string[] | null = flow_context?.kbCategories || null;
+    let flowKbProductFilter: string[] | null = flow_context?.kbProductFilter || null;
     let flowContextPrompt: string | null = flow_context?.contextPrompt || null;
     let flowFallbackMessage: string | null = flow_context?.fallbackMessage || null;
     
@@ -3261,6 +3263,7 @@ serve(async (req) => {
     if (!flow_context) {
       flowPersonaId = null;
       flowKbCategories = null;
+      flowKbProductFilter = null;
       flowContextPrompt = null;
       flowFallbackMessage = null;
     }
@@ -3477,17 +3480,19 @@ serve(async (req) => {
         if (flowResult.useAI === true) {
           flowPersonaId = flowResult.personaId || null;
           flowKbCategories = flowResult.kbCategories || null;
+          flowKbProductFilter = flowResult.kbProductFilter || null;
           flowContextPrompt = flowResult.contextPrompt || null;
           flowFallbackMessage = flowResult.fallbackMessage || null;
           
-          // ðŸ†• MASTER FLOW: Log especÃ­fico quando vem do Master Flow
+          // 🆕 MASTER FLOW: Log específico quando vem do Master Flow
           const source = flowResult.masterFlowId ? 'Master Flow' : 'Chat Flow';
-          console.log(`[ai-autopilot-chat] ðŸŽ¯ ${source} definiu configuraÃ§Ãµes para IA:`, {
+          console.log(`[ai-autopilot-chat] 🎯 ${source} definiu configurações para IA:`, {
             source,
             masterFlowId: flowResult.masterFlowId || null,
             masterFlowName: flowResult.masterFlowName || null,
             personaId: flowPersonaId,
             kbCategories: flowKbCategories,
+            kbProductFilter: flowKbProductFilter,
             hasContextPrompt: !!flowContextPrompt
           });
         }
@@ -4343,6 +4348,8 @@ Responda APENAS: skip ou search`
         }
         
         const hasPersonaCategories = activeKbCategories.length > 0;
+        const activeProductFilter: string[] = flowKbProductFilter || [];
+        const hasProductFilter = activeProductFilter.length > 0;
       
         console.log('[ai-autopilot-chat] ðŸ“‚ KB Categories:', {
           persona_id: persona.id,
@@ -4431,8 +4438,9 @@ Responda APENAS: skip ou search`
                     'match_knowledge_articles',
                     {
                       query_embedding: queryEmbedding,
-                      match_threshold: 0.50, // Reduzido de 0.70 - permite artigos com 50%+ de similaridade
-                      match_count: 5,        // Aumentado de 3 para 5 - mais artigos candidatos
+                      match_threshold: 0.50,
+                      match_count: 5,
+                      product_filter: hasProductFilter ? activeProductFilter : [],
                     }
                   );
 
@@ -4511,6 +4519,11 @@ Responda APENAS: skip ou search`
                 
                 if (hasPersonaCategories) {
                   query = query.in('category', personaCategories);
+                }
+                
+                // Product filter for keyword fallback
+                if (hasProductFilter) {
+                  query = query.or(`product_tags.cs.{${activeProductFilter.join(',')}},product_tags.eq.{}`);
                 }
                 
                 const { data: keywordResults } = await query.limit(3);

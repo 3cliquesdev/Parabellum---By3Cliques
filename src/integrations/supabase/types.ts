@@ -5296,6 +5296,7 @@ export type Database = {
           is_published: boolean
           needs_review: boolean | null
           problem: string | null
+          product_tags: string[]
           published_at: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -5326,6 +5327,7 @@ export type Database = {
           is_published?: boolean
           needs_review?: boolean | null
           problem?: string | null
+          product_tags?: string[]
           published_at?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -5356,6 +5358,7 @@ export type Database = {
           is_published?: boolean
           needs_review?: boolean | null
           problem?: string | null
+          product_tags?: string[]
           published_at?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -10733,20 +10736,36 @@ export type Database = {
         Returns: undefined
       }
       is_manager_or_admin: { Args: { _user_id: string }; Returns: boolean }
-      match_knowledge_articles: {
-        Args: {
-          match_count?: number
-          match_threshold?: number
-          query_embedding: string
-        }
-        Returns: {
-          category: string
-          content: string
-          id: string
-          similarity: number
-          title: string
-        }[]
-      }
+      match_knowledge_articles:
+        | {
+            Args: {
+              match_count?: number
+              match_threshold?: number
+              query_embedding: string
+            }
+            Returns: {
+              category: string
+              content: string
+              id: string
+              similarity: number
+              title: string
+            }[]
+          }
+        | {
+            Args: {
+              match_count: number
+              match_threshold: number
+              product_filter?: string[]
+              query_embedding: string
+            }
+            Returns: {
+              category: string
+              content: string
+              id: string
+              similarity: number
+              title: string
+            }[]
+          }
       merge_duplicate_contacts: {
         Args: { p_duplicate_ids: string[]; p_master_id: string }
         Returns: Json

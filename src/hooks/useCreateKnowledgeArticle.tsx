@@ -7,6 +7,7 @@ interface CreateArticleParams {
   content: string;
   category?: string;
   tags?: string[];
+  product_tags?: string[];
   is_published: boolean;
 }
 
@@ -29,6 +30,7 @@ export function useCreateKnowledgeArticle() {
           content: params.content,
           category: params.category || null,
           tags: params.tags || [],
+          product_tags: params.product_tags || [],
           is_published: params.is_published,
           created_by: user.id,
         })

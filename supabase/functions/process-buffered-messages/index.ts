@@ -357,6 +357,7 @@ async function callPipeline(
           response_format: "text_only",
           personaId: flowData.personaId || null,
           kbCategories: flowData.kbCategories || null,
+          kbProductFilter: flowData.kbProductFilter || null,
           contextPrompt: flowData.contextPrompt || null,
           fallbackMessage: flowData.fallbackMessage || null,
           objective: flowData.objective || null,

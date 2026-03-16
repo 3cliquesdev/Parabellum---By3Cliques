@@ -8,6 +8,7 @@ interface UpdateArticleParams {
   content?: string;
   category?: string;
   tags?: string[];
+  product_tags?: string[];
   is_published?: boolean;
 }
 
