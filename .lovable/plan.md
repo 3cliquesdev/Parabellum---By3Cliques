@@ -1,13 +1,25 @@
 
-# Auditoria Conversa #2D12F4F9 — Correções Aplicadas
+# Configuração: Fechar ou Manter Aberta Fora do Horário — ✅ IMPLEMENTADO
 
-## Bug 1 — callStrictRAG 400 tokens → ✅ CORRIGIDO
-- `max_completion_tokens` aumentado de 400 para 1200 (L4269)
-- Deploy realizado
+## Alterações
 
-## Bug 2 — FALLBACK_PHRASES genérico `'não consigo'` → ✅ CORRIGIDO
-- Substituído `'não consigo'` por duas variações específicas:
-  - `'não consigo te ajudar com isso'`
-  - `'não consigo resolver'`
-- Isso elimina falsos positivos em respostas legítimas como "Não consegui encontrar informações"
-- Deploy realizado
+### 1. Hook `useAfterHoursKeepOpen` — ✅ Criado
+- Gerencia `system_configurations` key `after_hours_keep_open`
+- Default: `true` (manter aberta)
+
+### 2. Toggle na UI (SLASettings) — ✅ Adicionado
+- Switch "Manter conversa aberta fora do horário" na seção BusinessMessagesSection
+- Com descrição dinâmica conforme estado
+
+### 3. `meta-whatsapp-webhook` — ✅ Condicional
+- Busca `after_hours_keep_open` em paralelo com template
+- `true`: mantém aberta + salva metadata pending
+- `false`: fecha com `close_reason: "after_hours_handoff"`
+
+### 4. `ai-autopilot-chat` — ✅ Condicional
+- Busca `after_hours_keep_open` no bloco request_human_agent
+- `false`: fecha conversa
+- `true`: mantém aberta (comportamento anterior)
+
+### 5. Deploy — ✅ Realizado
+
