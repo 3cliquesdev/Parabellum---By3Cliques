@@ -232,6 +232,25 @@ export function BulkReengageDialog({
 
           await supabase.from("conversations").update(updateData).eq("id", conv.id);
 
+          // Auto-distribute: create dispatch job for round-robin assignment
+          if (destinationType === "auto_distribute") {
+            const deptId = (destinationType === "department" && targetDepartmentId)
+              ? targetDepartmentId
+              : (conv as any).department;
+            if (deptId) {
+              await (supabase as any)
+                .from("conversation_dispatch_jobs")
+                .insert({
+                  conversation_id: conv.id,
+                  department_id: deptId,
+                  status: "pending",
+                  priority: 5,
+                  attempts: 0,
+                  max_attempts: 10,
+                });
+            }
+          }
+
           sent++;
         } catch (err) {
           console.error(`[BulkReengage] Erro conv ${conv.id}:`, err);
@@ -240,8 +259,8 @@ export function BulkReengageDialog({
 
         setProgress({ sent, failed, total });
 
-        // Throttle: ~50ms between sends to avoid Meta rate limit
-        await new Promise(r => setTimeout(r, 50));
+        // Throttle: ~200ms between sends to avoid Meta rate limit
+        await new Promise(r => setTimeout(r, 200));
       }
 
       return { sent, failed, total };
