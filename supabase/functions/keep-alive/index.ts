@@ -155,7 +155,7 @@ serve(async (req) => {
         const start = Date.now();
         try {
           const response = await fetch(
-            `${supabaseUrl}/functions/v1/get-inbox-counts`,
+            `${supabaseUrl}/functions/v1/close-conversation`,
             {
               method: 'POST',
               headers: {
