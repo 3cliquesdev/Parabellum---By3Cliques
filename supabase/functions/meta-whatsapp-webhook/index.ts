@@ -1282,6 +1282,8 @@ serve(async (req) => {
                           forbidCancellation: (flowData as any).forbidCancellation,
                           forbidConsultant: (flowData as any).forbidConsultant,
                           collectedData: (flowData as any).collectedData || null,
+                          firstEntry: (flowData as any).firstEntry || false,
+                          selectedOption: (flowData as any).selectedOption || null,
                         },
                       });
                     } catch (bufferErr) {
