@@ -120,6 +120,9 @@ function prepareContactData(contact: ContactRow, consultantMap: Map<string, stri
       ? parseFloat(String(contact.account_balance).replace(',', '.')) 
       : 0,
     ...(consultantId ? { consultant_id: consultantId } : {}),
+    ...((contact as any)._detected_product_name ? { 
+      external_ids: { imported_product_name: (contact as any)._detected_product_name } 
+    } : {}),
     source: 'csv_import',
     last_contact_date: new Date().toISOString(),
   };
