@@ -1240,8 +1240,6 @@ Sua resposta deve ter NO MÁXIMO ${maxSentences} frases.`;
 
   if (forbidFinancial) {
     restrictions += `\n\n🔒 TRAVA FINANCEIRA ATIVA:
-
-    restrictions += `\n\n🔒 TRAVA FINANCEIRA ATIVA:
 Você PODE responder perguntas INFORMATIVAS sobre finanças (prazos, como funciona, onde consultar saldo, políticas).
 Você NÃO PODE executar ou prometer AÇÕES financeiras (saque, reembolso, estorno, devolução, cancelamento de cobrança, transferência de saldo).
 Se o cliente solicitar uma AÇÃO financeira (ex: "quero sacar", "faz meu reembolso", "quero meu dinheiro de volta"), responda:
