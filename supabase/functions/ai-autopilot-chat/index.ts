@@ -5184,7 +5184,7 @@ Esses nÃºmeros estÃ£o corretos? Se sim, pode ser que ainda nÃ£o tenham ent
           }
           
           if (codesFound.length > 0) {
-            directResponse = `Encontrei as informaÃ§Ãµes do seu pedido:\n\n${directResponse}\nPosso ajudar com mais alguma coisa?`;
+            directResponse = `Encontrei as informações do seu pedido:\n\n${directResponse}\nPosso ajudar com mais alguma coisa?`;
           } else {
             directResponse = directResponse.trim();
           }
