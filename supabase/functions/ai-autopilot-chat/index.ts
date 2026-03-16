@@ -6567,15 +6567,15 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
     // ðŸ›’ TRAVA COMERCIAL: Injetar instruÃ§Ãµes diretamente no prompt da LLM
     const commercialGuardInstruction = flowForbidCommercialPrompt ? `
 
-ðŸ›’ TRAVA COMERCIAL ATIVA â€” REGRAS OBRIGATÃ“RIAS:
-- Se o cliente quiser COMPRAR, ASSINAR, ver PREÃ‡OS ou fazer UPGRADE, responda: "Ã“timo! Vou te conectar com nosso time comercial para te ajudar com isso." e retorne [[FLOW_EXIT:comercial]].
-- Responda perguntas INFORMATIVAS sobre produtos/serviÃ§os usando a base de conhecimento.
+🛒 TRAVA COMERCIAL ATIVA — REGRAS OBRIGATÓRIAS:
+- Se o cliente quiser COMPRAR, ASSINAR, ver PREÇOS ou fazer UPGRADE, responda: "Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso." e retorne [[FLOW_EXIT:comercial]].
+- Responda perguntas INFORMATIVAS sobre produtos/serviços usando a base de conhecimento.
 ${ambiguousCommercialDetected ? `
-âš ï¸ DESAMBIGUAÃ‡ÃƒO OBRIGATÃ“RIA: O cliente mencionou um termo comercial sem deixar claro se quer informaÃ§Ã£o ou realizar uma compra/assinatura.
-VocÃª DEVE perguntar de forma natural e empÃ¡tica: "VocÃª gostaria de saber mais informaÃ§Ãµes sobre [tema] ou deseja falar com nosso time comercial?"
-Nunca assuma a intenÃ§Ã£o do cliente. Essa pergunta Ã© OBRIGATÃ“RIA antes de qualquer resposta.
-Se o cliente confirmar que quer COMPRAR/ASSINAR/VER PREÃ‡OS â†’ responda com [[FLOW_EXIT:comercial]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo comercial sem deixar claro se quer informação ou realizar uma compra/assinatura.
+Você DEVE perguntar de forma natural e empática: "Você gostaria de saber mais informações sobre [tema] ou deseja falar com nosso time comercial?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+Se o cliente confirmar que quer COMPRAR/ASSINAR/VER PREÇOS → responda com [[FLOW_EXIT:comercial]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
