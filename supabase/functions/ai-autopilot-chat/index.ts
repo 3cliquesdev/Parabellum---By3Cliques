@@ -1066,21 +1066,21 @@ interface ConfidenceLog {
   timestamp: string;
 }
 
-// ðŸ†• PadrÃµes de INTENÃ‡ÃƒO financeira (contexto geral) - NÃƒO exige OTP
+// 🆕 Padrões de INTENÇÃO financeira (contexto geral) - NÃO exige OTP
 const FINANCIAL_ACTION_PATTERNS = [
-  // PadrÃµes de consulta (SEM OTP)
+  // Padrões de consulta (SEM OTP)
   /ver\s+(meu\s+)?saldo/i,                            // "quero ver meu saldo"
   /consultar\s+(meu\s+)?saldo/i,                      // "consultar saldo"
   /quanto\s+tenho\s+(de\s+)?saldo/i,                  // "quanto tenho de saldo"
   
-  // PadrÃµes de problemas gerais (SEM OTP)
-  /cadÃª\s+(meu\s+saldo|meu\s+dinheiro|meu\s+pix)/i,
-  /nÃ£o\s+(recebi|caiu|chegou)\s+(o\s+)?(pix|pagamento|saldo|dinheiro)/i,
+  // Padrões de problemas gerais (SEM OTP)
+  /cadê\s+(meu\s+saldo|meu\s+dinheiro|meu\s+pix)/i,
+  /não\s+(recebi|caiu|chegou)\s+(o\s+)?(pix|pagamento|saldo|dinheiro)/i,
   /erro\s+(no|de)\s+pagamento/i,
   /cobrar|cobraram\s+errado/i,
 ];
 
-// ðŸ” PadrÃµes de SAQUE DE SALDO (EXIGE OTP) - Apenas movimentaÃ§Ã£o de dinheiro da carteira
+// 🔐 Padrões de SAQUE DE SALDO (EXIGE OTP) - Apenas movimentação de dinheiro da carteira
 const WITHDRAWAL_ACTION_PATTERNS = [
   /quero\s+(fazer\s+)?(um\s+)?saque/i,                // "quero fazer um saque", "quero saque"
   /preciso\s+(fazer\s+)?(um\s+)?saque/i,              // "preciso fazer um saque"
@@ -1099,8 +1099,8 @@ const WITHDRAWAL_ACTION_PATTERNS = [
   /pedir\s+saque/i,                                   // "pedir saque"
 ];
 
-// ðŸ†• PadrÃµes de REEMBOLSO DE PEDIDO (SEM OTP) - DevoluÃ§Ã£o de pedido Kiwify
-// A IA explica o processo e sÃ³ transfere se cliente insistir
+// 🆕 Padrões de REEMBOLSO DE PEDIDO (SEM OTP) - Devolução de pedido Kiwify
+// A IA explica o processo e só transfere se cliente insistir
 const REFUND_ACTION_PATTERNS = [
   /quero\s+reembolso/i,                               // "quero reembolso"
   /preciso\s+(de\s+)?reembolso/i,                     // "preciso de reembolso"
@@ -1109,11 +1109,11 @@ const REFUND_ACTION_PATTERNS = [
   /estornar/i,                                        // "estornar"
   /estorno/i,                                         // "estorno"
   /cancelar\s+(meu\s+)?pedido/i,                      // "cancelar meu pedido"
-  /devoluÃ§Ã£o/i,                                       // "devoluÃ§Ã£o"
+  /devolução/i,                                       // "devolução"
   /devolver\s+pedido/i,                               // "devolver pedido"
 ];
 
-// ðŸ†• PadrÃµes de CANCELAMENTO DE ASSINATURA (SEM OTP) - Kiwify
+// 🆕 Padrões de CANCELAMENTO DE ASSINATURA (SEM OTP) - Kiwify
 const CANCELLATION_ACTION_PATTERNS = [
   /cancelar\s+(minha\s+)?assinatura/i,                // "cancelar minha assinatura"
   /cancelamento\s+(de\s+)?assinatura/i,               // "cancelamento de assinatura"
@@ -1121,14 +1121,14 @@ const CANCELLATION_ACTION_PATTERNS = [
   /preciso\s+cancelar/i,                              // "preciso cancelar"
   /encerrar\s+(minha\s+)?assinatura/i,                // "encerrar minha assinatura"
   /parar\s+(de\s+)?pagar/i,                           // "parar de pagar"
-  /nÃ£o\s+quero\s+mais\s+pagar/i,                      // "nÃ£o quero mais pagar"
+  /não\s+quero\s+mais\s+pagar/i,                      // "não quero mais pagar"
 ];
 
-// ðŸ†• Perguntas INFORMATIVAS - NÃƒO criar ticket - Usado globalmente
+// 🆕 Perguntas INFORMATIVAS - NÃO criar ticket - Usado globalmente
 const INFORMATIONAL_PATTERNS = [
-  /como\s+(funciona|faz|Ã©|posso)/i,
-  /o\s+que\s+(Ã©|significa)/i,
-  /qual\s+(Ã©|o)/i,
+  /como\s+(funciona|faz|é|posso)/i,
+  /o\s+que\s+(é|significa)/i,
+  /qual\s+(é|o)/i,
   /pode\s+me\s+explicar/i,
   /quero\s+saber/i,
   /me\s+explica/i,
