@@ -752,13 +752,13 @@ const FINANCIAL_BARRIER_KEYWORDS = [
   'dinheiro',
   'pagamento',
   'reembolso',
-  'comissÃ£o',
+  'comissão',
   'carteira',
-  'transferÃªncia',
+  'transferência',
   'estorno',
   'cancelar',
   'cancelamento',
-  'devoluÃ§Ã£o',
+  'devolução',
   'devolver',
   'meu dinheiro'
 ];
