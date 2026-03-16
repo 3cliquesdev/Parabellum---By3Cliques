@@ -870,7 +870,7 @@ serve(async (req) => {
                       }
                       
                       if (!hasOnlineAgents) {
-                        console.log("[meta-whatsapp-webhook] ⚠️ Nenhum agente online no departamento:", conversation.department_id);
+                        console.log("[meta-whatsapp-webhook] ⚠️ Nenhum agente online no departamento:", conversation.department);
                         queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";
                       }
                     }
