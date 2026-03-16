@@ -4366,7 +4366,7 @@ Responda APENAS: skip ou search`
           { role: 'user', content: customerMessage }
         ],
         temperature: 0.1,
-        max_tokens: 10
+        max_completion_tokens: 50
       });
 
       intentType = intentData.choices?.[0]?.message?.content?.trim().toLowerCase() || 'search';
