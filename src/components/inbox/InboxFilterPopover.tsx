@@ -83,6 +83,7 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
   const [open, setOpen] = useState(false);
   const { data: users } = useUsers();
   const { data: tags } = useTags();
+  const { data: departments } = useDepartments({ activeOnly: true });
 
   // Contagem de filtros ativos - search NÃO é contado (é campo separado, não "filtro")
   const activeFiltersCount = [
