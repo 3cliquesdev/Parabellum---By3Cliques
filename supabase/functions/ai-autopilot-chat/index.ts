@@ -4348,6 +4348,8 @@ Responda APENAS: skip ou search`
         }
         
         const hasPersonaCategories = activeKbCategories.length > 0;
+        const activeProductFilter: string[] = flowKbProductFilter || [];
+        const hasProductFilter = activeProductFilter.length > 0;
       
         console.log('[ai-autopilot-chat] ðŸ“‚ KB Categories:', {
           persona_id: persona.id,
