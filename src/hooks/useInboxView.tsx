@@ -846,12 +846,9 @@ export function useInboxCounts(userId?: string) {
         const message = (error as any)?.message || "";
         const isBootError = status === 503 || message.includes("BOOT_ERROR");
         if (isBootError) {
-          console.warn("[useInboxCounts] BOOT_ERROR (cold start), retrying...");
-          return {
-            total: 0, mine: 0, aiQueue: 0, humanQueue: 0,
-            slaCritical: 0, slaWarning: 0, notResponded: 0, myNotResponded: 0,
-            unassigned: 0, unread: 0, closed: 0, byDepartment: [], byTag: [],
-          } as InboxCounts;
+          console.warn("[useInboxCounts] BOOT_ERROR (cold start), will retry via React Query...");
+          // Throw para ativar o retry do React Query ao invés de retornar dados vazios
+          throw Object.assign(new Error("BOOT_ERROR: Function failed to start"), { status: 503 });
         }
         throw error;
       }
