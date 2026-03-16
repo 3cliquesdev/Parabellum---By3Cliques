@@ -52,6 +52,8 @@ interface MessagesWithMediaProps {
   messagesEndRef: React.RefObject<HTMLDivElement>;
   /** Tick counter from parent — forces re-render for relative timestamps */
   _tick?: number;
+  /** Callback to retry a failed message */
+  onRetryMessage?: (messageId: string, conversationId: string) => void;
 }
 
 // Helper: Extrair MIME type do attachment_type
@@ -162,6 +164,7 @@ export function MessagesWithMedia({
   isManager,
   messagesEndRef,
   _tick,
+  onRetryMessage,
 }: MessagesWithMediaProps) {
   // Extrair todos os attachments prontos de todas as mensagens
   const allAttachments = useMemo(() => {
@@ -394,6 +397,7 @@ export function MessagesWithMedia({
               isAdmin={isAdmin}
               isManager={isManager}
               attachments={attachments}
+              onRetry={message.status === 'failed' && onRetryMessage ? () => onRetryMessage(message.id, conversation.id) : undefined}
             />
             {flowName && (
               <p className="text-[10px] text-muted-foreground mt-0.5 ml-10 opacity-70">

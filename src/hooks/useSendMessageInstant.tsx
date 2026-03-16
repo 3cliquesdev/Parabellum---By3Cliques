@@ -5,6 +5,35 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { isFeatureEnabled } from "@/config/features";
 
+/**
+ * Helper: invocar edge function com 1 retry automático (delay 2s)
+ * Protege contra instabilidade transiente (503/timeout)
+ */
+async function invokeWithRetry(
+  functionName: string,
+  body: Record<string, unknown>
+): Promise<{ data: any; error: any }> {
+  const result = await supabase.functions.invoke(functionName, { body });
+  
+  // Se falhou, tentar 1x mais após 2s
+  if (result.error) {
+    const errorMsg = result.error?.message || String(result.error);
+    const isTransient = errorMsg.includes('Failed to send') || 
+                        errorMsg.includes('503') ||
+                        errorMsg.includes('network') ||
+                        errorMsg.includes('timeout') ||
+                        errorMsg.includes('EDGE_RUNTIME');
+    
+    if (isTransient) {
+      console.warn(`[invokeWithRetry] ⚠️ ${functionName} falhou, retry em 2s...`, errorMsg);
+      await new Promise(r => setTimeout(r, 2000));
+      return await supabase.functions.invoke(functionName, { body });
+    }
+  }
+  
+  return result;
+}
+
 // Configuração para envio WhatsApp (Meta ou Evolution)
 interface WhatsAppConfig {
   provider: 'meta' | 'evolution';
@@ -187,9 +216,7 @@ export function useSendMessageInstant() {
                 metaPayload.message = contentToSend;
               }
               
-              const { data: metaResponse, error: metaError } = await supabase.functions.invoke('send-meta-whatsapp', {
-                body: metaPayload
-              });
+              const { data: metaResponse, error: metaError } = await invokeWithRetry('send-meta-whatsapp', metaPayload);
               
               if (metaError) throw new Error(metaError.message || 'Meta WhatsApp failed');
               
@@ -222,9 +249,7 @@ export function useSendMessageInstant() {
                 evolutionPayload.message = contentToSend;
               }
               
-              const { error: evolutionError } = await supabase.functions.invoke('send-whatsapp-message', {
-                body: evolutionPayload
-              });
+              const { error: evolutionError } = await invokeWithRetry('send-whatsapp-message', evolutionPayload);
               
               if (evolutionError) throw new Error(evolutionError.message || 'Evolution API failed');
               

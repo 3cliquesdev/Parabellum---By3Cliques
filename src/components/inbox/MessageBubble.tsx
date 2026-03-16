@@ -45,6 +45,7 @@ interface MessageBubbleProps {
   isManager?: boolean;
   attachments?: MediaAttachment[];
   className?: string;
+  onRetry?: () => void;
 }
 
 // Pure function — no per-bubble interval. Parent passes _tick to force re-render.
@@ -75,6 +76,7 @@ export function MessageBubble({
   isManager = false,
   attachments = [],
   className,
+  onRetry,
 }: MessageBubbleProps) {
   const relativeTime = formatRelativeTime(createdAt);
   return (
@@ -271,6 +273,18 @@ export function MessageBubble({
                   isAI ? "text-violet-600 dark:text-violet-400" : "text-white"
                 }
               />
+            )}
+
+            {/* Botão Reenviar para mensagens falhadas */}
+            {!isCustomer && status === "failed" && onRetry && (
+              <button
+                onClick={onRetry}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-destructive hover:text-destructive/80 transition-colors ml-1"
+                title="Reenviar mensagem"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Reenviar
+              </button>
             )}
           </div>
         </div>
