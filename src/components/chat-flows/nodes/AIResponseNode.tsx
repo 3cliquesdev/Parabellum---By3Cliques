@@ -22,7 +22,7 @@ interface AIResponseNodeData {
   forbid_questions?: boolean;
   forbid_options?: boolean;
   forbid_financial?: boolean;
-  // 🆕 Modo Persistente
+  // Modo Persistente
   ai_persistent?: boolean;
   max_ai_interactions?: number;
   exit_keywords?: string[];
@@ -30,14 +30,20 @@ interface AIResponseNodeData {
   forbid_cancellation?: boolean;
   forbid_support?: boolean;
   forbid_consultant?: boolean;
-  // 🆕 5 novos intents
+  // 5 novos intents
   forbid_pedidos?: boolean;
   forbid_devolucao?: boolean;
   forbid_saque?: boolean;
   forbid_sistema?: boolean;
   forbid_internacional?: boolean;
-  // 🆕 OTP inline
+  // OTP inline
   require_otp_for_financial?: boolean;
+  // Ação ao sair
+  end_action?: string;
+  action_data?: {
+    department_name?: string;
+    [key: string]: any;
+  };
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
