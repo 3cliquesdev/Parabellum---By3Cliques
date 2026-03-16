@@ -59,6 +59,7 @@ import { VariableAutocomplete } from "./VariableAutocomplete";
 import { CONDITION_CONTACT_FIELDS, CONDITION_CONVERSATION_FIELDS, getAncestorNodeIds } from "./variableCatalog";
 import { useTicketCategories } from "@/hooks/useTicketCategories";
 import { useTags } from "@/hooks/useTags";
+import { useDepartments } from "@/hooks/useDepartments";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 // Tipos de nós para chat flows
@@ -187,6 +188,7 @@ const SAVE_AS_SUGGESTIONS: Record<string, { value: string; label: string }[]> = 
 function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSaving }: ChatFlowEditorProps) {
   const { data: ticketCategories = [] } = useTicketCategories();
   const { data: allTags = [] } = useTags();
+  const { data: departments = [] } = useDepartments({ activeOnly: true });
   // Criar nó de início se não houver nós
   const initialNodes = useMemo(() => {
     if (initialFlow?.nodes && initialFlow.nodes.length > 0) {
@@ -301,6 +303,8 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         description_template: "",
         ticket_category: "outro",
         ticket_priority: "medium",
+        department_id: null,
+        department_name: null,
       },
     };
     return defaults[type] || { label: `Novo ${type}` };
@@ -1416,6 +1420,30 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                         <SelectItem value="medium">Média</SelectItem>
                         <SelectItem value="high">Alta</SelectItem>
                         <SelectItem value="urgent">Urgente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Departamento</Label>
+                    <Select
+                      value={selectedNode.data.department_id || "none"}
+                      onValueChange={(v) => {
+                        if (v === "none") {
+                          updateNodeData("department_id", null);
+                          updateNodeData("department_name", null);
+                        } else {
+                          const dept = departments.find(d => d.id === v);
+                          updateNodeData("department_id", v);
+                          updateNodeData("department_name", dept?.name || null);
+                        }
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Sem departamento" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem departamento</SelectItem>
+                        {departments.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

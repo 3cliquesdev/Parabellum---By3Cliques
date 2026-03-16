@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
-import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign, Store, Briefcase, Truck, RotateCcw, Wallet, Monitor, Globe } from "lucide-react";
+import { Sparkles, Brain, Bot, BookOpen, ShoppingCart, Package, Wand2, Shield, MessageSquareOff, Target, RefreshCw, Hash, KeyRound, DollarSign, Store, Briefcase, Truck, RotateCcw, Wallet, Monitor, Globe, Ticket } from "lucide-react";
 import { ChatFlowNodeWrapper } from "../ChatFlowNodeWrapper";
 import { Badge } from "@/components/ui/badge";
 
@@ -22,7 +22,7 @@ interface AIResponseNodeData {
   forbid_questions?: boolean;
   forbid_options?: boolean;
   forbid_financial?: boolean;
-  // 🆕 Modo Persistente
+  // Modo Persistente
   ai_persistent?: boolean;
   max_ai_interactions?: number;
   exit_keywords?: string[];
@@ -30,14 +30,20 @@ interface AIResponseNodeData {
   forbid_cancellation?: boolean;
   forbid_support?: boolean;
   forbid_consultant?: boolean;
-  // 🆕 5 novos intents
+  // 5 novos intents
   forbid_pedidos?: boolean;
   forbid_devolucao?: boolean;
   forbid_saque?: boolean;
   forbid_sistema?: boolean;
   forbid_internacional?: boolean;
-  // 🆕 OTP inline
+  // OTP inline
   require_otp_for_financial?: boolean;
+  // Ação ao sair
+  end_action?: string;
+  action_data?: {
+    department_name?: string;
+    [key: string]: any;
+  };
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
@@ -350,6 +356,14 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
           <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-cyan-600/90">
             <Globe className="h-2.5 w-2.5" />
             Internacional
+          </Badge>
+        )}
+
+        {/* Badge de end_action: create_ticket */}
+        {data.end_action === "create_ticket" && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 gap-0.5 border-violet-500/50 text-violet-600">
+            <Ticket className="h-2.5 w-2.5" />
+            Ticket
           </Badge>
         )}
 
