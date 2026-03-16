@@ -112,7 +112,7 @@ export function SystemHealthWidget() {
 
       {data.totalErrors24h === 0 && (
         <div className="text-center py-3">
-          <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-1" />
+          <CheckCircle className="h-8 w-8 text-primary mx-auto mb-1" />
           <p className="text-xs text-muted-foreground">Nenhum erro nas últimas 24h</p>
         </div>
       )}

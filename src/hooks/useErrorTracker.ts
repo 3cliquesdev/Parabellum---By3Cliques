@@ -45,7 +45,7 @@ export function useErrorTracker() {
 
     // Persist to database
     try {
-      await supabase.from('client_error_logs').insert({
+      await supabase.from('client_error_logs').insert([{
         user_id: userId,
         error_type: entry.type,
         message: entry.message.slice(0, 2000),
@@ -53,11 +53,11 @@ export function useErrorTracker() {
         metadata: {
           url: window.location.href,
           user_agent: navigator.userAgent,
-          build_id: (window as Record<string, unknown>).__APP_SCHEMA_VERSION || 'unknown',
+          build_id: ((window as unknown) as Record<string, unknown>).__APP_SCHEMA_VERSION || 'unknown',
           timestamp: new Date().toISOString(),
           ...entry.metadata,
         },
-      });
+      }]);
     } catch (err) {
       // Silently fail — don't create error loops
       console.warn('[ErrorTracker] Failed to persist error:', err);
