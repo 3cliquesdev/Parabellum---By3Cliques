@@ -7270,7 +7270,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         // NÃO passar temperature nem max_tokens — callAIWithFallback normaliza automaticamente
         const retryPayload: any = {
           messages: retryMessages,
-          max_completion_tokens: 300,
+          max_completion_tokens: 800,
         };
         const retryData = await callAIWithFallback(retryPayload);
         rawAIContent = retryData.choices?.[0]?.message?.content;
