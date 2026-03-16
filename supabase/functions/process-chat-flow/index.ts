@@ -4310,7 +4310,7 @@ serve(async (req) => {
             personaName: nextNode.data?.persona_name || null,
             kbCategories: nextNode.data?.kb_categories || null,
             fallbackMessage: nextNode.data?.fallback_message || null,
-            objective: nextNode.data?.objective || null,
+            objective: nextNode.data?.objective ? replaceVariables(nextNode.data.objective, variablesContext || await rebuildCtx()) : null,
             maxSentences: nextNode.data?.max_sentences ?? 3,
             forbidQuestions: nextNode.data?.forbid_questions ?? true,
             forbidOptions: nextNode.data?.forbid_options ?? true,
