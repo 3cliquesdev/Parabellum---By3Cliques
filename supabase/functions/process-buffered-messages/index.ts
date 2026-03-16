@@ -366,6 +366,7 @@ async function callPipeline(
           forbidOptions: flowData.forbidOptions ?? true,
           forbidFinancial: flowData.forbidFinancial ?? false,
           forbidCommercial: flowData.forbidCommercial ?? false,
+          collectedData: flowData.collectedData || null,
         };
       }
 
