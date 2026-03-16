@@ -921,7 +921,7 @@ serve(async (req) => {
                       conversation_id: conversation.id,
                       skip_db_save: false,
                       is_bot_message: true,
-                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                      metadata: (flowData as any).flowName ? { flow_id: (flowData as any).flowId, flow_name: (flowData as any).flowName } : undefined,
                     },
                   });
                   
