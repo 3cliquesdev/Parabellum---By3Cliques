@@ -724,7 +724,7 @@ const FALLBACK_PHRASES = [
   'encaminhar para um humano',
   'chamar um atendente',
   'não consigo te ajudar com isso',
-  'não consigo resolver por aqui',
+  
   'não posso ajudar',
   'sorry',
   'i cannot',
