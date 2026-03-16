@@ -99,13 +99,13 @@ export function BulkReengageDialog({
   const { data: agents = [] } = useQuery({
     queryKey: ["profiles-agents"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("profiles")
         .select("id, full_name, avatar_url")
         .eq("is_active", true)
         .order("full_name");
       if (error) throw error;
-      return data || [];
+      return (data || []) as any[];
     },
     enabled: open && destinationType === "specific_agent",
   });
