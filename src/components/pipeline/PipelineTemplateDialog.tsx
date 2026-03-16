@@ -95,7 +95,7 @@ export function PipelineTemplateDialog({
         contact_id: contactId,
         channel: "whatsapp",
         status: "open",
-        ai_mode: "waiting_human",
+        ai_mode: "copilot",
         assigned_to: user?.id,
         whatsapp_meta_instance_id: instanceId,
       };
