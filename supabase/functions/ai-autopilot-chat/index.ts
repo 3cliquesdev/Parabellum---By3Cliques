@@ -7757,7 +7757,7 @@ Você quer:
             console.log('[ai-autopilot-chat] ðŸŽ« Criando ticket automaticamente:', args);
 
             // ðŸ”’ HARD GUARD: Bloquear criaÃ§Ã£o de ticket financeiro quando forbidFinancial ativo
-            const financialIssueTypes = ['saque', 'reembolso', 'estorno', 'devolucao', 'devoluÃ§Ã£o', 'financeiro', 'cobranÃ§a', 'cobranca', 'cancelamento'];
+            const financialIssueTypes = ['saque', 'reembolso', 'estorno', 'devolucao', 'devolução', 'financeiro', 'cobrança', 'cobranca', 'cancelamento'];
             const isFinancialTicket = financialIssueTypes.includes((args.issue_type || '').toLowerCase());
             
             if (flow_context?.forbidFinancial && isFinancialTicket) {
