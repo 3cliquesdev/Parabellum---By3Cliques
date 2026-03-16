@@ -152,6 +152,9 @@ export function ReengageTemplateDialog({
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
       queryClient.invalidateQueries({ queryKey: ["messages", conversation.id] });
+      queryClient.invalidateQueries({ queryKey: ["ai-mode", conversation.id] });
+      queryClient.invalidateQueries({ queryKey: ["my-inbox-items"] });
+      queryClient.invalidateQueries({ queryKey: ["my-not-responded-inbox"] });
       onOpenChange(false);
       setSelectedTemplateId(null);
       setVariables({});

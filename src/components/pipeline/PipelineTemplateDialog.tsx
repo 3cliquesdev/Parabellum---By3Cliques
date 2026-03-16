@@ -161,6 +161,9 @@ export function PipelineTemplateDialog({
 
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
+      queryClient.invalidateQueries({ queryKey: ["ai-mode"] });
+      queryClient.invalidateQueries({ queryKey: ["my-inbox-items"] });
+      queryClient.invalidateQueries({ queryKey: ["my-not-responded-inbox"] });
       onOpenChange(false);
       setSelectedTemplateId(null);
       setVariables({});
