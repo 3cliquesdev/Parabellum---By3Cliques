@@ -19,6 +19,7 @@ import { ActiveFilterChips } from "@/components/inbox/ActiveFilterChips";
 import { BulkActionsBar } from "@/components/inbox/BulkActionsBar";
 import { InboxBulkDistributeBar } from "@/components/inbox/InboxBulkDistributeBar";
 import { InboxBulkDistributeDialog } from "@/components/inbox/InboxBulkDistributeDialog";
+import { BulkReengageDialog } from "@/components/inbox/BulkReengageDialog";
 import { BroadcastAIQueueButton } from "@/components/inbox/BroadcastAIQueueButton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
