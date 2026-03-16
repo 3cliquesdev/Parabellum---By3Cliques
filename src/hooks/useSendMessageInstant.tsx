@@ -509,9 +509,8 @@ export function useSendMessageInstant() {
           };
 
           if (hasMedia) {
-            evolutionPayload.media_url = failedMsg.media_url;
-            evolutionPayload.media_type = failedMsg.media_type;
-            evolutionPayload.media_filename = failedMsg.media_filename;
+            evolutionPayload.media_url = failedMsg.attachment_url;
+            evolutionPayload.media_type = failedMsg.attachment_type;
             evolutionPayload.message = failedMsg.content || '';
           } else {
             evolutionPayload.message = failedMsg.content;
