@@ -678,14 +678,24 @@ export default function Inbox() {
         onDistribute={() => setShowDistributeDialog(true)}
         onReactivateAI={handleBulkReactivateAI}
         onCloseConversations={handleBulkCloseConversations}
+        onReengage={() => setShowReengageDialog(true)}
         isReactivating={bulkReactivate.isPending}
         isClosing={bulkClose.isPending}
+        isArchived={isArchived}
       />
 
       {/* Bulk Distribute Dialog */}
       <InboxBulkDistributeDialog
         open={showDistributeDialog}
         onOpenChange={setShowDistributeDialog}
+        conversationIds={Array.from(selectedIds)}
+        onSuccess={handleClearSelection}
+      />
+
+      {/* Bulk Reengage Dialog */}
+      <BulkReengageDialog
+        open={showReengageDialog}
+        onOpenChange={setShowReengageDialog}
         conversationIds={Array.from(selectedIds)}
         onSuccess={handleClearSelection}
       />
