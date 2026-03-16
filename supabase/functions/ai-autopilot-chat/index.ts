@@ -3263,6 +3263,7 @@ serve(async (req) => {
     if (!flow_context) {
       flowPersonaId = null;
       flowKbCategories = null;
+      flowKbProductFilter = null;
       flowContextPrompt = null;
       flowFallbackMessage = null;
     }
