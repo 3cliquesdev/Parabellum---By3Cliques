@@ -308,6 +308,10 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
       const monthlyEvolution = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
 
       const topAffiliates = Array.from(affiliateMap.values())
+        .map(a => ({
+          ...a,
+          commissionPercent: a.totalGrossRevenue > 0 ? (a.totalCommission / a.totalGrossRevenue) * 100 : 0,
+        }))
         .sort((a, b) => b.totalCommission - a.totalCommission);
 
       console.log("✅ useKiwifyFinancials: Dados calculados de kiwify_events", {
