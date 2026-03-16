@@ -7145,7 +7145,7 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
       try {
         const retryMessages = [
           { role: 'system' as const, content: contextualizedSystemPrompt.substring(0, 4000) },
-          ...messagesForAI.slice(-5),
+          ...aiPayload.messages.slice(-5),
           { role: 'user' as const, content: customerMessage }
         ];
         const retryPayload: any = {
