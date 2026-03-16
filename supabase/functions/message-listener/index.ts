@@ -313,6 +313,7 @@ serve(async (req) => {
           response_format: 'text_only',
           personaId: flowData.personaId,
           kbCategories: flowData.kbCategories,
+          kbProductFilter: flowData.kbProductFilter,
           contextPrompt: flowData.contextPrompt,
           fallbackMessage: flowData.fallbackMessage,
           // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação

@@ -2344,6 +2344,7 @@ serve(async (req) => {
                         response_format: 'text_only',
                         personaId: currentNode.data?.persona_id || null,
                         kbCategories: currentNode.data?.kb_categories || null,
+                        kbProductFilter: [], // Test mode - no product context available
                         contextPrompt: currentNode.data?.context_prompt || null,
                         fallbackMessage: currentNode.data?.fallback_message || null,
                         objective: currentNode.data?.objective || null,
