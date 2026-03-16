@@ -752,13 +752,13 @@ const FINANCIAL_BARRIER_KEYWORDS = [
   'dinheiro',
   'pagamento',
   'reembolso',
-  'comissÃ£o',
+  'comissão',
   'carteira',
-  'transferÃªncia',
+  'transferência',
   'estorno',
   'cancelar',
   'cancelamento',
-  'devoluÃ§Ã£o',
+  'devolução',
   'devolver',
   'meu dinheiro'
 ];
@@ -1394,7 +1394,7 @@ const ESCAPE_PATTERNS = [
   // AÃ§Ã£o em andamento (estou/estarei + gerÃºndio)
   /(estou|estarei)\s+(te\s+)?(direcionando|redirecionando|transferindo|encaminhando|conectando)/i,
   // MenÃ§Ã£o a humano/atendente com contexto de espera
-  /\b(aguarde|sÃ³ um instante).*(atendente|especialista|consultor)\b/i,
+  /\b(aguarde|só um instante).*(atendente|especialista|consultor)\b/i,
   // Chamar/acionar humano
   /\b(chamar|acionar).*(atendente|especialista|consultor)\b/i,
   // Menu de atendimento (caso especÃ­fico)
@@ -1402,8 +1402,8 @@ const ESCAPE_PATTERNS = [
   // OpÃ§Ãµes numeradas (2+ emojis para evitar falso positivo com emoji isolado)
   /[1-9]ï¸âƒ£.*[1-9]ï¸âƒ£/s,
   // Menus textuais
-  /escolha uma das op[Ã§c][Ãµo]es/i,
-  /selecione uma op[Ã§c][Ã£a]o/i,
+  /escolha uma das opções/i,
+  /selecione uma opção/i,
   // Menus textuais com numeraÃ§Ã£o (1) ... 2) ...)
   /\b1[\)\.\-][\s\S]*?\b2[\)\.\-]/i,
 ];
@@ -6533,64 +6533,64 @@ REGRA: Tente resolver sozinha. Se nÃ£o conseguir e o cliente pedir humano, use
     // ðŸ”’ TRAVA FINANCEIRA: Injetar instruÃ§Ãµes diretamente no prompt da LLM
     const financialGuardInstruction = flowForbidFinancial ? `
 
-ðŸ”’ TRAVA FINANCEIRA ATIVA â€” REGRAS OBRIGATÃ“RIAS:
-- Responda perguntas INFORMATIVAS sobre finanÃ§as usando APENAS dados da base de conhecimento.
-- Se o cliente pedir uma AÃ‡ÃƒO financeira (saque, reembolso, estorno, devoluÃ§Ã£o), responda: "Entendi sua solicitaÃ§Ã£o. Vou te encaminhar para o setor responsÃ¡vel." e retorne [[FLOW_EXIT:financeiro]].
-- NUNCA cite valores monetÃ¡rios, prazos em dias ou percentuais sobre saques/reembolsos A MENOS que existam EXATAMENTE na base de conhecimento.
-- Se nÃ£o encontrar a informaÃ§Ã£o na KB, responda: "NÃ£o tenho essa informaÃ§Ã£o no momento. O setor financeiro poderÃ¡ te orientar com detalhes."
+🔒 TRAVA FINANCEIRA ATIVA — REGRAS OBRIGATÓRIAS:
+- Responda perguntas INFORMATIVAS sobre finanças usando APENAS dados da base de conhecimento.
+- Se o cliente pedir uma AÇÃO financeira (saque, reembolso, estorno, devolução), responda: "Entendi sua solicitação. Vou te encaminhar para o setor responsável." e retorne [[FLOW_EXIT:financeiro]].
+- NUNCA cite valores monetários, prazos em dias ou percentuais sobre saques/reembolsos A MENOS que existam EXATAMENTE na base de conhecimento.
+- Se não encontrar a informação na KB, responda: "Não tenho essa informação no momento. O setor financeiro poderá te orientar com detalhes."
 - NUNCA invente, deduza ou estime valores financeiros.
 ${ambiguousFinancialDetected ? `
-âš ï¸ DESAMBIGUAÃ‡ÃƒO OBRIGATÃ“RIA: O cliente mencionou um termo financeiro sem deixar claro se quer informaÃ§Ã£o ou realizar uma aÃ§Ã£o.
-VocÃª DEVE perguntar de forma natural e empÃ¡tica: "Posso te ajudar com informaÃ§Ãµes sobre [tema] ou vocÃª gostaria de fazer uma solicitaÃ§Ã£o?"
-Nunca assuma a intenÃ§Ã£o do cliente. Essa pergunta Ã© OBRIGATÃ“RIA antes de qualquer resposta.
-Se o cliente confirmar que quer SOLICITAR/FAZER a aÃ§Ã£o (ex: "quero sacar", "sim, quero solicitar") â†’ responda com [[FLOW_EXIT:financeiro]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo financeiro sem deixar claro se quer informação ou realizar uma ação.
+Você DEVE perguntar de forma natural e empática: "Posso te ajudar com informações sobre [tema] ou você gostaria de fazer uma solicitação?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+Se o cliente confirmar que quer SOLICITAR/FAZER a ação (ex: "quero sacar", "sim, quero solicitar") → responda com [[FLOW_EXIT:financeiro]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
     // ðŸš« TRAVA CANCELAMENTO: Injetar instruÃ§Ãµes diretamente no prompt da LLM
     const cancellationGuardInstruction = flowForbidCancellation ? `
 
-ðŸš« TRAVA CANCELAMENTO ATIVA â€” REGRAS OBRIGATÃ“RIAS:
+🚫 TRAVA CANCELAMENTO ATIVA — REGRAS OBRIGATÓRIAS:
 - Responda perguntas INFORMATIVAS sobre cancelamento usando APENAS dados da base de conhecimento.
-- Se o cliente pedir uma AÃ‡ÃƒO de cancelamento (cancelar plano, encerrar conta, desistir), responda: "Entendi sua solicitaÃ§Ã£o de cancelamento. Vou te encaminhar para o setor responsÃ¡vel." e retorne [[FLOW_EXIT:cancelamento]].
-- Se nÃ£o encontrar a informaÃ§Ã£o na KB, responda: "NÃ£o tenho essa informaÃ§Ã£o no momento. O setor responsÃ¡vel poderÃ¡ te orientar."
+- Se o cliente pedir uma AÇÃO de cancelamento (cancelar plano, encerrar conta, desistir), responda: "Entendi sua solicitação de cancelamento. Vou te encaminhar para o setor responsável." e retorne [[FLOW_EXIT:cancelamento]].
+- Se não encontrar a informação na KB, responda: "Não tenho essa informação no momento. O setor responsável poderá te orientar."
 ${ambiguousCancellationDetected ? `
-âš ï¸ DESAMBIGUAÃ‡ÃƒO OBRIGATÃ“RIA: O cliente mencionou um termo de cancelamento sem deixar claro se quer informaÃ§Ã£o ou realizar a aÃ§Ã£o.
-VocÃª DEVE perguntar de forma natural e empÃ¡tica: "VocÃª tem dÃºvidas sobre cancelamento ou deseja cancelar um produto/serviÃ§o?"
-Nunca assuma a intenÃ§Ã£o do cliente. Essa pergunta Ã© OBRIGATÃ“RIA antes de qualquer resposta.
-Se o cliente confirmar que quer CANCELAR â†’ responda com [[FLOW_EXIT:cancelamento]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo de cancelamento sem deixar claro se quer informação ou realizar a ação.
+Você DEVE perguntar de forma natural e empática: "Você tem dúvidas sobre cancelamento ou deseja cancelar um produto/serviço?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
     // ðŸ›’ TRAVA COMERCIAL: Injetar instruÃ§Ãµes diretamente no prompt da LLM
     const commercialGuardInstruction = flowForbidCommercialPrompt ? `
 
-ðŸ›’ TRAVA COMERCIAL ATIVA â€” REGRAS OBRIGATÃ“RIAS:
-- Se o cliente quiser COMPRAR, ASSINAR, ver PREÃ‡OS ou fazer UPGRADE, responda: "Ã“timo! Vou te conectar com nosso time comercial para te ajudar com isso." e retorne [[FLOW_EXIT:comercial]].
-- Responda perguntas INFORMATIVAS sobre produtos/serviÃ§os usando a base de conhecimento.
+🛒 TRAVA COMERCIAL ATIVA — REGRAS OBRIGATÓRIAS:
+- Se o cliente quiser COMPRAR, ASSINAR, ver PREÇOS ou fazer UPGRADE, responda: "Ótimo! Vou te conectar com nosso time comercial para te ajudar com isso." e retorne [[FLOW_EXIT:comercial]].
+- Responda perguntas INFORMATIVAS sobre produtos/serviços usando a base de conhecimento.
 ${ambiguousCommercialDetected ? `
-âš ï¸ DESAMBIGUAÃ‡ÃƒO OBRIGATÃ“RIA: O cliente mencionou um termo comercial sem deixar claro se quer informaÃ§Ã£o ou realizar uma compra/assinatura.
-VocÃª DEVE perguntar de forma natural e empÃ¡tica: "VocÃª gostaria de saber mais informaÃ§Ãµes sobre [tema] ou deseja falar com nosso time comercial?"
-Nunca assuma a intenÃ§Ã£o do cliente. Essa pergunta Ã© OBRIGATÃ“RIA antes de qualquer resposta.
-Se o cliente confirmar que quer COMPRAR/ASSINAR/VER PREÃ‡OS â†’ responda com [[FLOW_EXIT:comercial]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo comercial sem deixar claro se quer informação ou realizar uma compra/assinatura.
+Você DEVE perguntar de forma natural e empática: "Você gostaria de saber mais informações sobre [tema] ou deseja falar com nosso time comercial?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+Se o cliente confirmar que quer COMPRAR/ASSINAR/VER PREÇOS → responda com [[FLOW_EXIT:comercial]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
     // ðŸ’¼ TRAVA CONSULTOR: Injetar instruÃ§Ãµes diretamente no prompt da LLM
     const consultorGuardInstruction = flowForbidConsultantPrompt ? `
 
-ðŸ’¼ TRAVA CONSULTOR ATIVA â€” REGRAS OBRIGATÃ“RIAS:
+💼 TRAVA CONSULTOR ATIVA — REGRAS OBRIGATÓRIAS:
 - Se o cliente pedir para FALAR COM SEU CONSULTOR/ASSESSOR/GERENTE, responda: "Entendi! Vou te conectar com seu consultor." e retorne [[FLOW_EXIT:consultor]].
 - Responda perguntas gerais normalmente usando a base de conhecimento.
 ${ambiguousConsultorDetected ? `
-âš ï¸ DESAMBIGUAÃ‡ÃƒO OBRIGATÃ“RIA: O cliente mencionou um termo relacionado a consultor sem deixar claro se quer falar com ele ou tem uma dÃºvida geral.
-VocÃª DEVE perguntar de forma natural e empÃ¡tica: "VocÃª gostaria de falar diretamente com seu consultor ou posso te ajudar com sua dÃºvida?"
-Nunca assuma a intenÃ§Ã£o do cliente. Essa pergunta Ã© OBRIGATÃ“RIA antes de qualquer resposta.
-Se o cliente confirmar que quer FALAR COM O CONSULTOR â†’ responda com [[FLOW_EXIT:consultor]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo relacionado a consultor sem deixar claro se quer falar com ele ou tem uma dúvida geral.
+Você DEVE perguntar de forma natural e empática: "Você gostaria de falar diretamente com seu consultor ou posso te ajudar com sua dúvida?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+Se o cliente confirmar que quer FALAR COM O CONSULTOR → responda com [[FLOW_EXIT:consultor]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
@@ -7757,7 +7757,7 @@ Você quer:
             console.log('[ai-autopilot-chat] ðŸŽ« Criando ticket automaticamente:', args);
 
             // ðŸ”’ HARD GUARD: Bloquear criaÃ§Ã£o de ticket financeiro quando forbidFinancial ativo
-            const financialIssueTypes = ['saque', 'reembolso', 'estorno', 'devolucao', 'devoluÃ§Ã£o', 'financeiro', 'cobranÃ§a', 'cobranca', 'cancelamento'];
+            const financialIssueTypes = ['saque', 'reembolso', 'estorno', 'devolucao', 'devolução', 'financeiro', 'cobrança', 'cobranca', 'cancelamento'];
             const isFinancialTicket = financialIssueTypes.includes((args.issue_type || '').toLowerCase());
             
             if (flow_context?.forbidFinancial && isFinancialTicket) {
