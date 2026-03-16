@@ -352,10 +352,10 @@ function safeParseToolArgs(rawArgs: string): any {
 function formatOptionsAsText(options: Array<{label: string; value: string}> | null | undefined): string {
   if (!options || options.length === 0) return '';
   
-  const emojis = ['1ï¸âƒ£', '2ï¸âƒ£', '3ï¸âƒ£', '4ï¸âƒ£', '5ï¸âƒ£', '6ï¸âƒ£', '7ï¸âƒ£', '8ï¸âƒ£', '9ï¸âƒ£', 'ðŸ”Ÿ'];
+  const numberEmojis = ['1\uFE0F\u20E3', '2\uFE0F\u20E3', '3\uFE0F\u20E3', '4\uFE0F\u20E3', '5\uFE0F\u20E3', '6\uFE0F\u20E3', '7\uFE0F\u20E3', '8\uFE0F\u20E3', '9\uFE0F\u20E3', '\uD83D\uDD1F'];
   
   const formatted = options.map((opt, idx) => {
-    const emoji = emojis[idx] || `${idx + 1}.`;
+    const emoji = numberEmojis[idx] || `${idx + 1}.`;
     return `${emoji} ${opt.label}`;
   }).join('\n');
   
@@ -372,7 +372,7 @@ function detectIntentCategory(message: string): string | null {
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   
   // Cancelamento
-  if (/cancel|assinatura|desinscrever|cancela|desinscriÃ§Ã£o/.test(msgLower)) return 'cancellation';
+  if (/cancel|assinatura|desinscrever|cancela|desinscricao/.test(msgLower)) return 'cancellation';
   
   // Reembolso
   if (/reembolso|devol|devolucao|trocar|estorno/.test(msgLower)) return 'refund';
@@ -402,11 +402,11 @@ function getIntentCategoryLabel(category: string | null): string {
     'refund': 'reembolso',
     'withdrawal': 'saque',
     'tracking': 'seu pedido/entrega',
-    'technical': 'problema tÃ©cnico',
-    'access': 'acesso Ã  plataforma',
-    'billing': 'cobranÃ§a'
+    'technical': 'problema técnico',
+    'access': 'acesso à plataforma',
+    'billing': 'cobrança'
   };
-  return category ? labels[category] || 'sua dÃºvida' : 'sua dÃºvida';
+  return category ? labels[category] || 'sua dúvida' : 'sua dúvida';
 }
 
 // ============================================================
@@ -823,11 +823,11 @@ const STRICT_SIMILARITY_THRESHOLD = 0.45; // Artigos com menos de 45% sÃ£o ign
 const EXPLICIT_HUMAN_REQUEST_PATTERNS = [
   /quero\s*(falar\s*(com)?)?\s*(um\s*)?(atendente|humano|pessoa|agente|suporte)/i,
   /preciso\s*(de\s*)?(um\s*)?(atendente|humano|pessoa|agente)/i,
-  /fala(r)?\s+com\s+(um\s+)?(atendente|humano|pessoa|alguÃ©m|alguem)/i,
+  /fala(r)?\s+com\s+(um\s+)?(atendente|humano|pessoa|alguém|alguem)/i,
   /me\s+(transfere|transfira|passa)\s+(para|a)\s+(um\s+)?(atendente|humano|pessoa)/i,
   /transferir\s+(para)?\s*(um\s*)?(atendente|humano)/i,
   /chamar?\s*(um\s*)?(atendente|humano|pessoa)/i,
-  /nÃ£o\s*consigo\s*resolver\s*(sozinho)?/i,
+  /não\s*consigo\s*resolver\s*(sozinho)?/i,
   /atendimento\s*humano/i,
   /pessoa\s*real/i,
   /suporte\s*humano/i,
@@ -835,20 +835,20 @@ const EXPLICIT_HUMAN_REQUEST_PATTERNS = [
 
 // ðŸ†• Indicadores de incerteza/alucinaÃ§Ã£o para validaÃ§Ã£o pÃ³s-resposta
 const HALLUCINATION_INDICATORS = [
-  'nÃ£o tenho certeza',
+  'não tenho certeza',
   'acredito que',
   'provavelmente',
   'geralmente',
   'pode ser que',
   'talvez',
-  'Ã© possÃ­vel que',
+  'é possível que',
   'me parece que',
   'suponho que',
   'imagino que'
 ];
 
 // Indicadores de conflito
-const CONFLICT_INDICATORS = ['porÃ©m', 'entretanto', 'no entanto', 'diferente', 'contrÃ¡rio', 'atualizado', 'novo', 'antigo'];
+const CONFLICT_INDICATORS = ['porém', 'entretanto', 'no entanto', 'diferente', 'contrário', 'atualizado', 'novo', 'antigo'];
 
 // ðŸ†• GATILHOS REMOVIDOS: IA nÃ£o faz mais handoff automÃ¡tico por keywords
 // A IA agora SEMPRE tenta responder e sÃ³ transfere se cliente PEDIR EXPLICITAMENTE
@@ -1066,21 +1066,21 @@ interface ConfidenceLog {
   timestamp: string;
 }
 
-// ðŸ†• PadrÃµes de INTENÃ‡ÃƒO financeira (contexto geral) - NÃƒO exige OTP
+// 🆕 Padrões de INTENÇÃO financeira (contexto geral) - NÃO exige OTP
 const FINANCIAL_ACTION_PATTERNS = [
-  // PadrÃµes de consulta (SEM OTP)
+  // Padrões de consulta (SEM OTP)
   /ver\s+(meu\s+)?saldo/i,                            // "quero ver meu saldo"
   /consultar\s+(meu\s+)?saldo/i,                      // "consultar saldo"
   /quanto\s+tenho\s+(de\s+)?saldo/i,                  // "quanto tenho de saldo"
   
-  // PadrÃµes de problemas gerais (SEM OTP)
-  /cadÃª\s+(meu\s+saldo|meu\s+dinheiro|meu\s+pix)/i,
-  /nÃ£o\s+(recebi|caiu|chegou)\s+(o\s+)?(pix|pagamento|saldo|dinheiro)/i,
+  // Padrões de problemas gerais (SEM OTP)
+  /cadê\s+(meu\s+saldo|meu\s+dinheiro|meu\s+pix)/i,
+  /não\s+(recebi|caiu|chegou)\s+(o\s+)?(pix|pagamento|saldo|dinheiro)/i,
   /erro\s+(no|de)\s+pagamento/i,
   /cobrar|cobraram\s+errado/i,
 ];
 
-// ðŸ” PadrÃµes de SAQUE DE SALDO (EXIGE OTP) - Apenas movimentaÃ§Ã£o de dinheiro da carteira
+// 🔐 Padrões de SAQUE DE SALDO (EXIGE OTP) - Apenas movimentação de dinheiro da carteira
 const WITHDRAWAL_ACTION_PATTERNS = [
   /quero\s+(fazer\s+)?(um\s+)?saque/i,                // "quero fazer um saque", "quero saque"
   /preciso\s+(fazer\s+)?(um\s+)?saque/i,              // "preciso fazer um saque"
@@ -1099,8 +1099,8 @@ const WITHDRAWAL_ACTION_PATTERNS = [
   /pedir\s+saque/i,                                   // "pedir saque"
 ];
 
-// ðŸ†• PadrÃµes de REEMBOLSO DE PEDIDO (SEM OTP) - DevoluÃ§Ã£o de pedido Kiwify
-// A IA explica o processo e sÃ³ transfere se cliente insistir
+// 🆕 Padrões de REEMBOLSO DE PEDIDO (SEM OTP) - Devolução de pedido Kiwify
+// A IA explica o processo e só transfere se cliente insistir
 const REFUND_ACTION_PATTERNS = [
   /quero\s+reembolso/i,                               // "quero reembolso"
   /preciso\s+(de\s+)?reembolso/i,                     // "preciso de reembolso"
@@ -1109,11 +1109,11 @@ const REFUND_ACTION_PATTERNS = [
   /estornar/i,                                        // "estornar"
   /estorno/i,                                         // "estorno"
   /cancelar\s+(meu\s+)?pedido/i,                      // "cancelar meu pedido"
-  /devoluÃ§Ã£o/i,                                       // "devoluÃ§Ã£o"
+  /devolução/i,                                       // "devolução"
   /devolver\s+pedido/i,                               // "devolver pedido"
 ];
 
-// ðŸ†• PadrÃµes de CANCELAMENTO DE ASSINATURA (SEM OTP) - Kiwify
+// 🆕 Padrões de CANCELAMENTO DE ASSINATURA (SEM OTP) - Kiwify
 const CANCELLATION_ACTION_PATTERNS = [
   /cancelar\s+(minha\s+)?assinatura/i,                // "cancelar minha assinatura"
   /cancelamento\s+(de\s+)?assinatura/i,               // "cancelamento de assinatura"
@@ -1121,14 +1121,14 @@ const CANCELLATION_ACTION_PATTERNS = [
   /preciso\s+cancelar/i,                              // "preciso cancelar"
   /encerrar\s+(minha\s+)?assinatura/i,                // "encerrar minha assinatura"
   /parar\s+(de\s+)?pagar/i,                           // "parar de pagar"
-  /nÃ£o\s+quero\s+mais\s+pagar/i,                      // "nÃ£o quero mais pagar"
+  /não\s+quero\s+mais\s+pagar/i,                      // "não quero mais pagar"
 ];
 
-// ðŸ†• Perguntas INFORMATIVAS - NÃƒO criar ticket - Usado globalmente
+// 🆕 Perguntas INFORMATIVAS - NÃO criar ticket - Usado globalmente
 const INFORMATIONAL_PATTERNS = [
-  /como\s+(funciona|faz|Ã©|posso)/i,
-  /o\s+que\s+(Ã©|significa)/i,
-  /qual\s+(Ã©|o)/i,
+  /como\s+(funciona|faz|é|posso)/i,
+  /o\s+que\s+(é|significa)/i,
+  /qual\s+(é|o)/i,
   /pode\s+me\s+explicar/i,
   /quero\s+saber/i,
   /me\s+explica/i,
@@ -1160,28 +1160,28 @@ async function createTicketSuccessMessage(
     
     if (saqueTemplate) return saqueTemplate;
     
-    // Fallback se template nÃ£o existir
-    return `SolicitaÃ§Ã£o de saque registrada!
+    // Fallback se template não existir
+    return `Solicitação de saque registrada!
 
 Protocolo: #${formattedId}
 Valor Solicitado: R$ ${withdrawalData.amount.toFixed(2)}
 ${withdrawalData.cpf_last4 ? `CPF (final): ...${withdrawalData.cpf_last4}` : ''}
-Prazo: atÃ© 7 dias Ãºteis
+Prazo: até 7 dias úteis
 
-VocÃª receberÃ¡ um email confirmando a abertura do chamado.
-Quando o saque for processado, vocÃª serÃ¡ notificado por email tambÃ©m.
+Você receberá um email confirmando a abertura do chamado.
+Quando o saque for processado, você será notificado por email também.
 
-IMPORTANTE: O saque serÃ¡ creditado via PIX na chave informada, vinculada ao seu CPF. NÃ£o Ã© possÃ­vel transferir para conta de terceiros.`;
+IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu CPF. Não é possível transferir para conta de terceiros.`;
   }
   
   const ticketMessages: Record<string, string> = {
-    'financeiro': `Entendi sua solicitaÃ§Ã£o financeira. Abri o ticket #${formattedId} para nossa equipe resolver.`,
+    'financeiro': `Entendi sua solicitação financeira. Abri o ticket #${formattedId} para nossa equipe resolver.`,
     'reembolso': `Registrei seu pedido de reembolso no ticket #${formattedId}. Vamos analisar e retornar.`,
-    'devolucao': `Registrei seu pedido de devoluÃ§Ã£o no ticket #${formattedId}. Vamos processar e retornar.`,
-    'troca': `Registrei sua solicitaÃ§Ã£o de troca no ticket #${formattedId}. Nossa equipe vai cuidar disso.`,
-    'defeito': `Criei o ticket #${formattedId} para nossa equipe tÃ©cnica analisar seu caso.`,
-    'tecnico': `Criei o ticket #${formattedId} para nossa equipe tÃ©cnica analisar seu caso.`,
-    'default': `Abri o ticket #${formattedId}. Nossa equipe vai cuidar disso para vocÃª.`
+    'devolucao': `Registrei seu pedido de devolução no ticket #${formattedId}. Vamos processar e retornar.`,
+    'troca': `Registrei sua solicitação de troca no ticket #${formattedId}. Nossa equipe vai cuidar disso.`,
+    'defeito': `Criei o ticket #${formattedId} para nossa equipe técnica analisar seu caso.`,
+    'tecnico': `Criei o ticket #${formattedId} para nossa equipe técnica analisar seu caso.`,
+    'default': `Abri o ticket #${formattedId}. Nossa equipe vai cuidar disso para você.`
   };
   
   const baseMessage = ticketMessages[issueType] || ticketMessages['default'];
@@ -4229,11 +4229,11 @@ ${a.content}`).join('\n\n---\n\n')}`;
           };
         }
         
-        // Verificar se a IA indicou que nÃ£o encontrou informaÃ§Ã£o
+        // Verificar se a IA indicou que não encontrou informação
         const notFoundPatterns = [
-          'nÃ£o encontrei essa informaÃ§Ã£o',
-          'nÃ£o encontrei na base',
-          'nÃ£o tenho essa informaÃ§Ã£o',
+          'não encontrei essa informação',
+          'não encontrei na base',
+          'não tenho essa informação',
           'posso te conectar com um especialista'
         ];
         
@@ -5804,18 +5804,18 @@ Se foram pagos recentemente, pode ser que ainda nÃ£o tenham entrado em prepara
     });
 
     // ============================================================
-    // ðŸŽ¯ BYPASS DIRETO: CANCELAMENTO DE ASSINATURA
-    // Responde imediatamente com a resposta padrÃ£o Kiwify
-    // SEM passar pelo sistema de confianÃ§a, SEM pedir email
+    // BYPASS DIRETO: CANCELAMENTO DE ASSINATURA
+    // Responde imediatamente com a resposta padrao Kiwify
+    // SEM passar pelo sistema de confianca, SEM pedir email
     // ============================================================
     if (isCancellationRequest) {
-      console.log('[ai-autopilot-chat] âŒ CANCELAMENTO DETECTADO - Bypass direto para resposta Kiwify');
+      console.log('[ai-autopilot-chat] CANCELAMENTO DETECTADO - Bypass direto para resposta Kiwify');
       
-      const cancellationResponse = `Entendi! O cancelamento de cursos/assinaturas Ã© feito diretamente pela plataforma Kiwify.
+      const cancellationResponse = `Entendi! O cancelamento de cursos/assinaturas é feito diretamente pela plataforma Kiwify.
 
-ðŸ“Œ VocÃª tem *7 dias de garantia* a partir da compra para solicitar reembolso.
+📌 Você tem *7 dias de garantia* a partir da compra para solicitar reembolso.
 
-ðŸ”— *Acesse aqui para cancelar:* https://reembolso.kiwify.com.br/login
+🔗 *Acesse aqui para cancelar:* https://reembolso.kiwify.com.br/login
 
 Use o mesmo email da compra para fazer login e solicitar o reembolso.
 
@@ -6280,13 +6280,13 @@ Digite **"reenviar"** se precisar de um novo cÃ³digo.`;
         console.log('[ai-autopilot-chat] ðŸ” OTP pendente marcado na metadata (withdrawal barrier)');
         
         // BYPASS DIRETO - NÃƒO CHAMAR A IA
-        const directOTPResponse = `**VerificaÃ§Ã£o de SeguranÃ§a para Saque**
+        const directOTPResponse = `**Verificação de Segurança para Saque**
 
-OlÃ¡ ${contactName}! Para saques da carteira, preciso confirmar sua identidade.
+Olá ${contactName}! Para saques da carteira, preciso confirmar sua identidade.
 
-Enviei um cÃ³digo de **6 dÃ­gitos** para **${maskedEmail}**.
+Enviei um código de **6 dígitos** para **${maskedEmail}**.
 
-Por favor, **digite o cÃ³digo** que vocÃª recebeu para continuar com o saque.`;
+Por favor, **digite o código** que você recebeu para continuar com o saque.`;
 
         // Salvar mensagem no banco
         const { data: savedMsg } = await supabaseClient
@@ -7168,9 +7168,9 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
 
     // ðŸ†• FIX C: Se AINDA vazio + intent financeiro + flow_context â†’ FLOW_EXIT:financeiro
     if (!rawAIContent && !toolCalls.length && flow_context) {
-      const financialTerms = /\b(saque|sacar|reembolso|estorno|devoluÃ§Ã£o|dinheiro|pix|saldo|transferir|transferÃªncia|retirar|retirada)\b/i;
-      const cancellationTerms = /\b(cancelar|cancelamento|cancela|desistir|desistÃªncia)\b/i;
-      const commercialTerms = /\b(comprar|contratar|assinar|upgrade|plano|preÃ§o|valor)\b/i;
+      const financialTerms = /\b(saque|sacar|reembolso|estorno|devolução|dinheiro|pix|saldo|transferir|transferência|retirar|retirada)\b/i;
+      const cancellationTerms = /\b(cancelar|cancelamento|cancela|desistir|desistência)\b/i;
+      const commercialTerms = /\b(comprar|contratar|assinar|upgrade|plano|preço|valor)\b/i;
 
       let autoExitIntent: string | null = null;
       if (financialTerms.test(customerMessage) && flowForbidFinancial) {
@@ -7397,7 +7397,7 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o cÃ³digo que voc�
             });
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro ao reenviar OTP:', error);
-            assistantMessage = 'Ocorreu um erro ao reenviar o cÃ³digo. Por favor, tente novamente.';
+            assistantMessage = 'Ocorreu um erro ao reenviar o código. Por favor, tente novamente.';
           }
         }
         // ðŸ†• TOOL HANDLER: Enviar OTP para operaÃ§Ãµes financeiras
@@ -7411,7 +7411,7 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o cÃ³digo que voc�
             const emailToUse = contact.email || verifiedEmail;
             
             if (!emailToUse) {
-              assistantMessage = 'NÃ£o encontrei seu email cadastrado. Por favor, informe seu email para que eu possa enviar o cÃ³digo de verificaÃ§Ã£o.';
+              assistantMessage = 'Não encontrei seu email cadastrado. Por favor, informe seu email para que eu possa enviar o código de verificação.';
               continue;
             }
 
@@ -7422,7 +7422,7 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o cÃ³digo que voc�
 
             if (otpError || !otpData?.success) {
               console.error('[ai-autopilot-chat] âŒ Erro ao enviar OTP financeiro:', otpError);
-              assistantMessage = 'NÃ£o consegui enviar o cÃ³digo de verificaÃ§Ã£o. Por favor, tente novamente em alguns instantes.';
+              assistantMessage = 'Não consegui enviar o código de verificação. Por favor, tente novamente em alguns instantes.';
               continue;
             }
 
@@ -7446,9 +7446,9 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o cÃ³digo que voc�
 
             // Resposta
             const safeEmail = maskEmail(emailToUse);
-            assistantMessage = `Para sua seguranca, enviei um codigo de 6 digitos para **${safeEmail}**.
+            assistantMessage = `Para sua segurança, enviei um código de 6 dígitos para **${safeEmail}**.
 
-Por favor, digite o codigo que voce recebeu para confirmar sua identidade.`;
+Por favor, digite o código que você recebeu para confirmar sua identidade.`;
 
             // Log dev mode internally
             if (otpData.dev_mode) {
@@ -7464,7 +7464,7 @@ Por favor, digite o codigo que voce recebeu para confirmar sua identidade.`;
             });
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro ao enviar OTP financeiro:', error);
-            assistantMessage = 'Ocorreu um erro ao enviar o cÃ³digo. Por favor, tente novamente.';
+            assistantMessage = 'Ocorreu um erro ao enviar o código. Por favor, tente novamente.';
           }
         }
         // TOOL: Confirmar email nÃ£o encontrado - transferir para comercial ou pedir novo email
@@ -7497,7 +7497,7 @@ Por favor, digite o codigo que voce recebeu para confirmar sua identidade.`;
             // Cliente CONFIRMOU que email estÃ¡ correto - TRANSFERIR PARA COMERCIAL
             console.log('[ai-autopilot-chat] âœ… Email confirmado pelo cliente, transferindo para comercial');
             
-            const emailInformado = pendingEmail || 'nÃ£o informado';
+            const emailInformado = pendingEmail || 'não informado';
             
             // âœ… CRIAR DEAL COM DADOS DO LEAD (contact_id = NULL)
             let dealId: string | null = null;
@@ -8409,14 +8409,14 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
               await supabaseClient.from('interactions').insert({
                 customer_id: contact.id,
                 type: 'internal_note',
-                content: `**Handoff Fora do HorÃ¡rio (Pendente Retorno)**
+                content: `**Handoff Fora do Horário (Pendente Retorno)**
 
 **Motivo:** ${handoffReason}
 **Contexto:** ${handoffNote}
-**HorÃ¡rio:** ${businessHoursInfo?.current_time || 'N/A'}
-**PrÃ³xima abertura:** ${nextOpenText}
+**Horário:** ${businessHoursInfo?.current_time || 'N/A'}
+**Próxima abertura:** ${nextOpenText}
 
-**AÃ§Ã£o:** Conversa marcada com pendente_retorno. SerÃ¡ redistribuÃ­da automaticamente no prÃ³ximo expediente.`,
+**Ação:** Conversa marcada com pendente_retorno. Será redistribuída automaticamente no próximo expediente.`,
                 channel: responseChannel,
                 metadata: {
                   source: 'ai_autopilot_after_hours_handoff',
@@ -8432,7 +8432,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
 
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro ao executar handoff manual:', error);
-            assistantMessage = 'Vou transferir vocÃª para um atendente humano. Por favor, aguarde um momento.';
+            assistantMessage = 'Vou transferir você para um atendente humano. Por favor, aguarde um momento.';
           }
         }
         // TOOL: close_conversation - Encerramento autÃ´nomo com confirmaÃ§Ã£o
@@ -8455,7 +8455,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
                 })
                 .eq('id', conversationId);
               
-              assistantMessage = 'Fico feliz em ter ajudado! ðŸ˜Š Posso encerrar seu atendimento?';
+              assistantMessage = 'Fico feliz em ter ajudado! 😊 Posso encerrar seu atendimento?';
               console.log('[ai-autopilot-chat] â³ Aguardando confirmaÃ§Ã£o do cliente para encerrar');
             }
             // Se customer_confirmed=true, o detector de confirmaÃ§Ã£o cuida na prÃ³xima mensagem
