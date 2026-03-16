@@ -6551,16 +6551,16 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
     // ðŸš« TRAVA CANCELAMENTO: Injetar instruÃ§Ãµes diretamente no prompt da LLM
     const cancellationGuardInstruction = flowForbidCancellation ? `
 
-ðŸš« TRAVA CANCELAMENTO ATIVA â€” REGRAS OBRIGATÃ“RIAS:
+🚫 TRAVA CANCELAMENTO ATIVA — REGRAS OBRIGATÓRIAS:
 - Responda perguntas INFORMATIVAS sobre cancelamento usando APENAS dados da base de conhecimento.
-- Se o cliente pedir uma AÃ‡ÃƒO de cancelamento (cancelar plano, encerrar conta, desistir), responda: "Entendi sua solicitaÃ§Ã£o de cancelamento. Vou te encaminhar para o setor responsÃ¡vel." e retorne [[FLOW_EXIT:cancelamento]].
-- Se nÃ£o encontrar a informaÃ§Ã£o na KB, responda: "NÃ£o tenho essa informaÃ§Ã£o no momento. O setor responsÃ¡vel poderÃ¡ te orientar."
+- Se o cliente pedir uma AÇÃO de cancelamento (cancelar plano, encerrar conta, desistir), responda: "Entendi sua solicitação de cancelamento. Vou te encaminhar para o setor responsável." e retorne [[FLOW_EXIT:cancelamento]].
+- Se não encontrar a informação na KB, responda: "Não tenho essa informação no momento. O setor responsável poderá te orientar."
 ${ambiguousCancellationDetected ? `
-âš ï¸ DESAMBIGUAÃ‡ÃƒO OBRIGATÃ“RIA: O cliente mencionou um termo de cancelamento sem deixar claro se quer informaÃ§Ã£o ou realizar a aÃ§Ã£o.
-VocÃª DEVE perguntar de forma natural e empÃ¡tica: "VocÃª tem dÃºvidas sobre cancelamento ou deseja cancelar um produto/serviÃ§o?"
-Nunca assuma a intenÃ§Ã£o do cliente. Essa pergunta Ã© OBRIGATÃ“RIA antes de qualquer resposta.
-Se o cliente confirmar que quer CANCELAR â†’ responda com [[FLOW_EXIT:cancelamento]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo de cancelamento sem deixar claro se quer informação ou realizar a ação.
+Você DEVE perguntar de forma natural e empática: "Você tem dúvidas sobre cancelamento ou deseja cancelar um produto/serviço?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
