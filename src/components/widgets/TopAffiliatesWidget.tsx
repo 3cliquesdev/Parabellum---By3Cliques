@@ -89,6 +89,12 @@ export function TopAffiliatesWidget({ startDate, endDate }: TopAffiliatesWidgetP
                     <TableCell className="text-center text-foreground">
                       {affiliate.salesCount}
                     </TableCell>
+                    <TableCell className="text-center text-foreground">
+                      {totalSales > 0 ? ((affiliate.salesCount / totalSales) * 100).toFixed(1) : '0.0'}%
+                    </TableCell>
+                    <TableCell className="text-center font-semibold text-amber-600">
+                      {affiliate.commissionPercent.toFixed(1)}%
+                    </TableCell>
                     <TableCell className="text-right font-semibold text-purple-600">
                       {formatCurrency(affiliate.totalCommission)}
                     </TableCell>
