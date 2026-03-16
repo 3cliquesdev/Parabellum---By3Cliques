@@ -6633,7 +6633,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
       return `\n\n**📋 CONTEXTO DO FLUXO (dados já coletados do cliente):**\n${lines.join('\n')}\nUse estas informações para contextualizar suas respostas. O cliente já passou por menus e escolheu essas opções — NÃO pergunte novamente o que ele já informou.\n`;
     })();
 
-    const contextualizedSystemPrompt = `${agentContextBlock}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
+    const contextualizedSystemPrompt = `${agentContextBlock}${flowCollectedDataBlock}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
 
 **🚫 REGRA DE HANDOFF (SÓ QUANDO CLIENTE PEDIR):**
 Transferência para humano SÓ acontece quando:
