@@ -5172,7 +5172,7 @@ Responda APENAS: skip ou search`
             }
           }
           
-          // Adicionar mensagem para cÃ³digos nÃ£o encontrados
+          // Adicionar mensagem para códigos não encontrados
           if (codesNotFound.length > 0) {
             if (codesNotFound.length === 1) {
               directResponse += `\nâ“ O cÃ³digo **${codesNotFound[0]}** nÃ£o foi encontrado no sistema.
