@@ -5149,7 +5149,7 @@ Responda APENAS: skip ou search`
             if (info) {
               codesFound.push(code);
               const packedAt = info.express_time_formatted || 'Recentemente';
-              const trackingNum = info.tracking_number || 'Aguardando cÃ³digo';
+              const trackingNum = info.tracking_number || 'Aguardando código';
               const buyerName = info.buyer_name || '';
               const status = info.order_status_label || info.status || 'Em processamento';
               
