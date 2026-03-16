@@ -111,7 +111,7 @@ export default function Inbox() {
     hasAudio: filters.hasAudio,
     hasAttachments: filters.hasAttachments,
     aiMode: filters.aiMode as InboxViewFiltersType['aiMode'],
-    department: departmentFilter || undefined,
+    department: filters.departmentId || departmentFilter || undefined,
     tags: filters.tags && filters.tags.length > 0
       ? filters.tags
       : (tagFilter ? [tagFilter] : undefined),
