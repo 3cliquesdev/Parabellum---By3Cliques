@@ -5,6 +5,35 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { isFeatureEnabled } from "@/config/features";
 
+/**
+ * Helper: invocar edge function com 1 retry automático (delay 2s)
+ * Protege contra instabilidade transiente (503/timeout)
+ */
+async function invokeWithRetry(
+  functionName: string,
+  body: Record<string, unknown>
+): Promise<{ data: any; error: any }> {
+  const result = await supabase.functions.invoke(functionName, { body });
+  
+  // Se falhou, tentar 1x mais após 2s
+  if (result.error) {
+    const errorMsg = result.error?.message || String(result.error);
+    const isTransient = errorMsg.includes('Failed to send') || 
+                        errorMsg.includes('503') ||
+                        errorMsg.includes('network') ||
+                        errorMsg.includes('timeout') ||
+                        errorMsg.includes('EDGE_RUNTIME');
+    
+    if (isTransient) {
+      console.warn(`[invokeWithRetry] ⚠️ ${functionName} falhou, retry em 2s...`, errorMsg);
+      await new Promise(r => setTimeout(r, 2000));
+      return await supabase.functions.invoke(functionName, { body });
+    }
+  }
+  
+  return result;
+}
+
 // Configuração para envio WhatsApp (Meta ou Evolution)
 interface WhatsAppConfig {
   provider: 'meta' | 'evolution';
