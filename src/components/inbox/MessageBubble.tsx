@@ -45,6 +45,7 @@ interface MessageBubbleProps {
   isManager?: boolean;
   attachments?: MediaAttachment[];
   className?: string;
+  onRetry?: () => void;
 }
 
 // Pure function — no per-bubble interval. Parent passes _tick to force re-render.
