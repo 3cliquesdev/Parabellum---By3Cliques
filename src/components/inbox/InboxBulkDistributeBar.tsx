@@ -25,9 +25,11 @@ export function InboxBulkDistributeBar({
   onDistribute,
   onReactivateAI,
   onCloseConversations,
+  onReengage,
   isDistributing,
   isReactivating,
   isClosing,
+  isArchived,
 }: InboxBulkDistributeBarProps) {
   if (selectedCount === 0) return null;
 
