@@ -547,7 +547,7 @@ serve(async (req) => {
               // Buscar conversa existente (QUALQUER provider) - priorizar aberta
               let { data: conversation } = await supabase
                 .from("conversations")
-                .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
+.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department")
                 .eq("contact_id", contact.id)
                 .neq("status", "closed")
                 .order("created_at", { ascending: false })
@@ -568,7 +568,7 @@ serve(async (req) => {
                     whatsapp_provider: "meta",
                     whatsapp_meta_instance_id: instance.id,
                   })
-                  .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
+.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department")
                   .single();
 
                 if (newConvError) {
@@ -576,7 +576,7 @@ serve(async (req) => {
                   // Race condition fallback: outro webhook criou a conversa milissegundos antes
                   const { data: existingRaceConv } = await supabase
                     .from("conversations")
-                    .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
+.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department")
                     .eq("contact_id", contact.id)
                     .neq("status", "closed")
                     .order("created_at", { ascending: false })
@@ -840,8 +840,8 @@ serve(async (req) => {
                     // 🆕 FIX #2: Verificar se há agentes ONLINE no departamento
                     let queueMessage = "💬 Sua conversa já está na fila de atendimento.\n\nFique tranquilo, em breve um especialista irá te atender. 🙂";
                     
-                    if ((conversation as any).department_id || (conversation as any).department) {
-                      const deptId = (conversation as any).department_id || (conversation as any).department;
+                    if (conversation.department) {
+                      const deptId = conversation.department;
                       const { data: deptAgentIds } = await supabase
                         .from("agent_departments")
                         .select("profile_id")
@@ -862,7 +862,7 @@ serve(async (req) => {
                         const { data: deptAgents } = await supabase
                           .from("agent_departments")
                           .select("profile_id, profiles!inner(availability_status)")
-                          .eq("department_id", conversation.department_id)
+                          .eq("department_id", conversation.department)
                           .eq("profiles.availability_status", "online")
                           .limit(1);
                         
@@ -870,7 +870,7 @@ serve(async (req) => {
                       }
                       
                       if (!hasOnlineAgents) {
-                        console.log("[meta-whatsapp-webhook] ⚠️ Nenhum agente online no departamento:", conversation.department_id);
+                        console.log("[meta-whatsapp-webhook] ⚠️ Nenhum agente online no departamento:", conversation.department);
                         queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";
                       }
                     }
