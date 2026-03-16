@@ -195,6 +195,17 @@ function matchAskOption(
   });
   if (containsMatches.length === 1) return containsMatches[0];
 
+  // 5️⃣ Input contido no label como palavra (reverso do Layer 4)
+  // Ex: "Nacional" → match "Drop Nacional"
+  if (normalized.length >= 3) {
+    const reverseMatches = options.filter(opt => {
+      const label = opt.label.toLowerCase();
+      const regex = new RegExp(`\\b${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      return regex.test(label);
+    });
+    if (reverseMatches.length === 1) return reverseMatches[0];
+  }
+
   return null;
 }
 
