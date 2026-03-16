@@ -429,6 +429,9 @@ serve(async (req) => {
             ),
             agent_support_channels(
               channel_id
+            ),
+            agent_departments(
+              department_id
             )
           `)
           .eq('availability_status', 'online')

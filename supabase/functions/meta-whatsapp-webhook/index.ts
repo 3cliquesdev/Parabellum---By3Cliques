@@ -547,7 +547,7 @@ serve(async (req) => {
               // Buscar conversa existente (QUALQUER provider) - priorizar aberta
               let { data: conversation } = await supabase
                 .from("conversations")
-                .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata")
+                .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
                 .eq("contact_id", contact.id)
                 .neq("status", "closed")
                 .order("created_at", { ascending: false })
@@ -568,7 +568,7 @@ serve(async (req) => {
                     whatsapp_provider: "meta",
                     whatsapp_meta_instance_id: instance.id,
                   })
-                  .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata")
+                  .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
                   .single();
 
                 conversation = newConv;
@@ -921,7 +921,7 @@ serve(async (req) => {
                       conversation_id: conversation.id,
                       skip_db_save: false,
                       is_bot_message: true,
-                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                      metadata: (flowData as any).flowName ? { flow_id: (flowData as any).flowId, flow_name: (flowData as any).flowName } : undefined,
                     },
                   });
                   
@@ -2332,7 +2332,7 @@ serve(async (req) => {
                     .maybeSingle();
 
                   if (activeFlowState) {
-                    const flowDef = activeFlowState.chat_flows?.flow_definition as any;
+                    const flowDef = (activeFlowState.chat_flows as any)?.flow_definition as any;
                     const currentNodeId = activeFlowState.current_node_id;
                     const nodes = flowDef?.nodes || [];
                     const currentNode = nodes.find((n: any) => n.id === currentNodeId);

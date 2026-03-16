@@ -152,10 +152,18 @@ serve(async (req) => {
     const schema = form.schema || {};
     const ticketSettings = schema.ticket_settings || {};
 
+    // Guardar pipeline_id fora do bloco else para uso posterior
+    let resolvedPipelineId: string | null = null;
+    if (form.distribution_rule !== "field_based") {
+      resolvedPipelineId = form.target_pipeline_id || null;
+      if (!resolvedPipelineId && form.target_type === "deal") {
+        const { data: defPipe } = await supabase.from("pipelines").select("id").eq("is_default", true).single();
+        resolvedPipelineId = defPipe?.id || null;
+      }
+    }
+
     if (form.target_type === "deal") {
-      // O pipeline_id já foi determinado acima para o round robin
-      // Usar o mesmo para criar o deal
-      const dealPipelineId = pipeline_id;
+      const dealPipelineId = resolvedPipelineId;
 
       // Verificar se já existe deal aberto para este contato no mesmo pipeline
       const { data: existingDeal } = await supabase

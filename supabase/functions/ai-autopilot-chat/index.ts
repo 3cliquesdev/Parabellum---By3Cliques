@@ -7219,7 +7219,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           { role: 'user' as const, content: customerMessage }
         ];
         const retryPayload: any = {
-          model: selectedModel,
+          model: (ragConfig as any)?.model || 'gpt-4o-mini',
           messages: retryMessages,
           temperature: 0.7,
           max_tokens: 300,

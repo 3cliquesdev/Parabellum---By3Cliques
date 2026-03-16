@@ -97,7 +97,7 @@ async function inlineKiwifyValidation(
 
     const first = matching[0];
     const customer = first.payload?.Customer || {};
-    const products = [...new Set(matching.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
+    const products: string[] = [...new Set(matching.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
 
     const result = {
       found: true,
@@ -1481,7 +1481,7 @@ serve(async (req) => {
             manualTrigger: true,
             personaId: contentNode.data?.persona_id || null,
             kbCategories: contentNode.data?.kb_categories || null,
-            kbProductFilter: mapProductToKbFilter(collectedData || {}),
+            kbProductFilter: mapProductToKbFilter(collectedDataForState || {}),
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -4933,7 +4933,7 @@ serve(async (req) => {
               masterFlowId: masterFlow.id,
               personaId: aiNode?.data?.persona_id || null,
               kbCategories: aiNode?.data?.kb_categories || null,
-              kbProductFilter: mapProductToKbFilter(collectedData || {}),
+              kbProductFilter: mapProductToKbFilter({}),
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -5323,7 +5323,7 @@ serve(async (req) => {
             const internalNote = (actionData.internal_note || node.data.internal_note)
               ? replaceVariables(actionData.internal_note || node.data.internal_note, masterVariablesContext) : null;
             await createTicketFromFlow(supabaseClient, {
-              conversationId, flowStateId: stateId, nodeId: node.id,
+              conversationId, flowStateId: stateId || '', nodeId: node.id,
               contactId: contactData?.id || null,
               subject, description,
               category: actionData.ticket_category || node.data.ticket_category || 'outro',
@@ -5586,7 +5586,7 @@ serve(async (req) => {
           responseFormat: 'text_only',
           personaId: startNode.data?.persona_id || null,
           kbCategories: startNode.data?.kb_categories || null,
-          kbProductFilter: mapProductToKbFilter(collectedData || {}),
+          kbProductFilter: mapProductToKbFilter({}),
           contextPrompt: startNode.data?.context_prompt || null,
           fallbackMessage: startNode.data?.fallback_message || null,
           // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação

@@ -165,6 +165,7 @@ interface SendMetaWhatsAppRequest {
   skip_db_save?: boolean;        // 🆕 Se true, não salva no banco (frontend faz insert otimista)
   sender_name?: string;          // 🆕 Nome do remetente para prefixar mensagem (ex: "Miguel Fedes")
   client_message_id?: string;    // 🆕 ENTERPRISE V2: UUID para reconciliação de status
+  metadata?: Record<string, any>; // Metadados adicionais para tracking
 }
 
 interface MetaApiResponse {
