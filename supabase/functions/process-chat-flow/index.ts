@@ -4908,6 +4908,7 @@ serve(async (req) => {
               masterFlowId: masterFlow.id,
               personaId: aiNode?.data?.persona_id || null,
               kbCategories: aiNode?.data?.kb_categories || null,
+              kbProductFilter: mapProductToKbFilter(collectedData || {}),
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
