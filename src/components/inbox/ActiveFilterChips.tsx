@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useTags } from "@/hooks/useTags";
 import { useUsers } from "@/hooks/useUsers";
+import { useDepartments } from "@/hooks/useDepartments";
 import type { InboxFilters } from "./InboxFilterPopover";
 
 interface ActiveFilterChipsProps {
