@@ -21,6 +21,7 @@ import {
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { useUsers } from "@/hooks/useUsers";
 import { useTags } from "@/hooks/useTags";
+import { useDepartments } from "@/hooks/useDepartments";
 import type { DateRange } from "react-day-picker";
 
 export interface InboxFilters {
