@@ -1,42 +1,19 @@
 
+# Correção: AI Node Recebe Contexto da Opção Selecionada — ✅ IMPLEMENTADO
 
-# Fix: Word-boundary Matching — User Input as Substring of Label
+## Problema
+Quando `ask_options` transitava para `ai_response`, o webhook enviava o número cru da seleção ("2") como `customerMessage` para a IA, que não encontrava nada na KB e acionava fallback.
 
-## Problem
+## Correção Aplicada
 
-The `matchAskOption` function (L161-198) has 4 matching layers, but none handles the case where the user types a **keyword from within the label**:
+### 1. `process-chat-flow/index.ts` — ✅ Flag `firstEntry`
+- Bloco genérico (L2925): detecta `currentNode.type === 'ask_options' && selectedOption` → retorna `firstEntry: true, selectedOption: label`
+- Bloco principal (L4307): mesma lógica com `isFirstEntryFromMenuMain`
 
-- User types: `"Nacional"`
-- Option label: `"Drop Nacional"`
+### 2. `meta-whatsapp-webhook/index.ts` — ✅ Substituição contextual
+- Path direto (L1305): `customerMessage` usa `"Cliente selecionou: {label}"` quando `firstEntry=true`
+- Path batching (L1256): `bufferMessage` usa mesma substituição
+- Propagação de `firstEntry` e `selectedOption` no flowData do buffer
 
-Layer 4 tests: does `\bdrop nacional\b` exist in `"nacional"`? → **No** (wrong direction).
-
-The correct check should also test: does `\bnacional\b` exist in `"drop nacional"`? → **Yes**.
-
-## Fix
-
-**File:** `supabase/functions/process-chat-flow/index.ts` (L188-198)
-
-Add a **5th matching layer** after Layer 4:
-
-```typescript
-// 5️⃣ Input contido no label como palavra (reverso do Layer 4)
-// Ex: "Nacional" → match "Drop Nacional"
-if (normalized.length >= 3) {
-  const reverseMatches = options.filter(opt => {
-    const label = opt.label.toLowerCase();
-    const regex = new RegExp(`\\b${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-    return regex.test(label);
-  });
-  if (reverseMatches.length === 1) return reverseMatches[0];
-}
-```
-
-Key safeguards:
-- Minimum 3 characters to avoid false positives (e.g., "do" matching "Drop Nacional")
-- Only matches if exactly 1 option matches (unambiguous)
-
-## Redeploy
-
-Deploy `process-chat-flow` after the edit.
-
+### 3. Deploy — ✅ Realizado
+- `process-chat-flow` e `meta-whatsapp-webhook` deployados
