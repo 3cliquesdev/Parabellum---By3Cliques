@@ -1168,6 +1168,7 @@ serve(async (req) => {
                           allowedSources: (flowData as any).allowedSources,
                           personaId: (flowData as any).personaId,
                           kbCategories: (flowData as any).kbCategories,
+                          kbProductFilter: (flowData as any).kbProductFilter,
                           contextPrompt: (flowData as any).contextPrompt,
                           fallbackMessage: (flowData as any).fallbackMessage,
                           objective: (flowData as any).objective,
