@@ -1,31 +1,29 @@
 
 
-# Fix: Thundering Herd Residual no `get-inbox-counts`
+# Correção: "Pode repetir sua mensagem?" — Deploy Pendente
 
-## Problema
+## Problema Identificado
 
-Os logs mostram 14+ boots simultâneos da função. O cache e promise coalescing atuais são **per-isolate** — cada cold start cria um isolate novo com cache vazio, anulando a proteção. Além disso, o cálculo interno faz **12+ queries ao banco** incluindo N queries sequenciais (uma por departamento).
+Os logs confirmam exatamente o que acontece:
 
-## Correções (2 frentes)
+```
+17:54:13 - Tentativa principal com gpt-5-mini → retorna vazio (content = null)
+17:54:18 - Retry com prompt reduzido → CRASH: "selectedModel is not defined"
+17:54:18 - Resultado: "Pode repetir sua mensagem? Não consegui processar corretamente."
+```
 
-### 1. Frontend — Reduzir rajadas de requests (`src/hooks/useInboxView.tsx`)
+**Causa raiz**: A Edge Function `ai-autopilot-chat` **não foi redeployada** após a correção do `selectedModel → (ragConfig as any)?.model`. O código fonte já está correto, mas a versão em produção ainda tem a referência quebrada.
 
-- **Aumentar dedupe** de 2.5s → 5s (`INBOX_COUNTS_DEDUPE_MS`)
-- **Adicionar jitter** ao `refetchInterval` (55-65s em vez de fixo 60s) para desalinhar tabs/usuários
-- **`refetchOnMount: false`** para evitar refetch ao navegar entre páginas
+O fluxo que deveria funcionar:
+1. IA principal retorna vazio (pode acontecer) → retry é acionado
+2. Retry deveria recuperar com prompt reduzido → **mas crasha por `selectedModel is not defined`**
+3. Resultado: mensagem genérica "Pode repetir sua mensagem?"
 
-### 2. Backend — Reduzir custo de cada invocação (`supabase/functions/get-inbox-counts/index.ts`)
+## Plano
 
-- **Consolidar `byDepartment`**: trocar N queries sequenciais por UMA query agrupada:
-  ```sql
-  SELECT department, count(*) FROM conversations 
-  WHERE status != 'closed' GROUP BY department
-  ```
-- **Consolidar `byTag`**: trocar 2 queries (buscar IDs + buscar tags) por uma única com group by
-- **Aumentar cache TTL** de 6s → 10s — reduz cache misses em 40%
-- **Mover auth + role para paralelo**: executar `getUser` e buscar role em `Promise.all` ao invés de sequencial
+### 1. Fazer deploy de `ai-autopilot-chat`
+A correção já está no código fonte (linha 7222). Basta deployar.
 
-### 3. Deploy da função
-
-Resultado esperado: ~60% menos invocações da função e cada invocação ~3x mais rápida (de ~12 queries para ~6).
+### 2. Investigar por que a chamada principal retorna vazio
+Após o deploy, monitorar se o retry resolve ou se o problema é mais profundo (ex: prompt muito grande para gpt-5-mini, conflito de tools com max_completion_tokens, etc.)
 

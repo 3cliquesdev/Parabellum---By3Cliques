@@ -70,7 +70,7 @@ interface FetchOptions {
   tags?: string[];
 }
 
-const INBOX_COUNTS_DEDUPE_MS = 2_500;
+const INBOX_COUNTS_DEDUPE_MS = 5_000;
 const inboxCountsInflight = new Map<string, Promise<InboxCounts>>();
 const inboxCountsSnapshots = new Map<string, { fetchedAt: number; data: InboxCounts }>();
 
@@ -906,8 +906,10 @@ export function useInboxCounts(userId?: string) {
     enabled: !!userId && isRoleReady && !deptLoading,
     queryFn: () => fetchInboxCountsWithDedupe(userId, effectiveRole, deptKey),
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    // Jitter de 55-65s para desalinhar tabs/usuários e evitar thundering herd
+    refetchInterval: 55_000 + Math.floor(Math.random() * 10_000),
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
     retry: (failureCount, error: any) => {
       const status = error?.status;
       const message = error?.message || "";
