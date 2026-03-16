@@ -163,6 +163,7 @@ const App = () => {
               <BrowserRouter>
                 <RealtimeNotifications />
                 <WhatsAppDisconnectMonitor />
+                <ErrorTrackerInit />
                 <Suspense fallback={<PageLoadingSkeleton />}>
             <Routes>
               {/* Public routes - no auth required */}

@@ -433,3 +433,10 @@ verify_jwt = false
 
 [functions.lookup-order-tracking]
 verify_jwt = false
+
+[functions.error-digest]
+verify_jwt = false
+
+[functions.error-digest.cron]
+schedule = "0 1 * * *"
+region = "us-east-1"
