@@ -6533,18 +6533,18 @@ REGRA: Tente resolver sozinha. Se nÃ£o conseguir e o cliente pedir humano, use
     // ðŸ”’ TRAVA FINANCEIRA: Injetar instruÃ§Ãµes diretamente no prompt da LLM
     const financialGuardInstruction = flowForbidFinancial ? `
 
-ðŸ”’ TRAVA FINANCEIRA ATIVA â€” REGRAS OBRIGATÃ“RIAS:
-- Responda perguntas INFORMATIVAS sobre finanÃ§as usando APENAS dados da base de conhecimento.
-- Se o cliente pedir uma AÃ‡ÃƒO financeira (saque, reembolso, estorno, devoluÃ§Ã£o), responda: "Entendi sua solicitaÃ§Ã£o. Vou te encaminhar para o setor responsÃ¡vel." e retorne [[FLOW_EXIT:financeiro]].
-- NUNCA cite valores monetÃ¡rios, prazos em dias ou percentuais sobre saques/reembolsos A MENOS que existam EXATAMENTE na base de conhecimento.
-- Se nÃ£o encontrar a informaÃ§Ã£o na KB, responda: "NÃ£o tenho essa informaÃ§Ã£o no momento. O setor financeiro poderÃ¡ te orientar com detalhes."
+🔒 TRAVA FINANCEIRA ATIVA — REGRAS OBRIGATÓRIAS:
+- Responda perguntas INFORMATIVAS sobre finanças usando APENAS dados da base de conhecimento.
+- Se o cliente pedir uma AÇÃO financeira (saque, reembolso, estorno, devolução), responda: "Entendi sua solicitação. Vou te encaminhar para o setor responsável." e retorne [[FLOW_EXIT:financeiro]].
+- NUNCA cite valores monetários, prazos em dias ou percentuais sobre saques/reembolsos A MENOS que existam EXATAMENTE na base de conhecimento.
+- Se não encontrar a informação na KB, responda: "Não tenho essa informação no momento. O setor financeiro poderá te orientar com detalhes."
 - NUNCA invente, deduza ou estime valores financeiros.
 ${ambiguousFinancialDetected ? `
-âš ï¸ DESAMBIGUAÃ‡ÃƒO OBRIGATÃ“RIA: O cliente mencionou um termo financeiro sem deixar claro se quer informaÃ§Ã£o ou realizar uma aÃ§Ã£o.
-VocÃª DEVE perguntar de forma natural e empÃ¡tica: "Posso te ajudar com informaÃ§Ãµes sobre [tema] ou vocÃª gostaria de fazer uma solicitaÃ§Ã£o?"
-Nunca assuma a intenÃ§Ã£o do cliente. Essa pergunta Ã© OBRIGATÃ“RIA antes de qualquer resposta.
-Se o cliente confirmar que quer SOLICITAR/FAZER a aÃ§Ã£o (ex: "quero sacar", "sim, quero solicitar") â†’ responda com [[FLOW_EXIT:financeiro]]
-Se for apenas dÃºvida â†’ responda normalmente usando a Base de Conhecimento.
+⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo financeiro sem deixar claro se quer informação ou realizar uma ação.
+Você DEVE perguntar de forma natural e empática: "Posso te ajudar com informações sobre [tema] ou você gostaria de fazer uma solicitação?"
+Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
+Se o cliente confirmar que quer SOLICITAR/FAZER a ação (ex: "quero sacar", "sim, quero solicitar") → responda com [[FLOW_EXIT:financeiro]]
+Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
