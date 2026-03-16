@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/ai-config-cache.ts";
+import { getBusinessHoursInfo } from "../_shared/business-hours.ts";
 
 // ============================================
 // 📦 MESSAGE BATCHING HELPERS
@@ -871,7 +872,63 @@ serve(async (req) => {
                       
                       if (!hasOnlineAgents) {
                         console.log("[meta-whatsapp-webhook] ⚠️ Nenhum agente online no departamento:", conversation.department);
-                        queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";
+                        
+                        // 🆕 Verificar horário comercial para usar template configurado
+                        const bhInfo = await getBusinessHoursInfo(supabase);
+                        
+                        if (!bhInfo.within_hours) {
+                          console.log("[meta-whatsapp-webhook] 🕐 Fora do horário comercial — usando template configurado");
+                          
+                          // Buscar template de after_hours_handoff
+                          const { data: afterHoursMsg } = await supabase
+                            .from("business_messages_config")
+                            .select("message_template, after_hours_tag_id")
+                            .eq("message_key", "after_hours_handoff")
+                            .single();
+                          
+                          if (afterHoursMsg?.message_template) {
+                            // Substituir variáveis no template
+                            queueMessage = afterHoursMsg.message_template
+                              .replace(/\{schedule\}/g, bhInfo.schedule_summary)
+                              .replace(/\{next_open\}/g, bhInfo.next_open_text);
+                            
+                            // Aplicar tag de after_hours se configurada
+                            if (afterHoursMsg.after_hours_tag_id) {
+                              try {
+                                await supabase
+                                  .from("conversation_tags")
+                                  .upsert({
+                                    conversation_id: conversation.id,
+                                    tag_id: afterHoursMsg.after_hours_tag_id,
+                                  }, { onConflict: "conversation_id,tag_id" });
+                                console.log("[meta-whatsapp-webhook] 🏷️ Tag after_hours aplicada");
+                              } catch (tagErr) {
+                                console.error("[meta-whatsapp-webhook] ⚠️ Erro ao aplicar tag:", tagErr);
+                              }
+                            }
+                            
+                            // Fechar conversa com motivo after_hours_handoff
+                            await supabase
+                              .from("conversations")
+                              .update({
+                                status: "closed",
+                                ai_mode: "autopilot",
+                                closed_at: new Date().toISOString(),
+                                metadata: {
+                                  ...(conversation.metadata || {}),
+                                  close_reason: "after_hours_handoff",
+                                },
+                              })
+                              .eq("id", conversation.id);
+                            console.log("[meta-whatsapp-webhook] 🔒 Conversa fechada — after_hours_handoff");
+                          } else {
+                            // Fallback se template não configurado
+                            queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";
+                          }
+                        } else {
+                          // Dentro do horário mas sem agentes → mensagem de indisponibilidade momentânea
+                          queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";
+                        }
                       }
                     }
                     
