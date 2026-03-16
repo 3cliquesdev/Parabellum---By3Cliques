@@ -590,7 +590,7 @@ serve(async (req) => {
             full_name, 
             availability_status, 
             department,
-            agent_departments(department_id),
+            agent_departments!inner(department_id),
             agent_support_channels(channel_id)
           `)
           .eq('availability_status', 'online')

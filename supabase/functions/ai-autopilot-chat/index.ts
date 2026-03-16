@@ -7003,7 +7003,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         { role: 'user', content: customerMessage }
       ],
       temperature: persona.temperature ?? 0.7,
-      max_tokens: persona.max_tokens ?? 500
+      max_tokens: persona.max_tokens ?? 800
     };
 
     console.log('[ai-autopilot-chat] Messages structure:', {
