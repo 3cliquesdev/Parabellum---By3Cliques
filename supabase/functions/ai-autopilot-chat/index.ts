@@ -835,7 +835,7 @@ const EXPLICIT_HUMAN_REQUEST_PATTERNS = [
 
 // ðŸ†• Indicadores de incerteza/alucinaÃ§Ã£o para validaÃ§Ã£o pÃ³s-resposta
 const HALLUCINATION_INDICATORS = [
-  'nÃ£o tenho certeza',
+  'não tenho certeza',
   'acredito que',
   'provavelmente',
   'geralmente',
