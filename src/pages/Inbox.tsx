@@ -57,6 +57,7 @@ const DEFAULT_FILTERS: InboxFilters = {
   hasAudio: undefined,
   hasAttachments: undefined,
   aiMode: undefined,
+  departmentId: undefined,
   includeArchived: undefined,
   waitingTime: 'oldest', // Por padrão, mostrar mais antigas primeiro para priorização
 };
