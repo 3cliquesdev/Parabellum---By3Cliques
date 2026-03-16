@@ -1,86 +1,85 @@
 
 
-# Auditoria das Alterações de Hoje — 16/03/2026
+# Plano: Sistema de Previsibilidade de Bugs
 
-## Resumo
+## Diagnóstico Atual
 
-Foram realizadas **3 frentes de trabalho** hoje, afetando **5 arquivos**:
+O projeto já tem:
+- `AppErrorBoundary` para crashes de renderização
+- Handlers globais para chunk errors e unhandled rejections
+- `useRealtimeHealth` para monitorar conexão realtime
+- Retry automático em envio de mensagens e close-conversation
+- Build version tracking com auto-heal
 
----
-
-## 1. Widget Top Afiliados — % Vendas e % Comissão Kiwify
-
-**Status:** ✅ Implementado corretamente
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useKiwifyFinancials.tsx` | Adicionou `totalGrossRevenue` e `commissionPercent` à interface e ao cálculo por afiliado |
-| `src/components/widgets/TopAffiliatesWidget.tsx` | Adicionou colunas **% Vendas** e **% Comissão** na tabela (6 colunas total) |
-
-**Validação:**
-- Interface `topAffiliates` inclui `totalGrossRevenue: number` e `commissionPercent: number` ✅
-- Cálculo: `(totalCommission / totalGrossRevenue) * 100` ✅
-- Widget exibe `% Vendas` = participação do afiliado no total de vendas ✅
-- Widget exibe `% Comissão` = taxa de comissão calculada da Kiwify ✅
-- `colSpan` atualizado para 6 ✅
+**O que falta:** Não existe nenhum sistema centralizado de **rastreamento, alerta e previsibilidade** de erros. Os erros acontecem silenciosamente no console e só descobrem quando um atendente reclama.
 
 ---
 
-## 2. Resiliência contra 503 — Retry automático no envio de mensagens
+## Proposta: Error Tracking Dashboard + Alertas Proativos
 
-**Status:** ✅ Implementado corretamente
+### 1. Tabela `client_error_logs` (banco de dados)
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useSendMessageInstant.tsx` | Helper `invokeWithRetry` com 1 retry após 2s para erros transientes (503, timeout, EDGE_RUNTIME) |
-| `src/hooks/useCloseConversation.tsx` | Retry 1x após 2s no `close-conversation` para mesmos erros transientes |
-
-**Validação:**
-- `invokeWithRetry` detecta: `Failed to send`, `503`, `network`, `timeout`, `EDGE_RUNTIME` ✅
-- Delay de 2s antes do retry ✅
-- `useCloseConversation` tem lógica idêntica inline ✅
-- Ambos logam warning no console antes do retry ✅
-
----
-
-## 3. Botão "Reenviar" para mensagens falhadas
-
-**Status:** ✅ Implementado corretamente
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/inbox/MessageBubble.tsx` | Botão "Reenviar" com ícone `RefreshCw` quando `status === 'failed'` e `onRetry` existe |
-| `src/components/inbox/MessagesWithMedia.tsx` | Propagação da prop `onRetry` para o `MessageBubble` |
-| `src/components/ChatWindow.tsx` | Função `retrySend` conectada ao botão |
-
-**Validação:**
-- Botão só aparece para mensagens de agente (`!isCustomer`) com `status === 'failed'` ✅
-- Prop `onRetry` é opcional e verificada antes de renderizar ✅
-- Estilo consistente com o resto da UI (texto 11px, cor destructive) ✅
-
----
-
-## Pontos de Atenção
-
-| Item | Status | Nota |
-|------|--------|------|
-| Erros 503 no `get-inbox-counts` | ⚠️ Transiente | Causados por instabilidade de infraestrutura, não por bug de código. Edge functions estão operando normalmente agora (logs mostram boot + respostas OK). |
-| Widget % Comissão não aparecia | ⚠️ Cache | Código está correto — era cache do browser. Hard refresh resolve. |
-| Conversas auditadas (A4DB73F2, 9E5D598E, 8446E6E5, 7909F5CB) | ✅ Diagnosticado | Falhas causadas pelo mesmo pico de 503s. Retry automático agora protege contra recorrência. |
-
----
-
-## Arquivos Modificados Hoje
+Persistir erros do frontend automaticamente para análise:
 
 ```text
-src/hooks/useKiwifyFinancials.tsx        — % comissão afiliado
-src/components/widgets/TopAffiliatesWidget.tsx — colunas % Vendas + % Comissão
-src/hooks/useSendMessageInstant.tsx      — invokeWithRetry (1x retry)
-src/hooks/useCloseConversation.tsx       — retry no close-conversation
-src/components/inbox/MessageBubble.tsx   — botão Reenviar
-src/components/inbox/MessagesWithMedia.tsx — prop onRetry
-src/components/ChatWindow.tsx            — função retrySend
+client_error_logs
+├── id (uuid)
+├── user_id (uuid, nullable)
+├── error_type (enum: 'runtime', 'network', 'edge_function', 'chunk', 'unhandled_rejection')
+├── message (text)
+├── stack (text, nullable)
+├── metadata (jsonb) — URL, user agent, build_id, conversation_id etc.
+├── created_at (timestamptz)
 ```
 
-**Total: 7 arquivos, 3 funcionalidades, 0 bugs introduzidos.**
+### 2. Hook `useErrorTracker` — Captura Centralizada
+
+Um hook global (no App.tsx) que:
+- Intercepta `window.onerror`, `unhandledrejection`
+- Intercepta falhas de Edge Functions (wrapper no supabase client)
+- Persiste na tabela `client_error_logs` com debounce (máx 1 erro/5s por tipo)
+- Agrupa erros repetidos para não poluir o banco
+
+### 3. Edge Function `error-digest` — Resumo Diário
+
+Cron job diário que:
+- Consulta `client_error_logs` das últimas 24h
+- Agrupa por `error_type` + `message` (top 10 mais frequentes)
+- Salva resumo em `error_digests` para consulta no dashboard
+- Opcionalmente envia alerta via webhook/email quando erros ultrapassam threshold
+
+### 4. Widget "Saúde do Sistema" no Dashboard Admin
+
+Um card no dashboard operacional mostrando:
+- **Erros nas últimas 24h** (total + por tipo)
+- **Edge Functions com falha** (quais e quantas vezes)
+- **Taxa de sucesso de envio** (mensagens enviadas vs falhadas)
+- **Status Realtime** (já existe via `useRealtimeHealth`)
+- Indicador semáforo: Verde (< 5 erros/h), Amarelo (5-20), Vermelho (> 20)
+
+### 5. Toast Proativo para Admins
+
+Quando o sistema detectar pico de erros (ex: > 10 erros em 5 minutos), mostrar toast apenas para admins:
+> "⚠️ Instabilidade detectada: X falhas de envio nos últimos 5 min"
+
+---
+
+## Arquivos a Criar/Modificar
+
+| Arquivo | Ação |
+|---------|------|
+| Migration SQL | Criar tabelas `client_error_logs` e `error_digests` |
+| `src/hooks/useErrorTracker.ts` | **Criar** — captura e persiste erros |
+| `src/App.tsx` | Adicionar `useErrorTracker` no nível do app |
+| `src/components/widgets/SystemHealthWidget.tsx` | **Criar** — widget de saúde |
+| `src/pages/Dashboard.tsx` | Adicionar widget ao dashboard admin |
+| `supabase/functions/error-digest/index.ts` | **Criar** — cron de resumo diário |
+
+## Resultado Esperado
+
+Em vez de descobrir bugs quando atendentes reclamam, o admin verá em tempo real:
+- Quantos erros estão acontecendo
+- Quais Edge Functions estão instáveis
+- Taxa de sucesso de envio de mensagens
+- Alertas proativos antes que o problema escale
 
