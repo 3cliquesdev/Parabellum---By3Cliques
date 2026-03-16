@@ -1321,6 +1321,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             forbidCancellation: flowResult.forbidCancellation ?? false,
             forbidConsultant: flowResult.forbidConsultant ?? false,
             collectedData: flowResult.collectedData || null,
+            forbidSupport: flowResult.forbidSupport ?? false,
           };
 
           console.log('[handle-whatsapp-event] 📋 flow_context:', JSON.stringify({
