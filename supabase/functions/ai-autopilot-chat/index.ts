@@ -1402,8 +1402,8 @@ const ESCAPE_PATTERNS = [
   // OpÃ§Ãµes numeradas (2+ emojis para evitar falso positivo com emoji isolado)
   /[1-9]ï¸âƒ£.*[1-9]ï¸âƒ£/s,
   // Menus textuais
-  /escolha uma das op[Ã§c][Ãµo]es/i,
-  /selecione uma op[Ã§c][Ã£a]o/i,
+  /escolha uma das opções/i,
+  /selecione uma opção/i,
   // Menus textuais com numeraÃ§Ã£o (1) ... 2) ...)
   /\b1[\)\.\-][\s\S]*?\b2[\)\.\-]/i,
 ];
