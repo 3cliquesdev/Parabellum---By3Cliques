@@ -5811,7 +5811,7 @@ Se foram pagos recentemente, pode ser que ainda nÃ£o tenham entrado em prepara
     if (isCancellationRequest) {
       console.log('[ai-autopilot-chat] âŒ CANCELAMENTO DETECTADO - Bypass direto para resposta Kiwify');
       
-      const cancellationResponse = `Entendi! O cancelamento de cursos/assinaturas Ã© feito diretamente pela plataforma Kiwify.
+      const cancellationResponse = `Entendi! O cancelamento de cursos/assinaturas é feito diretamente pela plataforma Kiwify. `Entendi! O cancelamento de cursos/assinaturas Ã© feito diretamente pela plataforma Kiwify.
 
 ðŸ“Œ VocÃª tem *7 dias de garantia* a partir da compra para solicitar reembolso.
 
