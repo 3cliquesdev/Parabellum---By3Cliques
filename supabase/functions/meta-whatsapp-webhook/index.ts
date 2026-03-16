@@ -1160,7 +1160,7 @@ serve(async (req) => {
                         instanceId: instance.id,
                         fromNumber,
                         flowContext: flowData.flow_context as Record<string, unknown> || undefined,
-                        flowData: {
+                      flowData: {
                           useAI: flowData.useAI,
                           aiNodeActive: flowData.aiNodeActive,
                           flowId: flowData.flowId,
@@ -1179,6 +1179,7 @@ serve(async (req) => {
                           forbidCommercial: (flowData as any).forbidCommercial,
                           forbidCancellation: (flowData as any).forbidCancellation,
                           forbidConsultant: (flowData as any).forbidConsultant,
+                          collectedData: (flowData as any).collectedData || null,
                         },
                       });
                     } catch (bufferErr) {
@@ -1224,11 +1225,12 @@ serve(async (req) => {
                             maxSentences: (flowData as any).maxSentences ?? 3,
                             forbidQuestions: (flowData as any).forbidQuestions ?? true,
                             forbidOptions: (flowData as any).forbidOptions ?? true,
-                          forbidFinancial: (flowData as any).forbidFinancial ?? false,
-                          forbidCommercial: (flowData as any).forbidCommercial ?? false,
-                          forbidCancellation: (flowData as any).forbidCancellation ?? false,
-                          forbidConsultant: (flowData as any).forbidConsultant ?? false,
-                          returnReasons: (flowData as any).returnReasons || null,
+                            forbidFinancial: (flowData as any).forbidFinancial ?? false,
+                            forbidCommercial: (flowData as any).forbidCommercial ?? false,
+                            forbidCancellation: (flowData as any).forbidCancellation ?? false,
+                            forbidConsultant: (flowData as any).forbidConsultant ?? false,
+                            returnReasons: (flowData as any).returnReasons || null,
+                            collectedData: (flowData as any).collectedData || null,
                           },
                         }),
                       }
