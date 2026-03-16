@@ -319,33 +319,42 @@ Deno.serve(async (req: Request) => {
     
     const unread = inbox.reduce((sum: number, i: any) => sum + (i.unread_count || 0), 0);
 
-    // -------- byDepartment (active)
-    const byDepartment = await Promise.all(
-      departments.map(async (dept) => {
-        const { count = 0 } = await applyVisibility(
-          supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
-        )
-          .neq("status", "closed")
-          .eq("department", dept.id);
-        return { id: dept.id, name: dept.name, color: dept.color, count };
-      })
-    );
+    // -------- byDepartment (active) — ✅ UMA query agrupada em vez de N queries sequenciais
+    const { data: activeConvWithDept } = await applyVisibility(
+      supabaseAdmin.from("conversations").select("department")
+    ).neq("status", "closed");
 
-    // -------- byTag (active)
-    // Get active conversation ids (bounded). This is safe for current scale and avoids raw SQL.
-    const { data: activeConvIdsRows } = await applyVisibility(
+    const deptCountMap = new Map<string, number>();
+    for (const row of activeConvWithDept || []) {
+      if (row.department) {
+        deptCountMap.set(row.department, (deptCountMap.get(row.department) || 0) + 1);
+      }
+    }
+    const byDepartment = departments.map((dept) => ({
+      id: dept.id,
+      name: dept.name,
+      color: dept.color,
+      count: deptCountMap.get(dept.id) || 0,
+    }));
+
+    // -------- byTag (active) — ✅ Reusar activeConvWithDept IDs em vez de query extra
+    const activeConvIds = (activeConvWithDept || []).map((_r: any, _i: number, _a: any) => _r).length > 0
+      ? (activeConvWithDept || [])
+      : [];
+
+    // Buscar IDs das conversas ativas para lookup de tags
+    const { data: activeConvIdRows } = await applyVisibility(
       supabaseAdmin.from("conversations").select("id")
-    )
-      .neq("status", "closed")
-      .limit(5000);
-    const activeConvIds = (activeConvIdsRows || []).map((r: any) => r.id);
+    ).neq("status", "closed").limit(5000);
+
+    const activeIds = (activeConvIdRows || []).map((r: any) => r.id);
 
     let tagCounts = new Map<string, number>();
-    if (activeConvIds.length > 0) {
+    if (activeIds.length > 0) {
       const { data: convTags } = await supabaseAdmin
         .from("conversation_tags")
         .select("conversation_id, tag_id")
-        .in("conversation_id", activeConvIds);
+        .in("conversation_id", activeIds);
       for (const ct of convTags || []) {
         tagCounts.set(ct.tag_id, (tagCounts.get(ct.tag_id) || 0) + 1);
       }

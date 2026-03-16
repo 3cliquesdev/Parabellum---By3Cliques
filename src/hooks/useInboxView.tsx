@@ -906,8 +906,10 @@ export function useInboxCounts(userId?: string) {
     enabled: !!userId && isRoleReady && !deptLoading,
     queryFn: () => fetchInboxCountsWithDedupe(userId, effectiveRole, deptKey),
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    // Jitter de 55-65s para desalinhar tabs/usuários e evitar thundering herd
+    refetchInterval: 55_000 + Math.floor(Math.random() * 10_000),
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
     retry: (failureCount, error: any) => {
       const status = error?.status;
       const message = error?.message || "";
