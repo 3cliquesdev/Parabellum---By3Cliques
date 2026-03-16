@@ -1253,7 +1253,11 @@ serve(async (req) => {
                     console.log(`[meta-whatsapp-webhook] 📦 BATCHING: Salvando mensagem no buffer (delay: ${batchDelaySeconds}s) - flow AI node`);
                     
                     try {
-                      await bufferAndSchedule(supabase, conversation.id, messageContent, batchDelaySeconds, {
+                      // 🆕 FIX: Se firstEntry (vindo de menu), substituir mensagem crua pelo contexto
+                      const bufferMessage = (flowData as any).firstEntry 
+                        ? `Cliente selecionou: ${(flowData as any).selectedOption || 'opção do menu'}` 
+                        : messageContent;
+                      await bufferAndSchedule(supabase, conversation.id, bufferMessage, batchDelaySeconds, {
                         contactId: contact.id,
                         instanceId: instance.id,
                         fromNumber,
