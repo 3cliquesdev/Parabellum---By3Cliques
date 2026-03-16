@@ -73,7 +73,7 @@ export function TopAffiliatesWidget({ startDate, endDate }: TopAffiliatesWidgetP
             <TableBody>
               {affiliates.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     Nenhuma venda com afiliado no período selecionado
                   </TableCell>
                 </TableRow>
