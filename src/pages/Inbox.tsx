@@ -117,7 +117,7 @@ export default function Inbox() {
       : (tagFilter ? [tagFilter] : undefined),
   }), [filters.dateRange, filters.channels, filters.status, filters.assignedTo,
        filters.search, filters.slaExpired, filters.hasAudio, filters.hasAttachments,
-       filters.aiMode, departmentFilter, tagFilter, filters.tags]);
+       filters.aiMode, filters.departmentId, departmentFilter, tagFilter, filters.tags]);
   
   // ✅ FIX: Passar scope explícito — 2 caches brutos (active/archived)
   const isArchived = filter === "archived";

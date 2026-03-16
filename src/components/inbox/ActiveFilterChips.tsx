@@ -79,6 +79,16 @@ export function ActiveFilterChips({ filters, onFiltersChange }: ActiveFilterChip
     });
   });
 
+  // Department
+  if (filters.departmentId) {
+    const dept = departments?.find((d) => d.id === filters.departmentId);
+    chips.push({
+      key: "dept",
+      label: `Depto: ${dept?.name || "..."}`,
+      onRemove: () => onFiltersChange({ ...filters, departmentId: undefined }),
+    });
+  }
+
   // Assigned
   if (filters.assignedTo) {
     const agentName =

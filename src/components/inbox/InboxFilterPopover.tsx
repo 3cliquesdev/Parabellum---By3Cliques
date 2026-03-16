@@ -300,6 +300,39 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
                 </div>
               </div>
 
+              {/* Department */}
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Departamento</Label>
+                <Select
+                  value={filters.departmentId || "all"}
+                  onValueChange={(v) => onFiltersChange({ ...filters, departmentId: v === "all" ? undefined : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos os departamentos" />
+                  </SelectTrigger>
+                  <SelectContent 
+                    position="popper" 
+                    side="bottom" 
+                    align="start"
+                    sideOffset={4}
+                    className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border"
+                  >
+                    <SelectItem value="all">Todos os departamentos</SelectItem>
+                    {departments?.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: dept.color }}
+                          />
+                          {dept.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* AI Mode */}
               <div>
                 <Label className="text-sm font-medium mb-2 block">Modo IA</Label>
