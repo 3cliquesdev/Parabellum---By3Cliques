@@ -1,25 +1,19 @@
 
-# Configuração: Fechar ou Manter Aberta Fora do Horário — ✅ IMPLEMENTADO
+# Correção: AI Node Recebe Contexto da Opção Selecionada — ✅ IMPLEMENTADO
 
-## Alterações
+## Problema
+Quando `ask_options` transitava para `ai_response`, o webhook enviava o número cru da seleção ("2") como `customerMessage` para a IA, que não encontrava nada na KB e acionava fallback.
 
-### 1. Hook `useAfterHoursKeepOpen` — ✅ Criado
-- Gerencia `system_configurations` key `after_hours_keep_open`
-- Default: `true` (manter aberta)
+## Correção Aplicada
 
-### 2. Toggle na UI (SLASettings) — ✅ Adicionado
-- Switch "Manter conversa aberta fora do horário" na seção BusinessMessagesSection
-- Com descrição dinâmica conforme estado
+### 1. `process-chat-flow/index.ts` — ✅ Flag `firstEntry`
+- Bloco genérico (L2925): detecta `currentNode.type === 'ask_options' && selectedOption` → retorna `firstEntry: true, selectedOption: label`
+- Bloco principal (L4307): mesma lógica com `isFirstEntryFromMenuMain`
 
-### 3. `meta-whatsapp-webhook` — ✅ Condicional
-- Busca `after_hours_keep_open` em paralelo com template
-- `true`: mantém aberta + salva metadata pending
-- `false`: fecha com `close_reason: "after_hours_handoff"`
+### 2. `meta-whatsapp-webhook/index.ts` — ✅ Substituição contextual
+- Path direto (L1305): `customerMessage` usa `"Cliente selecionou: {label}"` quando `firstEntry=true`
+- Path batching (L1256): `bufferMessage` usa mesma substituição
+- Propagação de `firstEntry` e `selectedOption` no flowData do buffer
 
-### 4. `ai-autopilot-chat` — ✅ Condicional
-- Busca `after_hours_keep_open` no bloco request_human_agent
-- `false`: fecha conversa
-- `true`: mantém aberta (comportamento anterior)
-
-### 5. Deploy — ✅ Realizado
-
+### 3. Deploy — ✅ Realizado
+- `process-chat-flow` e `meta-whatsapp-webhook` deployados
