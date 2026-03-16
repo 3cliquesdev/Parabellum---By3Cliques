@@ -42,7 +42,15 @@ type CacheEntry = {
 
 // Small in-memory cache to absorb UI burst traffic and prevent cold-start thrash.
 // Keyed by userId + role (role affects visibility rules).
-const CACHE_TTL_MS = 4_000;
+const CACHE_TTL_MS = 6_000; // 6 segundos é ideal para live chat
+
+// ==========================================
+// 🛡️ ANTI-THUNDERING HERD (PROMISE COALESCING)
+// ==========================================
+// Se 50 abas pedirem os counts exatamente no mesmo milisegundo (Cache Miss),
+// essa estrutura garante que apenar UMA requisição vai pro banco, e as outras 
+// 49 abas aguardam a mesma Promise resolver (Coalescing), poupando RAM e IO.
+const activePromises = new Map<string, Promise<any>>();
 const cache = new Map<string, CacheEntry>();
 
 function isManagementRole(role: AppRole | null | undefined) {
@@ -124,7 +132,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Cache hit (after role is known, since visibility depends on role).
+    // 1. Verificar Cache "Stale" (Pronto e ainda quente)
     const cacheKey = `${userId}:${role}`;
     const now = Date.now();
     const cached = cache.get(cacheKey);
@@ -140,8 +148,26 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Base filters: for non-management roles we restrict by department rules similar to the UI.
-    // For management roles, return global counts.
+    // 2. Promise Coalescing (Thundering Herd Protection)
+    // Se já tem um cálculo idêntico acontecendo (Cache Miss + Concorrência), junta-se à fila.
+    if (activePromises.has(cacheKey)) {
+      console.log(`[get-inbox-counts] 🛡️ Thundering Herd Evitado para ${cacheKey}. Aguardando promise irmã...`);
+      const sharedResult = await activePromises.get(cacheKey);
+      return new Response(JSON.stringify({ ...sharedResult, cached: true, coalesced: true }), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          "X-Counts-Cache": "hit-coalesced",
+        },
+      });
+    }
+
+    // 3. Calculation Promise (Primeiro request a chegar)
+    const computationPromise = (async () => {
+      // Base filters: for non-management roles we restrict by department rules similar to the UI.
+      // For management roles, return global counts.
     const isManager = isManagementRole(role);
 
     // Meta (run in parallel)
@@ -337,37 +363,49 @@ Deno.serve(async (req: Request) => {
       count: tagCounts.get(t.id) || 0,
     }));
 
-    const counts: InboxCounts = {
-      total: totalActive || 0,
-      mine: mine || 0,
-      aiQueue: aiQueue || 0,
-      humanQueue: humanQueue || 0,
-      slaCritical,
-      slaWarning,
-      notResponded,
-      myNotResponded,
-      unassigned: unassigned || 0,
-      unread,
-      closed: totalClosed || 0,
-      byDepartment,
-      byTag,
-    };
+      const counts: InboxCounts = {
+        total: totalActive || 0,
+        mine: mine || 0,
+        aiQueue: aiQueue || 0,
+        humanQueue: humanQueue || 0,
+        slaCritical,
+        slaWarning,
+        notResponded,
+        myNotResponded,
+        unassigned: unassigned || 0,
+        unread,
+        closed: totalClosed || 0,
+        byDepartment,
+        byTag,
+      };
 
-    // Store in cache
-    cache.set(cacheKey, {
-      expiresAt: Date.now() + CACHE_TTL_MS,
-      value: { counts, role },
-    });
+      // Store in cache
+      cache.set(cacheKey, {
+        expiresAt: Date.now() + CACHE_TTL_MS,
+        value: { counts, role },
+      });
 
-    return new Response(JSON.stringify({ counts, role, cached: false, tookMs: Date.now() - startedAt }), {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json",
-        "Cache-Control": "no-store",
-        "X-Counts-Cache": "miss",
-      },
-    });
+      return { counts, role, tookMs: Date.now() - startedAt };
+    })();
+
+    // Registra a Promise na RAM para as próximas abas colarem nela
+    activePromises.set(cacheKey, computationPromise);
+
+    try {
+      const result = await computationPromise;
+      return new Response(JSON.stringify({ ...result, cached: false }), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          "X-Counts-Cache": "miss",
+        },
+      });
+    } finally {
+      // Limpa do registro para que a próxima janela de cache de 6s comece fresca
+      activePromises.delete(cacheKey);
+    }
   } catch (error: any) {
     const errMsg = error?.message || error?.msg || (typeof error === 'string' ? error : JSON.stringify(error));
     console.error("[get-inbox-counts] Error:", errMsg, error);
