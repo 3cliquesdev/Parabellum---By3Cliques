@@ -7209,11 +7209,11 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
     if (rawAIContentNormalized) {
       assistantMessage = rawAIContentNormalized;
     } else if (isWithdrawalRequest) {
-      assistantMessage = 'Para solicitar o saque, preciso primeiro confirmar sua identidade. Qual Ã© o seu e-mail de cadastro?';
+      assistantMessage = 'Para solicitar o saque, preciso primeiro confirmar sua identidade. Qual é o seu e-mail de cadastro?';
     } else if (isFinancialRequest) {
-      assistantMessage = 'Entendi sua solicitaÃ§Ã£o financeira. Para prosseguir com seguranÃ§a, qual Ã© o seu e-mail de cadastro?';
+      assistantMessage = 'Entendi sua solicitação financeira. Para prosseguir com segurança, qual é o seu e-mail de cadastro?';
     } else {
-      assistantMessage = 'Pode repetir sua mensagem? NÃ£o consegui processar corretamente.';
+      assistantMessage = 'Pode repetir sua mensagem? Não consegui processar corretamente.';
     }
     const isEmptyAIResponse = !rawAIContent;
 
