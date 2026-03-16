@@ -423,12 +423,7 @@ export function useSendMessageInstant() {
 
   // Função para reenviar mensagens que falharam
   const retrySend = useCallback(async (messageId: string, conversationId: string) => {
-    const messages = queryClient.getQueryData<any[]>(["messages", conversationId]) || [];
-    const failedMessage = messages.find(m => m.id === messageId && m.status === 'failed');
-    
-    if (!failedMessage) return;
-
-    // Atualizar status para sending
+    // 1. Atualizar cache para "sending" imediatamente
     queryClient.setQueryData(
       ["messages", conversationId],
       (old: any[] = []) => old.map(m => 
@@ -437,20 +432,107 @@ export function useSendMessageInstant() {
     );
 
     try {
-      const { error } = await supabase
+      // 2. Buscar mensagem falhada do BANCO (não do cache)
+      const { data: failedMsg, error: msgError } = await supabase
         .from("messages")
-        .insert([{
-          id: messageId,
-          conversation_id: conversationId,
-          content: failedMessage.content,
-          sender_type: 'user' as const,
-          sender_id: user?.id || null,
-          is_internal: failedMessage.is_internal || false,
-          channel: (failedMessage.channel || 'web_chat') as 'web_chat' | 'whatsapp' | 'email',
-        }]);
+        .select("id, content, channel, is_internal, media_url, media_type, media_filename, media_mime_type")
+        .eq("id", messageId)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (msgError || !failedMsg) throw new Error(msgError?.message || 'Mensagem não encontrada no banco');
 
+      // 3. Buscar dados da conversa para WhatsApp
+      const { data: conv, error: convError } = await supabase
+        .from("conversations")
+        .select(`
+          channel, 
+          whatsapp_provider,
+          whatsapp_instance_id,
+          whatsapp_meta_instance_id,
+          contact_id,
+          contacts!conversations_contact_id_fkey ( phone, whatsapp_id )
+        `)
+        .eq("id", conversationId)
+        .maybeSingle();
+
+      if (convError || !conv) throw new Error(convError?.message || 'Conversa não encontrada');
+
+      const contact = conv.contacts as any;
+      const phoneNumber = contact?.whatsapp_id || contact?.phone;
+
+      // 4. Se for WhatsApp, invocar Edge Function
+      if (conv.channel === 'whatsapp' && phoneNumber) {
+        const provider = conv.whatsapp_provider || 'meta';
+        const hasMedia = failedMsg.media_url && failedMsg.media_type;
+
+        if (provider === 'meta') {
+          const instanceId = conv.whatsapp_meta_instance_id;
+          if (!instanceId) throw new Error('Instância Meta não configurada');
+
+          const metaPayload: Record<string, unknown> = {
+            instance_id: instanceId,
+            phone_number: phoneNumber,
+            conversation_id: conversationId,
+            skip_db_save: true,
+            client_message_id: isEnterpriseV2 ? messageId : undefined,
+          };
+
+          if (hasMedia) {
+            metaPayload.media = {
+              type: failedMsg.media_type,
+              url: failedMsg.media_url,
+              caption: failedMsg.content || undefined,
+              filename: failedMsg.media_filename,
+              mime_type: failedMsg.media_mime_type,
+            };
+          } else {
+            metaPayload.message = failedMsg.content;
+          }
+
+          const { data: metaResp, error: metaErr } = await invokeWithRetry('send-meta-whatsapp', metaPayload);
+          if (metaErr) throw new Error(metaErr.message || 'Meta WhatsApp falhou no reenvio');
+
+          // Atualizar external_id se retornado
+          const externalId = metaResp?.message_id;
+          if (externalId) {
+            await supabase.from("messages").update({ external_id: externalId }).eq("id", messageId);
+          }
+
+        } else {
+          // Evolution API
+          const instanceId = conv.whatsapp_instance_id;
+          if (!instanceId) throw new Error('Instância Evolution não configurada');
+
+          const evolutionPayload: Record<string, unknown> = {
+            instance_id: instanceId,
+            phone_number: phoneNumber,
+            use_queue: false,
+            skip_db_save: true,
+          };
+
+          if (hasMedia) {
+            evolutionPayload.media_url = failedMsg.media_url;
+            evolutionPayload.media_type = failedMsg.media_type;
+            evolutionPayload.media_filename = failedMsg.media_filename;
+            evolutionPayload.message = failedMsg.content || '';
+          } else {
+            evolutionPayload.message = failedMsg.content;
+          }
+
+          const { error: evoErr } = await invokeWithRetry('send-whatsapp-message', evolutionPayload);
+          if (evoErr) throw new Error(evoErr.message || 'Evolution API falhou no reenvio');
+        }
+      }
+
+      // 5. UPDATE status da mensagem existente (nunca INSERT)
+      const { error: updateErr } = await supabase
+        .from("messages")
+        .update({ status: 'sent' })
+        .eq("id", messageId);
+
+      if (updateErr) throw updateErr;
+
+      // 6. Atualizar cache
       queryClient.setQueryData(
         ["messages", conversationId],
         (old: any[] = []) => old.map(m => 
@@ -464,6 +546,8 @@ export function useSendMessageInstant() {
       });
 
     } catch (error) {
+      console.error('[retrySend] ❌ Falha ao reenviar:', error);
+      
       queryClient.setQueryData(
         ["messages", conversationId],
         (old: any[] = []) => old.map(m => 
@@ -477,7 +561,7 @@ export function useSendMessageInstant() {
         variant: "destructive",
       });
     }
-  }, [queryClient, user, toast]);
+  }, [queryClient, user, toast, isEnterpriseV2]);
 
   return { sendInstant, retrySend };
 }
