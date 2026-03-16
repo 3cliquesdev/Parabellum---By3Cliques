@@ -5323,7 +5323,7 @@ serve(async (req) => {
             const internalNote = (actionData.internal_note || node.data.internal_note)
               ? replaceVariables(actionData.internal_note || node.data.internal_note, masterVariablesContext) : null;
             await createTicketFromFlow(supabaseClient, {
-              conversationId, flowStateId: stateId, nodeId: node.id,
+              conversationId, flowStateId: stateId || '', nodeId: node.id,
               contactId: contactData?.id || null,
               subject, description,
               category: actionData.ticket_category || node.data.ticket_category || 'outro',
