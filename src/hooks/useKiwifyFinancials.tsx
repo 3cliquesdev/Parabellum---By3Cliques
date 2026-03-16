@@ -28,6 +28,8 @@ export interface KiwifyFinancialData {
     affiliateEmail: string;
     salesCount: number;
     totalCommission: number;
+    totalGrossRevenue: number;
+    commissionPercent: number;
   }>;
 }
 
