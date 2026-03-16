@@ -4229,11 +4229,11 @@ ${a.content}`).join('\n\n---\n\n')}`;
           };
         }
         
-        // Verificar se a IA indicou que nÃ£o encontrou informaÃ§Ã£o
+        // Verificar se a IA indicou que não encontrou informação
         const notFoundPatterns = [
-          'nÃ£o encontrei essa informaÃ§Ã£o',
-          'nÃ£o encontrei na base',
-          'nÃ£o tenho essa informaÃ§Ã£o',
+          'não encontrei essa informação',
+          'não encontrei na base',
+          'não tenho essa informação',
           'posso te conectar com um especialista'
         ];
         
