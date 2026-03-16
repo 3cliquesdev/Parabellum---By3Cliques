@@ -479,11 +479,9 @@ export function useSendMessageInstant() {
 
           if (hasMedia) {
             metaPayload.media = {
-              type: failedMsg.media_type,
-              url: failedMsg.media_url,
+              type: failedMsg.attachment_type,
+              url: failedMsg.attachment_url,
               caption: failedMsg.content || undefined,
-              filename: failedMsg.media_filename,
-              mime_type: failedMsg.media_mime_type,
             };
           } else {
             metaPayload.message = failedMsg.content;
