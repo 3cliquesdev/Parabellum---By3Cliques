@@ -435,7 +435,7 @@ export function useSendMessageInstant() {
       // 2. Buscar mensagem falhada do BANCO (não do cache)
       const { data: failedMsg, error: msgError } = await supabase
         .from("messages")
-        .select("id, content, channel, is_internal, media_url, media_type, media_filename, media_mime_type")
+        .select("id, content, channel, is_internal, attachment_url, attachment_type, metadata")
         .eq("id", messageId)
         .maybeSingle();
 
