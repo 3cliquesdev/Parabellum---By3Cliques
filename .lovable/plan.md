@@ -1,19 +1,23 @@
 
-# Correção: AI Node Recebe Contexto da Opção Selecionada — ✅ IMPLEMENTADO
+# Ticket no Nó IA + Departamento + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-## Problema
-Quando `ask_options` transitava para `ai_response`, o webhook enviava o número cru da seleção ("2") como `customerMessage` para a IA, que não encontrava nada na KB e acionava fallback.
+## O que mudou
 
-## Correção Aplicada
+### 1. Nó `create_ticket` — Campo de Departamento ✅
+- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) ao painel de propriedades
+- Defaults atualizados com `department_id: null, department_name: null`
+- **`CreateTicketNode.tsx`**: Badge visual do departamento no nó
 
-### 1. `process-chat-flow/index.ts` — ✅ Flag `firstEntry`
-- Bloco genérico (L2925): detecta `currentNode.type === 'ask_options' && selectedOption` → retorna `firstEntry: true, selectedOption: label`
-- Bloco principal (L4307): mesma lógica com `isFirstEntryFromMenuMain`
+### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
+- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
+  - Campos: assunto, descrição, categoria, prioridade, departamento, usar dados coletados
+  - Dados salvos em `end_action` e `action_data` no node data
+- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
 
-### 2. `meta-whatsapp-webhook/index.ts` — ✅ Substituição contextual
-- Path direto (L1305): `customerMessage` usa `"Cliente selecionou: {label}"` quando `firstEntry=true`
-- Path batching (L1256): `bufferMessage` usa mesma substituição
-- Propagação de `firstEntry` e `selectedOption` no flowData do buffer
+### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
+- O motor já suporta `end_action: create_ticket` em 8+ pontos (L2034, L2262, L2444, L2887, L4153, L4541, L5342, L5711)
+- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`
 
-### 3. Deploy — ✅ Realizado
-- `process-chat-flow` e `meta-whatsapp-webhook` deployados
+### 4. Continuidade do Fluxo ✅
+- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
+- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
