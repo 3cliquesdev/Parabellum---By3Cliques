@@ -1,29 +1,26 @@
 
+# Checklist Pós-Deploy — Implementação Concluída
 
-# Correção: "Pode repetir sua mensagem?" — Deploy Pendente
+## Mudanças Realizadas
 
-## Problema Identificado
+### 1. ✅ ContextMemoryAgent — INTEGRADO
+- **Antes**: Carregava 10 mensagens brutas, usava 6 no prompt
+- **Depois**: Carrega até 30 mensagens, comprime as mais antigas via LLM (sliding window), injeta resumo + últimas 5 mensagens
+- **Arquivos**: `ai-autopilot-chat/index.ts` (linhas 4039-4088, 6986-7018)
+- **Impacto**: Economia de tokens em conversas longas (20+ msgs), contexto preservado
 
-Os logs confirmam exatamente o que acontece:
+### 2. ✅ ActionTools.ts — REMOVIDO (dead code)
+- **Decisão**: Os schemas Zod (transfer_to_human, process_refund, etc.) NÃO correspondiam às tools reais do sistema (create_ticket, verify_customer_email, etc.)
+- **Ação**: Arquivo deletado. As tool definitions inline no index.ts são as corretas e já validam via safeParseToolArgs()
 
-```
-17:54:13 - Tentativa principal com gpt-5-mini → retorna vazio (content = null)
-17:54:18 - Retry com prompt reduzido → CRASH: "selectedModel is not defined"
-17:54:18 - Resultado: "Pode repetir sua mensagem? Não consegui processar corretamente."
-```
+### 3. ✅ TriageRouterAgent — REMOVIDO (dead code)
+- **Decisão**: Master Flow visual via process-chat-flow já faz toda a triagem. O TriageRouterAgent era dead code
+- **Ação**: Import removido, arquivo deletado. Reduz bundle size ~30KB
 
-**Causa raiz**: A Edge Function `ai-autopilot-chat` **não foi redeployada** após a correção do `selectedModel → (ragConfig as any)?.model`. O código fonte já está correto, mas a versão em produção ainda tem a referência quebrada.
+### 4. ⚠️ Bug "Failed to find/create conversation"
+- **Status**: Investigado — erro não existe no código-fonte atual do webhook
+- **Possível causa**: Versão anterior do webhook ainda em memória ou sub-função não identificada
+- **Ação**: Monitorar se reaparece após deploy
 
-O fluxo que deveria funcionar:
-1. IA principal retorna vazio (pode acontecer) → retry é acionado
-2. Retry deveria recuperar com prompt reduzido → **mas crasha por `selectedModel is not defined`**
-3. Resultado: mensagem genérica "Pode repetir sua mensagem?"
-
-## Plano
-
-### 1. Fazer deploy de `ai-autopilot-chat`
-A correção já está no código fonte (linha 7222). Basta deployar.
-
-### 2. Investigar por que a chamada principal retorna vazio
-Após o deploy, monitorar se o retry resolve ou se o problema é mais profundo (ex: prompt muito grande para gpt-5-mini, conflito de tools com max_completion_tokens, etc.)
-
+## Deploy
+- `ai-autopilot-chat` — ✅ Deployado com sucesso
