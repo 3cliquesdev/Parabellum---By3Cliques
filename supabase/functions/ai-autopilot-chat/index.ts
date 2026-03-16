@@ -724,8 +724,8 @@ const FALLBACK_PHRASES = [
   'encaminhar para um humano',
   'chamar um atendente',
   'não consigo te ajudar com isso',
-  'não consigo resolver',
-  'nÃ£o posso ajudar',
+  'não consigo resolver por aqui',
+  'não posso ajudar',
   'sorry',
   'i cannot',
   'unable to',
@@ -760,8 +760,6 @@ const FINANCIAL_BARRIER_KEYWORDS = [
   'estorno',
   'cancelar',
   'cancelamento',
-  'devolução',
-  'devolver',
   'meu dinheiro'
 ];
 
@@ -5151,21 +5149,21 @@ Responda APENAS: skip ou search`
             if (info) {
               codesFound.push(code);
               const packedAt = info.express_time_formatted || 'Recentemente';
-              const trackingNum = info.tracking_number || 'Aguardando cÃ³digo';
+              const trackingNum = info.tracking_number || 'Aguardando código';
               const buyerName = info.buyer_name || '';
               const status = info.order_status_label || info.status || 'Em processamento';
               
               if (info.is_packed) {
                 directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
-ðŸ“¦ Embalado em: ${packedAt}
-ðŸšš CÃ³digo de rastreio: ${trackingNum}
-âœ… Status: ${status}
+📦 Embalado em: ${packedAt}
+🚚 Código de rastreio: ${trackingNum}
+✅ Status: ${status}
 
 `;
               } else {
                 directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
-â³ ${info.packing_message || 'Pedido ainda estÃ¡ sendo preparado.'}
-ðŸ“‹ Status: ${status}
+⏳ ${info.packing_message || 'Pedido ainda está sendo preparado.'}
+📋 Status: ${status}
 
 `;
               }
@@ -5174,19 +5172,19 @@ Responda APENAS: skip ou search`
             }
           }
           
-          // Adicionar mensagem para cÃ³digos nÃ£o encontrados
+          // Adicionar mensagem para códigos não encontrados
           if (codesNotFound.length > 0) {
             if (codesNotFound.length === 1) {
-              directResponse += `\nâ“ O cÃ³digo **${codesNotFound[0]}** nÃ£o foi encontrado no sistema.
-Este nÃºmero estÃ¡ correto? Se sim, pode ser que o pedido ainda nÃ£o tenha entrado em preparaÃ§Ã£o.`;
+              directResponse += `\n❓ O código **${codesNotFound[0]}** não foi encontrado no sistema.
+Este número está correto? Se sim, pode ser que o pedido ainda não tenha entrado em preparação.`;
             } else {
-              directResponse += `\nâ“ Os seguintes cÃ³digos nÃ£o foram encontrados: ${codesNotFound.join(', ')}
-Esses nÃºmeros estÃ£o corretos? Se sim, pode ser que ainda nÃ£o tenham entrado em preparaÃ§Ã£o.`;
+              directResponse += `\n❓ Os seguintes códigos não foram encontrados: ${codesNotFound.join(', ')}
+Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado em preparação.`;
             }
           }
           
           if (codesFound.length > 0) {
-            directResponse = `Encontrei as informaÃ§Ãµes do seu pedido:\n\n${directResponse}\nPosso ajudar com mais alguma coisa?`;
+            directResponse = `Encontrei as informações do seu pedido:\n\n${directResponse}\nPosso ajudar com mais alguma coisa?`;
           } else {
             directResponse = directResponse.trim();
           }
