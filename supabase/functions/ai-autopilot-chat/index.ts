@@ -7422,7 +7422,7 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o cÃ³digo que voc�
 
             if (otpError || !otpData?.success) {
               console.error('[ai-autopilot-chat] âŒ Erro ao enviar OTP financeiro:', otpError);
-              assistantMessage = 'NÃ£o consegui enviar o cÃ³digo de verificaÃ§Ã£o. Por favor, tente novamente em alguns instantes.';
+              assistantMessage = 'Não consegui enviar o código de verificação. Por favor, tente novamente em alguns instantes.';
               continue;
             }
 
