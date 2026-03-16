@@ -1,26 +1,62 @@
 
-# Checklist Pós-Deploy — Implementação Concluída
 
-## Mudanças Realizadas
+# Auditoria Conversa #2D12F4F9 — 2 Bugs Identificados
 
-### 1. ✅ ContextMemoryAgent — INTEGRADO
-- **Antes**: Carregava 10 mensagens brutas, usava 6 no prompt
-- **Depois**: Carrega até 30 mensagens, comprime as mais antigas via LLM (sliding window), injeta resumo + últimas 5 mensagens
-- **Arquivos**: `ai-autopilot-chat/index.ts` (linhas 4039-4088, 6986-7018)
-- **Impacto**: Economia de tokens em conversas longas (20+ msgs), contexto preservado
+## Problema Observado
+1. Cliente digitou "1" → IA respondeu "Pode repetir sua mensagem?" (resposta vazia)
+2. Cliente digitou "Sem contexto ainda" e "Mds" → **nenhuma resposta**
 
-### 2. ✅ ActionTools.ts — REMOVIDO (dead code)
-- **Decisão**: Os schemas Zod (transfer_to_human, process_refund, etc.) NÃO correspondiam às tools reais do sistema (create_ticket, verify_customer_email, etc.)
-- **Ação**: Arquivo deletado. As tool definitions inline no index.ts são as corretas e já validam via safeParseToolArgs()
+## Bug 1: `callStrictRAG` usa `gpt-5` direto com 400 tokens (CRÍTICO — causa "Pode repetir")
 
-### 3. ✅ TriageRouterAgent — REMOVIDO (dead code)
-- **Decisão**: Master Flow visual via process-chat-flow já faz toda a triagem. O TriageRouterAgent era dead code
-- **Ação**: Import removido, arquivo deletado. Reduz bundle size ~30KB
+**Evidência nos logs:**
+```
+[callStrictRAG] ⚠️ GPT-5 retornou resposta vazia - forçando handoff
+[ai-autopilot-chat] ⚠️ IA retornou vazio — tentando retry com prompt reduzido
+[ai-autopilot-chat] ❌ Retry também retornou vazio
+```
 
-### 4. ⚠️ Bug "Failed to find/create conversation"
-- **Status**: Investigado — erro não existe no código-fonte atual do webhook
-- **Possível causa**: Versão anterior do webhook ainda em memória ou sub-função não identificada
-- **Ação**: Monitorar se reaparece após deploy
+**Causa:** `callStrictRAG` (linha 4264) faz chamada direta à OpenAI com `model: 'gpt-5'` e `max_completion_tokens: 400`. Isso **bypassa** toda a normalização do `callAIWithFallback`. O modelo `gpt-5` é um reasoning model cujos tokens de raciocínio interno contam contra o limite — 400 tokens é insuficiente, resultando em resposta vazia.
 
-## Deploy
-- `ai-autopilot-chat` — ✅ Deployado com sucesso
+**Correção em `supabase/functions/ai-autopilot-chat/index.ts` (linha 4269):**
+```typescript
+// DE:
+max_completion_tokens: 400
+
+// PARA:
+max_completion_tokens: 1200
+```
+
+O Strict RAG precisa de mais margem porque o `gpt-5` gasta tokens no reasoning chain antes de produzir output visível.
+
+---
+
+## Bug 2: Mensagens "Sem contexto ainda" e "Mds" nunca chegaram ao `ai-autopilot-chat` (CRÍTICO — sem resposta)
+
+**Evidência:**
+- `process-chat-flow` processou ambas as mensagens (logs confirmam `node_ia_pedidos`)
+- `process-chat-flow` retornou `useAI: true, aiNodeActive: true`
+- **Zero logs** de `ai-autopilot-chat` para essas mensagens
+- O webhook `meta-whatsapp-webhook` não registrou nenhuma invocação de `ai-autopilot-chat` nesse período
+
+**Causa provável:** O Message Batching está engolindo as mensagens. O buffer acumula as mensagens mas o timer/processamento do buffer falha silenciosamente ou o buffer nunca é processado. Preciso verificar a função de buffer e o cron/timer associado.
+
+**Investigação adicional necessária:** Verificar:
+1. A função `bufferAndSchedule` no webhook
+2. O valor de `batchDelaySeconds` para essa instância
+3. Se existe um `process-message-buffer` ou equivalente que processa o buffer
+
+**Correção preliminar:** Se o batching está silenciosamente descartando mensagens, adicionar fallback direto quando o buffer falha, ou verificar se o timer está sendo criado corretamente.
+
+---
+
+## Resumo
+
+| # | Arquivo | Linha | Bug | Severidade |
+|---|---------|-------|-----|------------|
+| 1 | `ai-autopilot-chat/index.ts` | 4269 | `callStrictRAG` com `max_completion_tokens: 400` insuficiente para gpt-5 | **CRÍTICO** |
+| 2 | `meta-whatsapp-webhook/index.ts` | ~1169 | Mensagens perdidas no batching — IA nunca invocada | **CRÍTICO** |
+
+## Ação Imediata
+- Bug 1: Aumentar `max_completion_tokens` para `1200` no `callStrictRAG`
+- Bug 2: Preciso investigar mais a fundo o mecanismo de buffer (`bufferAndSchedule`, o cron de processamento, e o valor de `batchDelaySeconds`) para identificar onde as mensagens estão sendo perdidas. Posso fazer isso na próxima iteração.
+
