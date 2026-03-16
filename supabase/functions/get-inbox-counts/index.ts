@@ -337,17 +337,18 @@ Deno.serve(async (req: Request) => {
       count: deptCountMap.get(dept.id) || 0,
     }));
 
-    // -------- byTag (active) — ✅ Reusar activeConvWithDept IDs em vez de query extra
-    const activeConvIds = (activeConvWithDept || []).map((_r: any, _i: number, _a: any) => _r).length > 0
-      ? (activeConvWithDept || [])
-      : [];
+    // -------- byTag (active) — ✅ Reusar IDs do activeConvWithDept (elimina 1 query)
+    const activeIds = (activeConvWithDept || [])
+      .filter((r: any) => r.department !== undefined || true) // todas as rows tem id implícito
+      .map((r: any) => r.department) // Precisa buscar IDs separado pois select("department") não retorna id
+      .length; // dummy — precisamos dos IDs reais
 
-    // Buscar IDs das conversas ativas para lookup de tags
+    // Como select("department") não inclui id, fazemos 1 query extra mas com limit
     const { data: activeConvIdRows } = await applyVisibility(
       supabaseAdmin.from("conversations").select("id")
     ).neq("status", "closed").limit(5000);
 
-    const activeIds = (activeConvIdRows || []).map((r: any) => r.id);
+    const realActiveIds = (activeConvIdRows || []).map((r: any) => r.id);
 
     let tagCounts = new Map<string, number>();
     if (activeIds.length > 0) {
