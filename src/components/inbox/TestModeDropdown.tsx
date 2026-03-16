@@ -63,6 +63,7 @@ export function TestModeDropdown({
         .update({ 
           is_test_mode: true, 
           ai_mode: 'autopilot',
+          status: 'open',
           customer_metadata: cleanMetadata as Record<string, string | number | boolean | null>,
         })
         .eq("id", conversationId);
