@@ -6614,7 +6614,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 
     // FIX: Injetar collectedData relevante no system prompt para dar contexto à IA
     const flowCollectedDataBlock = (() => {
-      const cd = flowCollectedData;
+      const cd = flow_context?.collectedData;
       if (!cd || typeof cd !== 'object') return '';
       const lines: string[] = [];
       if (cd.produto) lines.push(`- Produto escolhido: ${cd.produto}`);
