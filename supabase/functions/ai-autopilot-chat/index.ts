@@ -7446,9 +7446,9 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o cÃ³digo que voc�
 
             // Resposta
             const safeEmail = maskEmail(emailToUse);
-            assistantMessage = `Para sua seguranca, enviei um codigo de 6 digitos para **${safeEmail}**.
+            assistantMessage = `Para sua segurança, enviei um código de 6 dígitos para **${safeEmail}**.
 
-Por favor, digite o codigo que voce recebeu para confirmar sua identidade.`;
+Por favor, digite o código que você recebeu para confirmar sua identidade.`;
 
             // Log dev mode internally
             if (otpData.dev_mode) {
