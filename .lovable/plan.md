@@ -1,74 +1,66 @@
 
 
-# V5 Enterprise — Menu + Especialistas (2 Níveis)
+# Auditoria do Fluxo V5 Enterprise — Problemas Encontrados
 
-## Resumo
+## Resultado: 3 problemas detectados (1 crítico, 2 moderados)
 
-Criar novo chat flow "V5 Enterprise — Menu + Especialistas" com **2 níveis de menu** (Produto → Assunto), 7 IAs especialistas com contexto do produto propagado via `collectedData.produto`, tickets automáticos com carimbo, e escape elegante em cada ramo. V4 e V5 anterior permanecem intactos.
+---
 
-## Estrutura (30 nós, ~40 edges)
+### PROBLEMA 1 — CRITICO: `{{produto}}` NÃO é interpolado no `objective`
 
-```text
-START → Boas-vindas → MENU PRODUTO (3 opções) → MENU ASSUNTO (6 opções)
-                                                    ├── pedidos    → IA Pedidos → [devolução → IA Ticket Devolução → Encerramento]
-                                                    │                           → Escape → menu/humano
-                                                    ├── financeiro → IA Financeiro → Escape → menu/humano
-                                                    ├── sistema    → IA Sistema → Escape → menu/humano
-                                                    ├── comercial  → IA Comercial → [internacional → Transfer] → Escape → menu/humano
-                                                    ├── duvidas    → IA Geral → [financeiro → IA Fin] [cancelamento → IA Cancel] → Escape
-                                                    └── consultor  → IA CS Ana → Escape → menu/humano
+O campo `objective` de todos os nós de IA contém `{{produto}}` (ex: "Resolver dúvidas sobre pedidos, rastreio e devoluções do produto {{produto}} do cliente").
+
+**O que acontece**: O motor `process-chat-flow` passa o `objective` **raw** para o `ai-autopilot-chat` sem chamar `replaceVariables()`. O autopilot recebe e usa o texto literal `{{produto}}` no prompt da LLM.
+
+**Impacto**: A IA vai receber no prompt: *"Responder dúvidas sobre pedidos do produto {{produto}}"* em vez de *"...do produto Drop Nacional"*. Perde todo o contexto de produto.
+
+**Correção**: Em todos os 7 pontos do `process-chat-flow/index.ts` onde o `objective` é passado no flow_context, aplicar `replaceVariables()`:
+
+```
+objective: replaceVariables(node.data?.objective || '', variablesContext) || null,
 ```
 
-## Nós Detalhados
+Linhas afetadas: ~2062, ~2289, ~2474, ~3602, ~4313, ~5204, ~5539
 
-| ID | Tipo | Descrição |
-|----|------|-----------|
-| `start` | input | Nó inicial padrão |
-| `node_welcome` | message | Boas-vindas |
-| `node_menu_produto` | ask_options | Menu 1: Drop Nacional / Internacional / Híbrido → salva em `collectedData.produto` via `save_as: "produto"` |
-| `node_menu_assunto` | ask_options | Menu 2: 6 opções (pedidos/financeiro/sistema/comercial/duvidas/consultor) |
-| `node_ia_pedidos` | ai_response | Helper Pedidos, max:4, switches: pedidos+devolução+suporte, objective com `${produto}` |
-| `node_ticket_devolucao` | ai_response | Helper Pedidos, max:10, objective de coleta de dados + create_ticket |
-| `node_escape_pedidos` | ask_options | menu → node_menu_assunto / humano → transfer |
-| `node_ia_financeiro` | ai_response | Helper Financeiro, max:15, switches: financeiro+saque, OTP, objective com `${produto}` |
-| `node_escape_financeiro` | ask_options | menu / humano |
-| `node_ia_sistema` | ai_response | Helper Sistema, max:5, switches: sistema+suporte, objective com `${produto}` |
-| `node_escape_sistema` | ask_options | menu / humano |
-| `node_ia_comercial` | ai_response | Hunter, max:5, switches: comercial+internacional, objective com `${produto}` |
-| `node_escape_comercial` | ask_options | menu / humano |
-| `node_ia_duvidas` | ai_response | Helper, max:4, switches: financeiro+cancelamento+suporte |
-| `node_escape_duvidas` | ask_options | menu / humano |
-| `node_ia_cancelamento` | ai_response | Helper Cancelamento, max:8, switch: cancelamento |
-| `node_escape_cancelamento` | ask_options | menu / humano |
-| `node_ia_consultor` | ai_response | CS Ana, max:5, switch: consultor |
-| `node_escape_consultor` | ask_options | menu / humano |
-| `node_encerramento` | message + close_conversation | Despedida |
-| 7x transfer nodes | transfer | Um por departamento, ai_mode: disabled |
+---
 
-## Diferenças do V5 anterior
+### PROBLEMA 2 — MODERADO: `enable_saque: true` no Financeiro sem edge de saída `saque`
 
-1. **Menu Produto** (novo nó ask_options antes do menu de assunto) — salva `produto` no `collectedData`
-2. **Nó Ticket Devolução** (ai_response dedicado) — coleta dados e cria ticket com `issue_type=devolucao`
-3. **Nó Encerramento** — com `close_conversation` para protocolo
-4. **Objectives** em todos os nós de IA incluem `${produto}` para contexto
-5. **Escapes voltam ao Menu Assunto** (nó 4), não ao Menu Produto
-6. **Financeiro com max:15** e OTP inline
-7. **Cancelamento com max:8** e objetivo de retenção
+O nó `node_ia_financeiro` tem `enable_saque: true`, o que faz o motor detectar intenção de saque e setar `path = 'saque'`. Porém **não existe edge com `sourceHandle: saque`** saindo desse nó — só existe `sourceHandle: default`.
 
-## Implementação
+**O que acontece**: Quando o motor tenta `findNextNode(flowDef, currentNode, 'saque')`, não encontra edge correspondente. O fallback hierárquico tenta `ai_exit` → `default` → any. Provavelmente cai no `default` → escape, mas o log vai mostrar warning de path não encontrado.
 
-Inserir um novo registro na tabela `chat_flows` com o `flow_definition` JSON completo contendo os ~30 nós e ~40 edges. Usar a mesma estrutura de dados do V5 existente. `is_active: false` até homologação. Nenhum arquivo de código será alterado.
+**Correção**: Duas opções:
+- **Opção A**: Adicionar edge `saque` → `transfer_financeiro` (transfer direto para saque)
+- **Opção B**: Remover `enable_saque: true` do nó financeiro (já está no contexto financeiro, não precisa de sub-roteamento)
 
-### Personas e Departamentos (mesmo mapeamento)
+---
 
-| Ramo | persona_id | Transfer → dept_id |
-|------|-----------|-------------------|
-| Pedidos | `8b5a5acb` | `2dd0ee5c` |
-| Ticket Devolução | `8b5a5acb` | — (encerra) |
-| Financeiro | `2001b4a1` | `af3c75a9` |
-| Sistema | `49810ef3` | `fd4fcc90` |
-| Comercial | `31f82776` | Nacional: `f446e202` / Int: `68195a0f` |
-| Dúvidas | `0d2f4c7c` | `36ce66cd` |
-| Cancelamento | `f97f23e6` | `36ce66cd` |
-| Consultor | `dcf5c52f` | `b7149bf4` |
+### PROBLEMA 3 — MODERADO: `enable_suporte: true` em nós que não têm edge `suporte`
+
+Os nós `node_ia_pedidos` e `node_ia_duvidas` têm `enable_suporte: true`, mas nenhum tem edge com `sourceHandle: suporte`. O motor vai detectar intenção de suporte, setar `path = 'suporte'`, e não encontrar saída dedicada — caindo no fallback `default` → escape.
+
+**Impacto**: Funciona via fallback, mas não é intencional. Se o objetivo é redirecionar para suporte técnico quando detectado, precisa de um edge explícito. Se não é necessário, remover o switch.
+
+**Correção**: Remover `enable_suporte: true` desses nós (o cliente já escolheu o assunto no menu, não precisa re-rotear por intenção de suporte).
+
+---
+
+## Itens OK (sem problemas)
+
+- **Estrutura de nós e edges**: Todos os 27 nós referenciados por edges existem no JSON
+- **Edges circulares (escape → menu)**: Corretamente apontam para `node_menu_assunto` (Menu 2), não para `node_menu_produto`
+- **save_as: "produto"**: Corretamente configurado no `node_menu_produto`, e o motor salva em `collectedData['produto']`
+- **collectedData propagado**: O `collectedData` é passado em todas as respostas do flow_context, permitindo que a IA acesse `produto` (mesmo que o objective não interpole)
+- **Personas e departamentos**: Todos os IDs referenciados existem no mapeamento
+- **Transfers com ai_mode: disabled**: Todos os 7 transfers corretamente configurados
+- **forbid_options: false**: Correto em todos os nós de IA (permite perguntas)
+- **Encerramento com close_conversation**: Configurado corretamente
+- **Auto-advance**: start → welcome → menu_produto funciona via auto-traverse de message nodes
+
+## Plano de Correção
+
+1. Interpolar `{{produto}}` no objective em 7 pontos do `process-chat-flow/index.ts`
+2. Remover `enable_saque: true` do `node_ia_financeiro` (ou adicionar edge saque → transfer)
+3. Remover `enable_suporte: true` dos nós pedidos e dúvidas (sem edge correspondente)
 
