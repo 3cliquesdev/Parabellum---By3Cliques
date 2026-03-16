@@ -1506,6 +1506,7 @@ serve(async (req) => {
     // ðŸ†• Chat Flow: variÃ¡veis para persona/KB especÃ­ficas do fluxo
     let flowPersonaId: string | null = flow_context?.personaId || null;
     let flowKbCategories: string[] | null = flow_context?.kbCategories || null;
+    let flowKbProductFilter: string[] | null = flow_context?.kbProductFilter || null;
     let flowContextPrompt: string | null = flow_context?.contextPrompt || null;
     let flowFallbackMessage: string | null = flow_context?.fallbackMessage || null;
     
