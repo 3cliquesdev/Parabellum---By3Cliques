@@ -4438,8 +4438,9 @@ Responda APENAS: skip ou search`
                     'match_knowledge_articles',
                     {
                       query_embedding: queryEmbedding,
-                      match_threshold: 0.50, // Reduzido de 0.70 - permite artigos com 50%+ de similaridade
-                      match_count: 5,        // Aumentado de 3 para 5 - mais artigos candidatos
+                      match_threshold: 0.50,
+                      match_count: 5,
+                      product_filter: hasProductFilter ? activeProductFilter : [],
                     }
                   );
 
