@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/business-hours.ts";
-import { ContextMemoryAgent, type ChatMessage } from "./agents/ContextMemoryAgent.ts";
+import { TriageRouterAgent } from "./agents/TriageRouterAgent.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -724,8 +724,9 @@ const FALLBACK_PHRASES = [
   'encaminhar para um humano',
   'chamar um atendente',
   'não consigo te ajudar com isso',
-  
-  'não posso ajudar',
+  'não consigo resolver isso',
+  'não sou capaz de ajudar',
+  'não posso ajudar com isso',
   'sorry',
   'i cannot',
   'unable to',
@@ -760,6 +761,8 @@ const FINANCIAL_BARRIER_KEYWORDS = [
   'estorno',
   'cancelar',
   'cancelamento',
+  'devolução',
+  'devolver',
   'meu dinheiro'
 ];
 
@@ -4035,56 +4038,22 @@ serve(async (req) => {
 
     console.log(`[ai-autopilot-chat] ${enabledTools.length} tools disponÃ­veis para esta persona`);
 
-    // 4. Buscar histÃ³rico de mensagens (expandido para compressÃ£o)
-    const expandedHistoryLimit = Math.max(maxHistory, 30); // Buscar mais para comprimir
+    // 4. Buscar histÃ³rico de mensagens
     const { data: messages, error: messagesError } = await supabaseClient
       .from('messages')
-      .select('id, content, sender_type, created_at')
+      .select('content, sender_type, created_at')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: false })
-      .limit(expandedHistoryLimit);
+      .limit(maxHistory);
 
     if (messagesError) {
       console.error('[ai-autopilot-chat] Erro ao buscar histÃ³rico:', messagesError);
     }
 
-    const allMessages: ChatMessage[] = messages?.reverse().map(m => ({
-      id: m.id,
-      role: (m.sender_type === 'contact' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.content,
-      created_at: m.created_at
+    const messageHistory = messages?.reverse().map(m => ({
+      role: m.sender_type === 'contact' ? 'user' : 'assistant',
+      content: m.content
     })) || [];
-
-    // 🧠 Compressão de memória: janela deslizante + resumo LLM para conversas longas
-    let messageHistory: Array<{ role: string; content: string }>;
-    let longTermSummary: string | null = null;
-
-    const OPENAI_API_KEY_EARLY = Deno.env.get('OPENAI_API_KEY');
-    if (allMessages.length > 6 && OPENAI_API_KEY_EARLY) {
-      try {
-        const compressed = await ContextMemoryAgent.buildCompressedContext(
-          allMessages,
-          sanitizeModelName(ragConfig.model),
-          OPENAI_API_KEY_EARLY,
-          null // No existing summary yet
-        );
-        messageHistory = compressed.shortTermMessages.map(m => ({
-          role: m.role,
-          content: m.content
-        }));
-        longTermSummary = compressed.longTermSummary;
-        console.log('[ai-autopilot-chat] 🧠 ContextMemoryAgent: compressão aplicada', {
-          totalMessages: allMessages.length,
-          shortTermKept: compressed.shortTermMessages.length,
-          hasLongTermSummary: !!longTermSummary
-        });
-      } catch (compressErr) {
-        console.warn('[ai-autopilot-chat] ⚠️ ContextMemoryAgent falhou, usando fallback:', compressErr);
-        messageHistory = allMessages.map(m => ({ role: m.role, content: m.content }));
-      }
-    } else {
-      messageHistory = allMessages.map(m => ({ role: m.role, content: m.content }));
-    }
 
     // Obter API keys antecipadamente
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
@@ -4265,7 +4234,7 @@ ${a.content}`).join('\n\n---\n\n')}`;
               { role: 'system', content: strictPrompt },
               { role: 'user', content: `${contactName}: ${customerMessage}` }
             ],
-            max_completion_tokens: 1200
+            max_completion_tokens: 400
           }),
         });
         
@@ -4365,7 +4334,7 @@ Responda APENAS: skip ou search`
           { role: 'user', content: customerMessage }
         ],
         temperature: 0.1,
-        max_completion_tokens: 50
+        max_tokens: 10
       });
 
       intentType = intentData.choices?.[0]?.message?.content?.trim().toLowerCase() || 'search';
@@ -5138,7 +5107,7 @@ Responda APENAS: skip ou search`
         
         // Se encontrou resultados, retornar resposta direta SEM chamar IA
         if (fetchResult?.success && fetchResult?.found > 0 && fetchResult?.data) {
-          console.log('[ai-autopilot-chat] 🚚 BYPASS IA: Retornando dados de rastreio diretamente');
+          console.log('[ai-autopilot-chat] ðŸšš BYPASS IA: Retornando dados de rastreio diretamente');
           
           let directResponse = '';
           const codesFound: string[] = [];
@@ -5149,21 +5118,21 @@ Responda APENAS: skip ou search`
             if (info) {
               codesFound.push(code);
               const packedAt = info.express_time_formatted || 'Recentemente';
-              const trackingNum = info.tracking_number || 'Aguardando código';
+              const trackingNum = info.tracking_number || 'Aguardando cÃ³digo';
               const buyerName = info.buyer_name || '';
               const status = info.order_status_label || info.status || 'Em processamento';
               
               if (info.is_packed) {
                 directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
-📦 Embalado em: ${packedAt}
-🚚 Código de rastreio: ${trackingNum}
-✅ Status: ${status}
+ðŸ“¦ Embalado em: ${packedAt}
+ðŸšš CÃ³digo de rastreio: ${trackingNum}
+âœ… Status: ${status}
 
 `;
               } else {
                 directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
-⏳ ${info.packing_message || 'Pedido ainda está sendo preparado.'}
-📋 Status: ${status}
+â³ ${info.packing_message || 'Pedido ainda estÃ¡ sendo preparado.'}
+ðŸ“‹ Status: ${status}
 
 `;
               }
@@ -5172,19 +5141,19 @@ Responda APENAS: skip ou search`
             }
           }
           
-          // Adicionar mensagem para códigos não encontrados
+          // Adicionar mensagem para cÃ³digos nÃ£o encontrados
           if (codesNotFound.length > 0) {
             if (codesNotFound.length === 1) {
-              directResponse += `\n❓ O código **${codesNotFound[0]}** não foi encontrado no sistema.
-Este número está correto? Se sim, pode ser que o pedido ainda não tenha entrado em preparação.`;
+              directResponse += `\nâ“ O cÃ³digo **${codesNotFound[0]}** nÃ£o foi encontrado no sistema.
+Este nÃºmero estÃ¡ correto? Se sim, pode ser que o pedido ainda nÃ£o tenha entrado em preparaÃ§Ã£o.`;
             } else {
-              directResponse += `\n❓ Os seguintes códigos não foram encontrados: ${codesNotFound.join(', ')}
-Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado em preparação.`;
+              directResponse += `\nâ“ Os seguintes cÃ³digos nÃ£o foram encontrados: ${codesNotFound.join(', ')}
+Esses nÃºmeros estÃ£o corretos? Se sim, pode ser que ainda nÃ£o tenham entrado em preparaÃ§Ã£o.`;
             }
           }
           
           if (codesFound.length > 0) {
-            directResponse = `Encontrei as informações do seu pedido:\n\n${directResponse}\nPosso ajudar com mais alguma coisa?`;
+            directResponse = `Encontrei as informaÃ§Ãµes do seu pedido:\n\n${directResponse}\nPosso ajudar com mais alguma coisa?`;
           } else {
             directResponse = directResponse.trim();
           }
@@ -6983,34 +6952,21 @@ ${crossSessionContext}${personaToneInstruction}
 Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 
     // 6. Gerar resposta final
-    // 🧠 Montar mensagens com memória comprimida (se disponível)
-    const contextMessages: Array<{ role: string; content: string }> = [];
-    
-    // Injetar resumo de longo prazo como mensagem de sistema auxiliar
-    if (longTermSummary) {
-      contextMessages.push({ role: 'system', content: longTermSummary });
-    }
-    
-    // Adicionar histórico de curto prazo (já comprimido pelo ContextMemoryAgent)
-    contextMessages.push(...messageHistory.slice(-6));
-
     const aiPayload: any = {
       messages: [
         { role: 'system', content: contextualizedSystemPrompt },
-        ...fewShotMessages,  // ✨ Injetar exemplos de treinamento (Few-Shot Learning)
-        ...contextMessages,
+        ...fewShotMessages,  // âœ¨ Injetar exemplos de treinamento (Few-Shot Learning)
+        ...messageHistory.slice(-6), // 🔧 TOKEN OPT: limitar a últimas 6 msgs (3 turnos)
         { role: 'user', content: customerMessage }
       ],
-      temperature: persona.temperature ?? 0.7,
-      max_tokens: persona.max_tokens ?? 800
+      temperature: persona.temperature ?? 0.7,  // CORRIGIDO: ?? ao invÃ©s de || (temperatura 0 Ã© vÃ¡lida)
+      max_tokens: persona.max_tokens ?? 500    // CORRIGIDO: ?? ao invÃ©s de || (consistÃªncia)
     };
 
     console.log('[ai-autopilot-chat] Messages structure:', {
       system: 1,
-      longTermSummary: !!longTermSummary,
       fewShot: fewShotMessages.length,
       history: messageHistory.length,
-      historyUsed: Math.min(messageHistory.length, 6),
       current: 1,
       total: aiPayload.messages.length
     });
@@ -7259,17 +7215,15 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     if (!rawAIContent && !toolCalls.length) {
       console.warn('[ai-autopilot-chat] âš ï¸ IA retornou vazio â€” tentando retry com prompt reduzido');
       try {
-        // Pegar últimas 5 mensagens do payload original (já contêm a mensagem do user)
-        const lastMessages = aiPayload.messages.slice(-5);
-        // Evitar duplicação: NÃO adicionar customerMessage novamente
         const retryMessages = [
           { role: 'system' as const, content: contextualizedSystemPrompt.substring(0, 4000) },
-          ...lastMessages,
+          ...aiPayload.messages.slice(-5)
         ];
-        // NÃO passar temperature nem max_tokens — callAIWithFallback normaliza automaticamente
         const retryPayload: any = {
-          messages: retryMessages,
-          max_completion_tokens: 800,
+          model: (ragConfig as any)?.model || 'gpt-4o-mini',
+          messages: retryMessages
+          // temperature: 0.7, // ❌ REMOVIDO: Deixamos callAIWithFallback usar os defaults normalizados
+          // max_tokens: 300,  // ❌ REMOVIDO
         };
         const retryData = await callAIWithFallback(retryPayload);
         rawAIContent = retryData.choices?.[0]?.message?.content;
@@ -7329,17 +7283,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       assistantMessage = 'Para solicitar o saque, preciso primeiro confirmar sua identidade. Qual é o seu e-mail de cadastro?';
     } else if (isFinancialRequest) {
       assistantMessage = 'Entendi sua solicitação financeira. Para prosseguir com segurança, qual é o seu e-mail de cadastro?';
-    } else if (flowFallbackMessage) {
-      // Usar fallback configurado no fluxo
-      assistantMessage = flowFallbackMessage;
-      console.log('[ai-autopilot-chat] 🔄 Usando flowFallbackMessage como resposta');
-    } else if (flowObjective) {
-      // Gerar resposta contextual baseada no objetivo do fluxo
-      assistantMessage = `Estou aqui para ajudá-lo. Como posso auxiliar você hoje?`;
-      console.log('[ai-autopilot-chat] 🔄 Usando fallback contextual baseado no flowObjective');
     } else {
-      assistantMessage = 'Estou aqui para ajudá-lo. Pode me dizer como posso auxiliar?';
-      console.log('[ai-autopilot-chat] 🔄 Usando fallback genérico aprimorado');
+      assistantMessage = 'Pode repetir sua mensagem? Não consegui processar corretamente.';
     }
     const isEmptyAIResponse = !rawAIContent;
 
@@ -8516,43 +8461,19 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
                 console.error('[ai-autopilot-chat] âš ï¸ Erro ao aplicar tag pendente_retorno:', tagErr);
               }
 
-              // 5. Verificar configuração after_hours_keep_open
-              const { data: keepOpenConfig } = await supabaseClient
-                .from('system_configurations')
-                .select('value')
-                .eq('key', 'after_hours_keep_open')
-                .maybeSingle();
-              
-              const keepOpen = keepOpenConfig?.value !== 'false'; // default: true
-
-              // 6. Salvar metadata na conversa (e fechar se configurado)
+              // 5. Salvar metadata na conversa
               const existingMeta = conversation.customer_metadata || {};
-              const updateData: any = {
-                customer_metadata: {
-                  ...existingMeta,
-                  after_hours_handoff_requested_at: new Date().toISOString(),
-                  after_hours_next_open_text: nextOpenText,
-                  pending_department_id: conversation.department || null,
-                  handoff_reason: handoffReason,
-                }
-              };
-
-              if (!keepOpen) {
-                // FECHAR conversa
-                updateData.status = 'closed';
-                updateData.closed_at = new Date().toISOString();
-                updateData.metadata = {
-                  ...(conversation.metadata || {}),
-                  close_reason: 'after_hours_handoff',
-                };
-                console.log('[ai-autopilot-chat] 🔒 Fechando conversa — after_hours_keep_open=false');
-              } else {
-                console.log('[ai-autopilot-chat] 📂 Mantendo conversa aberta na fila (after_hours_keep_open=true)');
-              }
-
               await supabaseClient
                 .from('conversations')
-                .update(updateData)
+                .update({
+                  customer_metadata: {
+                    ...existingMeta,
+                    after_hours_handoff_requested_at: new Date().toISOString(),
+                    after_hours_next_open_text: nextOpenText,
+                    pending_department_id: conversation.department || null,
+                    handoff_reason: handoffReason,
+                  }
+                })
                 .eq('id', conversationId);
 
               // 6. Registrar nota interna
