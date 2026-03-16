@@ -7168,9 +7168,9 @@ Seja inteligente. Converse. O ticket Ã© o ÃšLTIMO recurso.`;
 
     // ðŸ†• FIX C: Se AINDA vazio + intent financeiro + flow_context â†’ FLOW_EXIT:financeiro
     if (!rawAIContent && !toolCalls.length && flow_context) {
-      const financialTerms = /\b(saque|sacar|reembolso|estorno|devoluÃ§Ã£o|dinheiro|pix|saldo|transferir|transferÃªncia|retirar|retirada)\b/i;
-      const cancellationTerms = /\b(cancelar|cancelamento|cancela|desistir|desistÃªncia)\b/i;
-      const commercialTerms = /\b(comprar|contratar|assinar|upgrade|plano|preÃ§o|valor)\b/i;
+      const financialTerms = /\b(saque|sacar|reembolso|estorno|devolução|dinheiro|pix|saldo|transferir|transferência|retirar|retirada)\b/i;
+      const cancellationTerms = /\b(cancelar|cancelamento|cancela|desistir|desistência)\b/i;
+      const commercialTerms = /\b(comprar|contratar|assinar|upgrade|plano|preço|valor)\b/i;
 
       let autoExitIntent: string | null = null;
       if (financialTerms.test(customerMessage) && flowForbidFinancial) {
