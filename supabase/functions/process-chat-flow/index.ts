@@ -97,7 +97,7 @@ async function inlineKiwifyValidation(
 
     const first = matching[0];
     const customer = first.payload?.Customer || {};
-    const products = [...new Set(matching.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
+    const products: string[] = [...new Set(matching.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
 
     const result = {
       found: true,
