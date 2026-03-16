@@ -4036,22 +4036,56 @@ serve(async (req) => {
 
     console.log(`[ai-autopilot-chat] ${enabledTools.length} tools disponÃ­veis para esta persona`);
 
-    // 4. Buscar histÃ³rico de mensagens
+    // 4. Buscar histÃ³rico de mensagens (expandido para compressÃ£o)
+    const expandedHistoryLimit = Math.max(maxHistory, 30); // Buscar mais para comprimir
     const { data: messages, error: messagesError } = await supabaseClient
       .from('messages')
-      .select('content, sender_type, created_at')
+      .select('id, content, sender_type, created_at')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: false })
-      .limit(maxHistory);
+      .limit(expandedHistoryLimit);
 
     if (messagesError) {
       console.error('[ai-autopilot-chat] Erro ao buscar histÃ³rico:', messagesError);
     }
 
-    const messageHistory = messages?.reverse().map(m => ({
-      role: m.sender_type === 'contact' ? 'user' : 'assistant',
-      content: m.content
+    const allMessages: ChatMessage[] = messages?.reverse().map(m => ({
+      id: m.id,
+      role: (m.sender_type === 'contact' ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.content,
+      created_at: m.created_at
     })) || [];
+
+    // 🧠 Compressão de memória: janela deslizante + resumo LLM para conversas longas
+    let messageHistory: Array<{ role: string; content: string }>;
+    let longTermSummary: string | null = null;
+
+    const OPENAI_API_KEY_EARLY = Deno.env.get('OPENAI_API_KEY');
+    if (allMessages.length > 6 && OPENAI_API_KEY_EARLY) {
+      try {
+        const compressed = await ContextMemoryAgent.buildCompressedContext(
+          allMessages,
+          sanitizeModelName(ragConfig.model),
+          OPENAI_API_KEY_EARLY,
+          null // No existing summary yet
+        );
+        messageHistory = compressed.shortTermMessages.map(m => ({
+          role: m.role,
+          content: m.content
+        }));
+        longTermSummary = compressed.longTermSummary;
+        console.log('[ai-autopilot-chat] 🧠 ContextMemoryAgent: compressão aplicada', {
+          totalMessages: allMessages.length,
+          shortTermKept: compressed.shortTermMessages.length,
+          hasLongTermSummary: !!longTermSummary
+        });
+      } catch (compressErr) {
+        console.warn('[ai-autopilot-chat] ⚠️ ContextMemoryAgent falhou, usando fallback:', compressErr);
+        messageHistory = allMessages.map(m => ({ role: m.role, content: m.content }));
+      }
+    } else {
+      messageHistory = allMessages.map(m => ({ role: m.role, content: m.content }));
+    }
 
     // Obter API keys antecipadamente
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
