@@ -862,7 +862,7 @@ serve(async (req) => {
                         const { data: deptAgents } = await supabase
                           .from("agent_departments")
                           .select("profile_id, profiles!inner(availability_status)")
-                          .eq("department_id", conversation.department_id)
+                          .eq("department_id", conversation.department)
                           .eq("profiles.availability_status", "online")
                           .limit(1);
                         
