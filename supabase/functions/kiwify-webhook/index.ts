@@ -1167,7 +1167,7 @@ async function handlePaidOrder(
       type: 'recovery',
       email: Customer.email,
       options: {
-        redirectTo: `${frontendUrl}/client-portal`
+        redirectTo: `${frontendUrl}/portal`
       }
     });
 
