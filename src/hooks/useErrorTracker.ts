@@ -53,7 +53,7 @@ export function useErrorTracker() {
         metadata: {
           url: window.location.href,
           user_agent: navigator.userAgent,
-          build_id: ((window as unknown) as Record<string, unknown>).__APP_SCHEMA_VERSION || 'unknown',
+          build_id: String(((window as unknown) as Record<string, unknown>).__APP_SCHEMA_VERSION || 'unknown'),
           timestamp: new Date().toISOString(),
           ...entry.metadata,
         },
