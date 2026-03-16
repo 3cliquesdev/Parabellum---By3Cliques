@@ -1481,7 +1481,7 @@ serve(async (req) => {
             manualTrigger: true,
             personaId: contentNode.data?.persona_id || null,
             kbCategories: contentNode.data?.kb_categories || null,
-            kbProductFilter: mapProductToKbFilter(collectedData || {}),
+            kbProductFilter: mapProductToKbFilter(collectedDataForState || {}),
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
