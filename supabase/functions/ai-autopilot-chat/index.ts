@@ -6984,21 +6984,34 @@ ${crossSessionContext}${personaToneInstruction}
 Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 
     // 6. Gerar resposta final
+    // 🧠 Montar mensagens com memória comprimida (se disponível)
+    const contextMessages: Array<{ role: string; content: string }> = [];
+    
+    // Injetar resumo de longo prazo como mensagem de sistema auxiliar
+    if (longTermSummary) {
+      contextMessages.push({ role: 'system', content: longTermSummary });
+    }
+    
+    // Adicionar histórico de curto prazo (já comprimido pelo ContextMemoryAgent)
+    contextMessages.push(...messageHistory.slice(-6));
+
     const aiPayload: any = {
       messages: [
         { role: 'system', content: contextualizedSystemPrompt },
-        ...fewShotMessages,  // âœ¨ Injetar exemplos de treinamento (Few-Shot Learning)
-        ...messageHistory.slice(-6), // 🔧 TOKEN OPT: limitar a últimas 6 msgs (3 turnos)
+        ...fewShotMessages,  // ✨ Injetar exemplos de treinamento (Few-Shot Learning)
+        ...contextMessages,
         { role: 'user', content: customerMessage }
       ],
-      temperature: persona.temperature ?? 0.7,  // CORRIGIDO: ?? ao invÃ©s de || (temperatura 0 Ã© vÃ¡lida)
-      max_tokens: persona.max_tokens ?? 500    // CORRIGIDO: ?? ao invÃ©s de || (consistÃªncia)
+      temperature: persona.temperature ?? 0.7,
+      max_tokens: persona.max_tokens ?? 500
     };
 
     console.log('[ai-autopilot-chat] Messages structure:', {
       system: 1,
+      longTermSummary: !!longTermSummary,
       fewShot: fewShotMessages.length,
       history: messageHistory.length,
+      historyUsed: Math.min(messageHistory.length, 6),
       current: 1,
       total: aiPayload.messages.length
     });
