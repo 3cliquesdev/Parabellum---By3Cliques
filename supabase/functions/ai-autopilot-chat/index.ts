@@ -5155,15 +5155,15 @@ Responda APENAS: skip ou search`
               
               if (info.is_packed) {
                 directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
-ðŸ“¦ Embalado em: ${packedAt}
-ðŸšš CÃ³🚚 Código de rastreio: ${trackingNum}
-âœ… Status: ${status}
+📦 Embalado em: ${packedAt}
+🚚 Código de rastreio: ${trackingNum}
+✅ Status: ${status}
 
 `;
               } else {
                 directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
-â³ ${info.packing_message || 'Pedido ainda estÃ¡ sendo preparado.'}
-ðŸ“‹ Status: ${status}
+⏳ ${info.packing_message || 'Pedido ainda está sendo preparado.'}
+📋 Status: ${status}
 
 `;
               }
