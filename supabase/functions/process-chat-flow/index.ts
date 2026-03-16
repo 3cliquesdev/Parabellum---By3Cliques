@@ -850,7 +850,7 @@ serve(async (req) => {
     // waiting_human: Cliente na fila, aguardando humano
     // copilot: Humano atendendo com sugestões da IA
     // disabled: Atendimento 100% manual
-    if ((currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') && !isTestMode) {
+    if ((currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') && !isTestMode && !manualTrigger) {
       // 🔓 SOBERANIA DO FLUXO: verificar se existe fluxo ativo antes de bloquear
       const { data: activeFlowCheck } = await supabaseClient
         .from('chat_flow_states')
@@ -1310,13 +1310,19 @@ serve(async (req) => {
         .from('chat_flow_states')
         .delete()
         .eq('conversation_id', conversationId)
-        .in('status', ['active', 'waiting_input', 'in_progress', 'cancelled']);
+        .in('status', ['active', 'waiting_input', 'in_progress', 'cancelled', 'transferred', 'completed']);
 
       if (deleteError) {
         console.error('[process-chat-flow] Error cleaning up old states:', deleteError);
       } else {
         console.log('[process-chat-flow] 🧹 Cleaned up old flow states for manual trigger');
       }
+
+      // 🔄 Resetar ai_mode para autopilot no trigger manual (para que o novo fluxo processe mensagens)
+      await supabaseClient.from('conversations')
+        .update({ ai_mode: 'autopilot', assigned_to: null })
+        .eq('id', conversationId);
+      console.log('[process-chat-flow] 🔄 Reset ai_mode → autopilot para trigger manual');
 
       // Criar estado do fluxo no nó de conteúdo (não no start)
       // Add inactivity metadata if stopped at inactivity condition
