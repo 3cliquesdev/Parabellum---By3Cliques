@@ -560,6 +560,7 @@ function BusinessMessagesSection() {
   const { data: messages = [], isLoading } = useBusinessMessages();
   const { data: allTags = [] } = useTags();
   const updateMessage = useUpdateBusinessMessage();
+  const { keepOpen, isLoading: isLoadingKeepOpen, updateKeepOpen } = useAfterHoursKeepOpen();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
   const [tagInitialized, setTagInitialized] = useState(false);
