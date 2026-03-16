@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useTags } from "@/hooks/useTags";
 import { useBusinessMessages, useUpdateBusinessMessage } from "@/hooks/useBusinessMessages";
+import { useAfterHoursKeepOpen } from "@/hooks/useAfterHoursKeepOpen";
 import { 
   useSLAPolicies, 
   useCreateSLAPolicy, 
