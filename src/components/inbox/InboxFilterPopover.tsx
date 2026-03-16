@@ -134,6 +134,7 @@ export default function InboxFilterPopover({ filters, onFiltersChange }: InboxFi
       hasAudio: undefined,
       hasAttachments: undefined,
       aiMode: undefined,
+      departmentId: undefined,
       includeArchived: undefined,
       waitingTime: 'all',
     });
