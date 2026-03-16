@@ -65,6 +65,8 @@ export function TopAffiliatesWidget({ startDate, endDate }: TopAffiliatesWidgetP
                 <TableHead className="text-foreground font-semibold">Afiliado</TableHead>
                 <TableHead className="text-foreground font-semibold">Email</TableHead>
                 <TableHead className="text-center text-foreground font-semibold">Vendas</TableHead>
+                <TableHead className="text-center text-foreground font-semibold">% Vendas</TableHead>
+                <TableHead className="text-center text-foreground font-semibold">% Comissão</TableHead>
                 <TableHead className="text-right text-foreground font-semibold">Comissão Total</TableHead>
               </TableRow>
             </TableHeader>
