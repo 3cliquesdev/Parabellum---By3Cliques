@@ -359,6 +359,14 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
           </Badge>
         )}
 
+        {/* Badge de end_action: create_ticket */}
+        {data.end_action === "create_ticket" && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 gap-0.5 border-violet-500/50 text-violet-600">
+            <Ticket className="h-2.5 w-2.5" />
+            Ticket
+          </Badge>
+        )}
+
         {/* Badge de fallback configurado */}
         {data.fallback_message && (
           <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 opacity-60">
