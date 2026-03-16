@@ -164,6 +164,7 @@ export function MessagesWithMedia({
   isManager,
   messagesEndRef,
   _tick,
+  onRetryMessage,
 }: MessagesWithMediaProps) {
   // Extrair todos os attachments prontos de todas as mensagens
   const allAttachments = useMemo(() => {
