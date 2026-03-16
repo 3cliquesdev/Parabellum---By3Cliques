@@ -1,51 +1,26 @@
 
+# Checklist Pós-Deploy — Implementação Concluída
 
-# Correção da Race Condition — meta-whatsapp-webhook
+## Mudanças Realizadas
 
-## Problema
-Quando o cliente envia uma imagem no WhatsApp, a Meta dispara 2 webhooks simultâneos. Ambas as threads não encontram conversa existente, tentam inserir — a segunda falha por violação de unicidade, retornando `undefined`, gerando o log `❌ Failed to find/create conversation`.
+### 1. ✅ ContextMemoryAgent — INTEGRADO
+- **Antes**: Carregava 10 mensagens brutas, usava 6 no prompt
+- **Depois**: Carrega até 30 mensagens, comprime as mais antigas via LLM (sliding window), injeta resumo + últimas 5 mensagens
+- **Arquivos**: `ai-autopilot-chat/index.ts` (linhas 4039-4088, 6986-7018)
+- **Impacto**: Economia de tokens em conversas longas (20+ msgs), contexto preservado
 
-## Correção
-Substituir as linhas **560-575** em `supabase/functions/meta-whatsapp-webhook/index.ts`:
+### 2. ✅ ActionTools.ts — REMOVIDO (dead code)
+- **Decisão**: Os schemas Zod (transfer_to_human, process_refund, etc.) NÃO correspondiam às tools reais do sistema (create_ticket, verify_customer_email, etc.)
+- **Ação**: Arquivo deletado. As tool definitions inline no index.ts são as corretas e já validam via safeParseToolArgs()
 
-**De:**
-```typescript
-const { data: newConv } = await supabase
-  .from("conversations")
-  .insert({...})
-  .select("...")
-  .single();
+### 3. ✅ TriageRouterAgent — REMOVIDO (dead code)
+- **Decisão**: Master Flow visual via process-chat-flow já faz toda a triagem. O TriageRouterAgent era dead code
+- **Ação**: Import removido, arquivo deletado. Reduz bundle size ~30KB
 
-conversation = newConv;
-console.log("... New conversation created:", conversation?.id);
-```
-
-**Para:**
-```typescript
-const { data: newConv, error: newConvError } = await supabase
-  .from("conversations")
-  .insert({...})
-  .select("...")
-  .single();
-
-if (newConvError) {
-  console.error("[meta-whatsapp-webhook] ❌ ERRO AO CRIAR CONVERSA (possível race condition):", newConvError);
-  const { data: existingRaceConv } = await supabase
-    .from("conversations")
-    .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
-    .eq("contact_id", contact.id)
-    .neq("status", "closed")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
-  conversation = existingRaceConv;
-  console.log("[meta-whatsapp-webhook] 💬 Conversa recuperada via fallback após colisão:", conversation?.id);
-} else {
-  conversation = newConv;
-  console.log("[meta-whatsapp-webhook] 💬 New conversation created:", conversation?.id);
-}
-```
+### 4. ⚠️ Bug "Failed to find/create conversation"
+- **Status**: Investigado — erro não existe no código-fonte atual do webhook
+- **Possível causa**: Versão anterior do webhook ainda em memória ou sub-função não identificada
+- **Ação**: Monitorar se reaparece após deploy
 
 ## Deploy
-Deploy individual apenas de `meta-whatsapp-webhook`.
-
+- `ai-autopilot-chat` — ✅ Deployado com sucesso

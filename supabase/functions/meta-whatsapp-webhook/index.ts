@@ -557,7 +557,7 @@ serve(async (req) => {
               if (!conversation) {
                 // Nova conversa — sempre autopilot, sem pré-atribuição
                 // Roteamento para consultor é 100% responsabilidade do Chat Flow
-                const { data: newConv } = await supabase
+                const { data: newConv, error: newConvError } = await supabase
                   .from("conversations")
                   .insert({
                     contact_id: contact.id,
@@ -571,8 +571,23 @@ serve(async (req) => {
                   .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
                   .single();
 
-                conversation = newConv;
-                console.log("[meta-whatsapp-webhook] 💬 New conversation created:", conversation?.id);
+                if (newConvError) {
+                  console.error("[meta-whatsapp-webhook] ❌ ERRO AO CRIAR CONVERSA (possível race condition):", newConvError);
+                  // Race condition fallback: outro webhook criou a conversa milissegundos antes
+                  const { data: existingRaceConv } = await supabase
+                    .from("conversations")
+                    .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
+                    .eq("contact_id", contact.id)
+                    .neq("status", "closed")
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .single();
+                  conversation = existingRaceConv;
+                  console.log("[meta-whatsapp-webhook] 💬 Conversa recuperada via fallback após colisão:", conversation?.id);
+                } else {
+                  conversation = newConv;
+                  console.log("[meta-whatsapp-webhook] 💬 New conversation created:", conversation?.id);
+                }
               } else {
                 // Migrar de Evolution para Meta se necessário
                 if (conversation.whatsapp_provider !== "meta") {
