@@ -1144,7 +1144,8 @@ async function handlePaidOrder(
       user_metadata: {
         full_name: Customer.full_name,
         contact_id: contact.id,
-        source: 'kiwify'
+        source: 'kiwify',
+        role: 'client'
       }
     });
 
@@ -1166,7 +1167,7 @@ async function handlePaidOrder(
       type: 'recovery',
       email: Customer.email,
       options: {
-        redirectTo: `${frontendUrl}/client-portal`
+        redirectTo: `${frontendUrl}/portal`
       }
     });
 

@@ -316,6 +316,7 @@ serve(async (req) => {
                 user_metadata: {
                   full_name: `${firstName} ${lastName}`,
                   must_change_password: true,
+                  role: 'client',
                 },
               });
 

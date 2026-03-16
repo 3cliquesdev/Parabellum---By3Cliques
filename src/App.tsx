@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { PortalGuard } from "./components/auth/PortalGuard";
 import RealtimeNotifications from "./components/RealtimeNotifications";
 import { WhatsAppDisconnectMonitor } from "./components/WhatsAppDisconnectMonitor";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
@@ -180,8 +181,8 @@ const App = () => {
               <Route path="/meu-cadastro" element={<CustomerFiscalData />} />
               <Route path="/onboarding-form" element={<PublicOnboardingForm />} />
               
-              {/* Client portal - for users with role 'user' */}
-              <Route path="/client-portal" element={<ProtectedRoute><ClientPortal /></ProtectedRoute>} />
+              {/* Client portal - protected by PortalGuard (only role 'user') */}
+              <Route path="/client-portal" element={<PortalGuard><ClientPortal /></PortalGuard>} />
 
               {/* Debug routes - dev only */}
               <Route path="/debug/routes" element={<DebugRoutes />} />
