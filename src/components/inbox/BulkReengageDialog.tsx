@@ -234,9 +234,7 @@ export function BulkReengageDialog({
 
           // Auto-distribute: create dispatch job for round-robin assignment
           if (destinationType === "auto_distribute") {
-            const deptId = (destinationType === "department" && targetDepartmentId)
-              ? targetDepartmentId
-              : (conv as any).department;
+            const deptId = (conv as any).department;
             if (deptId) {
               await (supabase as any)
                 .from("conversation_dispatch_jobs")
