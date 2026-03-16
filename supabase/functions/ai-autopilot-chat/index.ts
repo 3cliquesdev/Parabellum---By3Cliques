@@ -7330,8 +7330,17 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       assistantMessage = 'Para solicitar o saque, preciso primeiro confirmar sua identidade. Qual é o seu e-mail de cadastro?';
     } else if (isFinancialRequest) {
       assistantMessage = 'Entendi sua solicitação financeira. Para prosseguir com segurança, qual é o seu e-mail de cadastro?';
+    } else if (flowFallbackMessage) {
+      // Usar fallback configurado no fluxo
+      assistantMessage = flowFallbackMessage;
+      console.log('[ai-autopilot-chat] 🔄 Usando flowFallbackMessage como resposta');
+    } else if (flowObjective) {
+      // Gerar resposta contextual baseada no objetivo do fluxo
+      assistantMessage = `Estou aqui para ajudá-lo. Como posso auxiliar você hoje?`;
+      console.log('[ai-autopilot-chat] 🔄 Usando fallback contextual baseado no flowObjective');
     } else {
-      assistantMessage = 'Pode repetir sua mensagem? Não consegui processar corretamente.';
+      assistantMessage = 'Estou aqui para ajudá-lo. Pode me dizer como posso auxiliar?';
+      console.log('[ai-autopilot-chat] 🔄 Usando fallback genérico aprimorado');
     }
     const isEmptyAIResponse = !rawAIContent;
 
