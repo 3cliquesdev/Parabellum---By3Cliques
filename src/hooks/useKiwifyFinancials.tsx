@@ -290,11 +290,13 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
               affiliateEmail: affiliateEmail || "Email não disponível",
               salesCount: 0,
               totalCommission: 0,
+              totalGrossRevenue: 0,
             });
           }
           const affiliate = affiliateMap.get(key)!;
           affiliate.salesCount++;
           affiliate.totalCommission += affiliateCommission;
+          affiliate.totalGrossRevenue += grossValue;
         }
       });
 
