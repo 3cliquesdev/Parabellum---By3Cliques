@@ -5804,18 +5804,18 @@ Se foram pagos recentemente, pode ser que ainda nÃ£o tenham entrado em prepara
     });
 
     // ============================================================
-    // ðŸŽ¯ BYPASS DIRETO: CANCELAMENTO DE ASSINATURA
-    // Responde imediatamente com a resposta padrÃ£o Kiwify
-    // SEM passar pelo sistema de confianÃ§a, SEM pedir email
+    // BYPASS DIRETO: CANCELAMENTO DE ASSINATURA
+    // Responde imediatamente com a resposta padrao Kiwify
+    // SEM passar pelo sistema de confianca, SEM pedir email
     // ============================================================
     if (isCancellationRequest) {
-      console.log('[ai-autopilot-chat] âŒ CANCELAMENTO DETECTADO - Bypass direto para resposta Kiwify');
+      console.log('[ai-autopilot-chat] CANCELAMENTO DETECTADO - Bypass direto para resposta Kiwify');
       
-      const cancellationResponse = `Entendi! O cancelamento de cursos/assinaturas é feito diretamente pela plataforma Kiwify. `Entendi! O cancelamento de cursos/assinaturas Ã© feito diretamente pela plataforma Kiwify.
+      const cancellationResponse = `Entendi! O cancelamento de cursos/assinaturas é feito diretamente pela plataforma Kiwify.
 
-ðŸ“Œ VocÃª tem *7 dias de garantia* a partir da compra para solicitar reembolso.
+📌 Você tem *7 dias de garantia* a partir da compra para solicitar reembolso.
 
-ðŸ”— *Acesse aqui para cancelar:* https://reembolso.kiwify.com.br/login
+🔗 *Acesse aqui para cancelar:* https://reembolso.kiwify.com.br/login
 
 Use o mesmo email da compra para fazer login e solicitar o reembolso.
 
