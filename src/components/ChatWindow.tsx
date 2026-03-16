@@ -781,6 +781,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                       isManager={isManager}
                       messagesEndRef={messagesEndRef}
                       _tick={tickCounter}
+                      onRetryMessage={retrySend}
                     />
 
                     {/* Typing indicator */}

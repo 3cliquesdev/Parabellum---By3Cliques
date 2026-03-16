@@ -397,6 +397,7 @@ export function MessagesWithMedia({
               isAdmin={isAdmin}
               isManager={isManager}
               attachments={attachments}
+              onRetry={message.status === 'failed' && onRetryMessage ? () => onRetryMessage(message.id, conversation.id) : undefined}
             />
             {flowName && (
               <p className="text-[10px] text-muted-foreground mt-0.5 ml-10 opacity-70">
