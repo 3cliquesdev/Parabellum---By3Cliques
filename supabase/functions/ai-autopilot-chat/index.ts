@@ -6280,13 +6280,13 @@ Digite **"reenviar"** se precisar de um novo cÃ³digo.`;
         console.log('[ai-autopilot-chat] ðŸ” OTP pendente marcado na metadata (withdrawal barrier)');
         
         // BYPASS DIRETO - NÃƒO CHAMAR A IA
-        const directOTPResponse = `**VerificaÃ§Ã£o de SeguranÃ§a para Saque**
+        const directOTPResponse = `**Verificação de Segurança para Saque**
 
-OlÃ¡ ${contactName}! Para saques da carteira, preciso confirmar sua identidade.
+Olá ${contactName}! Para saques da carteira, preciso confirmar sua identidade.
 
-Enviei um cÃ³digo de **6 dÃ­gitos** para **${maskedEmail}**.
+Enviei um código de **6 dígitos** para **${maskedEmail}**.
 
-Por favor, **digite o cÃ³digo** que vocÃª recebeu para continuar com o saque.`;
+Por favor, **digite o código** que você recebeu para continuar com o saque.`;
 
         // Salvar mensagem no banco
         const { data: savedMsg } = await supabaseClient
