@@ -2,13 +2,33 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/business-hours.ts";
 
-const jsonUtf8 = 'application/json; charset=utf-8';
-
-const corsHeaders = {
+const _corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Content-Type': jsonUtf8,
 };
+
+// Proxy que força charset=utf-8 em toda Response JSON
+const corsHeaders = new Proxy(_corsHeaders as Record<string, string>, {
+  get(target, prop, receiver) {
+    return Reflect.get(target, prop, receiver);
+  }
+});
+
+// Override global: toda resposta JSON terá charset=utf-8
+const _OriginalResponse = Response;
+const _patchedResponse = function(body: BodyInit | null, init?: ResponseInit) {
+  if (init?.headers) {
+    const h = init.headers as Record<string, string>;
+    if (h['Content-Type'] === 'application/json') {
+      h['Content-Type'] = 'application/json; charset=utf-8';
+    }
+  }
+  return new _OriginalResponse(body, init);
+} as unknown as typeof Response;
+// @ts-ignore
+globalThis.Response = _patchedResponse;
+Object.setPrototypeOf(_patchedResponse, _OriginalResponse);
+Object.defineProperty(_patchedResponse, 'prototype', { value: _OriginalResponse.prototype });
 
 // ============================================================
 // ðŸ†• INTERFACE DE CONFIGURAÃ‡ÃƒO RAG DINÃ‚MICA
