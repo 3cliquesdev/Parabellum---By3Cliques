@@ -188,6 +188,7 @@ const SAVE_AS_SUGGESTIONS: Record<string, { value: string; label: string }[]> = 
 function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSaving }: ChatFlowEditorProps) {
   const { data: ticketCategories = [] } = useTicketCategories();
   const { data: allTags = [] } = useTags();
+  const { data: departments = [] } = useDepartments({ activeOnly: true });
   // Criar nó de início se não houver nós
   const initialNodes = useMemo(() => {
     if (initialFlow?.nodes && initialFlow.nodes.length > 0) {
