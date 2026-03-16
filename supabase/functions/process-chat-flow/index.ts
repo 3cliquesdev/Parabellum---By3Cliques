@@ -850,7 +850,7 @@ serve(async (req) => {
     // waiting_human: Cliente na fila, aguardando humano
     // copilot: Humano atendendo com sugestões da IA
     // disabled: Atendimento 100% manual
-    if ((currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') && !isTestMode) {
+    if ((currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') && !isTestMode && !manualTrigger) {
       // 🔓 SOBERANIA DO FLUXO: verificar se existe fluxo ativo antes de bloquear
       const { data: activeFlowCheck } = await supabaseClient
         .from('chat_flow_states')
