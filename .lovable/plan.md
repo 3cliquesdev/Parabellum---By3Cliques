@@ -1,37 +1,19 @@
 
+# Correção: AI Node Recebe Contexto da Opção Selecionada — ✅ IMPLEMENTADO
 
-# Auditoria Final: Paridade firstEntry + forbidSupport
+## Problema
+Quando `ask_options` transitava para `ai_response`, o webhook enviava o número cru da seleção ("2") como `customerMessage` para a IA, que não encontrava nada na KB e acionava fallback.
 
-## Gaps Encontrados
+## Correção Aplicada
 
-### Gap 1 — `handle-whatsapp-event/index.ts` (L1338)
-`customerMessage: messageText` envia o texto cru (ex: "2") para a IA quando `firstEntry` é true. Falta a substituição contextual.
+### 1. `process-chat-flow/index.ts` — ✅ Flag `firstEntry`
+- Bloco genérico (L2925): detecta `currentNode.type === 'ask_options' && selectedOption` → retorna `firstEntry: true, selectedOption: label`
+- Bloco principal (L4307): mesma lógica com `isFirstEntryFromMenuMain`
 
-**Correção:** Substituir L1338 por:
-```typescript
-customerMessage: (flowResult.firstEntry && flowResult.selectedOption)
-  ? `Cliente selecionou: ${flowResult.selectedOption}`
-  : messageText,
-```
+### 2. `meta-whatsapp-webhook/index.ts` — ✅ Substituição contextual
+- Path direto (L1305): `customerMessage` usa `"Cliente selecionou: {label}"` quando `firstEntry=true`
+- Path batching (L1256): `bufferMessage` usa mesma substituição
+- Propagação de `firstEntry` e `selectedOption` no flowData do buffer
 
-### Gap 2 — `handle-whatsapp-event/index.ts` (L1305-1323)
-O `flowContext` não inclui `forbidSupport`, diferente do `meta-whatsapp-webhook`.
-
-**Correção:** Adicionar após L1323:
-```typescript
-forbidSupport: flowResult.forbidSupport ?? false,
-```
-
-### Gap 3 — `process-buffered-messages/index.ts` (L343)
-`customerMessage: concatenatedMessage` não verifica `firstEntry` do `flowData`.
-
-**Correção:** Substituir L343 por:
-```typescript
-customerMessage: (flowData?.firstEntry && flowData?.selectedOption)
-  ? `Cliente selecionou: ${flowData.selectedOption}`
-  : concatenatedMessage,
-```
-
-## Resumo
-3 edits pontuais + redeploy das 2 edge functions para paridade 100% entre Meta, Evolution API e Batching.
-
+### 3. Deploy — ✅ Realizado
+- `process-chat-flow` e `meta-whatsapp-webhook` deployados

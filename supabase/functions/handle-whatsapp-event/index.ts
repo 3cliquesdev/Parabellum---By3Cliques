@@ -1321,6 +1321,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             forbidCancellation: flowResult.forbidCancellation ?? false,
             forbidConsultant: flowResult.forbidConsultant ?? false,
             collectedData: flowResult.collectedData || null,
+            forbidSupport: flowResult.forbidSupport ?? false,
           };
 
           console.log('[handle-whatsapp-event] 📋 flow_context:', JSON.stringify({
@@ -1335,7 +1336,9 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-autopilot-chat', {
             body: {
               conversationId: conversationId,
-              customerMessage: messageText,
+              customerMessage: (flowResult.firstEntry && flowResult.selectedOption)
+                ? `Cliente selecionou: ${flowResult.selectedOption}`
+                : messageText,
               customer_context: isKnownCustomer ? {
                 name: contactName,
                 email: existingContact?.email,

@@ -340,7 +340,9 @@ async function callPipeline(
 
       const autopilotBody: Record<string, unknown> = {
         conversationId,
-        customerMessage: concatenatedMessage,
+        customerMessage: (flowData?.firstEntry && flowData?.selectedOption)
+          ? `Cliente selecionou: ${flowData.selectedOption}`
+          : concatenatedMessage,
         contact_id: contactId,
         whatsapp_provider: "meta",
         whatsapp_meta_instance_id: instanceId,
