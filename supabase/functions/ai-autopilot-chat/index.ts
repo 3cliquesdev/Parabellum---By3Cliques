@@ -5,6 +5,7 @@ import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/busin
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Content-Type': 'application/json; charset=utf-8',
 };
 
 // ============================================================
