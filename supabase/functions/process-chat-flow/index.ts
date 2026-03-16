@@ -3622,6 +3622,7 @@ serve(async (req) => {
               personaId: currentNode.data?.persona_id || null,
               personaName: currentNode.data?.persona_name || null,
               kbCategories: currentNode.data?.kb_categories || null,
+              kbProductFilter: mapProductToKbFilter(collectedData || {}),
               fallbackMessage: currentNode.data?.fallback_message || null,
               objective: currentNode.data?.objective ? replaceVariables(currentNode.data.objective, variablesContext || await rebuildCtx()) : null,
               maxSentences: currentNode.data?.max_sentences ?? 3,
