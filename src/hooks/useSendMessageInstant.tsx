@@ -216,9 +216,7 @@ export function useSendMessageInstant() {
                 metaPayload.message = contentToSend;
               }
               
-              const { data: metaResponse, error: metaError } = await supabase.functions.invoke('send-meta-whatsapp', {
-                body: metaPayload
-              });
+              const { data: metaResponse, error: metaError } = await invokeWithRetry('send-meta-whatsapp', metaPayload);
               
               if (metaError) throw new Error(metaError.message || 'Meta WhatsApp failed');
               
