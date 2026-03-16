@@ -1047,7 +1047,7 @@ function generateResponsePrefix(action: 'direct' | 'cautious' | 'handoff'): stri
     case 'direct':
       return ''; // Sem prefixo para respostas diretas
     case 'cautious':
-      return 'Baseado nas informaÃ§Ãµes disponÃ­veis:\n\n';
+      return ''; // Removido: prefixo cauteloso vazava metadados internos
     case 'handoff':
       return ''; // Handoff usa mensagem prÃ³pria
   }
