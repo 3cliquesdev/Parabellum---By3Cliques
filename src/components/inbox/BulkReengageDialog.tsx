@@ -86,9 +86,9 @@ export function BulkReengageDialog({
       const { data, error } = await supabase
         .from("whatsapp_message_templates" as any)
         .select("*")
-        .eq("instance_id", instanceId)
-        .eq("is_active", true)
-        .order("name");
+        .eq("instance_id" as any, instanceId)
+        .eq("is_active" as any, true)
+        .order("name" as any);
       if (error) throw error;
       return data as any[];
     },

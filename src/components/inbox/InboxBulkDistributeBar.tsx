@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRightLeft, Bot, X, CheckSquare, XCircle } from "lucide-react";
+import { ArrowRightLeft, Bot, X, CheckSquare, XCircle, Send } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface InboxBulkDistributeBarProps {
