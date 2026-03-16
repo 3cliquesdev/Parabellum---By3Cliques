@@ -1426,6 +1426,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Wrapper: garante charset=utf-8 em TODAS as responses JSON
+  const rawHandler = async (): Promise<Response> => {
   try {
     // Handler de warmup rÃ¡pido (sem processamento de IA)
     const bodyText = await req.text();
@@ -9795,4 +9797,18 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
+  }; // fim rawHandler
+
+  // Interceptor: garante Content-Type com charset=utf-8 em toda response
+  const response = await rawHandler();
+  const ct = response.headers.get('Content-Type') || '';
+  if (ct.includes('application/json') && !ct.includes('charset')) {
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Content-Type', 'application/json; charset=utf-8');
+    return new Response(response.body, {
+      status: response.status,
+      headers: newHeaders,
+    });
+  }
+  return response;
 });
