@@ -165,6 +165,7 @@ const App = () => {
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/auth" element={<Auth />} />
+              <Route path="/portal" element={<ClientLogin />} />
               <Route path="/setup-password" element={<SetupPassword />} />
               <Route path="/public/form/:formId" element={<PublicFormV2 />} />
               <Route path="/public-chat" element={<PublicChat />} />
