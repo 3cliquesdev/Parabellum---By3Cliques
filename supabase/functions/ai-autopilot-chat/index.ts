@@ -7397,7 +7397,7 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o cÃ³digo que voc�
             });
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro ao reenviar OTP:', error);
-            assistantMessage = 'Ocorreu um erro ao reenviar o cÃ³digo. Por favor, tente novamente.';
+            assistantMessage = 'Ocorreu um erro ao reenviar o código. Por favor, tente novamente.';
           }
         }
         // ðŸ†• TOOL HANDLER: Enviar OTP para operaÃ§Ãµes financeiras
