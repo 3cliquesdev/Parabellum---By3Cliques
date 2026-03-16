@@ -168,26 +168,19 @@ Deno.serve(async (req: Request) => {
 
     // 3. Calculation Promise (Primeiro request a chegar)
     const computationPromise = (async () => {
-      // Base filters: for non-management roles we restrict by department rules similar to the UI.
-      // For management roles, return global counts.
+    // Base filters: for non-management roles we restrict by department rules similar to the UI.
+    // For management roles, return global counts.
     const isManager = isManagementRole(role);
 
-    // Meta (run in parallel)
-    const [{ data: deptsData }, { data: tagsData }] = await Promise.all([
+    // ✅ Meta + profile em paralelo (3 queries simultâneas em vez de 3 sequenciais)
+    const [{ data: deptsData }, { data: tagsData }, { data: userProfile }] = await Promise.all([
       supabaseAdmin.from("departments").select("id, name, color").eq("is_active", true),
       supabaseAdmin.from("tags").select("id, name, color"),
+      supabaseAdmin.from("profiles").select("department").eq("id", userId).maybeSingle(),
     ]);
 
     const departments = (deptsData || []) as Array<{ id: string; name: string; color: string | null }>;
     const tags = (tagsData || []) as Array<{ id: string; name: string; color: string | null }>;
-
-    // Buscar departamento do perfil do usuário para visibilidade baseada em departamento
-    const { data: userProfile } = await supabaseAdmin
-      .from("profiles")
-      .select("department")
-      .eq("id", userId)
-      .maybeSingle();
-    
     const userDepartmentId = userProfile?.department ?? null;
 
     // Helper to apply non-management visibility constraints.
