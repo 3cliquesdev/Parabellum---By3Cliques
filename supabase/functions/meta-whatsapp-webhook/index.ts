@@ -2332,7 +2332,7 @@ serve(async (req) => {
                     .maybeSingle();
 
                   if (activeFlowState) {
-                    const flowDef = activeFlowState.chat_flows?.flow_definition as any;
+                    const flowDef = (activeFlowState.chat_flows as any)?.flow_definition as any;
                     const currentNodeId = activeFlowState.current_node_id;
                     const nodes = flowDef?.nodes || [];
                     const currentNode = nodes.find((n: any) => n.id === currentNodeId);

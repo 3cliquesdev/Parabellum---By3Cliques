@@ -5586,7 +5586,7 @@ serve(async (req) => {
           responseFormat: 'text_only',
           personaId: startNode.data?.persona_id || null,
           kbCategories: startNode.data?.kb_categories || null,
-          kbProductFilter: mapProductToKbFilter(collectedData || {}),
+          kbProductFilter: mapProductToKbFilter({}),
           contextPrompt: startNode.data?.context_prompt || null,
           fallbackMessage: startNode.data?.fallback_message || null,
           // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação

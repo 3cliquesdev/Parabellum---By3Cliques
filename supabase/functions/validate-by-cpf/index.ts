@@ -173,7 +173,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('[validate-by-cpf] ❌ Error:', error);
     return new Response(JSON.stringify({ 
-      error: error.message,
+      error: (error as Error).message,
       found: false,
     }), {
       status: 500,

@@ -215,7 +215,7 @@ serve(async (req) => {
         reason,
         metadata,
       },
-    }).then(() => {}).catch(e => console.warn('[transition] Log failed (non-blocking):', e));
+    }).then(() => {}).catch((e: any) => console.warn('[transition] Log failed (non-blocking):', e));
 
     console.log(`[transition-conversation-state] ✅ ${transition} aplicado com sucesso`);
 
