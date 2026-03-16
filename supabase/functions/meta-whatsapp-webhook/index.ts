@@ -576,7 +576,7 @@ serve(async (req) => {
                   // Race condition fallback: outro webhook criou a conversa milissegundos antes
                   const { data: existingRaceConv } = await supabase
                     .from("conversations")
-                    .select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department_id")
+.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department")
                     .eq("contact_id", contact.id)
                     .neq("status", "closed")
                     .order("created_at", { ascending: false })
