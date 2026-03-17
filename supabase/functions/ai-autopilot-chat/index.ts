@@ -226,7 +226,7 @@ async function getMessageTemplate(
   }
 }
 
-// FASE 2: FunÃ§Ã£o para gerar hash SHA-256 da pergunta normalizada
+// FASE 2: Função para gerar hash SHA-256 da pergunta normalizada
 async function generateQuestionHash(message: string): Promise<string> {
   const normalized = message
     .toLowerCase()
