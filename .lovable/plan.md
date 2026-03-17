@@ -1,25 +1,23 @@
 
-# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-## O que mudou
+# Deploy das Edge Functions Atualizadas
 
-### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
-- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
-- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
-- Ao trocar departamento, responsável é limpo automaticamente
-- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
+## Contexto
+Você fez commit e push de alterações nas Edge Functions via GitHub. As mudanças já estão no código-fonte do projeto, mas precisam ser re-deployadas no ambiente Lovable Cloud para ficarem ativas.
 
-### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
-- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
-  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
-  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
-  - Dados salvos em `end_action` e `action_data` no node data
-- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
+## Ação
+Vou fazer o deploy de **todas as Edge Functions relacionadas à IA conversacional** que foram mencionadas:
 
-### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
-- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
-- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
+1. **ai-autopilot-chat** — Motor principal do autopilot (Jarvis)
+2. **generate-smart-reply** — Copilot / sugestões inteligentes
+3. **ai-chat-stream** — Chat stream da IA
+4. **process-chat-flow** — Processamento de fluxo de chat
+5. **generate-copilot-insights** — Insights do copilot
+6. **ai-auto-trainer** — Auto-treinamento
+7. **ai-governor** — Governança da IA
+8. **health-check-ai** — Health check da IA
+9. **transition-conversation-state** — Transições de estado (handoff)
+10. **auto-handoff** — Handoff automático
 
-### 4. Continuidade do Fluxo ✅
-- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
-- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
+Após o deploy, você poderá testar o "Helper Pedidos" e verificar se a IA conversacional está respondendo livremente.
+
