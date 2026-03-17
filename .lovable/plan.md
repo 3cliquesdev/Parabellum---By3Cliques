@@ -1,23 +1,34 @@
 
 
-# Deploy das Edge Functions Atualizadas
+# Reagrupar colunas de tempo nos exports V1 e V2
 
-## Contexto
-Você fez commit e push de alterações nas Edge Functions via GitHub. As mudanças já estão no código-fonte do projeto, mas precisam ser re-deployadas no ambiente Lovable Cloud para ficarem ativas.
+## Alterações
 
-## Ação
-Vou fazer o deploy de **todas as Edge Functions relacionadas à IA conversacional** que foram mencionadas:
+### V2 (`useExportConversationsCSV.tsx`) — linhas 78-105
+Reordenar o objeto para agrupar tempos juntos:
 
-1. **ai-autopilot-chat** — Motor principal do autopilot (Jarvis)
-2. **generate-smart-reply** — Copilot / sugestões inteligentes
-3. **ai-chat-stream** — Chat stream da IA
-4. **process-chat-flow** — Processamento de fluxo de chat
-5. **generate-copilot-insights** — Insights do copilot
-6. **ai-auto-trainer** — Auto-treinamento
-7. **ai-governor** — Governança da IA
-8. **health-check-ai** — Health check da IA
-9. **transition-conversation-state** — Transições de estado (handoff)
-10. **auto-handoff** — Handoff automático
+```
+Protocolo, ID Conversa, Status, Nome, Email, Telefone,
+Data Entrada, Hora Entrada, Data Encerramento, Hora Encerramento,
+Data Handoff, Hora Handoff,
+Tempo Espera, Tempo Espera pós Atribuição, Tempo 1ª Resposta Humana,
+Duração, Tempo Resolução Humana,
+Responsável, Participantes, Grupo Responsável,
+Total Interações, Origem, CSAT, Ticket, Tags, Primeira Mensagem
+```
 
-Após o deploy, você poderá testar o "Helper Pedidos" e verificar se a IA conversacional está respondendo livremente.
+### V1 (`useExportCommercialConversationsCSV.tsx`) — linhas 177-218
+Reordenar headers e dados da aba "Detalhado":
+
+```
+ID Curto, ID Conversa, Status, Nome Contato, Email, Telefone, Organização,
+Criado em, Fechado em, Handoff,
+Tempo de Espera, Tempo Espera pós Atribuição, Tempo 1ª Resposta Humana,
+Duração, Tempo Resolução Humana,
+Agente Responsável, Participantes, Departamento,
+Total Interações, Origem, CSAT, Comentário CSAT,
+Ticket ID, Modo IA, Tags, Última Tag Conversa, Primeira Mensagem
+```
+
+Nenhuma mudança SQL — apenas reordenação de colunas nos dois arquivos.
 
