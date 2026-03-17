@@ -2991,7 +2991,7 @@ serve(async (req) => {
               forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
               forbidSupport: nextNode.data?.forbid_support ?? false,
               forbidConsultant: nextNode.data?.forbid_consultant ?? false,
-              ...(isFirstEntryFromMenu ? { firstEntry: true, selectedOption: selectedOption.label } : {}),
+              ...(isFirstEntryFromMenu ? { firstEntry: true, selectedOption: String(savedChoice) } : {}),
             }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
           // 🆕 BUG 4 FIX (2nd check): verify_customer_otp after auto-advance
