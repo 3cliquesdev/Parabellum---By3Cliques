@@ -58,9 +58,9 @@ export const universalMenuGroups: MenuGroup[] = [
     label: "Visão Geral",
     items: [
       { title: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" },
-      { title: "Painéis Dinâmicos", href: "/dashboards", icon: LayoutGrid, permission: "analytics.view" },
-      { title: "Assinaturas", href: "/subscriptions", icon: CreditCard, permission: "analytics.view" },
-      { title: "Report Builder", href: "/report-builder", icon: FileBarChart, permission: "analytics.view" },
+      { title: "Painéis Dinâmicos", href: "/dashboards", icon: LayoutGrid, permission: "analytics.view_dashboards" },
+      { title: "Assinaturas", href: "/subscriptions", icon: CreditCard, permission: "analytics.view_subscriptions" },
+      { title: "Report Builder", href: "/report-builder", icon: FileBarChart, permission: "analytics.view_report_builder" },
     ]
   },
   {
