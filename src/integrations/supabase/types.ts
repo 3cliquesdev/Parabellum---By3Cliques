@@ -6309,23 +6309,34 @@ export type Database = {
       pipelines: {
         Row: {
           created_at: string
+          department_id: string | null
           id: string
           is_default: boolean | null
           name: string
         }
         Insert: {
           created_at?: string
+          department_id?: string | null
           id?: string
           is_default?: boolean | null
           name: string
         }
         Update: {
           created_at?: string
+          department_id?: string | null
           id?: string
           is_default?: boolean | null
           name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pipelines_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       playbook_execution_queue: {
         Row: {
