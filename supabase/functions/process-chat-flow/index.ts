@@ -200,12 +200,32 @@ function matchAskOption(
   if (normalized.length >= 3) {
     const reverseMatches = options.filter(opt => {
       const label = opt.label.toLowerCase();
+      const val = opt.value ? opt.value.toLowerCase() : '';
       const regex = new RegExp(`\\b${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      return regex.test(label);
+      return regex.test(label) || regex.test(val);
     });
     if (reverseMatches.length === 1) return reverseMatches[0];
   }
 
+  // 6️⃣ Keyword partial match fallback (User typed a strong substring present in the label)
+  // Ex: Option is "Financeiro e saque", User types "saque" -> match
+  if (normalized.length >= 3) {
+    const keywordMatches = options.filter(opt => {
+      const label = opt.label.toLowerCase();
+      const val = opt.value ? opt.value.toLowerCase() : '';
+      return label.includes(normalized) || val.includes(normalized);
+    });
+    // Aceita apenas se houver match em exatamente 1 opção
+    if (keywordMatches.length === 1) return keywordMatches[0];
+  }
+
+  // 7️⃣ Strip emojis na checagem final caso o usuário tenha copiado e colado sem emoji
+  const labelWithoutEmojisMatches = options.filter(opt => {
+    const textOnlyLabel = opt.label.replace(/[\u1000-\uFFFF]/g, '').trim().toLowerCase();
+    if (textOnlyLabel.length < 3) return false;
+    return textOnlyLabel === normalized || textOnlyLabel.includes(normalized);
+  });
+  if (labelWithoutEmojisMatches.length === 1) return labelWithoutEmojisMatches[0];
   return null;
 }
 
