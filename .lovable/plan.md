@@ -1,47 +1,24 @@
 
+# Bug Fix: IA responde mesmo após agente assumir controle — ✅ IMPLEMENTADO
 
-# Plano: Dar permissão única a cada item de menu
+## O que mudou
 
-## Problema
-Vários itens de menu compartilham a mesma `permission_key`, então aparecem como uma única permissão no painel. Exemplos:
-- "Devoluções" e "Fila de Tickets" → ambos `tickets.view`
-- "Conf. de Devoluções" e "Configurações" → ambos `settings.view`
-- "Painéis Dinâmicos", "Assinaturas", "Report Builder" → todos `analytics.view`
-- "AI Studio" e "AI Messages" → ambos `ai.manage_personas`
-- "Inbox" e "Instagram" → ambos `inbox.access`
-- "Solicitações Internas" → `tickets.view`
+### 1. RPC `take_control_secure` — Limpeza de flow states ✅
+- Adicionado `UPDATE chat_flow_states SET status = 'transferred'` após o takeover
+- Garante que **nenhum flow state ativo** sobreviva ao "Assumir Controle"
 
-O `useSyncPermissions` deduplica por key, então esses menus nunca aparecem individualmente.
+### 2. Guard de defesa no `process-chat-flow` ✅
+- Na seção "Soberania do Fluxo" (linha 925), adicionada verificação:
+  - Se `assigned_to` está preenchido **E** `ai_mode = copilot` → **humano tem prioridade**
+  - Flow state residual é cancelado automaticamente
+  - Retorna `skipAutoResponse = true` (IA não responde)
 
-## Correção
-
-### 1. Atualizar `src/config/routes.ts` — dar keys únicas
-| Menu | Key Atual | Nova Key |
-|---|---|---|
-| Painéis Dinâmicos | `analytics.view` | `analytics.view_dashboards` |
-| Assinaturas | `analytics.view` | `analytics.view_subscriptions` |
-| Report Builder | `analytics.view` | `analytics.view_report_builder` |
-| Instagram | `inbox.access` | `inbox.access_instagram` |
-| AI Messages | `ai.manage_personas` | `ai.manage_messages` |
-| Solicitações Internas | `tickets.view` | `tickets.view_internal` |
-| Devoluções | `tickets.view` | `cadastros.view_returns` |
-| Conf. de Devoluções | `settings.view` | `settings.view_returns_config` |
-
-### 2. Atualizar `CATEGORY_LABELS` no `RolePermissionsManager.tsx`
-Nenhuma mudança necessária — as categorias são extraídas do prefixo da key (ex: `analytics`, `inbox`, `cadastros`).
-
-### 3. Migration SQL — inserir as novas keys para todos os roles existentes
-- Para cada role existente, inserir as novas permission_keys com `enabled = true` para roles de acesso total e `enabled = (valor da key original)` para os demais.
-- Preservar as permissões existentes (não deletar as keys compartilhadas, pois outros menus ainda as usam).
-
-### 4. Atualizar ProtectedRoute nos arquivos de rotas
-Onde as rotas usarem `requiredPermission` com as keys antigas que foram renomeadas, atualizar para as novas keys.
-
-### 5. Sincronizar
-Após deploy, o botão "Sincronizar Permissões" propagará automaticamente qualquer key que falte.
+### 3. Limpeza de dados existentes ✅
+- Estados residuais em conversas com agente atribuído foram marcados como `cancelled`
+- (Usado `cancelled` em vez de `transferred` para evitar conflito de unique constraint)
 
 ## Impacto
-- Cada item de menu terá toggle independente no painel de permissões
-- Zero breaking change — keys originais permanecem para os menus que ainda as usam
-- Roles com acesso total continuam ignorando verificações
-
+- ✅ Resolve o bug para todas as conversas futuras (RPC fix)
+- ✅ Corrige conversas afetadas existentes (data cleanup)
+- ✅ Defesa em profundidade no motor de fluxos (guard fix)
+- ✅ Zero impacto em conversas em autopilot legítimo

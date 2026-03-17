@@ -58,16 +58,16 @@ export const universalMenuGroups: MenuGroup[] = [
     label: "Visão Geral",
     items: [
       { title: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" },
-      { title: "Painéis Dinâmicos", href: "/dashboards", icon: LayoutGrid, permission: "analytics.view" },
-      { title: "Assinaturas", href: "/subscriptions", icon: CreditCard, permission: "analytics.view" },
-      { title: "Report Builder", href: "/report-builder", icon: FileBarChart, permission: "analytics.view" },
+      { title: "Painéis Dinâmicos", href: "/dashboards", icon: LayoutGrid, permission: "analytics.view_dashboards" },
+      { title: "Assinaturas", href: "/subscriptions", icon: CreditCard, permission: "analytics.view_subscriptions" },
+      { title: "Report Builder", href: "/report-builder", icon: FileBarChart, permission: "analytics.view_report_builder" },
     ]
   },
   {
     label: "Inbox & Suporte",
     items: [
       { title: "Inbox", href: "/inbox", icon: MessageCircle, permission: "inbox.access" },
-      { title: "Instagram", href: "/instagram", icon: Instagram, permission: "inbox.access" },
+      { title: "Instagram", href: "/instagram", icon: Instagram, permission: "inbox.access_instagram" },
       { title: "Fila de Tickets", href: "/support", icon: Ticket, permission: "tickets.view" },
       { title: "Base de Conhecimento", href: "/knowledge", icon: Book, permission: "inbox.view_knowledge" },
     ]
@@ -100,7 +100,7 @@ export const universalMenuGroups: MenuGroup[] = [
     items: [
       { title: "Automações", href: "/automations", icon: Zap, permission: "automations.view" },
       { title: "AI Studio", href: "/ai-studio/personas", icon: Brain, permission: "ai.manage_personas" },
-      { title: "AI Messages", href: "/settings/ai-messages", icon: MessageCircle, permission: "ai.manage_personas" },
+      { title: "AI Messages", href: "/settings/ai-messages", icon: MessageCircle, permission: "ai.manage_messages" },
       { title: "AI Trainer", href: "/settings/ai-trainer", icon: Brain, permission: "ai.train" },
       
       { title: "Templates de Email", href: "/email-templates", icon: Mail, permission: "email.view_templates" },
@@ -119,7 +119,7 @@ export const universalMenuGroups: MenuGroup[] = [
     items: [
       { title: "Projetos", href: "/projects", icon: Kanban, permission: "projects.view" },
       { title: "Definir Metas", href: "/goals-management", icon: Target, permission: "goals.set" },
-      { title: "Solicitações Internas", href: "/internal-requests", icon: ClipboardList, permission: "tickets.view" },
+      { title: "Solicitações Internas", href: "/internal-requests", icon: ClipboardList, permission: "tickets.view_internal" },
       { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
       { title: "Distribuição CS", href: "/reports/consultant-distribution", icon: BarChart3, permission: "reports.distribution" },
       { title: "Distribuição Vendas", href: "/reports/sales-distribution", icon: BarChart3, permission: "reports.lead_distribution" },
@@ -131,8 +131,8 @@ export const universalMenuGroups: MenuGroup[] = [
     label: "Cadastros",
     items: [
       { title: "Consultores", href: "/consultants", icon: Users, permission: "cadastros.view_consultants" },
-      { title: "Devoluções", href: "/returns", icon: RotateCcw, permission: "tickets.view" },
-      { title: "Conf. de Devoluções", href: "/settings/returns-config", icon: ClipboardList, permission: "settings.view" },
+      { title: "Devoluções", href: "/returns", icon: RotateCcw, permission: "cadastros.view_returns" },
+      { title: "Conf. de Devoluções", href: "/settings/returns-config", icon: ClipboardList, permission: "settings.view_returns_config" },
       { title: "Produtos", href: "/settings/products", icon: Package, permission: "cadastros.view_products" },
       { title: "Depart. & Operações", href: "/settings/departments", icon: Building2, permission: "cadastros.view_departments" },
     ]
