@@ -1,36 +1,25 @@
 
+# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-# Modo Jarvis — Duas alterações no ai-autopilot-chat
+## O que mudou
 
-## Alteração 1: Desativar `forbidQuestions` (linha 9229)
-Substituir:
-```typescript
-const forbidQuestions = flow_context.forbidQuestions ?? false;
-```
-Por:
-```typescript
-const forbidQuestions = false; // 🤖 OVERRIDDEN PARA MODO JARVIS
-```
-Isso permite que a IA sempre faça perguntas de triagem sem se autobloquear.
+### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
+- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
+- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
+- Ao trocar departamento, responsável é limpo automaticamente
+- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
 
-## Alteração 2: Atualizar `flowAntiTransferInstruction` (linhas 6596-6608)
-Substituir o bloco inteiro pela nova versão que instrui a IA a **fazer perguntas ativamente** quando o pedido é genérico, em vez de dar fallback automático:
-```typescript
-const flowAntiTransferInstruction = flow_context ? `
+### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
+- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
+  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
+  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
+  - Dados salvos em `end_action` e `action_data` no node data
+- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
 
-**🚫 REGRA ABSOLUTA — VOCÊ ESTÁ DENTRO DE UM FLUXO AUTOMATIZADO:**
-PROIBIDO dizer que vai transferir/direcionar/encaminhar/conectar/passar.
-PROIBIDO mencionar atendente/especialista/consultor/menu/departamento/setor.
-PROIBIDO criar opções numeradas (1️⃣ 2️⃣).
-Se o pedido for genérico ou não houver detalhes (ex: "oi", "pedidos", "suporte"), FAÇA PERGUNTAS ativamente para investigar a dúvida e ser prestativo.
-Se APÓS CONVERSAR e entender o contexto você REALMENTE não conseguir resolver com a base de conhecimento, responda SOMENTE: [[FLOW_EXIT]]
-Nenhum texto antes ou depois de [[FLOW_EXIT]].
-Quem decide transferências, menus e direcionamentos é o FLUXO, não você.
+### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
+- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
+- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
 
-` : '';
-```
-A diferença principal: adicionada a instrução para **fazer perguntas ativamente** em pedidos genéricos antes de considerar `[[FLOW_EXIT]]`.
-
-## Deploy
-Após as edições, deploy imediato da função `ai-autopilot-chat`.
-
+### 4. Continuidade do Fluxo ✅
+- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
+- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`

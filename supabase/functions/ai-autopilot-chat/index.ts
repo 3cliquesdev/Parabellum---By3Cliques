@@ -6593,17 +6593,17 @@ SE vocÃª nÃ£o tiver informaÃ§Ã£o sobre o assunto:
 - Abandonar cliente sem tentar ajudar
 `;
 
-    // ðŸ†• INSTRUÃ‡ÃƒO ANTI-FABRICAÃ‡ÃƒO DE TRANSFERÃŠNCIA + TOKEN [[FLOW_EXIT]] (quando dentro de fluxo)
+    // 🔥 INSTRUÇÃO ANTI-FABRICAÇÃO DE TRANSFERÊNCIA + TOKEN [[FLOW_EXIT]] (quando dentro de fluxo)
     const flowAntiTransferInstruction = flow_context ? `
 
-**ðŸš« REGRA ABSOLUTA â€” VOCÃŠ ESTÃ DENTRO DE UM FLUXO AUTOMATIZADO:**
+**🚫 REGRA ABSOLUTA — VOCÊ ESTÁ DENTRO DE UM FLUXO AUTOMATIZADO:**
 PROIBIDO dizer que vai transferir/direcionar/encaminhar/conectar/passar.
 PROIBIDO mencionar atendente/especialista/consultor/menu/departamento/setor.
-PROIBIDO criar opÃ§Ãµes numeradas (1ï¸âƒ£ 2ï¸âƒ£).
-Se vocÃª conseguir resolver, responda normalmente com informaÃ§Ã£o da base de conhecimento.
-Se NÃƒO conseguir resolver, responda SOMENTE: [[FLOW_EXIT]]
+PROIBIDO criar opções numeradas (1️⃣ 2️⃣).
+Se o pedido for genérico ou não houver detalhes (ex: "oi", "pedidos", "suporte"), FAÇA PERGUNTAS ativamente para investigar a dúvida e ser prestativo.
+Se APÓS CONVERSAR e entender o contexto você REALMENTE não conseguir resolver com a base de conhecimento, responda SOMENTE: [[FLOW_EXIT]]
 Nenhum texto antes ou depois de [[FLOW_EXIT]].
-Quem decide transferÃªncias, menus e direcionamentos Ã© o FLUXO, nÃ£o vocÃª.
+Quem decide transferências, menus e direcionamentos é o FLUXO, não você.
 
 ` : '';
 
@@ -9226,7 +9226,7 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
       }
       
       // ValidaÃ§Ã£o de restriÃ§Ãµes (forbidQuestions, forbidOptions, forbidFinancial)
-      const forbidQuestions = flow_context.forbidQuestions ?? false;
+      const forbidQuestions = false; // 🤖 OVERRIDDEN PARA MODO JARVIS
       const forbidOptions = flow_context.forbidOptions ?? false;
       const forbidFinancial = flow_context.forbidFinancial ?? false;
       const restrictionCheck = validateResponseRestrictions(assistantMessage, forbidQuestions, forbidOptions, flow_context); // FIX LOOP: passa contexto para detectar triagem
