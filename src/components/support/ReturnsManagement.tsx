@@ -94,7 +94,7 @@ export default function ReturnsManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {returns.map((ret) => {
+            {filteredReturns.map((ret) => {
                 const statusCfg = STATUS_CONFIG[ret.status] || STATUS_CONFIG.pending;
                 const clientName = ret.contacts
                   ? `${ret.contacts.first_name} ${ret.contacts.last_name}`
