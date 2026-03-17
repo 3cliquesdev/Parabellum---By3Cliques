@@ -39,7 +39,7 @@ export default function ReturnsManagement() {
 
   return (
     <PageContainer>
-      <div className="flex items-center justify-between gap-4 mb-4">
+      <div className="flex items-center gap-4 mb-4">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Filtrar por status" />
@@ -53,6 +53,16 @@ export default function ReturnsManagement() {
             <SelectItem value="archived">Arquivada</SelectItem>
           </SelectContent>
         </Select>
+
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por pedido, rastreio ou rastreio reverso..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9"
+          />
+        </div>
 
         <Button onClick={() => setShowCreate(true)}>
           <Plus className="h-4 w-4 mr-2" />
