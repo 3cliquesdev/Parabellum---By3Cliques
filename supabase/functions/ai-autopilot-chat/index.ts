@@ -737,11 +737,11 @@ const FALLBACK_PHRASES = [
   'vou te encaminhar',
   'encaminhar para o setor',
   'transferir para o setor',
-  'vou transferir vocÃª para um especialista',
-  // Redirecionamentos explÃ­citos
+  'vou transferir você para um especialista',
+  // Redirecionamentos explícitos
   'redirecionar para',
-  'encaminhar vocÃª',
-  'direcionar vocÃª',
+  'encaminhar você',
+  'direcionar você',
 ];
 
 // ðŸ” BARREIRA FINANCEIRA - Palavras que identificam contexto FINANCEIRO (sem OTP obrigatÃ³rio)
@@ -1672,10 +1672,11 @@ serve(async (req) => {
     }
 
     // ðŸ†• TRAVA CANCELAMENTO â€” InterceptaÃ§Ã£o na ENTRADA (antes de chamar LLM)
+    // 🆕 TRAVA CANCELAMENTO — Interceptação na ENTRADA (antes de chamar LLM)
     if (flowForbidCancellation && customerMessage && customerMessage.trim().length > 0 && isCancellationAction && !isFinancialInfo) {
-      console.warn('[ai-autopilot-chat] ðŸš« TRAVA CANCELAMENTO (ENTRADA): IntenÃ§Ã£o de cancelamento detectada, bloqueando IA:', customerMessage.substring(0, 80));
+      console.warn('[ai-autopilot-chat] 🚫 TRAVA CANCELAMENTO (ENTRADA): Intenção de cancelamento detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
-      const cancelMsg = 'Entendi que vocÃª deseja cancelar. Vou te direcionar para o processo de cancelamento.';
+      const cancelMsg = 'Entendi que você deseja cancelar. Vou te direcionar para o processo de cancelamento.';
       const hasFlowContext = !!(flow_context);
 
       try {
@@ -2195,12 +2196,12 @@ serve(async (req) => {
         if (closeMeta.awaiting_close_confirmation === true) {
           const msgLower = (customerMessage || '').toLowerCase().trim();
           
-          // PadrÃµes flexÃ­veis de SIM (keyword matching, nÃ£o exige match exato)
-          const yesKeywords = /\b(sim|s|yes|pode|pode fechar|pode encerrar|encerra|encerrar|fechou|claro|com certeza|isso|tÃ¡ bom|ta bom|foi sim)\b/i;
-          // PadrÃµes flexÃ­veis de NÃƒO
-          const noKeywords = /\b(n[aÃ£]o|nao|n|nÃ£o|nope|ainda n[aÃ£]o|tenho sim|outra|mais uma|espera|perai|pera|n[aÃ£]o foi|problema|d[uÃº]vida|continua|preciso)\b/i;
-          // PadrÃµes de ambiguidade (presenÃ§a anula confirmaÃ§Ã£o)
-          const ambiguityKeywords = /\b(mas|porÃ©m|porem|entretanto|sÃ³ que|so que|menos|exceto)\b/i;
+          // Padrões flexíveis de SIM (keyword matching, não exige match exato)
+          const yesKeywords = /\b(sim|s|yes|pode|pode fechar|pode encerrar|encerra|encerrar|fechou|claro|com certeza|isso|tá bom|ta bom|foi sim)\b/i;
+          // Padrões flexíveis de NÃO
+          const noKeywords = /\b(n[aã]o|nao|n|não|nope|ainda n[aã]o|tenho sim|outra|mais uma|espera|perai|pera|n[aã]o foi|problema|d[uú]vida|continua|preciso)\b/i;
+          // Padrões de ambiguidade (presença anula confirmação)
+          const ambiguityKeywords = /\b(mas|porém|porem|entretanto|só que|so que|menos|exceto)\b/i;
           
           const hasYes = yesKeywords.test(msgLower);
           const hasNo = noKeywords.test(msgLower);
@@ -2585,12 +2586,12 @@ serve(async (req) => {
             if (originalIntent && originalIntentCategory) {
               // TEM CONTEXTO: Mensagem que retoma o assunto original
               const intentLabel = getIntentCategoryLabel(originalIntentCategory);
-              successMessage = `Ã“timo, ${customerName}! âœ…\n\nIdentifiquei vocÃª em nosso sistema. VocÃª mencionou sobre **${intentLabel}** - vou te ajudar com isso agora!\n\n_Processando sua solicitaÃ§Ã£o..._`;
+              successMessage = `Ótimo, ${customerName}! ✅\n\nIdentifiquei você em nosso sistema. Você mencionou sobre **${intentLabel}** - vou te ajudar com isso agora!\n\n_Processando sua solicitação..._`;
               
-              console.log('[ai-autopilot-chat] ðŸŽ¯ Preservando contexto:', intentLabel);
+              console.log('[ai-autopilot-chat] 🎯 Preservando contexto:', intentLabel);
             } else {
-              // SEM CONTEXTO: Mensagem genÃ©rica (comportamento antigo)
-              successMessage = `Ã“timo, ${customerName}! âœ…\n\nIdentifiquei vocÃª em nosso sistema. Como posso ajudar hoje?`;
+              // SEM CONTEXTO: Mensagem genérica (comportamento antigo)
+              successMessage = `Ótimo, ${customerName}! ✅\n\nIdentifiquei você em nosso sistema. Como posso ajudar hoje?`;
             }
             
             await supabaseClient.from('messages').insert({
@@ -3068,10 +3069,10 @@ serve(async (req) => {
           
           console.log('âœ… [CACHE] Handoff executado, cache invalidado');
           
-          // ðŸ†• 6. RETORNAR RESPOSTA IMEDIATA DE HANDOFF (nÃ£o usar cache ruim!)
+          // 🆕 6. RETORNAR RESPOSTA IMEDIATA DE HANDOFF (não usar cache ruim!)
           const handoffMessage = isFinancial && ticketProtocol
-            ? `Entendi sua solicitaÃ§Ã£o financeira. Estou transferindo vocÃª para um especialista humano que vai te ajudar com isso.\n\nProtocolo criado: #${ticketProtocol}`
-            : `Entendi sua dÃºvida. Estou transferindo vocÃª para um especialista humano que poderÃ¡ te ajudar melhor.`;
+            ? `Entendi sua solicitação financeira. Estou transferindo você para um especialista humano que vai te ajudar com isso.\n\nProtocolo criado: #${ticketProtocol}`
+            : `Entendi sua dúvida. Estou transferindo você para um especialista humano que poderá te ajudar melhor.`;
           
           // Salvar mensagem de handoff no banco
           const { data: handoffMessageData } = await supabaseClient
@@ -3763,7 +3764,7 @@ serve(async (req) => {
             // Buscar template de lead direcionado
             let leadMessage = await getMessageTemplate(supabaseClient, 'lead_direcionado_comercial', {});
             if (!leadMessage) {
-              leadMessage = 'Obrigado! Como vocÃª ainda nÃ£o Ã© nosso cliente, vou te direcionar para nosso time Comercial que poderÃ¡ te ajudar. ðŸ¤\n\nAguarde um momento que logo um de nossos consultores irÃ¡ te atender!';
+              leadMessage = 'Obrigado! Como você ainda não é nosso cliente, vou te direcionar para nosso time Comercial que poderá te ajudar. 🤝\n\nAguarde um momento que logo um de nossos consultores irá te atender!';
             }
             
             // Atualizar conversa: departamento = Comercial, ai_mode = waiting_human
@@ -4891,7 +4892,7 @@ Responda APENAS: skip ou search`
         }
         
         // Mensagem padronizada de handoff para modo estrito
-        const strictHandoffMessage = `OlÃ¡ ${contactName}! Para te ajudar da melhor forma com essa questÃ£o especÃ­fica, vou te conectar com um de nossos especialistas.\n\nUm momento, por favor.`;
+        const strictHandoffMessage = `Olá ${contactName}! Para te ajudar da melhor forma com essa questão específica, vou te conectar com um de nossos especialistas.\n\nUm momento, por favor.`;
         
         // Salvar mensagem
         await supabaseClient.from('messages').insert({
@@ -5248,16 +5249,8 @@ Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado e
           console.log('[ai-autopilot-chat] ðŸšš Nenhum cÃ³digo encontrado - perguntando confirmaÃ§Ã£o');
           
           const notFoundMessage = allExtractedCodes.length === 1
-            ? `NÃ£o encontrei o pedido **${allExtractedCodes[0]}** no sistema de rastreio.
-
-ðŸ¤” Esse nÃºmero estÃ¡ correto?
-
-Se foi pago recentemente, pode ser que ainda nÃ£o tenha entrado em preparaÃ§Ã£o. Caso contrÃ¡rio, me envie o nÃºmero correto para eu verificar novamente.`
-            : `NÃ£o encontrei os cÃ³digos ${allExtractedCodes.join(', ')} no sistema de rastreio.
-
-ðŸ¤” Esses nÃºmeros estÃ£o corretos?
-
-Se foram pagos recentemente, pode ser que ainda nÃ£o tenham entrado em preparaÃ§Ã£o.`;
+            ? `Não encontrei o pedido **${allExtractedCodes[0]}** no sistema de rastreio.\n\n🤔 Esse número está correto?\n\nSe foi pago recentemente, pode ser que ainda não tenha entrado em preparação. Caso contrário, me envie o número correto para eu verificar novamente.`
+            : `Não encontrei os códigos ${allExtractedCodes.join(', ')} no sistema de rastreio.\n\n🤔 Esses números estão corretos?\n\nSe foram pagos recentemente, pode ser que ainda não tenham entrado em preparação.`;
           
           // Salvar mensagem no banco
           const { data: savedNotFoundMsg } = await supabaseClient
@@ -5696,7 +5689,7 @@ Se foram pagos recentemente, pode ser que ainda nÃ£o tenham entrado em prepara
       }
       
       // Mensagem para cliente identificado
-      const handoffMessage = `OlÃ¡ ${contactName}! Para te ajudar melhor com essa questÃ£o, vou te conectar com um de nossos especialistas. Um momento, por favor.`;
+      const handoffMessage = `Olá ${contactName}! Para te ajudar melhor com essa questão, vou te conectar com um de nossos especialistas. Um momento, por favor.`;
       
       // Salvar mensagem
       await supabaseClient.from('messages').insert({
@@ -8290,14 +8283,14 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
               console.log('[ai-autopilot-chat] ðŸ“§ email_verified_in_db:', conversation.customer_metadata?.email_verified_in_db);
               
               // Retornar mensagem instruindo a pedir email primeiro
-              assistantMessage = 'Para poder te conectar com um atendente, preciso primeiro confirmar sua identidade. Qual Ã© o seu email de cadastro?';
+              assistantMessage = 'Para poder te conectar com um atendente, preciso primeiro confirmar sua identidade. Qual é o seu email de cadastro?';
               
               // NÃ£o executa o handoff - forÃ§a a IA a pedir email
               continue;
             }
 
             const handoffReason = args.reason || 'solicitacao_cliente';
-            const handoffNote = args.internal_note || 'TransferÃªncia solicitada pela IA';
+            const handoffNote = args.internal_note || 'Transferência solicitada pela IA';
 
             // ðŸ†• BUSINESS HOURS CHECK: Comportamento diferente dentro/fora do horÃ¡rio
             const isWithinHours = businessHoursInfo?.within_hours ?? true; // Default: dentro do horÃ¡rio (seguro)
@@ -8547,7 +8540,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
                 model: ragConfig.model,
                 output_json: { category: args.category, summary: args.summary, blocked: true, reason: 'kill_switch' }
               });
-              assistantMessage = 'ClassificaÃ§Ã£o nÃ£o executada (sistema em manutenÃ§Ã£o).';
+              assistantMessage = 'Classificação não executada (sistema em manutenção).';
               break;
             }
 
@@ -8569,7 +8562,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
                 model: ragConfig.model,
                 output_json: { category: args.category, summary: args.summary, blocked: true, reason: 'active_flow', flow_state_id: activeFlowState.id }
               });
-              assistantMessage = 'ClassificaÃ§Ã£o bloqueada: fluxo ativo gerencia tickets.';
+              assistantMessage = 'Classificação bloqueada: fluxo ativo gerencia tickets.';
               break;
             }
 
@@ -8582,8 +8575,8 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
 
             const convMeta = convData?.customer_metadata || {};
             if (!convMeta.ai_can_classify_ticket) {
-              console.log('[ai-autopilot-chat] âš ï¸ classify_and_resolve_ticket: flag ai_can_classify_ticket nÃ£o ativa');
-              assistantMessage = 'ClassificaÃ§Ã£o disponÃ­vel apenas apÃ³s encerramento confirmado.';
+              console.log('[ai-autopilot-chat] ⚠️ classify_and_resolve_ticket: flag ai_can_classify_ticket não ativa');
+              assistantMessage = 'Classificação disponível apenas após encerramento confirmado.';
               break;
             }
 
@@ -8591,7 +8584,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
             const internalNote = `[AI RESOLVED]
 Categoria: ${args.category}
 Resumo: ${args.summary}
-ResoluÃ§Ã£o: ${args.resolution_notes}
+Resolução: ${args.resolution_notes}
 Severidade: ${args.severity || 'N/A'}
 Tags: ${args.tags?.join(', ') || 'N/A'}
 Conversa: ${conversationId}`;
@@ -8613,7 +8606,7 @@ Conversa: ${conversationId}`;
                 confidence_score: 1.0,
                 context: { category: args.category, summary: args.summary, resolution_notes: args.resolution_notes, severity: args.severity, tags: args.tags }
               });
-              assistantMessage = `ClassificaÃ§Ã£o sugerida: ${args.category} (shadow mode - nÃ£o aplicada).`;
+              assistantMessage = `Classificação sugerida: ${args.category} (shadow mode - não aplicada).`;
               break;
             }
 
@@ -8699,7 +8692,7 @@ Conversa: ${conversationId}`;
 
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro em classify_and_resolve_ticket:', error);
-            assistantMessage = 'Ocorreu um erro ao classificar o ticket. O atendimento jÃ¡ foi encerrado normalmente.';
+            assistantMessage = 'Ocorreu um erro ao classificar o ticket. O atendimento já foi encerrado normalmente.';
           }
         }
       }

@@ -1,61 +1,25 @@
 
+# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-# Correção: Strings com UTF-8 corrompido (Mojibake) no ai-autopilot-chat
+## O que mudou
 
-## Problema
-O arquivo `supabase/functions/ai-autopilot-chat/index.ts` (9902 linhas) contém centenas de strings com caracteres corrompidos (mojibake) — ex: `vocÃª` em vez de `você`, `Ã"timo` em vez de `Ótimo`, `soluÃ§Ã£o` em vez de `solução`. Essas strings aparecem em **mensagens enviadas ao cliente no WhatsApp**, resultando em texto "feio" e ilegível.
+### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
+- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
+- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
+- Ao trocar departamento, responsável é limpo automaticamente
+- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
 
-## Strings críticas afetadas (enviadas ao WhatsApp)
+### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
+- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
+  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
+  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
+  - Dados salvos em `end_action` e `action_data` no node data
+- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
 
-| Linha | Variável | Texto corrompido |
-|-------|----------|-----------------|
-| 1678 | `cancelMsg` | `vocÃª deseja cancelar` |
-| 2588 | `successMessage` | `Ã"timo...Identifiquei vocÃª...solicitaÃ§Ã£o` |
-| 2593 | `successMessage` | `Ã"timo...Identifiquei vocÃª` |
-| 3073 | `handoffMessage` | `solicitaÃ§Ã£o financeira...vocÃª` |
-| 3074 | `handoffMessage` | `dÃºvida...vocÃª...poderÃ¡` |
-| 3766 | `leadMessage` | `vocÃª ainda nÃ£o Ã©...poderÃ¡...ðŸ¤` |
-| 4894 | `strictHandoffMessage` | `OlÃ¡...questÃ£o especÃ­fica` |
-| 5251 | `notFoundMessage` | `NÃ£o encontrei o pedido` |
-| 5256 | `notFoundMessage` | `NÃ£o encontrei os cÃ³digos` |
-| 5699 | `handoffMessage` | `OlÃ¡...questÃ£o` |
-| 8293 | `assistantMessage` | `Qual Ã© o seu email` |
-| 8300 | `handoffNote` | `TransferÃªncia solicitada` |
-| 8550 | `assistantMessage` | `ClassificaÃ§Ã£o nÃ£o executada` |
-| 8586 | `assistantMessage` | `ClassificaÃ§Ã£o disponÃ­vel apÃ³s` |
-| 8616 | `assistantMessage` | `ClassificaÃ§Ã£o sugerida...nÃ£o aplicada` |
-| 8702 | `assistantMessage` | `classificar o ticket...jÃ¡ foi encerrado` |
+### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
+- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
+- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
 
-Além disso, arrays como `FALLBACK_PHRASES` (linhas 740-744) contêm mojibake que afeta a detecção de padrões.
-
-## Plano de correção
-
-### 1. Corrigir TODAS as strings user-facing com mojibake
-Substituir cada ocorrência de texto corrompido pelo equivalente UTF-8 correto em todo o arquivo. Exemplos:
-- `vocÃª` → `você`
-- `Ã"timo` → `Ótimo`
-- `OlÃ¡` → `Olá`
-- `NÃ£o` → `Não`
-- `solicitaÃ§Ã£o` → `solicitação`
-- `questÃ£o` → `questão`
-- `poderÃ¡` → `poderá`
-- `ðŸ¤` → `🤝`
-- `âœ…` → `✅`
-- `ðŸ"§` → `📧`
-
-### 2. Corrigir arrays de detecção de padrões
-- `FALLBACK_PHRASES` (linhas 740-744): strings com mojibake não matcham corretamente
-- `noKeywords` regex (linha 2201): padrões com `nÃ£o` não funcionam
-- `ambiguityKeywords` (linha 2203): `porÃ©m` não matcha
-
-### 3. Corrigir comentários e console.log
-- Menos crítico mas mantém o código legível e consistente
-
-## Arquivo alterado
-- `supabase/functions/ai-autopilot-chat/index.ts` — correção em ~100+ linhas espalhadas
-
-## Impacto
-- Elimina texto corrompido/feio nas mensagens de WhatsApp
-- Corrige detecção de padrões (fallback phrases, keywords) que falhavam silenciosamente
-- Zero risco funcional — apenas substituição de texto corrompido por texto correto
-
+### 4. Continuidade do Fluxo ✅
+- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
+- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
