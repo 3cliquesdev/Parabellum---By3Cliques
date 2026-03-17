@@ -4995,6 +4995,24 @@ serve(async (req) => {
         console.log('[process-chat-flow] ⚠️ Estado ativo encontrado - NÃO iniciar Master Flow');
         console.log('[process-chat-flow] Existing state:', existingActiveFlowState.id, 'flow:', existingActiveFlowState.flow_id, 'node:', existingActiveFlowState.current_node_id);
         
+        // 🆕 Dedup: não reenviar "Desculpe" se já enviou nos últimos 30s
+        const { data: recentRetryFallback } = await supabaseClient
+          .from('messages')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .ilike('content', 'Desculpe, não entendi%')
+          .gte('created_at', new Date(Date.now() - 30000).toISOString())
+          .limit(1)
+          .maybeSingle();
+
+        if (recentRetryFallback) {
+          console.log('[process-chat-flow] 🔇 Dedup fallback: "Desculpe" já enviado recentemente, silenciando');
+          return new Response(
+            JSON.stringify({ useAI: false, skipAutoResponse: true, reason: 'dedup_retry_fallback' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         // Mensagem genérica de retry para evitar perda de estado
         return new Response(
           JSON.stringify({
