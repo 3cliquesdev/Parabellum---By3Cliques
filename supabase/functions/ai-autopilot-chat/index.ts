@@ -280,8 +280,8 @@ function limitSentences(text: string, maxSentences: number): string {
 }
 
 // ============================================================
-// ðŸ†• FASE 1: Log de violaÃ§Ã£o de allowed_sources (nÃ£o bloqueante)
-// Registra quando a IA usa fontes nÃ£o autorizadas para auditoria
+// 🆕 FASE 1: Log de violação de allowed_sources (não bloqueante)
+// Registra quando a IA usa fontes não autorizadas para auditoria
 // ============================================================
 function logSourceViolationIfAny(
   response: string, 
