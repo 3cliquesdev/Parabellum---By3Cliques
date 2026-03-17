@@ -60,7 +60,7 @@ import { CONDITION_CONTACT_FIELDS, CONDITION_CONVERSATION_FIELDS, getAncestorNod
 import { useTicketCategories } from "@/hooks/useTicketCategories";
 import { useTags } from "@/hooks/useTags";
 import { useDepartments } from "@/hooks/useDepartments";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 
 // Tipos de nós para chat flows
 export const chatFlowNodeTypes = {
