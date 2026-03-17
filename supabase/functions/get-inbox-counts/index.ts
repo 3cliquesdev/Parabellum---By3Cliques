@@ -233,7 +233,8 @@ Deno.serve(async (req: Request) => {
         .select("id", { count: "exact", head: true })
         .neq("status", "closed")
         .eq("assigned_to", userId),
-      applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
+      // Fila IA: contagem GLOBAL (sem applyVisibility) para que todos os roles vejam
+      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
         .neq("status", "closed")
         .eq("ai_mode", "autopilot"),
       applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))

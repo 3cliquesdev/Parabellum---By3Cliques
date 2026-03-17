@@ -332,7 +332,9 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
     .limit(isArchivedScope ? 1000 : 500);
 
   // Aplicar filtros de role no nível do banco
-  if (role && userId && !hasFullInboxAccess(role)) {
+  // Fila IA: pular filtro de visibilidade para que todos os roles vejam
+  const isAiQueue = aiMode === 'autopilot';
+  if (role && userId && !hasFullInboxAccess(role) && !isAiQueue) {
     if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
       if (departmentIds && departmentIds.length > 0) {
         query = query.or(
