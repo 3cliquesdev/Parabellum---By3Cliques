@@ -8574,8 +8574,8 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
 
             const convMeta = convData?.customer_metadata || {};
             if (!convMeta.ai_can_classify_ticket) {
-              console.log('[ai-autopilot-chat] âš ï¸ classify_and_resolve_ticket: flag ai_can_classify_ticket nÃ£o ativa');
-              assistantMessage = 'ClassificaÃ§Ã£o disponÃ­vel apenas apÃ³s encerramento confirmado.';
+              console.log('[ai-autopilot-chat] ⚠️ classify_and_resolve_ticket: flag ai_can_classify_ticket não ativa');
+              assistantMessage = 'Classificação disponível apenas após encerramento confirmado.';
               break;
             }
 
