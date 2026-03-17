@@ -273,7 +273,7 @@ const App = () => {
               <Route path="/settings/teams" element={<ProtectedRoute requiredPermission="settings.teams"><Layout><Teams /></Layout></ProtectedRoute>} />
               <Route path="/settings/tags" element={<ProtectedRoute requiredPermission="cadastros.view_tags"><Layout><Tags /></Layout></ProtectedRoute>} />
               <Route path="/settings/recovery" element={<ProtectedRoute requiredPermission="settings.recovery"><Layout><SalesRecovery /></Layout></ProtectedRoute>} />
-              <Route path="/settings/ai-messages" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AIMessagesSettings /></Layout></ProtectedRoute>} />
+              <Route path="/settings/ai-messages" element={<ProtectedRoute requiredPermission="ai.manage_messages"><Layout><AIMessagesSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/ticket-notifications" element={<ProtectedRoute requiredPermission="email.manage_templates"><Layout><TicketNotificationRulesSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/sla" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SLASettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/return-reasons" element={<Navigate to="/settings/returns-config" replace />} />
