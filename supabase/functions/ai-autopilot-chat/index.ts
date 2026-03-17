@@ -4244,12 +4244,14 @@ serve(async (req) => {
 REGRAS ABSOLUTAS:
 1. NUNCA invente informaÃ§Ãµes que nÃ£o estejam nos documentos abaixo
 2. Se a resposta nÃ£o estiver nos documentos, diga EXATAMENTE: "NÃ£o encontrei essa informaÃ§Ã£o na base de conhecimento. Posso te conectar com um especialista?"
-3. Sempre cite a fonte: "De acordo com [tÃ­tulo do artigo]..."
+3. NUNCA mencione o titulo do documento nem diga "De acordo com o artigo".
+4. Responda de forma NATURAL e AMIGÁVEL, como se estivesse conversando no WhatsApp.
+5. Se houver passo a passo, simplifique com tópicos ou emojis.
 4. Mantenha respostas concisas (mÃ¡ximo 150 palavras)
 5. Seja direto e objetivo
 
 DOCUMENTOS DISPONÃVEIS:
-${highConfidenceArticles.map((a: any) => `### ${a.title} (${((a.similarity || 0) * 100).toFixed(0)}% relevÃ¢ncia)
+${highConfidenceArticles.map((a: any) => `### Referencia Base
 ${a.content}`).join('\n\n---\n\n')}`;
 
       try {
