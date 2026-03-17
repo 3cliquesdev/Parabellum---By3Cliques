@@ -108,15 +108,18 @@ export default function SetupPassword() {
 const userEmail = user.email;
   const userName = user.user_metadata?.full_name || "Usuário";
 
+  const isClient = user?.user_metadata?.role === "client";
+  const loginRoute = isClient ? "/portal" : "/auth";
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut({ scope: "local" });
       setUser(null);
       setSession(null);
-      navigate("/auth");
+      navigate(loginRoute);
     } catch (error) {
       console.error("Logout error:", error);
-      navigate("/auth");
+      navigate(loginRoute);
     }
   };
 

@@ -126,7 +126,11 @@ export default function ClientLogin() {
           {resetSent && (
             <Alert className="border-[hsl(142,76%,36%)] bg-[hsl(142,76%,93%)]">
               <AlertDescription className="text-[hsl(142,76%,25%)]">
-                E-mail de redefinição enviado! Verifique sua caixa de entrada.
+                📧 E-mail de redefinição enviado para <strong>{email}</strong>!
+                <br />
+                <span className="text-xs mt-1 block">
+                  Verifique sua caixa de entrada e spam. O link expira em 24 horas.
+                </span>
               </AlertDescription>
             </Alert>
           )}
