@@ -1,25 +1,39 @@
 
-# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-## O que mudou
+# Auditoria: Senha do Cliente e Recuperação de Senha
 
-### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
-- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
-- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
-- Ao trocar departamento, responsável é limpo automaticamente
-- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
+## Senha Inicial do Cliente
 
-### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
-- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
-  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
-  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
-  - Dados salvos em `end_action` e `action_data` no node data
-- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
+Quando um cliente é criado (via Kiwify sync), a senha temporária é:
+- **Primeiros 5 dígitos do CPF** do cliente, ou `temp12345` se o CPF não existir
+- A flag `must_change_password: true` é setada, forçando o cliente a ir para `/setup-password` no primeiro login
 
-### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
-- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
-- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
+O problema: **o cliente nunca é informado dessa senha temporária**. O e-mail de boas-vindas contém um link de recovery, mas se esse link expirar (24h), o cliente fica sem saber a senha.
 
-### 4. Continuidade do Fluxo ✅
-- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
-- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
+---
+
+## Bug na Recuperação de Senha (o que você viu na screenshot)
+
+O fluxo "Enviar link de redefinição" do portal (`/portal`) **aparenta funcionar** (mostra sucesso), mas o link recebido por email **falha** porque:
+
+1. O `redirectTo` aponta para `/setup-password`
+2. A página `/setup-password` **não detecta o token de recovery** do Supabase (hash `type=recovery`)
+3. Em vez de ir direto para "Definir nova senha", ela mostra o fluxo de OTP em 3 etapas (enviar código → verificar → definir senha)
+4. Se o usuário não tiver sessão ativa, `/setup-password` redireciona para `/auth` (login admin) em vez de `/portal` (login cliente)
+
+## Plano de Correção
+
+### Arquivo: `src/pages/SetupPassword.tsx`
+
+**A) Detectar recovery token na URL** — Quando o Supabase redireciona com `type=recovery`, o usuário já está autenticado automaticamente. Detectar isso e pular direto para a etapa "set_password", eliminando o OTP desnecessário.
+
+**B) Redirecionar clientes para `/portal`** — Se o usuário não estiver autenticado, verificar se veio de uma URL de cliente e redirecionar para `/portal` em vez de `/auth`.
+
+### Arquivo: `src/pages/ClientLogin.tsx`
+
+**C) Validação de email antes do reset** — Adicionar feedback caso o email não esteja cadastrado (atualmente o Supabase retorna sucesso mesmo para emails inexistentes por segurança, mas podemos melhorar o UX com uma mensagem mais clara).
+
+### Resultado
+- Cliente clica "Esqueci minha senha" → recebe email → clica no link → vai direto para "Definir nova senha" (sem OTP)
+- Fluxo de primeiro acesso com `must_change_password` continua funcionando com OTP (segurança extra para contas novas)
+
