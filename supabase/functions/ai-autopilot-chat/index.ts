@@ -364,9 +364,9 @@ function formatOptionsAsText(options: Array<{label: string; value: string}> | nu
 }
 
 // ============================================================
-// ðŸ†• DETECTOR DE INTENÃ‡ÃƒO PARA PRESERVAÃ‡ÃƒO DE CONTEXTO
-// Identifica a categoria da intenÃ§Ã£o original do cliente
-// para recuperar contexto apÃ³s verificaÃ§Ã£o de email
+// 🆕 DETECTOR DE INTENÇÃO PARA PRESERVAÇÃO DE CONTEXTO
+// Identifica a categoria da intenção original do cliente
+// para recuperar contexto após verificação de email
 // ============================================================
 function detectIntentCategory(message: string): string | null {
   const msgLower = message.toLowerCase()
