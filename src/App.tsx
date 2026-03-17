@@ -237,7 +237,7 @@ const App = () => {
               <Route path="/reports/inbox-time" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><InboxTimeReport /></Layout></ProtectedRoute>} />
               <Route path="/goals" element={<ProtectedRoute requiredPermission="goals.view_own"><Layout><Goals /></Layout></ProtectedRoute>} />
               <Route path="/goals-management" element={<ProtectedRoute requiredPermission="goals.set"><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
-              <Route path="/internal-requests" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><InternalRequests /></Layout></ProtectedRoute>} />
+              <Route path="/internal-requests" element={<ProtectedRoute requiredPermission="tickets.view_internal"><Layout><InternalRequests /></Layout></ProtectedRoute>} />
               <Route path="/cadences" element={<ProtectedRoute requiredPermission="cadences.manage"><Layout><Cadences /></Layout></ProtectedRoute>} />
               <Route path="/cadences/:id/edit" element={<ProtectedRoute requiredPermission="cadences.manage"><CadenceEditorPage /></ProtectedRoute>} />
               <Route path="/sales-tasks" element={<ProtectedRoute requiredPermission="sales.view_workzone"><Layout><SalesTasks /></Layout></ProtectedRoute>} />
