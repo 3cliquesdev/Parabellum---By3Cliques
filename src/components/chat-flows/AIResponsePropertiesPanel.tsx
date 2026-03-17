@@ -376,7 +376,8 @@ export function AIResponsePropertiesPanel({
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       <Separator />
