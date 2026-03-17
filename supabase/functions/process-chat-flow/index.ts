@@ -2277,9 +2277,10 @@ serve(async (req) => {
                       conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
                       contactId: activeContactData?.id || null,
                       subject, description,
-                      category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                      category: actionData.category || actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
                       priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
                       departmentId: actionData.department_id || resolvedNode.data.department_id || null,
+                      assignedTo: actionData.assigned_to || resolvedNode.data.assigned_to || null,
                       internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
                       collectedData,
                     });
