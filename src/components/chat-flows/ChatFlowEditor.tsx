@@ -305,6 +305,8 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         ticket_priority: "medium",
         department_id: null,
         department_name: null,
+        assigned_to: null,
+        assigned_to_name: null,
       },
     };
     return defaults[type] || { label: `Novo ${type}` };
