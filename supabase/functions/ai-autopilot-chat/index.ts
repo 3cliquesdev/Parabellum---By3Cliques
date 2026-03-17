@@ -326,7 +326,7 @@ function safeParseToolArgs(rawArgs: string): any {
   try {
     return JSON.parse(cleaned);
   } catch (_) {
-    // continuar para correÃ§Ãµes
+    // continuar para correções
   }
   
   // 4. Corrigir trailing commas antes de } ou ]
