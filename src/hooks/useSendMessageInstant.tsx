@@ -462,7 +462,10 @@ export function useSendMessageInstant() {
 
       // 4. Se for WhatsApp, invocar Edge Function
       if (conv.channel === 'whatsapp' && phoneNumber) {
-        const provider = conv.whatsapp_provider || 'meta';
+        // 🔧 FIX: Inferir provider pelos instance IDs disponíveis (whatsapp_provider pode estar incorreto)
+        const provider = conv.whatsapp_meta_instance_id ? 'meta' 
+          : conv.whatsapp_instance_id ? 'evolution' 
+          : (conv.whatsapp_provider || 'meta');
         const hasMedia = failedMsg.attachment_url && failedMsg.attachment_type;
 
         if (provider === 'meta') {
