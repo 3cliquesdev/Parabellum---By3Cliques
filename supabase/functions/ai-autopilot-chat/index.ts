@@ -4049,12 +4049,26 @@ serve(async (req) => {
       console.error('[ai-autopilot-chat] Erro ao buscar histÃ³rico:', messagesError);
     }
 
-    const allMessages: ChatMessage[] = messages?.reverse().map(m => ({
-      id: m.id,
-      role: (m.sender_type === 'contact' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.content,
-      created_at: m.created_at
-    })) || [];
+    // 🆕 FIX: Filtrar mensagens repetidas de quota/fallback do contexto
+    const QUOTA_PATTERNS = ['alta demanda', 'instabilidade no momento', 'tente novamente em alguns instantes'];
+    let quotaMessageSeen = false;
+    
+    const allMessages: ChatMessage[] = (messages?.reverse() || [])
+      .filter(m => {
+        // Excluir mensagens duplicadas de quota do contexto (manter no máximo 1)
+        const isQuotaMsg = QUOTA_PATTERNS.some(p => m.content?.includes(p));
+        if (isQuotaMsg) {
+          if (quotaMessageSeen) return false; // já temos 1, excluir duplicadas
+          quotaMessageSeen = true;
+        }
+        return true;
+      })
+      .map(m => ({
+        id: m.id,
+        role: (m.sender_type === 'contact' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: m.content,
+        created_at: m.created_at
+      }));
 
     // 🧠 Compressão de memória: janela deslizante + resumo LLM para conversas longas
     let messageHistory: Array<{ role: string; content: string }>;

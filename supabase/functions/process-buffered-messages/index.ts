@@ -660,31 +660,29 @@ async function handleFlowReInvoke(
   }
 }
 
-// 🆕 FIX 3: Contador de retries por conversa para evitar retry infinito em quota errors
-// Usa um campo em memória baseado nos buffers não-processados mais antigos
+// 🆕 FIX 3 v2: Contador de retries baseado em ai_failure_logs (persistente e confiável)
+// Não depende mais do estado processed do buffer que muda durante claim/rollback
 async function incrementBufferRetryCount(
   supabase: any,
   conversationId: string
 ): Promise<number> {
   try {
-    // Contar quantos ciclos de cron este buffer já sobreviveu
-    // Aproximação: idade do buffer mais antigo não-processado / intervalo do cron (60s)
-    const { data: oldestBuffer } = await supabase
-      .from("message_buffer")
-      .select("created_at")
+    // Contar falhas QUOTA_ERROR nos últimos 10 minutos para esta conversa
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { count, error } = await supabase
+      .from("ai_failure_logs")
+      .select("id", { count: "exact", head: true })
       .eq("conversation_id", conversationId)
-      .eq("processed", false)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      .ilike("error_message", "%QUOTA_ERROR%")
+      .gte("created_at", tenMinutesAgo);
 
-    if (!oldestBuffer) return 0;
+    if (error) {
+      console.error("[process-buffered-messages] ⚠️ Error counting retries from ai_failure_logs:", error);
+      return 0;
+    }
 
-    const ageSeconds = (Date.now() - new Date(oldestBuffer.created_at).getTime()) / 1000;
-    // Cada ciclo de cron é ~60s, batch delay ~8s
-    // Retry count = quantos ciclos completos já passaram
-    const retryCount = Math.floor(ageSeconds / 60);
-    console.log(`[process-buffered-messages] 📊 Conv ${conversationId}: buffer age ${ageSeconds.toFixed(0)}s → ~${retryCount} retries`);
+    const retryCount = count || 0;
+    console.log(`[process-buffered-messages] 📊 Conv ${conversationId}: ${retryCount} QUOTA_ERROR failures in last 10min`);
     return retryCount;
   } catch (err) {
     console.error("[process-buffered-messages] ⚠️ Error counting retries:", err);
