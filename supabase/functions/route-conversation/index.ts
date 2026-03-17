@@ -474,7 +474,7 @@ serve(async (req) => {
             // a.agent_departments pode ser array ou single object (PostgREST inlining)
             const agentDepts = Array.isArray(a.agent_departments) 
               ? a.agent_departments.map((d: any) => d.department_id)
-              : [a.agent_departments?.department_id].filter(Boolean);
+              : [(a.agent_departments as any)?.department_id].filter(Boolean);
             return skillDeptIds.some(d => agentDepts.includes(d));
           });
           
