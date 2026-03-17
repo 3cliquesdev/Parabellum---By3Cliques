@@ -261,8 +261,8 @@ function maskPhone(phone: string | null | undefined): string {
 }
 
 // ============================================================
-// ðŸ†• FASE 1: Truncar resposta ao mÃ¡ximo de frases permitido
-// Enforce pÃ³s-processamento para garantir verbosidade controlada
+// 🆕 FASE 1: Truncar resposta ao máximo de frases permitido
+// Enforce pós-processamento para garantir verbosidade controlada
 // ============================================================
 function limitSentences(text: string, maxSentences: number): string {
   // Separar por pontuaÃ§Ã£o final (. ! ?)
