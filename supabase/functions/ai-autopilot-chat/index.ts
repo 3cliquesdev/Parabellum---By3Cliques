@@ -2233,7 +2233,7 @@ serve(async (req) => {
               await supabaseClient.from('conversations')
                 .update({ ai_mode: 'waiting_human', customer_metadata: cleanMeta })
                 .eq('id', conversationId);
-              const killMsg = 'No momento, o encerramento automÃ¡tico estÃ¡ indisponÃ­vel. Um atendente humano vai finalizar seu atendimento. Aguarde um momento!';
+              const killMsg = 'No momento, o encerramento automatico esta indisponivel. Um atendente humano vai finalizar seu atendimento. Aguarde um momento!';
               await supabaseClient.from('messages').insert({
                 conversation_id: conversationId, content: killMsg,
                 sender_type: 'user', is_ai_generated: true, is_bot_message: true
@@ -2250,7 +2250,7 @@ serve(async (req) => {
               await supabaseClient.from('conversations')
                 .update({ customer_metadata: cleanMeta })
                 .eq('id', conversationId);
-              const shadowMsg = 'Obrigado pelo contato! Se precisar de mais alguma coisa, estou por aqui. ðŸ˜Š';
+              const shadowMsg = 'Obrigado pelo contato! Se precisar de mais alguma coisa, estou por aqui. 😊';
               await supabaseClient.from('messages').insert({
                 conversation_id: conversationId, content: shadowMsg,
                 sender_type: 'user', is_ai_generated: true, is_bot_message: true
@@ -2276,7 +2276,7 @@ serve(async (req) => {
                 await supabaseClient.from('conversations')
                   .update({ ai_mode: 'waiting_human', customer_metadata: cleanMeta })
                   .eq('id', conversationId);
-                const tagMsg = 'Obrigado pelo contato! Um atendente vai finalizar seu atendimento em instantes. ðŸ˜Š';
+                const tagMsg = 'Obrigado pelo contato! Um atendente vai finalizar seu atendimento em instantes. 😊';
                 await supabaseClient.from('messages').insert({
                   conversation_id: conversationId, content: tagMsg,
                   sender_type: 'user', is_ai_generated: true, is_bot_message: true
@@ -2297,7 +2297,7 @@ serve(async (req) => {
             }
             
             // TUDO OK â†’ Chamar close-conversation
-            const closeMsg = 'Foi um prazer ajudar! Seu atendimento serÃ¡ encerrado agora. AtÃ© a prÃ³xima! ðŸ˜Š';
+            const closeMsg = 'Foi um prazer ajudar! Seu atendimento sera encerrado agora. Ate a proxima! 😊';
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId, content: closeMsg,
               sender_type: 'user', is_ai_generated: true, is_bot_message: true
@@ -2345,7 +2345,7 @@ serve(async (req) => {
             // NÃ£o retorna - cai no fluxo normal para IA continuar atendimento
           } else {
             // AmbÃ­guo - repetir pergunta
-            const ambiguousMsg = 'SÃ³ confirmando: posso encerrar seu atendimento? Responda **sim** ou **nÃ£o**.';
+            const ambiguousMsg = 'So confirmando: posso encerrar seu atendimento? Responda **sim** ou **nao**.';
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId, content: ambiguousMsg,
               sender_type: 'user', is_ai_generated: true, is_bot_message: true
@@ -2387,10 +2387,10 @@ serve(async (req) => {
           const ANTI_SPAM_WINDOW_MS = 30000; // 30 segundos
           
           if (timeSinceHandoffBlocked < ANTI_SPAM_WINDOW_MS) {
-            console.log('[ai-autopilot-chat] ðŸ›¡ï¸ Anti-spam: mensagem de email enviada hÃ¡', Math.round(timeSinceHandoffBlocked/1000), 's - nÃ£o repetindo');
+            console.log('[ai-autopilot-chat] Anti-spam: mensagem de email enviada ha', Math.round(timeSinceHandoffBlocked/1000), 's - nao repetindo');
             
-            // Enviar mensagem mais curta de correÃ§Ã£o de formato
-            const formatHintMessage = 'ðŸ“§ Por favor, envie seu email em uma Ãºnica linha (sem espaÃ§os ou quebras). Exemplo: seuemail@dominio.com';
+            // Enviar mensagem mais curta de correcao de formato
+            const formatHintMessage = '📧 Por favor, envie seu email em uma unica linha (sem espacos ou quebras). Exemplo: seuemail@dominio.com';
             
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId,
@@ -2690,7 +2690,7 @@ serve(async (req) => {
               body: { conversationId, department_id: DEPT_COMERCIAL_ID }
             });
             
-            const leadHandoffMessage = `Obrigado! ðŸ“\n\nRegistramos seu contato (${detectedEmail}). Um de nossos consultores vai entrar em contato em breve para te ajudar.\n\nAguarde um momento, por favor.`;
+            const leadHandoffMessage = `Obrigado! 📋\n\nRegistramos seu contato (${detectedEmail}). Um de nossos consultores vai entrar em contato em breve para te ajudar.\n\nAguarde um momento, por favor.`;
             
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId,
@@ -4049,12 +4049,26 @@ serve(async (req) => {
       console.error('[ai-autopilot-chat] Erro ao buscar histÃ³rico:', messagesError);
     }
 
-    const allMessages: ChatMessage[] = messages?.reverse().map(m => ({
-      id: m.id,
-      role: (m.sender_type === 'contact' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.content,
-      created_at: m.created_at
-    })) || [];
+    // 🆕 FIX: Filtrar mensagens repetidas de quota/fallback do contexto
+    const QUOTA_PATTERNS = ['alta demanda', 'instabilidade no momento', 'tente novamente em alguns instantes'];
+    let quotaMessageSeen = false;
+    
+    const allMessages: ChatMessage[] = (messages?.reverse() || [])
+      .filter(m => {
+        // Excluir mensagens duplicadas de quota do contexto (manter no máximo 1)
+        const isQuotaMsg = QUOTA_PATTERNS.some(p => m.content?.includes(p));
+        if (isQuotaMsg) {
+          if (quotaMessageSeen) return false; // já temos 1, excluir duplicadas
+          quotaMessageSeen = true;
+        }
+        return true;
+      })
+      .map(m => ({
+        id: m.id,
+        role: (m.sender_type === 'contact' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: m.content,
+        created_at: m.created_at
+      }));
 
     // 🧠 Compressão de memória: janela deslizante + resumo LLM para conversas longas
     let messageHistory: Array<{ role: string; content: string }>;
@@ -5353,7 +5367,7 @@ Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado e
       
       if (!welcomeMessage) {
         const firstName = contactName ? contactName.split(' ')[0] : '';
-        welcomeMessage = `OlÃ¡${firstName ? `, ${firstName}` : ''}! ðŸ‘‹\n\nFicamos felizes com seu contato! Em que posso te ajudar hoje?`;
+        welcomeMessage = `Ola${firstName ? `, ${firstName}` : ''}! 👋\n\nFicamos felizes com seu contato! Em que posso te ajudar hoje?`;
       }
       
       // Salvar mensagem
@@ -5509,7 +5523,7 @@ Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado e
         
         if (!askEmailMessage) {
           const firstName = contactName ? contactName.split(' ')[0] : '';
-          askEmailMessage = `OlÃ¡${firstName ? `, ${firstName}` : ''}! ðŸ‘‹\n\nPara garantir um atendimento personalizado e seguro, preciso que vocÃª me informe seu email.\n\nðŸ“§ *Envie apenas o email em uma linha (ex: seunome@email.com)*`;
+          askEmailMessage = `Ola${firstName ? `, ${firstName}` : ''}! 👋\n\nPara garantir um atendimento personalizado e seguro, preciso que voce me informe seu email.\n\n📧 *Envie apenas o email em uma linha (ex: seunome@email.com)*`;
         }
         
         // Salvar mensagem pedindo email
