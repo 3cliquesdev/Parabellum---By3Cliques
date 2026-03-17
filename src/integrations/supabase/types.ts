@@ -10212,6 +10212,7 @@ export type Database = {
         Args: { p_contact_id: string }
         Returns: Json
       }
+      custom_auth_email_hook: { Args: { event: Json }; Returns: Json }
       distribute_client_to_consultant: {
         Args: { p_contact_id: string }
         Returns: Json
