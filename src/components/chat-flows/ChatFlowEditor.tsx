@@ -61,6 +61,7 @@ import { useTicketCategories } from "@/hooks/useTicketCategories";
 import { useTags } from "@/hooks/useTags";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 // Tipos de nós para chat flows
 export const chatFlowNodeTypes = {
