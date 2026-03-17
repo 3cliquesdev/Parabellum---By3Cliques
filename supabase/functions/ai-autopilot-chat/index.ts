@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 // ============================================================
-// ðŸ†• INTERFACE DE CONFIGURAÃ‡ÃƒO RAG DINÃ‚MICA
+// 🆕 INTERFACE DE CONFIGURAÇÃO RAG DINÂMICA
 // Lido do banco system_configurations
 // ============================================================
 interface RAGConfig {
@@ -43,7 +43,7 @@ const DEFAULT_RAG_CONFIG: RAGConfig = {
   maxFallback: 3,
 };
 
-// Helper: Buscar TODAS as configuraÃ§Ãµes RAG do banco
+// Helper: Buscar TODAS as configurações RAG do banco
 async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
   try {
     const { data, error } = await supabaseClient
@@ -97,7 +97,7 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       maxFallback: parseInt(configMap.get('ai_max_fallback_phrases') ?? '3'),
     };
     
-    console.log('[getRAGConfig] âœ… ConfiguraÃ§Ã£o RAG carregada:', {
+    console.log('[getRAGConfig] ✅ Configuração RAG carregada:', {
       model: config.model,
       minThreshold: config.minThreshold,
       directThreshold: config.directThreshold,
@@ -171,19 +171,19 @@ async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
 function extractWhatsAppNumber(whatsappId: string | null | undefined): string | null {
   if (!whatsappId) return null;
   
-  // Se for nÃºmero @lid (lead ID do Meta), retornar null - nÃ£o Ã© um nÃºmero vÃ¡lido
+  // Se for número @lid (lead ID do Meta), retornar null - não é um número válido
   if (whatsappId.includes('@lid')) {
     console.log('[extractWhatsAppNumber] âš ï¸ Lead ID detectado, ignorando:', whatsappId);
     return null;
   }
   
-  // Remove sufixos do WhatsApp e caracteres nÃ£o numÃ©ricos
+  // Remove sufixos do WhatsApp e caracteres não numéricos
   const cleaned = whatsappId
     .replace('@s.whatsapp.net', '')
     .replace('@c.us', '')
     .replace(/\D/g, '');
   
-  // Validar se tem pelo menos 10 dÃ­gitos (nÃºmero vÃ¡lido)
+  // Validar se tem pelo menos 10 dígitos (número válido)
   if (cleaned.length >= 10) {
     return cleaned;
   }
@@ -207,17 +207,17 @@ async function getMessageTemplate(
       .maybeSingle();
 
     if (error || !data) {
-      console.log(`[getMessageTemplate] Template "${key}" nÃ£o encontrado ou inativo`);
+      console.log(`[getMessageTemplate] Template "${key}" não encontrado ou inativo`);
       return null;
     }
 
-    // Substituir variÃ¡veis {{var}} pelos valores
+    // Substituir variáveis {{var}} pelos valores
     let content = data.content;
     Object.entries(variables).forEach(([varKey, value]) => {
       content = content.replace(new RegExp(`\\{\\{${varKey}\\}\\}`, 'g'), value || '');
     });
 
-    console.log(`[getMessageTemplate] âœ… Template "${key}" carregado com sucesso`);
+    console.log(`[getMessageTemplate] ✅ Template "${key}" carregado com sucesso`);
     return content;
   } catch (error) {
     console.error(`[getMessageTemplate] Erro ao buscar template "${key}":`, error);
@@ -225,13 +225,13 @@ async function getMessageTemplate(
   }
 }
 
-// FASE 2: FunÃ§Ã£o para gerar hash SHA-256 da pergunta normalizada
+// FASE 2: Função para gerar hash SHA-256 da pergunta normalizada
 async function generateQuestionHash(message: string): Promise<string> {
   const normalized = message
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // Remove acentos
-    .replace(/[^\w\s]/g, "") // Remove pontuaÃ§Ã£o
+    .replace(/[^\w\s]/g, "") // Remove pontuação
     .trim();
   
   const encoder = new TextEncoder();
@@ -261,11 +261,11 @@ function maskPhone(phone: string | null | undefined): string {
 }
 
 // ============================================================
-// ðŸ†• FASE 1: Truncar resposta ao mÃ¡ximo de frases permitido
-// Enforce pÃ³s-processamento para garantir verbosidade controlada
+// 🆕 FASE 1: Truncar resposta ao máximo de frases permitido
+// Enforce pós-processamento para garantir verbosidade controlada
 // ============================================================
 function limitSentences(text: string, maxSentences: number): string {
-  // Separar por pontuaÃ§Ã£o final (. ! ?)
+  // Separar por pontuação final (. ! ?)
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   
   if (sentences.length <= maxSentences) {
@@ -280,8 +280,8 @@ function limitSentences(text: string, maxSentences: number): string {
 }
 
 // ============================================================
-// ðŸ†• FASE 1: Log de violaÃ§Ã£o de allowed_sources (nÃ£o bloqueante)
-// Registra quando a IA usa fontes nÃ£o autorizadas para auditoria
+// 🆕 FASE 1: Log de violação de allowed_sources (não bloqueante)
+// Registra quando a IA usa fontes não autorizadas para auditoria
 // ============================================================
 function logSourceViolationIfAny(
   response: string, 
@@ -326,7 +326,7 @@ function safeParseToolArgs(rawArgs: string): any {
   try {
     return JSON.parse(cleaned);
   } catch (_) {
-    // continuar para correÃ§Ãµes
+    // continuar para correções
   }
   
   // 4. Corrigir trailing commas antes de } ou ]
