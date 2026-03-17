@@ -97,7 +97,7 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       maxFallback: parseInt(configMap.get('ai_max_fallback_phrases') ?? '3'),
     };
     
-    console.log('[getRAGConfig] âœ… ConfiguraÃ§Ã£o RAG carregada:', {
+    console.log('[getRAGConfig] ✅ Configuração RAG carregada:', {
       model: config.model,
       minThreshold: config.minThreshold,
       directThreshold: config.directThreshold,
