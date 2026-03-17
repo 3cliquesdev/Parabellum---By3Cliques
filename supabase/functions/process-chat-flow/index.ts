@@ -5358,9 +5358,10 @@ serve(async (req) => {
               conversationId, flowStateId: stateId || '', nodeId: node.id,
               contactId: contactData?.id || null,
               subject, description,
-              category: actionData.ticket_category || node.data.ticket_category || 'outro',
+              category: actionData.category || actionData.ticket_category || node.data.ticket_category || 'outro',
               priority: actionData.ticket_priority || node.data.ticket_priority || 'medium',
               departmentId: actionData.department_id || node.data.department_id || null,
+              assignedTo: actionData.assigned_to || node.data.assigned_to || null,
               internalNote, useCollectedData: actionData.use_collected_data || node.data.use_collected_data || false,
               collectedData: {},
             });
