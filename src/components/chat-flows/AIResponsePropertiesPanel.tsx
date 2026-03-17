@@ -23,6 +23,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
+import { VariableBadgesRow } from "./ClickableVariableBadge";
 
 interface AIResponsePropertiesPanelProps {
   selectedNode: Node;
