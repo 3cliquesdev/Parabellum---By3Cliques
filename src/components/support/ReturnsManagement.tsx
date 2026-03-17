@@ -74,7 +74,7 @@ export default function ReturnsManagement() {
         <div className="flex justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : !returns || returns.length === 0 ? (
+      ) : filteredReturns.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <RotateCcw className="h-12 w-12 text-muted-foreground/40 mb-4" />
           <p className="text-muted-foreground">Nenhuma devolução encontrada</p>
