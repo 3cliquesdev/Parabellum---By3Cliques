@@ -6935,7 +6935,7 @@ Resolução desejada: Reembolso integral"
 
 **REGRAS DO CENÁRIO C:**
 - NUNCA crie ticket sem saber tipo de resolução (A, B ou C)
-- NUNCA crie ticket sem número do pedido (se cliente não souber, pergunte: "Qual email usou na compra? Vou buscar para você.")
+- NUNCA crie ticket sem número do pedido (se cliente não souber o número, peça o código de rastreio como alternativa)
 - NUNCA crie ticket sem saber o que veio errado vs o que era esperado
 - SEMPRE peça foto para evidência (mas prossiga se cliente não puder enviar)
 - Se cliente mencionar "envio errado" mas já escolheu resolução, pule direto para PASSO 2
