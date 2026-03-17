@@ -14,7 +14,7 @@ import { ROLE_HOME_PAGES } from "@/config/roles";
 
 const authSchema = z.object({
   email: z.string().email({ message: "E-mail inválido" }),
-  password: z.string().min(6, { message: "Senha deve ter no mínimo 6 caracteres" }),
+  password: z.string().min(5, { message: "Senha deve ter no mínimo 5 caracteres" }),
 });
 
 export default function ClientLogin() {
