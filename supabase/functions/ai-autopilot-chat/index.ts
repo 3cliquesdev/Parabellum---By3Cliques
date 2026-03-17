@@ -6640,7 +6640,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 - Se não encontrar a informação na KB, responda: "Não tenho essa informação no momento. O setor responsável poderá te orientar."
 ${ambiguousCancellationDetected ? `
 ⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo de cancelamento sem deixar claro se quer informação ou realizar a ação.
-Você DEVE perguntar de forma natural e empática: "Você tem dúvidas sobre cancelamento ou deseja cancelar um produto/serviço?"
+Você DEVE perguntar de forma leve e amigável: "Entendi! Você quer saber como funciona o cancelamento ou quer cancelar de fato? Me conta que te ajudo! 😊"
 Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
 Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
 Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
