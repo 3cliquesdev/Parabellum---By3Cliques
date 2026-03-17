@@ -4426,7 +4426,7 @@ serve(async (req) => {
             forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
             forbidSupport: nextNode.data?.forbid_support ?? false,
             forbidConsultant: nextNode.data?.forbid_consultant ?? false,
-            ...(isFirstEntryFromMenuMain ? { firstEntry: true, selectedOption: selectedOption.label } : {}),
+            ...(isFirstEntryFromMenuMain ? { firstEntry: true, selectedOption: String(savedChoiceMain) } : {}),
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
