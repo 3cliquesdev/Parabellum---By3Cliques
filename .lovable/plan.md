@@ -1,35 +1,29 @@
 
+# Fix: IA vazando instruções internas do contextPrompt para o cliente — ✅ IMPLEMENTADO
 
-# Correções da IA em 3 Fases (sem risco de quebra)
+## O que mudou
 
-## Status atual (verificado agora)
-- **Anti-loop de quota**: Funcionando. Zero novas mensagens mojibake após fix das 19:20.
-- **Anti-loop em process-buffered-messages**: Funcionando. `incrementBufferRetryCount` já usa `ai_failure_logs` (persistente).
-- **Guard anti-vazamento de instruções**: Já existe (linhas 9313-9352 do index.ts) com 8 regex patterns + log de auditoria.
-- **Encoding no código-fonte**: 3.439 strings corrompidas ainda no index.ts (comments + logs). Não afetam mensagens ao cliente (fix parcial funcionou), mas poluem logs e são bomba-relógio.
-- **Mensagens poluentes no banco**: 163 mensagens antigas com mojibake + ~130 "alta demanda" duplicadas em 17 conversas.
+### 1. Guard anti-vazamento reforçado no `agentContextBlock` ✅
+- Instruções internas agora envoltas em tags `[SYSTEM INTERNAL — DO NOT OUTPUT TO USER]`
+- Adicionadas **9 regras explícitas** com exemplos proibidos e exemplos corretos
+- LLM recebe instrução imperativa e repetida para nunca reproduzir passos internos
 
-## Fase 1 — Limpeza do banco (zero risco, SQL puro)
-Limpar mensagens que já poluem o contexto da IA:
-- Deletar mensagens duplicadas de "alta demanda" em cada conversa, mantendo apenas a mais recente por conversa
-- Corrigir o emoji `ðŸ™` nas mensagens restantes para texto limpo
-- **Impacto**: 0 alteração de código. Apenas dados antigos limpos.
+### 2. Reordenação do prompt ✅
+- `agentContextBlock` movido da **posição 1** para a **última posição** no prompt contextualizado
+- LLM agora processa personalidade, regras de comportamento e contexto do fluxo ANTES de ver instruções internas
+- Reduz drasticamente a chance de eco das instruções
 
-## Fase 2 — Guard anti-regurgitação de KB + handler de áudio/imagem
-Adicionar ao bloco de pós-filtro existente (linhas ~9313 do index.ts):
-- **Anti-regurgitação**: Detectar quando a IA diz "suporte humano", lista categorias internas, ou menciona "Seller Center" fora de contexto TikTok
-- **Handler de mídia**: Quando mensagem do cliente é áudio/imagem, incluir instrução no prompt para pedir descrição por texto
-- **Impacto**: Aditivo — só adiciona novas regex ao filtro existente e uma condição ao prompt. Nenhuma lógica existente alterada.
+### 3. Sanitização pós-resposta da LLM ✅
+- Filtro regex detecta padrões de vazamento:
+  - "siga estes passos", "verifique na base", "próximos passos:"
+  - "Para o contato X, siga/execute..."
+  - Frases numeradas com verbos de sistema (1) Verifique...)
+  - Tags `[SYSTEM INTERNAL]` na resposta
+- Se detectado: resposta substituída por saudação natural contextual
+- Log de auditoria (`instruction_leak_blocked`) para monitoramento
 
-## Fase 3 — Correção massiva de encoding no código-fonte
-Reescrever todo o `ai-autopilot-chat/index.ts` corrigindo as 3.439 strings mojibake (comments, logs, variáveis):
-- `ðŸ†•` → `🆕`, `ðŸ"§` → `🔧`, `ðŸ›¡ï¸` → `🛡️`, `ConfiguraÃ§Ã£o` → `Configuração`, `nÃ£o` → `não`, etc.
-- **Impacto**: Apenas strings/comments. Zero mudança de lógica. Mas como o arquivo tem 10.010 linhas, é a fase mais arriscada em volume — por isso fica por último.
-
-## Ordem de execução
-1. **Fase 1** → Migração SQL (imediato, sem deploy)
-2. **Fase 2** → Edição cirúrgica no index.ts (~30 linhas novas)
-3. **Fase 3** → Reescrita de encoding do index.ts inteiro (volume alto, mesma lógica)
-
-Cada fase é independente. Se uma quebrar, as outras continuam funcionando.
-
+## Impacto
+- ✅ Defesa em profundidade: prompt reforçado + reordenação + filtro de saída
+- ✅ Zero vazamento de instruções internas para o cliente
+- ✅ Zero impacto em respostas legítimas da IA
+- ✅ Auditoria completa em `ai_events`

@@ -1497,6 +1497,21 @@ serve(async (req) => {
       });
     }
 
+    // 🔧 MEDIA HANDLER: Quando cliente envia áudio/imagem, pedir descrição por texto
+    const MEDIA_MESSAGE_PATTERNS = /^(?:🎵\s*(?:Áudio|Audio)|📷\s*(?:Imagem|Foto|Image)|🎙️\s*(?:Áudio|Audio)|📹\s*(?:Vídeo|Video))[\s.!]*$/i;
+    const isMediaMessage = MEDIA_MESSAGE_PATTERNS.test(customerMessage.trim());
+    if (isMediaMessage) {
+      console.log('[ai-autopilot-chat] 🔧 MEDIA_HANDLER: Mensagem de mídia detectada, pedindo texto');
+      return new Response(JSON.stringify({
+        response: 'Recebi sua mensagem! 😊 Infelizmente ainda não consigo processar áudios ou imagens. Poderia descrever por texto o que você precisa? Assim consigo te ajudar melhor! ✍️',
+        source: 'media_handler',
+        handoff: false
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // ðŸš¨ FASE 3: Declarar variÃ¡veis fora do try para acesso no catch
     let conversation: any = null;
     let responseChannel = 'web_chat';
@@ -9348,6 +9363,51 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
         const productCtx = collectedProduct ? ` sobre ${collectedProduct}` : '';
         assistantMessage = `Olá${contactName ? `, ${contactName.split(' ')[0]}` : ''}! Como posso te ajudar${productCtx} hoje? 😊`;
         console.log('[ai-autopilot-chat] ✅ Resposta substituída por saudação segura');
+      }
+    }
+
+    // 🛡️ PÓS-FILTRO: Anti-regurgitação de conteúdo KB interno
+    if (assistantMessage) {
+      const KB_REGURGITATION_PATTERNS = [
+        // IA se passando por humano
+        /(?:sou|somos)\s+(?:do\s+)?suporte\s+humano/i,
+        /(?:sou|somos)\s+(?:um|uma)?\s*(?:atendente|agente)\s+human[oa]/i,
+        // Listagem de categorias internas como opções
+        /(?:categorias|departamentos)\s*(?:disponíveis|que atendemos)\s*:?\s*(?:\n|-)?\s*(?:venda|pós-?venda|financeiro|mercado\s*livre|amazon|shopee)/i,
+        // Seller Center / TikTok fora de contexto (só bloqueia se não for conversa sobre TikTok)
+        /(?:seller\s+center|central\s+do\s+vendedor)\s/i,
+        // IA reproduzindo estrutura de artigo KB (título + seções)
+        /^(?:título|artigo|documento)\s*:/im,
+        // IA listando "abrangência e uso" (artigo interno)
+        /abrangência\s+e\s+uso/i,
+      ];
+
+      const hasSCContext = /tiktok|tik\s*tok/i.test(customerMessage || '');
+      const hasKBRegurgitation = KB_REGURGITATION_PATTERNS.some((p, idx) => {
+        // Pular check de Seller Center se contexto é TikTok
+        if (idx === 3 && hasSCContext) return false;
+        return p.test(assistantMessage);
+      });
+
+      if (hasKBRegurgitation) {
+        console.warn('[ai-autopilot-chat] 🛡️ KB_REGURGITATION detectada! Bloqueando resposta.');
+        console.warn('[ai-autopilot-chat] Preview:', assistantMessage.substring(0, 200));
+
+        Promise.resolve(supabaseClient.from('ai_events').insert({
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          event_type: 'kb_regurgitation_blocked',
+          model: configuredAIModel || 'gpt-5-mini',
+          output_json: {
+            blocked_preview: assistantMessage.substring(0, 300),
+            reason: 'kb_internal_content_leaked',
+          },
+          input_summary: customerMessage?.substring(0, 200) || '',
+        })).catch(() => {});
+
+        const collectedProduct2 = flow_context?.collectedData?.produto || flow_context?.collectedData?.product || null;
+        const productCtx2 = collectedProduct2 ? ` sobre ${collectedProduct2}` : '';
+        assistantMessage = `Olá${contactName ? `, ${contactName.split(' ')[0]}` : ''}! Como posso te ajudar${productCtx2}? 😊`;
       }
     }
 
