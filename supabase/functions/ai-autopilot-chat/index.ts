@@ -2390,7 +2390,7 @@ serve(async (req) => {
             console.log('[ai-autopilot-chat] ðŸ›¡ï¸ Anti-spam: mensagem de email enviada hÃ¡', Math.round(timeSinceHandoffBlocked/1000), 's - nÃ£o repetindo');
             
             // Enviar mensagem mais curta de correÃ§Ã£o de formato
-            const formatHintMessage = '📧 Por favor, envie seu email em uma unica linha (sem espacos ou quebras). Exemplo: seuemail@dominio.com'; = 'ðŸ“§ Por favor, envie seu email em uma Ãºnica linha (sem espaÃ§os ou quebras). Exemplo: seuemail@dominio.com';
+            const formatHintMessage = '📧 Por favor, envie seu email em uma unica linha (sem espacos ou quebras). Exemplo: seuemail@dominio.com';, envie seu email em uma unica linha (sem espacos ou quebras). Exemplo: seuemail@dominio.com'; = 'ðŸ“§ Por favor, envie seu email em uma Ãºnica linha (sem espaÃ§os ou quebras). Exemplo: seuemail@dominio.com';
             
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId,
