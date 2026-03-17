@@ -9232,17 +9232,39 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
 
     // 🛡️ PÓS-FILTRO DE SEGURANÇA: Bloquear pedido de email/CPF/telefone em contexto de pedidos/rastreio
     const ORDER_TRACKING_KEYWORDS = /pedido|rastreio|rastreamento|envio|enviado|entrega|tracking|status.*pedido|codigo.*rastreio/i;
-    const FORBIDDEN_REQUEST_PATTERN = /(?:informe|envie|me\s+(?:passe|diga|mande|informe|forne[cç]a)|qual\s+(?:[eé]\s+)?(?:o\s+)?seu|preciso\s+d[eo]\s+seu|poderia\s+(?:me\s+)?(?:informar|enviar|passar))[\s\S]{0,40}(?:e-?mail|cpf|telefone|whatsapp|n[uú]mero\s+de\s+telefone)/i;
+    const SAFE_REWRITE = 'Para consultar o status do seu pedido, preciso do número do pedido ou código de rastreio. Poderia me informar? 📦';
     
-    if (assistantMessage && ORDER_TRACKING_KEYWORDS.test(customerMessage || '') && FORBIDDEN_REQUEST_PATTERN.test(assistantMessage)) {
-      console.warn('[ai-autopilot-chat] 🛡️ PÓS-FILTRO: IA tentou pedir email/CPF em contexto de pedidos - BLOQUEADO');
-      assistantMessage = 'Para consultar o status do seu pedido, preciso do número do pedido ou código de rastreio. Poderia me informar? 📦';
-    }
-    // Também verificar se a resposta da IA menciona email como forma de busca de pedidos (mesmo sem intent explícito)
-    const EMAIL_AS_SEARCH = /(?:me\s+(?:informe|passe|envie|diga)|qual\s+(?:[eé]\s+)?(?:o\s+)?seu|preciso\s+d[eo]\s+seu)[\s\S]{0,30}(?:e-?mail)/i;
-    if (assistantMessage && EMAIL_AS_SEARCH.test(assistantMessage) && ORDER_TRACKING_KEYWORDS.test(assistantMessage)) {
-      console.warn('[ai-autopilot-chat] 🛡️ PÓS-FILTRO: Resposta menciona email+pedido - BLOQUEADO');
-      assistantMessage = 'Para consultar o status do seu pedido, preciso do número do pedido ou código de rastreio. Poderia me informar? 📦';
+    if (assistantMessage) {
+      const msgLower = assistantMessage.toLowerCase();
+      const mentionsEmail = /e-?mail/i.test(assistantMessage);
+      const mentionsCpf = /cpf/i.test(assistantMessage);
+      const mentionsPhone = /telefone|whatsapp|n[uú]mero.*celular/i.test(assistantMessage);
+      const mentionsForbidden = mentionsEmail || mentionsCpf || mentionsPhone;
+      
+      if (mentionsForbidden) {
+        const customerIsAskingOrder = ORDER_TRACKING_KEYWORDS.test(customerMessage || '');
+        const responseIsAboutOrder = ORDER_TRACKING_KEYWORDS.test(assistantMessage);
+        
+        // Camada 1: cliente perguntou sobre pedido/rastreio E resposta menciona email/cpf/telefone
+        if (customerIsAskingOrder) {
+          console.warn('[ai-autopilot-chat] 🛡️ PÓS-FILTRO L1: Cliente perguntou pedido + resposta menciona dado proibido - BLOQUEADO');
+          assistantMessage = SAFE_REWRITE;
+        }
+        // Camada 2: resposta menciona pedido/rastreio E email/cpf no mesmo texto (IA improvisou)
+        else if (responseIsAboutOrder) {
+          console.warn('[ai-autopilot-chat] 🛡️ PÓS-FILTRO L2: Resposta menciona pedido+dado proibido juntos - BLOQUEADO');
+          assistantMessage = SAFE_REWRITE;
+        }
+        // Camada 3: resposta pede email/cpf como forma de busca (verbos de solicitação + dado)
+        else if (/(?:informe|envie|passe|diga|forne[cç]a|informar|enviar|passar|qual\s+(?:[eé]\s+)?(?:o\s+)?seu|preciso\s+d[eo]\s+seu)/i.test(assistantMessage) && mentionsEmail) {
+          // Exceção: verify_customer_email é legítimo para identificação
+          const toolCallsMade = (assistantMessage.match(/\[\[TOOL:(\w+)\]\]/g) || []).map(t => t.replace(/\[\[TOOL:|]]/g, ''));
+          if (!toolCallsMade.includes('verify_customer_email')) {
+            console.warn('[ai-autopilot-chat] 🛡️ PÓS-FILTRO L3: Resposta solicita email sem contexto legítimo - BLOQUEADO');
+            assistantMessage = SAFE_REWRITE;
+          }
+        }
+      }
     }
 
     const { data: savedMessage, error: saveError } = await supabaseClient
