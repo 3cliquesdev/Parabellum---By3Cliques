@@ -9687,10 +9687,34 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
       const isQuotaError = errorMessage.includes('QUOTA_ERROR') || errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('rate_limit');
       
       if (isQuotaError) {
-        // QUOTA ERROR: NÃƒO transferir, apenas avisar o cliente e manter na IA
-        console.warn('[ai-autopilot-chat] âš ï¸ QUOTA_ERROR detectado â€” NÃƒO transferir, apenas avisar cliente');
+        // QUOTA ERROR: NAO transferir, apenas avisar o cliente e manter na IA
+        console.warn('[ai-autopilot-chat] QUOTA_ERROR detectado - NAO transferir, apenas avisar cliente');
         
-        const quotaMessage = "Estou com alta demanda no momento. Por favor, tente novamente em alguns instantes. ðŸ™";
+        const quotaMessage = "Estou com alta demanda no momento. Por favor, tente novamente em alguns instantes.";
+        
+        // ANTI-LOOP: verificar se a ultima mensagem ja e aviso de quota
+        const { data: lastAiMsg } = await supabaseClient
+          .from('messages')
+          .select('content')
+          .eq('conversation_id', conversationId)
+          .eq('is_ai_generated', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (lastAiMsg?.content?.includes('alta demanda')) {
+          console.log('[ai-autopilot-chat] Anti-loop: ultima mensagem ja e aviso de quota, pulando insert e envio');
+          return new Response(JSON.stringify({ 
+            status: 'quota_error',
+            message: quotaMessage,
+            handoff_triggered: false,
+            retry_suggested: true,
+            duplicate_skipped: true
+          }), {
+            status: 503,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
         
         // Salvar mensagem de aviso
         await supabaseClient.from('messages').insert({
@@ -9725,10 +9749,10 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
                   is_bot_message: true
                 }
               });
-              console.log('[ai-autopilot-chat] âœ… Quota warning sent via Meta WhatsApp');
+              console.log('[ai-autopilot-chat] Quota warning sent via Meta WhatsApp');
             }
           } catch (waErr) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao enviar aviso de quota via WhatsApp:', waErr);
+            console.error('[ai-autopilot-chat] Erro ao enviar aviso de quota via WhatsApp:', waErr);
           }
         }
         
@@ -9745,7 +9769,7 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
         await supabaseClient.functions.invoke('send-admin-alert', {
           body: {
             type: 'ai_quota_warning',
-            message: `âš ï¸ IA sem cota/saldo. Verifique o faturamento da API.`,
+            message: 'IA sem cota/saldo. Verifique o faturamento da API.',
             error: errorMessage,
             conversationId
           }
