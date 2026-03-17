@@ -8097,74 +8097,7 @@ Via: Atendimento Automatizado (IA)`;
             }
           }
         }
-        // TOOL: check_order_status - Consultar pedidos do cliente
-        else if (toolCall.function.name === 'check_order_status') {
-          try {
-            const args = safeParseToolArgs(toolCall.function.arguments);
-            const customerEmail = args.customer_email?.toLowerCase().trim();
-            console.log('[ai-autopilot-chat] ðŸ“¦ Consultando pedidos para:', customerEmail);
-
-            // Buscar contato pelo email
-            const { data: customerContact, error: contactError } = await supabaseClient
-              .from('contacts')
-              .select('id, first_name, last_name, email, status')
-              .eq('email', customerEmail)
-              .maybeSingle();
-
-            if (contactError || !customerContact) {
-              assistantMessage = `Não encontrei nenhum cliente cadastrado com o email ${customerEmail}. Poderia verificar se é o email correto de compra?`;
-              continue;
-            }
-
-            // Buscar deals desse contato
-            const { data: deals, error: dealsError } = await supabaseClient
-              .from('deals')
-              .select(`
-                id, title, value, currency, status, 
-                created_at, closed_at,
-                products (name)
-              `)
-              .eq('contact_id', customerContact.id)
-              .order('created_at', { ascending: false })
-              .limit(5);
-
-            if (!deals || deals.length === 0) {
-              assistantMessage = `Olá ${customerContact.first_name}! Encontrei seu cadastro, mas não há pedidos registrados para este email. Posso te ajudar com outra coisa?`;
-              continue;
-            }
-
-            // Formatar resposta
-            const dealsFormatted = deals.map(d => {
-              const productData = d.products as any;
-              const product = Array.isArray(productData) 
-                ? productData[0]?.name 
-                : productData?.name || 'Produto nÃ£o especificado';
-              
-              const statusLabels: Record<string, string> = {
-                'open': 'Em andamento',
-                'won': 'Concluído',
-                'lost': 'Cancelado'
-              };
-              const statusLabel = statusLabels[d.status] || d.status;
-              
-              const value = d.value ? `R$ ${d.value.toFixed(2)}` : 'R$ 0.00';
-              
-              return `â€¢ **${product}** - ${statusLabel}\n  Valor: ${value}`;
-            }).join('\n\n');
-
-            assistantMessage = `Olá ${customerContact.first_name}! 
-
-Encontrei os seguintes pedidos vinculados ao seu email:
-
-${dealsFormatted}
-
-Sobre qual pedido você gostaria de saber mais?`;
-
-          } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao consultar pedidos:', error);
-            assistantMessage = 'Ocorreu um erro ao consultar seus pedidos. Poderia tentar novamente?';
-          }
-        }
+        // TOOL: check_order_status - REMOVIDO (legado que pedia email)
         // TOOL: check_tracking - Consultar rastreio via MySQL externo (suporta mÃºltiplos cÃ³digos)
         else if (toolCall.function.name === 'check_tracking') {
           console.log('[ai-autopilot-chat] ðŸšš CHECK_TRACKING INVOCADO');
@@ -8181,49 +8114,18 @@ Sobre qual pedido você gostaria de saber mais?`;
             } else if (args.tracking_code) {
               trackingCodes = [args.tracking_code.trim()];
             }
-            const customerEmail = args.customer_email?.toLowerCase().trim();
+            // customer_email REMOVIDO
             
-            console.log('[ai-autopilot-chat] ðŸ“¦ Consultando rastreio:', { trackingCodes, customerEmail, numCodes: trackingCodes.length });
+            console.log('[ai-autopilot-chat] Consultando rastreio:', { trackingCodes, numCodes: trackingCodes.length });
 
             let codesToQuery: string[] = [];
 
-            // Se tem cÃ³digos de rastreio diretos, usa eles
             if (trackingCodes.length > 0) {
               codesToQuery = trackingCodes;
             }
-            // Se tem email, busca deals do cliente com tracking_code
-            else if (customerEmail) {
-              // Buscar contato pelo email
-              const { data: customerContact, error: contactError } = await supabaseClient
-                .from('contacts')
-                .select('id, first_name')
-                .eq('email', customerEmail)
-                .maybeSingle();
-
-              if (contactError || !customerContact) {
-                assistantMessage = `Não encontrei nenhum cliente cadastrado com o email ${customerEmail}. Poderia verificar se é o email correto?`;
-                continue;
-              }
-
-              // Buscar deals com tracking_code
-              const { data: dealsWithTracking, error: dealsError } = await supabaseClient
-                .from('deals')
-                .select('tracking_code, title')
-                .eq('contact_id', customerContact.id)
-                .not('tracking_code', 'is', null)
-                .order('created_at', { ascending: false })
-                .limit(10);
-
-              if (!dealsWithTracking || dealsWithTracking.length === 0) {
-                assistantMessage = `Olá ${customerContact.first_name}! Encontrei seu cadastro, mas não há pedidos com código de rastreio registrado. Você tem o código de rastreio em mãos para eu consultar?`;
-                continue;
-              }
-
-              codesToQuery = dealsWithTracking.map(d => d.tracking_code).filter(Boolean) as string[];
-            }
 
             if (codesToQuery.length === 0) {
-              assistantMessage = 'Para consultar o rastreio, preciso do código de rastreio ou do email cadastrado na compra. Poderia me informar?';
+              assistantMessage = 'Para consultar o rastreio, preciso do número do pedido ou código de rastreio. Poderia me informar?';
               continue;
             }
 
@@ -9328,7 +9230,21 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
       }
     }
 
-    // 7. Salvar resposta da IA como mensagem (PRIMEIRO salvar para visibilidade interna)
+    // 🛡️ PÓS-FILTRO DE SEGURANÇA: Bloquear pedido de email/CPF/telefone em contexto de pedidos/rastreio
+    const ORDER_TRACKING_KEYWORDS = /pedido|rastreio|rastreamento|envio|enviado|entrega|tracking|status.*pedido|codigo.*rastreio/i;
+    const FORBIDDEN_REQUEST_PATTERN = /(?:informe|envie|me\s+(?:passe|diga|mande|informe|forne[cç]a)|qual\s+(?:[eé]\s+)?(?:o\s+)?seu|preciso\s+d[eo]\s+seu|poderia\s+(?:me\s+)?(?:informar|enviar|passar))[\s\S]{0,40}(?:e-?mail|cpf|telefone|whatsapp|n[uú]mero\s+de\s+telefone)/i;
+    
+    if (assistantMessage && ORDER_TRACKING_KEYWORDS.test(customerMessage || '') && FORBIDDEN_REQUEST_PATTERN.test(assistantMessage)) {
+      console.warn('[ai-autopilot-chat] 🛡️ PÓS-FILTRO: IA tentou pedir email/CPF em contexto de pedidos - BLOQUEADO');
+      assistantMessage = 'Para consultar o status do seu pedido, preciso do número do pedido ou código de rastreio. Poderia me informar? 📦';
+    }
+    // Também verificar se a resposta da IA menciona email como forma de busca de pedidos (mesmo sem intent explícito)
+    const EMAIL_AS_SEARCH = /(?:me\s+(?:informe|passe|envie|diga)|qual\s+(?:[eé]\s+)?(?:o\s+)?seu|preciso\s+d[eo]\s+seu)[\s\S]{0,30}(?:e-?mail)/i;
+    if (assistantMessage && EMAIL_AS_SEARCH.test(assistantMessage) && ORDER_TRACKING_KEYWORDS.test(assistantMessage)) {
+      console.warn('[ai-autopilot-chat] 🛡️ PÓS-FILTRO: Resposta menciona email+pedido - BLOQUEADO');
+      assistantMessage = 'Para consultar o status do seu pedido, preciso do número do pedido ou código de rastreio. Poderia me informar? 📦';
+    }
+
     const { data: savedMessage, error: saveError } = await supabaseClient
       .from('messages')
       .insert({
