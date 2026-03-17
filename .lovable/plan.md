@@ -1,25 +1,32 @@
 
-# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-## O que mudou
+# Configurar emails de autenticação (recuperação de senha) com domínio próprio
 
-### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
-- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
-- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
-- Ao trocar departamento, responsável é limpo automaticamente
-- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
+## Problema atual
+Os emails de recuperação de senha estão sendo enviados pelo domínio padrão (`noreply@mail.app.supabase.io`), que tem baixa entregabilidade e é frequentemente filtrado pelo Gmail.
 
-### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
-- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
-  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
-  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
-  - Dados salvos em `end_action` e `action_data` no node data
-- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
+## Solução
 
-### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
-- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
-- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
+### Passo 1: Configurar domínio de email
+O projeto ainda não tem um domínio de email configurado na infraestrutura de emails do Lovable Cloud. Precisamos configurar o domínio (ex: `mail.3cliques.net` ou outro) através do setup de email.
 
-### 4. Continuidade do Fluxo ✅
-- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
-- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
+### Passo 2: Scaffold dos templates de autenticação
+Criar os templates customizados para:
+- **Recovery** (recuperação de senha) -- o caso principal
+- Signup, magic-link, invite, email-change, reauthentication
+
+### Passo 3: Aplicar branding do Parabellum
+- Cores do projeto (primary, foreground, etc. do CSS)
+- Logo existente em `/logo-parabellum-light.png`
+- Textos em português, tom compatível com o app ("Bem-vindo ao Q.G")
+
+### Passo 4: Deploy do `auth-email-hook`
+Deploy da Edge Function que intercepta eventos de autenticação e renderiza os templates customizados.
+
+### Resultado
+Emails de recuperação de senha passarão a ser enviados pelo domínio próprio verificado, com branding do Parabellum, garantindo entregabilidade no Gmail e outros provedores.
+
+---
+
+**Primeiro passo**: precisamos configurar o domínio de email. Vou abrir o setup para você configurar.
+
