@@ -26,6 +26,18 @@ export default function SetupPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Detectar recovery token na URL (type=recovery no hash)
+  const isRecoveryFlow = (() => {
+    try {
+      const hash = window.location.hash;
+      if (!hash) return false;
+      const params = new URLSearchParams(hash.substring(1));
+      return params.get("type") === "recovery";
+    } catch {
+      return false;
+    }
+  })();
+
   // Verificar sessão diretamente no componente para evitar race conditions
   useEffect(() => {
     let mounted = true;
@@ -54,6 +66,11 @@ export default function SetupPassword() {
       if (!mounted) return;
       setSession(newSession);
       setUser(newSession?.user ?? null);
+      
+      // Se veio de recovery flow e agora tem sessão, pular direto para set_password
+      if (event === "PASSWORD_RECOVERY" && newSession?.user) {
+        setStep("set_password");
+      }
     });
 
     return () => {
@@ -61,6 +78,13 @@ export default function SetupPassword() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Se é recovery flow e já tem sessão, pular OTP direto para set_password
+  useEffect(() => {
+    if (isRecoveryFlow && user && step === "send_code") {
+      setStep("set_password");
+    }
+  }, [isRecoveryFlow, user, step]);
 
   // Mostrar loading enquanto verifica autenticação
   if (authLoading) {
