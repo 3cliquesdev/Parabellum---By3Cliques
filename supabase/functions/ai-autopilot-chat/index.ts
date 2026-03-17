@@ -212,7 +212,7 @@ async function getMessageTemplate(
       return null;
     }
 
-    // Substituir variÃ¡veis {{var}} pelos valores
+    // Substituir variáveis {{var}} pelos valores
     let content = data.content;
     Object.entries(variables).forEach(([varKey, value]) => {
       content = content.replace(new RegExp(`\\{\\{${varKey}\\}\\}`, 'g'), value || '');
