@@ -9230,7 +9230,21 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
       }
     }
 
-    // 7. Salvar resposta da IA como mensagem (PRIMEIRO salvar para visibilidade interna)
+    // 🛡️ PÓS-FILTRO DE SEGURANÇA: Bloquear pedido de email/CPF/telefone em contexto de pedidos/rastreio
+    const ORDER_TRACKING_KEYWORDS = /pedido|rastreio|rastreamento|envio|enviado|entrega|tracking|status.*pedido|codigo.*rastreio/i;
+    const FORBIDDEN_REQUEST_PATTERN = /(?:informe|envie|me\s+(?:passe|diga|mande|informe|forne[cç]a)|qual\s+(?:[eé]\s+)?(?:o\s+)?seu|preciso\s+d[eo]\s+seu|poderia\s+(?:me\s+)?(?:informar|enviar|passar))[\s\S]{0,40}(?:e-?mail|cpf|telefone|whatsapp|n[uú]mero\s+de\s+telefone)/i;
+    
+    if (assistantMessage && ORDER_TRACKING_KEYWORDS.test(customerMessage || '') && FORBIDDEN_REQUEST_PATTERN.test(assistantMessage)) {
+      console.warn('[ai-autopilot-chat] 🛡️ PÓS-FILTRO: IA tentou pedir email/CPF em contexto de pedidos - BLOQUEADO');
+      assistantMessage = 'Para consultar o status do seu pedido, preciso do número do pedido ou código de rastreio. Poderia me informar? 📦';
+    }
+    // Também verificar se a resposta da IA menciona email como forma de busca de pedidos (mesmo sem intent explícito)
+    const EMAIL_AS_SEARCH = /(?:me\s+(?:informe|passe|envie|diga)|qual\s+(?:[eé]\s+)?(?:o\s+)?seu|preciso\s+d[eo]\s+seu)[\s\S]{0,30}(?:e-?mail)/i;
+    if (assistantMessage && EMAIL_AS_SEARCH.test(assistantMessage) && ORDER_TRACKING_KEYWORDS.test(assistantMessage)) {
+      console.warn('[ai-autopilot-chat] 🛡️ PÓS-FILTRO: Resposta menciona email+pedido - BLOQUEADO');
+      assistantMessage = 'Para consultar o status do seu pedido, preciso do número do pedido ou código de rastreio. Poderia me informar? 📦';
+    }
+
     const { data: savedMessage, error: saveError } = await supabaseClient
       .from('messages')
       .insert({
