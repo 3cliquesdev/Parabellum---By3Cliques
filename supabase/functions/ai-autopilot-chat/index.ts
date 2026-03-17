@@ -265,7 +265,7 @@ function maskPhone(phone: string | null | undefined): string {
 // Enforce pós-processamento para garantir verbosidade controlada
 // ============================================================
 function limitSentences(text: string, maxSentences: number): string {
-  // Separar por pontuaÃ§Ã£o final (. ! ?)
+  // Separar por pontuação final (. ! ?)
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
   
   if (sentences.length <= maxSentences) {
