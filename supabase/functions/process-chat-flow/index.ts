@@ -325,6 +325,7 @@ async function createTicketFromFlow(
     metadata,
   };
   if (opts.departmentId) insertPayload.department_id = opts.departmentId;
+  if (opts.assignedTo) insertPayload.assigned_to = opts.assignedTo;
   if (opts.internalNote) insertPayload.internal_note = opts.internalNote;
 
   const { data: ticket, error } = await supabaseClient
