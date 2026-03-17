@@ -1222,7 +1222,7 @@ interface FlowContext {
 function generateRestrictedPrompt(flowContext: FlowContext, contactName: string, contactStatus: string, enrichment?: { orgName?: string | null; consultantName?: string | null; sellerName?: string | null; tags?: string[] }): string {
   const maxSentences = flowContext.maxSentences ?? 3;
   const objective = flowContext.objective || 'Responder a dÃºvida do cliente';
-  const forbidQuestions = flowContext.forbidQuestions ?? true;
+  const forbidQuestions = false; // 🤖 OVERRIDDEN PARA MODO JARVIS
   const forbidOptions = flowContext.forbidOptions ?? true;
   const forbidFinancial = flowContext.forbidFinancial ?? false;
   
