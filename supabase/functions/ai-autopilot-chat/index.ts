@@ -1672,10 +1672,11 @@ serve(async (req) => {
     }
 
     // ðŸ†• TRAVA CANCELAMENTO â€” InterceptaÃ§Ã£o na ENTRADA (antes de chamar LLM)
+    // 🆕 TRAVA CANCELAMENTO — Interceptação na ENTRADA (antes de chamar LLM)
     if (flowForbidCancellation && customerMessage && customerMessage.trim().length > 0 && isCancellationAction && !isFinancialInfo) {
-      console.warn('[ai-autopilot-chat] ðŸš« TRAVA CANCELAMENTO (ENTRADA): IntenÃ§Ã£o de cancelamento detectada, bloqueando IA:', customerMessage.substring(0, 80));
+      console.warn('[ai-autopilot-chat] 🚫 TRAVA CANCELAMENTO (ENTRADA): Intenção de cancelamento detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
-      const cancelMsg = 'Entendi que você deseja cancelar. Vou te direcionar para o processo de cancelamento.';Ãª deseja cancelar. Vou te direcionar para o processo de cancelamento.';
+      const cancelMsg = 'Entendi que você deseja cancelar. Vou te direcionar para o processo de cancelamento.';
       const hasFlowContext = !!(flow_context);
 
       try {
