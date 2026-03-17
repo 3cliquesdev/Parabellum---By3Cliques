@@ -63,7 +63,7 @@ export function useSyncPermissions() {
       const allKeys = extractAllPermissionKeys();
 
       // 4. Calcular o que falta inserir
-      const toInsert: Array<{
+      const toInsert: Array<Record<string, any>> = [];
         role: string;
         permission_key: string;
         permission_label: string;
