@@ -923,6 +923,24 @@ serve(async (req) => {
         .maybeSingle();
 
       if (activeFlowCheck) {
+        // 🆕 DEFESA EM PROFUNDIDADE: Se tem agente atribuído E está em copilot, o humano tem prioridade
+        if (convState?.assigned_to && currentAiMode === 'copilot') {
+          console.log(`[process-chat-flow] 🛡️ HUMANO > FLUXO: agente ${convState.assigned_to} atribuído + copilot → cancelando flow state residual`);
+          await supabaseClient.from('chat_flow_states')
+            .update({ status: 'transferred', completed_at: new Date().toISOString() })
+            .eq('id', activeFlowCheck.id);
+          
+          return new Response(JSON.stringify({
+            useAI: false,
+            aiNodeActive: false,
+            skipAutoResponse: true,
+            reason: 'agent_has_priority_over_stale_flow',
+            message: 'Agente humano atribuído - fluxo residual cancelado'
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
         console.log(`[process-chat-flow] 🔓 SOBERANIA DO FLUXO: ai_mode=${currentAiMode} mas fluxo ativo (${activeFlowCheck.status}) → processando`);
         // Restaurar ai_mode para autopilot (foi corrompido pelo handoff dentro do fluxo)
         await supabaseClient.from('conversations')
