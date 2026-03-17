@@ -917,7 +917,13 @@ async function processEscalations(supabase: any) {
         continue; // Próximo job
       } catch (ahErr) {
         console.error(`[processEscalations] ❌ Erro ao fechar conversa escalada por after-hours:`, ahErr);
-        // Continuar com o alerta normal
+        // Marcar job como completed para evitar loop infinito — conversa fica aberta para intervenção manual
+        await supabase.from('conversation_dispatch_jobs').update({
+          status: 'completed',
+          last_error: 'after_hours_close_failed',
+          updated_at: new Date().toISOString(),
+        }).eq('id', job.id).catch(() => {});
+        continue;
       }
     }
 

@@ -1,4 +1,5 @@
 ﻿import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+// BUILD: 2026-03-17T03:00:00Z — cache-bust redeploy
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/business-hours.ts";
 
@@ -740,6 +741,9 @@ const FALLBACK_PHRASES = [
   'redirecionar para',
   'encaminhar vocÃª',
   'direcionar vocÃª',
+  'pode repetir',
+  'nao consegui processar',
+  'não consegui processar',
 ];
 
 // ðŸ” BARREIRA FINANCEIRA - Palavras que identificam contexto FINANCEIRO (sem OTP obrigatÃ³rio)
