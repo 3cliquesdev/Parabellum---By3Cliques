@@ -2233,7 +2233,7 @@ serve(async (req) => {
               await supabaseClient.from('conversations')
                 .update({ ai_mode: 'waiting_human', customer_metadata: cleanMeta })
                 .eq('id', conversationId);
-              const killMsg = 'No momento, o encerramento automÃ¡tico estÃ¡ indisponÃ­vel. Um atendente humano vai finalizar seu atendimento. Aguarde um momento!';
+              const killMsg = 'No momento, o encerramento automatico esta indisponivel. Um atendente humano vai finalizar seu atendimento. Aguarde um momento!';
               await supabaseClient.from('messages').insert({
                 conversation_id: conversationId, content: killMsg,
                 sender_type: 'user', is_ai_generated: true, is_bot_message: true
