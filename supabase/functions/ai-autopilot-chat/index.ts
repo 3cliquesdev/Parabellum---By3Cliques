@@ -6655,7 +6655,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 - Responda perguntas INFORMATIVAS sobre produtos/serviços usando a base de conhecimento.
 ${ambiguousCommercialDetected ? `
 ⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo comercial sem deixar claro se quer informação ou realizar uma compra/assinatura.
-Você DEVE perguntar de forma natural e empática: "Você gostaria de saber mais informações sobre [tema] ou deseja falar com nosso time comercial?"
+Você DEVE perguntar de forma leve e amigável: "Legal! Você tá querendo contratar algo ou só quer tirar uma dúvida sobre os planos? Me fala! 😊"
 Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
 Se o cliente confirmar que quer COMPRAR/ASSINAR/VER PREÇOS → responda com [[FLOW_EXIT:comercial]]
 Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
