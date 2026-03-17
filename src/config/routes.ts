@@ -100,7 +100,7 @@ export const universalMenuGroups: MenuGroup[] = [
     items: [
       { title: "Automações", href: "/automations", icon: Zap, permission: "automations.view" },
       { title: "AI Studio", href: "/ai-studio/personas", icon: Brain, permission: "ai.manage_personas" },
-      { title: "AI Messages", href: "/settings/ai-messages", icon: MessageCircle, permission: "ai.manage_personas" },
+      { title: "AI Messages", href: "/settings/ai-messages", icon: MessageCircle, permission: "ai.manage_messages" },
       { title: "AI Trainer", href: "/settings/ai-trainer", icon: Brain, permission: "ai.train" },
       
       { title: "Templates de Email", href: "/email-templates", icon: Mail, permission: "email.view_templates" },
