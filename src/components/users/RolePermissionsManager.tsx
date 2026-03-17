@@ -4,9 +4,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Shield, ShieldCheck, ShieldX, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, Shield, ShieldCheck, ShieldX, Search, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
 import { useAllRolePermissions, useUpdatePermission, RolePermission } from "@/hooks/useRolePermissions";
+import { useSyncPermissions } from "@/hooks/useSyncPermissions";
 import { toast } from "sonner";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
