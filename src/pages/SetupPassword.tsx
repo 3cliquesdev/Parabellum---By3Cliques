@@ -26,6 +26,18 @@ export default function SetupPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Detectar recovery token na URL (type=recovery no hash)
+  const isRecoveryFlow = (() => {
+    try {
+      const hash = window.location.hash;
+      if (!hash) return false;
+      const params = new URLSearchParams(hash.substring(1));
+      return params.get("type") === "recovery";
+    } catch {
+      return false;
+    }
+  })();
+
   // Verificar sessão diretamente no componente para evitar race conditions
   useEffect(() => {
     let mounted = true;
@@ -54,6 +66,11 @@ export default function SetupPassword() {
       if (!mounted) return;
       setSession(newSession);
       setUser(newSession?.user ?? null);
+      
+      // Se veio de recovery flow e agora tem sessão, pular direto para set_password
+      if (event === "PASSWORD_RECOVERY" && newSession?.user) {
+        setStep("set_password");
+      }
     });
 
     return () => {
@@ -61,6 +78,13 @@ export default function SetupPassword() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Se é recovery flow e já tem sessão, pular OTP direto para set_password
+  useEffect(() => {
+    if (isRecoveryFlow && user && step === "send_code") {
+      setStep("set_password");
+    }
+  }, [isRecoveryFlow, user, step]);
 
   // Mostrar loading enquanto verifica autenticação
   if (authLoading) {
@@ -72,22 +96,30 @@ export default function SetupPassword() {
   }
 
   // Redirecionar para login se não autenticado
+  // Clientes vão para /portal, funcionários para /auth
   if (!user || !user.email) {
-    return <Navigate to="/auth" replace />;
+    const isClientContext = user?.user_metadata?.role === "client" || 
+      window.location.search.includes("portal") ||
+      document.referrer.includes("/portal") ||
+      document.referrer.includes("/client-portal");
+    return <Navigate to={isClientContext ? "/portal" : "/auth"} replace />;
   }
 
 const userEmail = user.email;
   const userName = user.user_metadata?.full_name || "Usuário";
+
+  const isClient = user?.user_metadata?.role === "client";
+  const loginRoute = isClient ? "/portal" : "/auth";
 
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut({ scope: "local" });
       setUser(null);
       setSession(null);
-      navigate("/auth");
+      navigate(loginRoute);
     } catch (error) {
       console.error("Logout error:", error);
-      navigate("/auth");
+      navigate(loginRoute);
     }
   };
 
@@ -195,11 +227,14 @@ const userEmail = user.email;
 
       if (metadataError) throw metadataError;
 
-      toast.success("Conta ativada com segurança!");
+      toast.success("Senha definida com sucesso!");
       
-      // Pequeno delay para garantir que a atualização foi processada
+      // Redirecionar baseado no role do usuário
+      const isClient = user?.user_metadata?.role === "client";
+      const destination = isClient ? "/client-portal" : "/";
+      
       setTimeout(() => {
-        navigate("/");
+        navigate(destination);
       }, 500);
     } catch (err: any) {
       console.error("Erro ao definir senha:", err);
@@ -219,11 +254,14 @@ const userEmail = user.email;
             alt="Seu Armazém Drop" 
             className="h-16 w-auto mx-auto mb-4 object-contain" 
           />
-          <CardTitle className="text-2xl">Primeiro Acesso - Validação de Segurança</CardTitle>
+          <CardTitle className="text-2xl">
+            {isRecoveryFlow ? "Redefinir Senha" : "Primeiro Acesso - Validação de Segurança"}
+          </CardTitle>
           <CardDescription>
-            {step === "send_code" && "Este é seu primeiro acesso. Para ativar sua conta, precisamos validar seu e-mail."}
+            {step === "send_code" && !isRecoveryFlow && "Este é seu primeiro acesso. Para ativar sua conta, precisamos validar seu e-mail."}
+            {step === "send_code" && isRecoveryFlow && "Aguarde, validando seu link..."}
             {step === "verify_otp" && "Digite o código enviado para seu email"}
-            {step === "set_password" && "Defina sua senha definitiva"}
+            {step === "set_password" && (isRecoveryFlow ? "Defina sua nova senha" : "Defina sua senha definitiva")}
           </CardDescription>
         </CardHeader>
 
