@@ -2195,12 +2195,12 @@ serve(async (req) => {
         if (closeMeta.awaiting_close_confirmation === true) {
           const msgLower = (customerMessage || '').toLowerCase().trim();
           
-          // PadrÃµes flexÃ­veis de SIM (keyword matching, nÃ£o exige match exato)
-          const yesKeywords = /\b(sim|s|yes|pode|pode fechar|pode encerrar|encerra|encerrar|fechou|claro|com certeza|isso|tÃ¡ bom|ta bom|foi sim)\b/i;
-          // PadrÃµes flexÃ­veis de NÃƒO
-          const noKeywords = /\b(n[aÃ£]o|nao|n|nÃ£o|nope|ainda n[aÃ£]o|tenho sim|outra|mais uma|espera|perai|pera|n[aÃ£]o foi|problema|d[uÃº]vida|continua|preciso)\b/i;
-          // PadrÃµes de ambiguidade (presenÃ§a anula confirmaÃ§Ã£o)
-          const ambiguityKeywords = /\b(mas|porÃ©m|porem|entretanto|sÃ³ que|so que|menos|exceto)\b/i;
+          // Padrões flexíveis de SIM (keyword matching, não exige match exato)
+          const yesKeywords = /\b(sim|s|yes|pode|pode fechar|pode encerrar|encerra|encerrar|fechou|claro|com certeza|isso|tá bom|ta bom|foi sim)\b/i;
+          // Padrões flexíveis de NÃO
+          const noKeywords = /\b(n[aã]o|nao|n|não|nope|ainda n[aã]o|tenho sim|outra|mais uma|espera|perai|pera|n[aã]o foi|problema|d[uú]vida|continua|preciso)\b/i;
+          // Padrões de ambiguidade (presença anula confirmação)
+          const ambiguityKeywords = /\b(mas|porém|porem|entretanto|só que|so que|menos|exceto)\b/i;
           
           const hasYes = yesKeywords.test(msgLower);
           const hasNo = noKeywords.test(msgLower);
