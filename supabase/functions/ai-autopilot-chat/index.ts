@@ -8297,7 +8297,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
             }
 
             const handoffReason = args.reason || 'solicitacao_cliente';
-            const handoffNote = args.internal_note || 'TransferÃªncia solicitada pela IA';
+            const handoffNote = args.internal_note || 'Transferência solicitada pela IA';
 
             // ðŸ†• BUSINESS HOURS CHECK: Comportamento diferente dentro/fora do horÃ¡rio
             const isWithinHours = businessHoursInfo?.within_hours ?? true; // Default: dentro do horÃ¡rio (seguro)
