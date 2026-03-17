@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAdminReturns, AdminReturn } from "@/hooks/useReturns";
 import { STATUS_CONFIG } from "@/hooks/useClientReturns";
 import { useReasonLabelsMap } from "@/hooks/useReturnReasons";
@@ -10,7 +10,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, RotateCcw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Plus, RotateCcw, Search } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AdminReturnDialog } from "./AdminReturnDialog";
@@ -19,10 +20,22 @@ import { PageContainer } from "@/components/ui/page-container";
 
 export default function ReturnsManagement() {
   const [statusFilter, setStatusFilter] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<AdminReturn | null>(null);
   const { data: returns, isLoading } = useAdminReturns(statusFilter);
   const reasonLabels = useReasonLabelsMap();
+
+  const filteredReturns = useMemo(() => {
+    if (!returns) return [];
+    if (!searchTerm.trim()) return returns;
+    const term = searchTerm.trim().toLowerCase();
+    return returns.filter((r) =>
+      (r.external_order_id && r.external_order_id.toLowerCase().includes(term)) ||
+      (r.tracking_code_original && r.tracking_code_original.toLowerCase().includes(term)) ||
+      (r.tracking_code_return && r.tracking_code_return.toLowerCase().includes(term))
+    );
+  }, [returns, searchTerm]);
 
   return (
     <PageContainer>
