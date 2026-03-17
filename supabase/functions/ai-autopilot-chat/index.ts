@@ -2250,7 +2250,7 @@ serve(async (req) => {
               await supabaseClient.from('conversations')
                 .update({ customer_metadata: cleanMeta })
                 .eq('id', conversationId);
-              const shadowMsg = 'Obrigado pelo contato! Se precisar de mais alguma coisa, estou por aqui. ðŸ˜Š';
+              const shadowMsg = 'Obrigado pelo contato! Se precisar de mais alguma coisa, estou por aqui. 😊';
               await supabaseClient.from('messages').insert({
                 conversation_id: conversationId, content: shadowMsg,
                 sender_type: 'user', is_ai_generated: true, is_bot_message: true
