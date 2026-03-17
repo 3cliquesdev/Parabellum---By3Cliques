@@ -2297,7 +2297,7 @@ serve(async (req) => {
             }
             
             // TUDO OK â†’ Chamar close-conversation
-            const closeMsg = 'Foi um prazer ajudar! Seu atendimento serÃ¡ encerrado agora. AtÃ© a prÃ³xima! ðŸ˜Š';
+            const closeMsg = 'Foi um prazer ajudar! Seu atendimento sera encerrado agora. Ate a proxima! 😊';
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId, content: closeMsg,
               sender_type: 'user', is_ai_generated: true, is_bot_message: true
