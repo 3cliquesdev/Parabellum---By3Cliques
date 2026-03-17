@@ -270,13 +270,17 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
   }, [nodes, edges, onFlowChange]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({
-      ...params,
-      type: 'buttonEdge',
-      style: { strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed },
-    }, eds)),
-    [setEdges]
+    (params: Connection) => {
+      const color = getEdgeColorFromSource(nodes, params.source || '', params.sourceHandle);
+      const strokeColor = color || 'hsl(var(--primary))';
+      setEdges((eds) => addEdge({
+        ...params,
+        type: 'buttonEdge',
+        style: { strokeWidth: 2, stroke: strokeColor },
+        markerEnd: { type: MarkerType.ArrowClosed, color: strokeColor },
+      }, eds));
+    },
+    [setEdges, nodes]
   );
 
   const defaultEdgeOptions = {
