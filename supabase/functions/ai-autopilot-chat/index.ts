@@ -208,7 +208,7 @@ async function getMessageTemplate(
       .maybeSingle();
 
     if (error || !data) {
-      console.log(`[getMessageTemplate] Template "${key}" nÃ£o encontrado ou inativo`);
+      console.log(`[getMessageTemplate] Template "${key}" não encontrado ou inativo`);
       return null;
     }
 
