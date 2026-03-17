@@ -1481,7 +1481,7 @@ serve(async (req) => {
             manualTrigger: true,
             personaId: contentNode.data?.persona_id || null,
             kbCategories: contentNode.data?.kb_categories || null,
-            kbProductFilter: mapProductToKbFilter(collectedData || {}),
+            kbProductFilter: mapProductToKbFilter({}),
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -4908,12 +4908,12 @@ serve(async (req) => {
               masterFlowId: masterFlow.id,
               personaId: aiNode?.data?.persona_id || null,
               kbCategories: aiNode?.data?.kb_categories || null,
-              kbProductFilter: mapProductToKbFilter(collectedData || {}),
+              kbProductFilter: mapProductToKbFilter({}),
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        
+
         // ============================================================
         // 🆕 VERSÃO PRODUÇÃO-SAFE: Travessia com 4 correções críticas
         // 1. Nunca retorna response: "" (usa null)
@@ -5298,7 +5298,7 @@ serve(async (req) => {
             const internalNote = (actionData.internal_note || node.data.internal_note)
               ? replaceVariables(actionData.internal_note || node.data.internal_note, masterVariablesContext) : null;
             await createTicketFromFlow(supabaseClient, {
-              conversationId, flowStateId: stateId, nodeId: node.id,
+              conversationId, flowStateId: stateId || '', nodeId: node.id,
               contactId: contactData?.id || null,
               subject, description,
               category: actionData.ticket_category || node.data.ticket_category || 'outro',

@@ -847,15 +847,15 @@ serve(async (req) => {
                         const { data: deptAgents } = await supabase
                           .from("agent_departments")
                           .select("profile_id, profiles!inner(availability_status)")
-                          .eq("department_id", conversation.department_id)
+                          .eq("department_id", (conversation as any).department_id)
                           .eq("profiles.availability_status", "online")
                           .limit(1);
-                        
+
                         hasOnlineAgents = (deptAgents && deptAgents.length > 0);
                       }
-                      
+
                       if (!hasOnlineAgents) {
-                        console.log("[meta-whatsapp-webhook] ⚠️ Nenhum agente online no departamento:", conversation.department_id);
+                        console.log("[meta-whatsapp-webhook] ⚠️ Nenhum agente online no departamento:", (conversation as any).department_id);
                         queueMessage = "⏳ Nosso time de atendimento não está disponível no momento.\n\nAssim que um especialista ficar online, você será atendido automaticamente. Obrigado pela paciência! 🙏";
                       }
                     }
@@ -921,7 +921,7 @@ serve(async (req) => {
                       conversation_id: conversation.id,
                       skip_db_save: false,
                       is_bot_message: true,
-                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                      metadata: (flowData as any).flowName ? { flow_id: (flowData as any).flowId, flow_name: (flowData as any).flowName } : undefined,
                     },
                   });
                   
@@ -1286,7 +1286,7 @@ serve(async (req) => {
                                       conversation_id: conversation.id,
                                       skip_db_save: false,
                                       is_bot_message: true,
-                                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                                      metadata: (flowData as any).flowName ? { flow_id: (flowData as any).flowId, flow_name: (flowData as any).flowName } : undefined,
                                     },
                                   });
                                   console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (financial exit)");
@@ -1492,7 +1492,7 @@ serve(async (req) => {
                                       conversation_id: conversation.id,
                                       skip_db_save: false,
                                       is_bot_message: true,
-                                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                                      metadata: (flowData as any).flowName ? { flow_id: (flowData as any).flowId, flow_name: (flowData as any).flowName } : undefined,
                                     },
                                   });
                                   console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (commercial exit)");
@@ -1667,7 +1667,7 @@ serve(async (req) => {
                                       conversation_id: conversation.id,
                                       skip_db_save: false,
                                       is_bot_message: true,
-                                      metadata: flowData.flowName ? { flow_id: flowData.flowId, flow_name: flowData.flowName } : undefined,
+                                      metadata: (flowData as any).flowName ? { flow_id: (flowData as any).flowId, flow_name: (flowData as any).flowName } : undefined,
                                     },
                                   });
                                   console.log("[meta-whatsapp-webhook] ✅ Flow next-node message sent (cancellation exit)");
@@ -2330,7 +2330,7 @@ serve(async (req) => {
                     .maybeSingle();
 
                   if (activeFlowState) {
-                    const flowDef = activeFlowState.chat_flows?.flow_definition as any;
+                    const flowDef = (activeFlowState.chat_flows as any)?.flow_definition as any;
                     const currentNodeId = activeFlowState.current_node_id;
                     const nodes = flowDef?.nodes || [];
                     const currentNode = nodes.find((n: any) => n.id === currentNodeId);

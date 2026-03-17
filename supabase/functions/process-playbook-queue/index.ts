@@ -373,7 +373,7 @@ Deno.serve(async (req) => {
           // Update execution with error
           const { data: failedExecution } = await supabaseAdmin
             .from('playbook_executions')
-            .select('errors, metadata')
+            .select('errors, metadata, execution_context')
             .eq('id', item.execution_id)
             .single();
 
