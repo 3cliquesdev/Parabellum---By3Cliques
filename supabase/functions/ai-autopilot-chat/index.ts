@@ -8547,7 +8547,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
                 model: ragConfig.model,
                 output_json: { category: args.category, summary: args.summary, blocked: true, reason: 'kill_switch' }
               });
-              assistantMessage = 'ClassificaÃ§Ã£o nÃ£o executada (sistema em manutenÃ§Ã£o).';
+              assistantMessage = 'Classificação não executada (sistema em manutenção).';
               break;
             }
 
