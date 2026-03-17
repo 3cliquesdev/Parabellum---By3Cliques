@@ -142,7 +142,10 @@ export function CommercialDetailedTable({
                       <TableHead>Tempo Espera</TableHead>
                       <TableHead>Duração</TableHead>
                       <TableHead>CSAT</TableHead>
-                      <TableHead>Tag</TableHead>
+                      <TableHead>Tags</TableHead>
+                      <TableHead>Handoff</TableHead>
+                      <TableHead>TFR Humano</TableHead>
+                      <TableHead>Resolução Humano</TableHead>
                       <TableHead>Modo IA</TableHead>
                       <TableHead>Criado em</TableHead>
                       <TableHead className="w-[60px]"></TableHead>
