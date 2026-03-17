@@ -158,7 +158,7 @@ interface AskOption {
   id?: string;
 }
 
-function matchAskOption(
+function matchAskOptionSingle(
   userInput: string,
   options: AskOption[]
 ): AskOption | null {
@@ -178,7 +178,6 @@ function matchAskOption(
   if (exactMatch) return exactMatch;
 
   // 3️⃣ Resposta começa com o label da opção
-  // Ex: "Não sou cliente" → match "Não"
   const startsWithMatch = options.find(opt => {
     const label = opt.label.toLowerCase();
     return normalized.startsWith(label + ' ') || normalized.startsWith(label + ',') || normalized.startsWith(label + '.');
@@ -186,17 +185,15 @@ function matchAskOption(
   if (startsWithMatch) return startsWithMatch;
 
   // 4️⃣ Label contido na resposta como palavra (somente se unambíguo)
-  // Ex: "eu quero sim" → match "Sim" (mas só se 1 opção bate)
   const containsMatches = options.filter(opt => {
     const label = opt.label.toLowerCase();
-    if (label.length < 2) return false; // Evita match de labels muito curtos
+    if (label.length < 2) return false;
     const regex = new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
     return regex.test(normalized);
   });
   if (containsMatches.length === 1) return containsMatches[0];
 
   // 5️⃣ Input contido no label como palavra (reverso do Layer 4)
-  // Ex: "Nacional" → match "Drop Nacional"
   if (normalized.length >= 3) {
     const reverseMatches = options.filter(opt => {
       const label = opt.label.toLowerCase();
@@ -207,26 +204,54 @@ function matchAskOption(
     if (reverseMatches.length === 1) return reverseMatches[0];
   }
 
-  // 6️⃣ Keyword partial match fallback (User typed a strong substring present in the label)
-  // Ex: Option is "Financeiro e saque", User types "saque" -> match
+  // 6️⃣ Keyword partial match fallback
   if (normalized.length >= 3) {
     const keywordMatches = options.filter(opt => {
       const label = opt.label.toLowerCase();
       const val = opt.value ? opt.value.toLowerCase() : '';
       return label.includes(normalized) || val.includes(normalized);
     });
-    // Aceita apenas se houver match em exatamente 1 opção
     if (keywordMatches.length === 1) return keywordMatches[0];
   }
 
-  // 7️⃣ Strip emojis na checagem final caso o usuário tenha copiado e colado sem emoji
+  // 7️⃣ Strip emojis (Unicode-aware) na checagem final
   const labelWithoutEmojisMatches = options.filter(opt => {
-    const textOnlyLabel = opt.label.replace(/[\u1000-\uFFFF]/g, '').trim().toLowerCase();
+    const textOnlyLabel = opt.label
+      .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
+      .trim().toLowerCase();
     if (textOnlyLabel.length < 3) return false;
     return textOnlyLabel === normalized || textOnlyLabel.includes(normalized);
   });
   if (labelWithoutEmojisMatches.length === 1) return labelWithoutEmojisMatches[0];
   return null;
+}
+
+/**
+ * matchAskOption — wrapper com Layer 0 para multi-line (buffer concatenation).
+ * Quando o buffer junta várias mensagens com \n, tenta cada linha individualmente
+ * (da última para a primeira) antes de tentar o input completo.
+ */
+function matchAskOption(
+  userInput: string,
+  options: AskOption[]
+): AskOption | null {
+  const trimmed = userInput.trim();
+
+  // Layer 0: Multi-line split (buffer concatenation fix)
+  const lines = trimmed.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length > 1) {
+    // Tenta da última linha para a primeira (última intenção do usuário)
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const match = matchAskOptionSingle(lines[i], options);
+      if (match) {
+        console.log(`[matchAskOption] ✅ Layer 0 multi-line match on line[${i}]: "${lines[i]}" → "${match.label}"`);
+        return match;
+      }
+    }
+  }
+
+  // Fallback: tenta o input original completo
+  return matchAskOptionSingle(trimmed, options);
 }
 
 // Validadores
@@ -3069,6 +3094,24 @@ serve(async (req) => {
           console.log('[process-chat-flow] invalidOption conv=' + conversationId + ' flow=' + activeState.flow_id + ' node=' + currentNode.id + ' msg="' + userMessage + '"');
           console.log('[process-chat-flow] ❌ Invalid option response:', userMessage, '| Options:', options.map((o: any) => o.label).join(', '));
           
+          // 🆕 Dedup: não reenviar "Desculpe" se já enviou nos últimos 30s
+          const { data: recentRetry } = await supabaseClient
+            .from('messages')
+            .select('id')
+            .eq('conversation_id', conversationId)
+            .ilike('content', 'Desculpe, não entendi%')
+            .gte('created_at', new Date(Date.now() - 30000).toISOString())
+            .limit(1)
+            .maybeSingle();
+
+          if (recentRetry) {
+            console.log('[process-chat-flow] 🔇 Dedup: "Desculpe" já enviado recentemente, silenciando');
+            return new Response(
+              JSON.stringify({ useAI: false, skipAutoResponse: true, reason: 'dedup_retry_ask_options' }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
           // Formatar opções para reenvio
           const formattedOptions = options.map((opt: any) => ({
             label: opt.label,
@@ -4952,6 +4995,24 @@ serve(async (req) => {
         console.log('[process-chat-flow] ⚠️ Estado ativo encontrado - NÃO iniciar Master Flow');
         console.log('[process-chat-flow] Existing state:', existingActiveFlowState.id, 'flow:', existingActiveFlowState.flow_id, 'node:', existingActiveFlowState.current_node_id);
         
+        // 🆕 Dedup: não reenviar "Desculpe" se já enviou nos últimos 30s
+        const { data: recentRetryFallback } = await supabaseClient
+          .from('messages')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .ilike('content', 'Desculpe, não entendi%')
+          .gte('created_at', new Date(Date.now() - 30000).toISOString())
+          .limit(1)
+          .maybeSingle();
+
+        if (recentRetryFallback) {
+          console.log('[process-chat-flow] 🔇 Dedup fallback: "Desculpe" já enviado recentemente, silenciando');
+          return new Response(
+            JSON.stringify({ useAI: false, skipAutoResponse: true, reason: 'dedup_retry_fallback' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         // Mensagem genérica de retry para evitar perda de estado
         return new Response(
           JSON.stringify({
