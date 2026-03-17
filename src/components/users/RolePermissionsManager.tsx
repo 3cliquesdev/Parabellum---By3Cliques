@@ -163,13 +163,26 @@ export function RolePermissionsManager() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <Shield className="h-5 w-5 text-primary" />
-          <CardTitle>Permissões por Cargo</CardTitle>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <CardTitle>Permissões por Cargo</CardTitle>
+            </div>
+            <CardDescription className="mt-1.5">
+              Configure as permissões de acesso para cada cargo do sistema ({totalCount} permissões disponíveis)
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => syncPermissions()}
+            disabled={syncing}
+          >
+            {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Sincronizar Permissões
+          </Button>
         </div>
-        <CardDescription>
-          Configure as permissões de acesso para cada cargo do sistema ({totalCount} permissões disponíveis)
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs value={activeRole} onValueChange={setActiveRole}>
