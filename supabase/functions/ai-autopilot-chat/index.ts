@@ -1497,6 +1497,21 @@ serve(async (req) => {
       });
     }
 
+    // 🔧 MEDIA HANDLER: Quando cliente envia áudio/imagem, pedir descrição por texto
+    const MEDIA_MESSAGE_PATTERNS = /^(?:🎵\s*(?:Áudio|Audio)|📷\s*(?:Imagem|Foto|Image)|🎙️\s*(?:Áudio|Audio)|📹\s*(?:Vídeo|Video))[\s.!]*$/i;
+    const isMediaMessage = MEDIA_MESSAGE_PATTERNS.test(customerMessage.trim());
+    if (isMediaMessage) {
+      console.log('[ai-autopilot-chat] 🔧 MEDIA_HANDLER: Mensagem de mídia detectada, pedindo texto');
+      return new Response(JSON.stringify({
+        response: 'Recebi sua mensagem! 😊 Infelizmente ainda não consigo processar áudios ou imagens. Poderia descrever por texto o que você precisa? Assim consigo te ajudar melhor! ✍️',
+        source: 'media_handler',
+        handoff: false
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // ðŸš¨ FASE 3: Declarar variÃ¡veis fora do try para acesso no catch
     let conversation: any = null;
     let responseChannel = 'web_chat';
