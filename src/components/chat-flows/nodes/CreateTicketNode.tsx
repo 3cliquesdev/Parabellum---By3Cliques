@@ -51,6 +51,11 @@ export const CreateTicketNode = memo(({ data, selected }: NodeProps<CreateTicket
             {data.department_name}
           </Badge>
         )}
+        {data.assigned_to_name && (
+          <Badge variant="outline" className="text-[10px] border-emerald-500/50 text-emerald-600">
+            👤 {data.assigned_to_name}
+          </Badge>
+        )}
       </div>
     </ChatFlowNodeWrapper>
   );
