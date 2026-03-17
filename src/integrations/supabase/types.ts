@@ -1843,6 +1843,36 @@ export type Database = {
           },
         ]
       }
+      client_error_logs: {
+        Row: {
+          created_at: string
+          error_type: Database["public"]["Enums"]["client_error_type"]
+          id: string
+          message: string
+          metadata: Json | null
+          stack: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_type: Database["public"]["Enums"]["client_error_type"]
+          id?: string
+          message: string
+          metadata?: Json | null
+          stack?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_type?: Database["public"]["Enums"]["client_error_type"]
+          id?: string
+          message?: string
+          metadata?: Json | null
+          stack?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       contact_tags: {
         Row: {
           contact_id: string
@@ -3446,6 +3476,39 @@ export type Database = {
         }
         Relationships: []
       }
+      email_send_log: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          message_id: string | null
+          metadata: Json | null
+          recipient_email: string | null
+          status: string | null
+          template_name: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          recipient_email?: string | null
+          status?: string | null
+          template_name?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          recipient_email?: string | null
+          status?: string | null
+          template_name?: string | null
+        }
+        Relationships: []
+      }
       email_senders: {
         Row: {
           created_at: string | null
@@ -4034,6 +4097,36 @@ export type Database = {
           expires_at?: string
           id?: string
           verified?: boolean | null
+        }
+        Relationships: []
+      }
+      error_digests: {
+        Row: {
+          created_at: string
+          digest_date: string
+          edge_function_failures: Json | null
+          errors_by_type: Json | null
+          id: string
+          top_errors: Json | null
+          total_errors: number
+        }
+        Insert: {
+          created_at?: string
+          digest_date: string
+          edge_function_failures?: Json | null
+          errors_by_type?: Json | null
+          id?: string
+          top_errors?: Json | null
+          total_errors?: number
+        }
+        Update: {
+          created_at?: string
+          digest_date?: string
+          edge_function_failures?: Json | null
+          errors_by_type?: Json | null
+          id?: string
+          top_errors?: Json | null
+          total_errors?: number
         }
         Relationships: []
       }
@@ -6216,23 +6309,34 @@ export type Database = {
       pipelines: {
         Row: {
           created_at: string
+          department_id: string | null
           id: string
           is_default: boolean | null
           name: string
         }
         Insert: {
           created_at?: string
+          department_id?: string | null
           id?: string
           is_default?: boolean | null
           name: string
         }
         Update: {
           created_at?: string
+          department_id?: string | null
           id?: string
           is_default?: boolean | null
           name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pipelines_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       playbook_execution_queue: {
         Row: {
@@ -10114,10 +10218,12 @@ export type Database = {
       }
       cleanup_expired_insights_cache: { Args: never; Returns: number }
       cleanup_invalid_consultant_ids: { Args: never; Returns: number }
+      cleanup_old_error_logs: { Args: never; Returns: undefined }
       cleanup_single_contact_test: {
         Args: { p_contact_id: string }
         Returns: Json
       }
+      custom_auth_email_hook: { Args: { event: Json }; Returns: Json }
       distribute_client_to_consultant: {
         Args: { p_contact_id: string }
         Returns: Json
@@ -10196,6 +10302,7 @@ export type Database = {
             }
             Returns: string
           }
+      get_auth_email: { Args: never; Returns: string }
       get_avg_first_response_time: {
         Args: { p_end: string; p_start: string }
         Returns: number
@@ -10335,6 +10442,9 @@ export type Database = {
           department_name: string
           duration_seconds: number
           first_customer_message: string
+          handoff_at: string
+          human_first_response_seconds: number
+          human_resolution_seconds: number
           interactions_count: number
           last_conversation_tag: string
           origin: string
@@ -10912,6 +11022,12 @@ export type Database = {
         | "contact_created"
         | "contact_inactive"
       availability_status: "online" | "busy" | "away" | "offline"
+      client_error_type:
+        | "runtime"
+        | "network"
+        | "edge_function"
+        | "chunk"
+        | "unhandled_rejection"
       communication_channel:
         | "email"
         | "phone"
@@ -11156,6 +11272,13 @@ export const Constants = {
         "contact_inactive",
       ],
       availability_status: ["online", "busy", "away", "offline"],
+      client_error_type: [
+        "runtime",
+        "network",
+        "edge_function",
+        "chunk",
+        "unhandled_rejection",
+      ],
       communication_channel: [
         "email",
         "phone",
