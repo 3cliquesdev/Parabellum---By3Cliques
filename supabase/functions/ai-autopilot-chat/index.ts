@@ -8699,7 +8699,7 @@ Conversa: ${conversationId}`;
 
           } catch (error) {
             console.error('[ai-autopilot-chat] âŒ Erro em classify_and_resolve_ticket:', error);
-            assistantMessage = 'Ocorreu um erro ao classificar o ticket. O atendimento jÃ¡ foi encerrado normalmente.';
+            assistantMessage = 'Ocorreu um erro ao classificar o ticket. O atendimento já foi encerrado normalmente.';
           }
         }
       }
