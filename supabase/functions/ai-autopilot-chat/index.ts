@@ -5248,6 +5248,8 @@ Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado e
           console.log('[ai-autopilot-chat] ðŸšš Nenhum cÃ³digo encontrado - perguntando confirmaÃ§Ã£o');
           
           const notFoundMessage = allExtractedCodes.length === 1
+            ? `Não encontrei o pedido **${allExtractedCodes[0]}** no sistema de rastreio.\n\n🤔 Esse número está correto?\n\nSe foi pago recentemente, pode ser que ainda não tenha entrado em preparação. Caso contrário, me envie o número correto para eu verificar novamente.`
+            : `Não encontrei os códigos ${allExtractedCodes.join(', ')} no sistema de rastreio.\n\n🤔 Esses números estão corretos?\n\nSe foram pagos recentemente, pode ser que ainda não tenham entrado em preparação.`;
             ? `NÃ£o encontrei o pedido **${allExtractedCodes[0]}** no sistema de rastreio.
 
 ðŸ¤” Esse nÃºmero estÃ¡ correto?
