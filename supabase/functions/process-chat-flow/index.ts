@@ -4430,6 +4430,7 @@ serve(async (req) => {
             category: nextNode.data?.ticket_category || 'outro',
             priority: nextNode.data?.ticket_priority || 'medium',
             departmentId: nextNode.data?.department_id || null,
+            assignedTo: nextNode.data?.assigned_to || null,
             internalNote,
             useCollectedData: nextNode.data?.use_collected_data || false,
             collectedData,
