@@ -471,9 +471,9 @@ serve(async (req) => {
           // N:N: Filter agents by department using agent_departments
           onlineAgents = agentsWithChannel.filter(a => {
             // a.agent_departments pode ser array ou single object (PostgREST inlining)
-            const agentDepts = Array.isArray(a.agent_departments) 
-              ? a.agent_departments.map((d: any) => d.department_id)
-              : [a.agent_departments?.department_id].filter(Boolean);
+            const agentDepts = Array.isArray((a as any).agent_departments)
+              ? (a as any).agent_departments.map((d: any) => d.department_id)
+              : [(a as any).agent_departments?.department_id].filter(Boolean);
             return skillDeptIds.some(d => agentDepts.includes(d));
           });
           

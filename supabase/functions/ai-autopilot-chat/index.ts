@@ -8826,14 +8826,14 @@ Conversa: ${conversationId}`;
           console.log('[ai-autopilot-chat] Destino do exit:', exitDestination || 'padrao');
 
           // MULTI-AGENTE: Garantir mensagem de transferência adequada
-          const TRANSFER_LABELS = {
+          const TRANSFER_LABELS: { [key: string]: string } = {
             financeiro: 'equipe financeira', cancelamento: 'equipe de retencao',
             comercial: 'equipe comercial', consultor: 'seu consultor',
             suporte: 'equipe de suporte', internacional: 'equipe internacional',
             pedidos: 'equipe de pedidos', devolucao: 'equipe de devoluções', saque: 'equipe financeira',
           };
           const transferLabel = TRANSFER_LABELS[exitDestination] || 'equipe responsavel';
-          const visibleMessage = assistantMessage.replace(/[[FLOW_EXIT(:[a-zA-Z_]+)?]]/gi, '').trim();
+          const visibleMessage = assistantMessage.replace(/\[\[FLOW_EXIT(?::[a-zA-Z_]+)?\]\]/gi, '').trim();
 
           if (visibleMessage.length < 20) {
             assistantMessage = 'Entendido! Vou te encaminhar agora para a ' + transferLabel + '. Um momento, ja te transfiro!';
@@ -8845,7 +8845,7 @@ Conversa: ${conversationId}`;
 
           // MULTI-AGENTE: Salvar contexto de transferência para o agente receptor
           if (exitDestination && conversationId) {
-            const INTENT_LABEL_MAP = {
+            const INTENT_LABEL_MAP: { [key: string]: string } = {
               financeiro: 'Solicitacao financeira', cancelamento: 'Solicitacao de cancelamento',
               comercial: 'Interesse comercial', consultor: 'Falar com consultor',
               suporte: 'Suporte tecnico', internacional: 'Atendimento internacional',

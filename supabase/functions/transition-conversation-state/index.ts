@@ -200,7 +200,7 @@ serve(async (req) => {
     }
 
     // 6. Logar transição em ai_events (non-blocking)
-    await supabase.from('ai_events').insert({
+    Promise.resolve(supabase.from('ai_events').insert({
       entity_type: 'conversation',
       entity_id: conversationId,
       event_type: `state_transition_${transition}`,
@@ -215,7 +215,7 @@ serve(async (req) => {
         reason,
         metadata,
       },
-    }).then(() => {}).catch((e: any) => console.warn('[transition] Log failed (non-blocking):', e));
+    })).then(() => {}).catch((e: any) => console.warn('[transition] Log failed (non-blocking):', e));
 
     console.log(`[transition-conversation-state] ✅ ${transition} aplicado com sucesso`);
 

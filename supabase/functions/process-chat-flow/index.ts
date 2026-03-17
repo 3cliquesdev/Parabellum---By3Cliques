@@ -97,7 +97,7 @@ async function inlineKiwifyValidation(
 
     const first = matching[0];
     const customer = first.payload?.Customer || {};
-    const products = [...new Set(matching.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
+    const products: string[] = Array.from(new Set(matching.map((e: any) => String(e.payload?.Product?.product_name || 'Produto'))));
 
     const result = {
       found: true,
@@ -5561,7 +5561,7 @@ serve(async (req) => {
           responseFormat: 'text_only',
           personaId: startNode.data?.persona_id || null,
           kbCategories: startNode.data?.kb_categories || null,
-          kbProductFilter: mapProductToKbFilter(collectedData || {}),
+          kbProductFilter: mapProductToKbFilter({}),
           contextPrompt: startNode.data?.context_prompt || null,
           fallbackMessage: startNode.data?.fallback_message || null,
           // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
