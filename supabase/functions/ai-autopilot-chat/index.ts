@@ -6519,8 +6519,10 @@ Qual Ã© o seu **email de cadastro**?"
       }
     }
     
-    // ðŸ†• HANDLER PARA REEMBOLSO (SEM OTP)
-    if (isRefundRequest && !isWithdrawalRequest) {
+    // 🆕 HANDLER PARA REEMBOLSO (SEM OTP)
+    // NÃO injetar quando já está no nó financeiro (o objetivo do nó já cuida da coleta de dados e criação de ticket)
+    const isInFinanceiroNode = flow_context?.currentNodeId?.includes('financeiro');
+    if (isRefundRequest && !isWithdrawalRequest && !isInFinanceiroNode) {
       console.log('[ai-autopilot-chat] ðŸ“¦ Detectado pedido de REEMBOLSO - sem OTP necessÃ¡rio');
       
       identityWallNote += `\n\n**=== REEMBOLSO DE PEDIDO (SEM OTP) ===**
