@@ -1134,7 +1134,7 @@ async function handlePaidOrder(
   }
 
   // 2. ✅ CRIAR Login no Supabase Auth (senha = 5 primeiros dígitos CPF)
-  const password = Customer.CPF?.replace(/\D/g, '').substring(0, 5) || '12345';
+  const password = Customer.CPF?.replace(/\D/g, '').substring(0, 6) || 'temp12345';
   
   try {
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
