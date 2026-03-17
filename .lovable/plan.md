@@ -1,18 +1,11 @@
 
 
-# Deploy de 5 Edge Functions — Correções de Build
+# Deploy da Edge Function `ai-autopilot-chat`
 
 ## Plano
 
-Fazer deploy das 5 edge functions que receberam correções de tipagem TypeScript no último commit:
-
-1. `ai-autopilot-chat`
-2. `process-chat-flow`
-3. `route-conversation`
-4. `submit-form`
-5. `transition-conversation-state`
+Deploy da função `ai-autopilot-chat` com as correções de saudação proativa e fallback contextualizado do último commit.
 
 ## Critério de Sucesso
-- Todas as 5 funções deployadas sem erros
-- Build errors = 0
+- Função deployada sem erros de build
 
