@@ -1,64 +1,78 @@
 
-# Plano: Inserir Chat Flow "Fluxo Inteligente Jarvis (Triage)"
 
-## Estrutura do Fluxo
+# Bug Fix: IA responde mesmo após agente assumir controle
 
-```text
-                          ┌─► transfer_suporte_pedidos (Suporte Pedidos)
-                          ├─► transfer_suporte_sistema (Suporte Sistema)
-                          ├─► transfer_comercial_nacional (Comercial Nacional)
-                          ├─► transfer_comercial_internacional (Comercial Internacional)
-  start ──► ai_jarvis ────├─► transfer_financeiro (Financeiro)
-                          ├─► transfer_saque (Customer Success)
-                          ├─► transfer_devolucao (Suporte Pedidos)
-                          ├─► transfer_cancelamento (Retenção — 5a0a8d1a)
-                          ├─► transfer_consultor (Customer Success, type=consultant)
-                          └─► transfer_humano (Suporte — fila geral)
+## Causa raiz identificada
+
+Encontrei o problema e confirmei com dados reais. São **806 conversas afetadas** agora mesmo.
+
+### O que acontece:
+
+1. Agente clica "Assumir Controle" → `take_control_secure` muda `ai_mode` para `copilot`
+2. Cliente envia mensagem → webhook chama `process-chat-flow`
+3. `process-chat-flow` verifica `ai_mode = copilot` e deveria bloquear...
+4. **MAS** encontra um registro ativo na tabela `chat_flow_states` (status `waiting_input`/`active`)
+5. A lógica de "Soberania do Fluxo" (linha 925-930) **sobrescreve** `ai_mode` de volta para `autopilot`
+6. A IA responde ao cliente como se nenhum agente estivesse na conversa
+
+O problema está em **dois lugares**:
+
+**1. `take_control_secure` (RPC)** — Não limpa os `chat_flow_states` ao assumir controle
+**2. `process-chat-flow` (linha 925)** — A "Soberania do Fluxo" não verifica se há agente atribuído antes de sobrescrever o copilot
+
+## Correções
+
+### Correção 1 — RPC `take_control_secure`
+Adicionar limpeza dos flow states quando o agente assume:
+
+```sql
+-- Após o UPDATE conversations SET ai_mode = 'copilot'...
+UPDATE chat_flow_states
+SET status = 'transferred', completed_at = NOW()
+WHERE conversation_id = p_conversation_id
+  AND status IN ('waiting_input', 'active', 'in_progress');
 ```
 
-## Execução
+### Correção 2 — `process-chat-flow` guard (defesa em profundidade)
+Na verificação de "Soberania do Fluxo" (linha 925), adicionar condição: se `assigned_to` está preenchido (agente humano), **respeitar o copilot** e não restaurar autopilot:
 
-**Uma única operação SQL INSERT** na tabela `chat_flows` com o `flow_definition` JSONB contendo:
+```typescript
+if (activeFlowCheck) {
+  // 🆕 Se tem agente atribuído, o humano tem prioridade sobre o fluxo
+  if (convState?.assigned_to && currentAiMode === 'copilot') {
+    // Cancelar o flow state residual em vez de restaurar autopilot
+    await supabaseClient.from('chat_flow_states')
+      .update({ status: 'transferred', completed_at: new Date().toISOString() })
+      .eq('id', activeFlowCheck.id);
+    // Retornar skipAutoResponse como se não houvesse fluxo
+    return skipResponse;
+  }
+  // Caso sem agente: manter soberania do fluxo (comportamento atual)
+  ...
+}
+```
 
-### Nodes (12 nós)
-1. **`start`** — tipo `input`, label "Início"
-2. **`ai_jarvis`** — tipo `ai_response`, label "Triageira Lais"
-   - `use_knowledge_base: true`, todas as `enable_*` flags ativas para os 10 destinos
-   - `persona_name: "Lais Triageira"` (persona_id vazio — você configura depois)
-   - `max_ai_interactions: 10`, `forbid_options: true` (sem botões!)
-   - `objective`: placeholder para você preencher com o prompt da Lais
-3-12. **10 nós `transfer`** — cada um com `department_id`, `department_name`, `transfer_message` e `label` corretos
+### Correção 3 — Limpar os 806 estados residuais existentes
+Migration SQL para corrigir dados atuais:
 
-### Edges (11 arestas)
-- `start` → `ai_jarvis` (conexão direta, sem menus)
-- `ai_jarvis` → cada transfer via `sourceHandle` correspondente:
-  - `suporte_pedidos`, `suporte_sistema`, `comercial_nacional`, `comercial_internacional`, `financeiro`, `saque`, `devolucao`, `cancelamento`, `consultor`, `humano`
-- Aresta `default` → `transfer_humano` (fallback)
-
-### Department IDs mapeados
-| Transfer | Department | ID |
-|---|---|---|
-| Suporte Pedidos | Suporte Pedidos | `2dd0ee5c-...` |
-| Suporte Sistema | Suporte Sistema | `fd4fcc90-...` |
-| Comercial Nacional | Comercial - Nacional | `f446e202-...` |
-| Comercial Internacional | Comercial - Internacional | `68195a0f-...` |
-| Financeiro | Financeiro | `af3c75a9-...` |
-| Saque | Customer Success | `b7149bf4-...` |
-| Devoluções | Suporte Pedidos | `2dd0ee5c-...` |
-| Cancelamentos | Retenção | `5a0a8d1a-...` |
-| Consultor | Customer Success | `b7149bf4-...` (type=consultant) |
-| Fila Geral | Suporte | `36ce66cd-...` |
-
-### Configuração do flow
-- `is_active: false` (inativo para testes)
-- `is_master_flow: false`
-- `priority: 0`
-- `trigger_keywords: '{}'` (vazio — será ativado manualmente)
+```sql
+UPDATE chat_flow_states
+SET status = 'transferred', completed_at = NOW()
+WHERE status IN ('waiting_input', 'active', 'in_progress')
+  AND conversation_id IN (
+    SELECT id FROM conversations 
+    WHERE ai_mode IN ('copilot', 'disabled') 
+       OR assigned_to IS NOT NULL
+  );
+```
 
 ## Arquivos alterados
-Nenhum arquivo de código alterado — apenas INSERT SQL via migration tool.
+1. **Migration SQL** — Atualizar RPC `take_control_secure` + limpar dados existentes
+2. **`supabase/functions/process-chat-flow/index.ts`** — Guard de defesa na Soberania do Fluxo
 
-## Pós-execução
-- O fluxo aparecerá no editor visual para revisão
-- Você salva o System Prompt da "Lais Triageira" na persona correspondente
-- Ativa quando pronto para testar
+## Impacto
+- Resolve o bug para **todas** as conversas futuras (RPC fix)
+- Corrige as 806 conversas afetadas agora (data migration)  
+- Defesa em profundidade no motor de fluxos (guard fix)
+- Zero impacto em conversas em autopilot legítimo
+
