@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/business-hours.ts";
 
@@ -7195,6 +7195,45 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     if (allTools.length > 0) {
       aiPayload.tools = allTools;
     }
+    // CORREÇÃO: Saudação proativa na primeira interação ou mensagem de ruído do menu
+    const rawInteractionCount = flow_context?.collectedData?.__ai?.interaction_count;
+    const isFirstNodeInteraction = rawInteractionCount === undefined || rawInteractionCount === 0;
+    const isMenuNoise = !!(customerMessage && (customerMessage.trim().length <= 3 || /^\d+$/.test(customerMessage.trim())));
+    let skipLLMForGreeting = false;
+    if (flow_context && (isFirstNodeInteraction || isMenuNoise)) {
+      const personaGreetName = persona?.name || 'nossa equipe';
+      const greetObjective = flow_context.objective || '';
+      const greetProduto = (flow_context.collectedData?.produto || flow_context.collectedData?.Produto || '') as string;
+      let greetingMsg = 'Olá! Sou ' + personaGreetName;
+      if (greetProduto) greetingMsg += ' do time de atendimento do ' + greetProduto;
+      greetingMsg += '.';
+      if (greetObjective) greetingMsg += ' ' + greetObjective + '.';
+      greetingMsg += ' Como posso te ajudar?';
+      skipLLMForGreeting = true;
+      console.log('[ai-autopilot-chat] Saudação proativa enviada, pulando LLM');
+      // Montar assistantMessage diretamente sem chamar a LLM
+      const assistantMessageGreeting = greetingMsg;
+      // Persistir e enviar pelo pipeline normal
+      const { error: greetSaveErr } = await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: assistantMessageGreeting,
+        sender_type: 'user',
+        message_type: 'ai_response',
+        is_ai_generated: true,
+        sender_id: null,
+        status: 'sending',
+        channel: responseChannel,
+      });
+      if (!greetSaveErr && responseChannel === 'whatsapp') {
+        await supabaseClient.functions.invoke('send-meta-whatsapp', {
+          body: { conversationId, message: assistantMessageGreeting, contactPhone: contact.phone }
+        }).catch((e: any) => console.warn('[ai-autopilot-chat] Falha ao enviar saudação proativa:', e));
+      }
+      return new Response(JSON.stringify({ success: true, proactiveGreeting: true, message: assistantMessageGreeting }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
 
     const aiData = await callAIWithFallback(aiPayload);
     // âœ… FIX 2: Fallback nÃ£o usa 'Desculpe' que estÃ¡ na lista de frases proibidas (auto-loop).
@@ -7275,7 +7314,14 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     } else if (isFinancialRequest) {
       assistantMessage = 'Entendi sua solicitação financeira. Para prosseguir com segurança, qual é o seu e-mail de cadastro?';
     } else {
-      assistantMessage = 'Pode repetir sua mensagem? Não consegui processar corretamente.';
+      const ctxFallbackMsg = flow_context?.fallbackMessage;
+      if (ctxFallbackMsg) {
+        assistantMessage = ctxFallbackMsg;
+      } else {
+        assistantMessage = persona?.name
+          ? 'Não encontrei uma resposta específica para isso. Pode me contar com mais detalhes o que você precisa? Estou aqui para ajudar!'
+          : 'Não consegui processar sua mensagem. Pode me dar mais detalhes sobre o que precisa?';
+      }
     }
     const isEmptyAIResponse = !rawAIContent;
 
