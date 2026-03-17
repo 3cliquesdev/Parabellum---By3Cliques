@@ -186,6 +186,43 @@ const SAVE_AS_SUGGESTIONS: Record<string, { value: string; label: string }[]> = 
   ],
 };
 
+// Cores fixas para handles (mesmas dos nós AskOptionsNode / ConditionV2Node)
+const optionColors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+function getEdgeColorFromSource(allNodes: Node[], sourceId: string, sourceHandleId: string | null | undefined): string | null {
+  if (!sourceHandleId) return null;
+  const sourceNode = allNodes.find(n => n.id === sourceId);
+  if (!sourceNode) return null;
+
+  if (sourceNode.type === 'ask_options') {
+    const options = sourceNode.data?.options || [];
+    const idx = options.findIndex((o: any) => o.id === sourceHandleId);
+    if (idx >= 0) return optionColors[idx % optionColors.length];
+  }
+
+  if (sourceNode.type === 'condition_v2') {
+    const rules = sourceNode.data?.condition_rules || [];
+    if (sourceHandleId === 'else') return '#6b7280';
+    // Check _false handles
+    const falseMatch = sourceHandleId.endsWith('_false');
+    const ruleId = falseMatch ? sourceHandleId.replace('_false', '') : sourceHandleId;
+    const ruleIdx = rules.findIndex((r: any) => r.id === ruleId);
+    if (ruleIdx >= 0) return falseMatch ? '#dc2626' : '#16a34a';
+  }
+
+  if (sourceNode.type === 'condition') {
+    if (sourceHandleId === 'true') return '#16a34a';
+    if (sourceHandleId === 'false') return '#dc2626';
+    if (sourceHandleId === 'else') return '#6b7280';
+    // Multi-rule handles
+    const rules = sourceNode.data?.condition_rules || [];
+    const idx = rules.findIndex((r: any) => r.id === sourceHandleId);
+    if (idx >= 0) return optionColors[idx % optionColors.length];
+  }
+
+  return null;
+}
+
 function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSaving }: ChatFlowEditorProps) {
   const { data: ticketCategories = [] } = useTicketCategories();
   const { data: allTags = [] } = useTags();
