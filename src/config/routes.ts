@@ -131,8 +131,8 @@ export const universalMenuGroups: MenuGroup[] = [
     label: "Cadastros",
     items: [
       { title: "Consultores", href: "/consultants", icon: Users, permission: "cadastros.view_consultants" },
-      { title: "Devoluções", href: "/returns", icon: RotateCcw, permission: "tickets.view" },
-      { title: "Conf. de Devoluções", href: "/settings/returns-config", icon: ClipboardList, permission: "settings.view" },
+      { title: "Devoluções", href: "/returns", icon: RotateCcw, permission: "cadastros.view_returns" },
+      { title: "Conf. de Devoluções", href: "/settings/returns-config", icon: ClipboardList, permission: "settings.view_returns_config" },
       { title: "Produtos", href: "/settings/products", icon: Package, permission: "cadastros.view_products" },
       { title: "Depart. & Operações", href: "/settings/departments", icon: Building2, permission: "cadastros.view_departments" },
     ]

@@ -277,7 +277,7 @@ const App = () => {
               <Route path="/settings/ticket-notifications" element={<ProtectedRoute requiredPermission="email.manage_templates"><Layout><TicketNotificationRulesSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/sla" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SLASettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/return-reasons" element={<Navigate to="/settings/returns-config" replace />} />
-              <Route path="/settings/returns-config" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ReturnsConfigSettings /></Layout></ProtectedRoute>} />
+              <Route path="/settings/returns-config" element={<ProtectedRoute requiredPermission="settings.view_returns_config"><Layout><ReturnsConfigSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/scoring" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ScoringSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/sales-channels" element={<ProtectedRoute requiredPermission="sales.manage_pipelines"><Layout><SalesChannelsSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/ticket-statuses" element={<ProtectedRoute requiredPermission="settings.view"><Layout><TicketStatusSettings /></Layout></ProtectedRoute>} />
