@@ -548,7 +548,7 @@ serve(async (req) => {
               // Buscar conversa existente (QUALQUER provider) - priorizar aberta
               let { data: conversation } = await supabase
                 .from("conversations")
-.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department, metadata")
+.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department")
                 .eq("contact_id", contact.id)
                 .neq("status", "closed")
                 .order("created_at", { ascending: false })
@@ -569,7 +569,7 @@ serve(async (req) => {
                     whatsapp_provider: "meta",
                     whatsapp_meta_instance_id: instance.id,
                   })
-.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department, metadata")
+.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department")
                   .single();
 
                 if (newConvError) {
@@ -577,7 +577,7 @@ serve(async (req) => {
                   // Race condition fallback: outro webhook criou a conversa milissegundos antes
                   const { data: existingRaceConv } = await supabase
                     .from("conversations")
-.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department, metadata")
+.select("id, ai_mode, status, assigned_to, awaiting_rating, whatsapp_provider, customer_metadata, department")
                     .eq("contact_id", contact.id)
                     .neq("status", "closed")
                     .order("created_at", { ascending: false })
@@ -923,8 +923,8 @@ serve(async (req) => {
                               await supabase
                                 .from("conversations")
                                 .update({
-                                  metadata: {
-                                    ...(conversation.metadata || {}),
+                                  customer_metadata: {
+                                    ...(conversation.customer_metadata || {}),
                                     after_hours_handoff_requested_at: new Date().toISOString(),
                                     after_hours_next_open_text: bhInfo.next_open_text,
                                     pending_department_id: conversation.department || null,
@@ -940,8 +940,8 @@ serve(async (req) => {
                                   status: "closed",
                                   ai_mode: "autopilot",
                                   closed_at: new Date().toISOString(),
-                                  metadata: {
-                                    ...(conversation.metadata || {}),
+                                  customer_metadata: {
+                                    ...(conversation.customer_metadata || {}),
                                     close_reason: "after_hours_handoff",
                                   },
                                 })

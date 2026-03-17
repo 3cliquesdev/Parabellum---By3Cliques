@@ -1,47 +1,25 @@
 
+# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-# Fix: Coluna `metadata` não existe na tabela `conversations`
+## O que mudou
 
-## Problema
+### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
+- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
+- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
+- Ao trocar departamento, responsável é limpo automaticamente
+- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
 
-A mensagem do WhatsApp chegou no webhook (02:39:35) mas falhou ao criar a conversa com o erro:
-```
-column conversations.metadata does not exist
-```
+### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
+- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
+  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
+  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
+  - Dados salvos em `end_action` e `action_data` no node data
+- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
 
-A coluna real se chama **`customer_metadata`**, não `metadata`. O fix anterior adicionou `metadata` incorretamente nos `.select()`.
+### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
+- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
+- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
 
-## Correções no `supabase/functions/meta-whatsapp-webhook/index.ts`
-
-### 1. Remover `metadata` dos 3 `.select()` (linhas 551, 572, 580)
-
-Trocar:
-```
-.select("..., customer_metadata, department, metadata")
-```
-Por:
-```
-.select("..., customer_metadata, department")
-```
-
-### 2. Trocar `metadata` por `customer_metadata` nos `.update()` (linhas 926 e 943)
-
-Trocar:
-```typescript
-metadata: {
-  ...(conversation.metadata || {}),
-```
-Por:
-```typescript
-customer_metadata: {
-  ...(conversation.customer_metadata || {}),
-```
-
-Nos dois locais (linhas 926-927 e 943-944).
-
-### 3. Deploy do `meta-whatsapp-webhook`
-
-**Total: 5 locais alterados + redeploy**
-
-Resultado: Mensagens do WhatsApp voltarão a criar conversas e aparecer no CRM.
-
+### 4. Continuidade do Fluxo ✅
+- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
+- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
