@@ -127,7 +127,7 @@ export function CommercialDetailedTable({
         ) : (
           <>
             <ScrollArea className="w-full">
-              <div className="min-w-[1200px]">
+              <div className="min-w-[1600px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
