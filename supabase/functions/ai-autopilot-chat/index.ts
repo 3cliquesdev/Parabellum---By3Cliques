@@ -8116,47 +8116,16 @@ Via: Atendimento Automatizado (IA)`;
             }
             // customer_email REMOVIDO
             
-            console.log('[ai-autopilot-chat] ðŸ“¦ Consultando rastreio:', { trackingCodes, customerEmail, numCodes: trackingCodes.length });
+            console.log('[ai-autopilot-chat] Consultando rastreio:', { trackingCodes, numCodes: trackingCodes.length });
 
             let codesToQuery: string[] = [];
 
-            // Se tem cÃ³digos de rastreio diretos, usa eles
             if (trackingCodes.length > 0) {
               codesToQuery = trackingCodes;
             }
-            // Se tem email, busca deals do cliente com tracking_code
-            else if (customerEmail) {
-              // Buscar contato pelo email
-              const { data: customerContact, error: contactError } = await supabaseClient
-                .from('contacts')
-                .select('id, first_name')
-                .eq('email', customerEmail)
-                .maybeSingle();
-
-              if (contactError || !customerContact) {
-                assistantMessage = `Não encontrei nenhum cliente cadastrado com o email ${customerEmail}. Poderia verificar se é o email correto?`;
-                continue;
-              }
-
-              // Buscar deals com tracking_code
-              const { data: dealsWithTracking, error: dealsError } = await supabaseClient
-                .from('deals')
-                .select('tracking_code, title')
-                .eq('contact_id', customerContact.id)
-                .not('tracking_code', 'is', null)
-                .order('created_at', { ascending: false })
-                .limit(10);
-
-              if (!dealsWithTracking || dealsWithTracking.length === 0) {
-                assistantMessage = `Olá ${customerContact.first_name}! Encontrei seu cadastro, mas não há pedidos com código de rastreio registrado. Você tem o código de rastreio em mãos para eu consultar?`;
-                continue;
-              }
-
-              codesToQuery = dealsWithTracking.map(d => d.tracking_code).filter(Boolean) as string[];
-            }
 
             if (codesToQuery.length === 0) {
-              assistantMessage = 'Para consultar o rastreio, preciso do código de rastreio ou do email cadastrado na compra. Poderia me informar?';
+              assistantMessage = 'Para consultar o rastreio, preciso do número do pedido ou código de rastreio. Poderia me informar?';
               continue;
             }
 
