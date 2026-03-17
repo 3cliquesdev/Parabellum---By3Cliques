@@ -60,6 +60,7 @@ import { CONDITION_CONTACT_FIELDS, CONDITION_CONVERSATION_FIELDS, getAncestorNod
 import { useTicketCategories } from "@/hooks/useTicketCategories";
 import { useTags } from "@/hooks/useTags";
 import { useDepartments } from "@/hooks/useDepartments";
+import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 // Tipos de nós para chat flows
@@ -189,6 +190,8 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
   const { data: ticketCategories = [] } = useTicketCategories();
   const { data: allTags = [] } = useTags();
   const { data: departments = [] } = useDepartments({ activeOnly: true });
+
+
   // Criar nó de início se não houver nós
   const initialNodes = useMemo(() => {
     if (initialFlow?.nodes && initialFlow.nodes.length > 0) {
@@ -211,6 +214,10 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  // Agentes do departamento selecionado no nó create_ticket
+  const selectedCreateTicketDeptId = selectedNode?.type === "create_ticket" ? selectedNode?.data?.department_id : null;
+  const { data: agentsByDepartment = [] } = useUsersByDepartment(selectedCreateTicketDeptId || undefined);
 
   // Notificar mudanças no fluxo para o parent
   useEffect(() => {
@@ -305,6 +312,8 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         ticket_priority: "medium",
         department_id: null,
         department_name: null,
+        assigned_to: null,
+        assigned_to_name: null,
       },
     };
     return defaults[type] || { label: `Novo ${type}` };
@@ -1436,6 +1445,9 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                           updateNodeData("department_id", v);
                           updateNodeData("department_name", dept?.name || null);
                         }
+                        // Limpar responsável ao trocar departamento
+                        updateNodeData("assigned_to", null);
+                        updateNodeData("assigned_to_name", null);
                       }}
                     >
                       <SelectTrigger><SelectValue placeholder="Sem departamento" /></SelectTrigger>
@@ -1447,6 +1459,35 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       </SelectContent>
                     </Select>
                   </div>
+                  {selectedNode.data.department_id && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Responsável</Label>
+                      <Select
+                        value={selectedNode.data.assigned_to || "none"}
+                        onValueChange={(v) => {
+                          if (v === "none") {
+                            updateNodeData("assigned_to", null);
+                            updateNodeData("assigned_to_name", null);
+                          } else {
+                            const agent = agentsByDepartment.find((a: any) => a.id === v);
+                            updateNodeData("assigned_to", v);
+                            updateNodeData("assigned_to_name", agent?.full_name || null);
+                          }
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Pool do departamento" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem responsável (pool)</SelectItem>
+                          {agentsByDepartment.map((agent: any) => (
+                            <SelectItem key={agent.id} value={agent.id}>{agent.full_name || "Sem nome"}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">
+                        Agente que receberá o ticket neste departamento
+                      </p>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label className="text-xs">Nota interna</Label>
                     <VariableAutocomplete

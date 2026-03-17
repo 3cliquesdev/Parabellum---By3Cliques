@@ -13,6 +13,8 @@ interface CreateTicketNodeData {
   ticket_priority: string;
   department_id?: string | null;
   department_name?: string | null;
+  assigned_to?: string | null;
+  assigned_to_name?: string | null;
 }
 
 const priorityColors: Record<string, string> = {
@@ -47,6 +49,11 @@ export const CreateTicketNode = memo(({ data, selected }: NodeProps<CreateTicket
         {data.department_name && (
           <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-600">
             {data.department_name}
+          </Badge>
+        )}
+        {data.assigned_to_name && (
+          <Badge variant="outline" className="text-[10px] border-emerald-500/50 text-emerald-600">
+            👤 {data.assigned_to_name}
           </Badge>
         )}
       </div>

@@ -1,10 +1,14 @@
 import { Node } from "reactflow";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Sparkles, AlertTriangle, GraduationCap } from "lucide-react";
+import { Bot, Sparkles, AlertTriangle, GraduationCap, Ticket } from "lucide-react";
 import { usePersonas } from "@/hooks/usePersonas";
+import { useTicketCategories } from "@/hooks/useTicketCategories";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +34,11 @@ export function AIResponsePropertiesPanel({
   updateNodeData,
 }: AIResponsePropertiesPanelProps) {
   const { data: personas, isLoading: loadingPersonas } = usePersonas();
+  const { data: ticketCategories = [] } = useTicketCategories();
+  const { data: departments = [] } = useDepartments({ activeOnly: true });
+  
+  const actionDeptId = selectedNode.data.action_data?.department_id;
+  const { data: actionAgents = [] } = useUsersByDepartment(actionDeptId || undefined);
 
   // Personas ativas
   const activePersonas = personas?.filter((p) => p.is_active) || [];
@@ -174,6 +183,147 @@ export function AIResponsePropertiesPanel({
         <p className="text-[10px] text-muted-foreground">
           Ex: "Foque em explicar o processo de saque" ou "Seja breve e objetivo"
         </p>
+      </div>
+
+      <Separator />
+
+      {/* Seção: Ação ao Sair */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Ticket className="h-4 w-4 text-violet-500" />
+          <Label className="text-xs font-semibold uppercase tracking-wide">Ação ao Sair</Label>
+        </div>
+        <Select
+          value={selectedNode.data.end_action || "none"}
+          onValueChange={(v) => {
+            updateNodeData("end_action", v === "none" ? null : v);
+            if (v === "none") updateNodeData("action_data", null);
+            else if (!selectedNode.data.action_data) {
+              updateNodeData("action_data", {
+                subject: "",
+                description: "",
+                category: "outro",
+                priority: "medium",
+                department_id: null,
+                department_name: null,
+                assigned_to: null,
+                assigned_to_name: null,
+                use_collected_data: true,
+              });
+            }
+          }}
+        >
+          <SelectTrigger><SelectValue placeholder="Nenhuma ação" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Nenhuma</SelectItem>
+            <SelectItem value="create_ticket">🎫 Criar Ticket</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {selectedNode.data.end_action === "create_ticket" && selectedNode.data.action_data && (
+          <div className="space-y-2 pl-2 border-l-2 border-violet-500/30">
+            <div className="space-y-1">
+              <Label className="text-[10px]">Assunto</Label>
+              <Input
+                value={selectedNode.data.action_data.subject || ""}
+                onChange={(e) => updateNodeData("action_data", { ...selectedNode.data.action_data, subject: e.target.value })}
+                placeholder="Assunto do ticket com {{variáveis}}"
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px]">Descrição</Label>
+              <Textarea
+                onKeyDown={(e) => e.stopPropagation()}
+                value={selectedNode.data.action_data.description || ""}
+                onChange={(e) => updateNodeData("action_data", { ...selectedNode.data.action_data, description: e.target.value })}
+                placeholder="Descrição do ticket..."
+                rows={2}
+                className="resize-none text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-[10px]">Categoria</Label>
+                <Select
+                  value={selectedNode.data.action_data.category || "outro"}
+                  onValueChange={(v) => updateNodeData("action_data", { ...selectedNode.data.action_data, category: v })}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ticketCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
+                    ))}
+                    {ticketCategories.length === 0 && (
+                      <SelectItem value="outro" disabled>Nenhuma categoria</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px]">Prioridade</Label>
+                <Select
+                  value={selectedNode.data.action_data.priority || "medium"}
+                  onValueChange={(v) => updateNodeData("action_data", { ...selectedNode.data.action_data, priority: v })}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Baixa</SelectItem>
+                    <SelectItem value="medium">Média</SelectItem>
+                    <SelectItem value="high">Alta</SelectItem>
+                    <SelectItem value="urgent">Urgente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px]">Departamento</Label>
+              <Select
+                value={selectedNode.data.action_data.department_id || "none"}
+                onValueChange={(v) => {
+                  if (v === "none") {
+                    updateNodeData("action_data", { ...selectedNode.data.action_data, department_id: null, department_name: null, assigned_to: null, assigned_to_name: null });
+                  } else {
+                    const dept = departments.find(d => d.id === v);
+                    updateNodeData("action_data", { ...selectedNode.data.action_data, department_id: v, department_name: dept?.name || null, assigned_to: null, assigned_to_name: null });
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sem departamento" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem departamento</SelectItem>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedNode.data.action_data.department_id && (
+              <div className="space-y-1">
+                <Label className="text-[10px]">Responsável</Label>
+                <Select
+                  value={selectedNode.data.action_data.assigned_to || "none"}
+                  onValueChange={(v) => {
+                    if (v === "none") {
+                      updateNodeData("action_data", { ...selectedNode.data.action_data, assigned_to: null, assigned_to_name: null });
+                    } else {
+                      const agent = actionAgents.find((a: any) => a.id === v);
+                      updateNodeData("action_data", { ...selectedNode.data.action_data, assigned_to: v, assigned_to_name: agent?.full_name || null });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Pool do departamento" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem responsável (pool)</SelectItem>
+                    {actionAgents.map((agent: any) => (
+                      <SelectItem key={agent.id} value={agent.id}>{agent.full_name || "Sem nome"}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <Separator />
