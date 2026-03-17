@@ -7204,10 +7204,6 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
                 items: { type: 'string' },
                 description: 'Lista de cÃ³digos de rastreio ou nÃºmeros de pedido (ex: ["BR123456789BR", "MS-12345", "16315521"]). Aceita um ou vÃ¡rios cÃ³digos.'
               },
-              customer_email: { 
-                type: 'string', 
-                description: 'Email do cliente para buscar pedidos com rastreio cadastrado.' 
-              }
             },
             required: []
           }
