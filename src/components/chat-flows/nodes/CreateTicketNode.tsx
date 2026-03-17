@@ -13,6 +13,8 @@ interface CreateTicketNodeData {
   ticket_priority: string;
   department_id?: string | null;
   department_name?: string | null;
+  assigned_to?: string | null;
+  assigned_to_name?: string | null;
 }
 
 const priorityColors: Record<string, string> = {

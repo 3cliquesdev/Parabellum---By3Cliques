@@ -1445,6 +1445,9 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                           updateNodeData("department_id", v);
                           updateNodeData("department_name", dept?.name || null);
                         }
+                        // Limpar responsável ao trocar departamento
+                        updateNodeData("assigned_to", null);
+                        updateNodeData("assigned_to_name", null);
                       }}
                     >
                       <SelectTrigger><SelectValue placeholder="Sem departamento" /></SelectTrigger>
@@ -1456,6 +1459,35 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       </SelectContent>
                     </Select>
                   </div>
+                  {selectedNode.data.department_id && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Responsável</Label>
+                      <Select
+                        value={selectedNode.data.assigned_to || "none"}
+                        onValueChange={(v) => {
+                          if (v === "none") {
+                            updateNodeData("assigned_to", null);
+                            updateNodeData("assigned_to_name", null);
+                          } else {
+                            const agent = agentsByDepartment.find((a: any) => a.id === v);
+                            updateNodeData("assigned_to", v);
+                            updateNodeData("assigned_to_name", agent?.full_name || null);
+                          }
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Pool do departamento" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem responsável (pool)</SelectItem>
+                          {agentsByDepartment.map((agent: any) => (
+                            <SelectItem key={agent.id} value={agent.id}>{agent.full_name || "Sem nome"}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">
+                        Agente que receberá o ticket neste departamento
+                      </p>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label className="text-xs">Nota interna</Label>
                     <VariableAutocomplete
