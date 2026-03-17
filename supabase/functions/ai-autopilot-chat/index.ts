@@ -6734,7 +6734,7 @@ Vá direto ao atendimento usando o nome dele.`
       return `\n\n**📋 CONTEXTO DO FLUXO (dados já coletados do cliente):**\n${lines.join('\n')}\nUse estas informações para contextualizar suas respostas. O cliente já passou por menus e escolheu essas opções — NÃO pergunte novamente o que ele já informou.${antiAskInstruction}\n`;
     })();
 
-    const contextualizedSystemPrompt = `${agentContextBlock}${flowCollectedDataBlock}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
+    const contextualizedSystemPrompt = `${flowCollectedDataBlock}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}${agentContextBlock}
 
 **🚫 REGRA DE HANDOFF (SÓ QUANDO CLIENTE PEDIR):**
 Transferência para humano SÓ acontece quando:
