@@ -1,25 +1,41 @@
 
-# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-## O que mudou
+# Correção: IA pedindo email/CPF para consulta de pedidos
 
-### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
-- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
-- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
-- Ao trocar departamento, responsável é limpo automaticamente
-- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
+## Problema
+Apesar da instrução na linha 1318-1322 dizer "NUNCA peça email, CPF ou telefone para consultar pedidos", a IA ainda pede porque existem **3 pontos contraditórios** no código:
 
-### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
-- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
-  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
-  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
-  - Dados salvos em `end_action` e `action_data` no node data
-- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
+1. **Tool `check_tracking` (linha 7207-7209)**: tem parâmetro `customer_email` com descrição "Email do cliente para buscar pedidos com rastreio cadastrado" — a IA vê isso e conclui que pode/deve pedir email
+2. **Cenário C de ticket (linha 6938)**: diz literalmente "se cliente não souber o pedido, pergunte: Qual email usou na compra?"
+3. **Tool `check_order_status` (linhas 8104-8170)**: busca pedidos inteiramente por email, reforçando o comportamento
 
-### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
-- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
-- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
+## Correções
 
-### 4. Continuidade do Fluxo ✅
-- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
-- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
+### 1. Remover `customer_email` do tool `check_tracking` (linha 7207-7210)
+Eliminar o parâmetro para que a IA não veja email como opção de busca de pedidos.
+
+### 2. Corrigir instrução do Cenário C (linha 6938)
+Trocar:
+```
+"se cliente não souber, pergunte: Qual email usou na compra?"
+```
+Por:
+```
+"se cliente não souber o número do pedido, peça o código de rastreio"
+```
+
+### 3. Reforçar instrução no bloco de tools (perto da linha 6958-6962)
+Adicionar instrução explícita junto às descrições das ferramentas:
+```
+REGRA: Para consultar pedidos/rastreio, peça APENAS número do pedido ou código de rastreio. NUNCA peça email, CPF ou telefone para essa finalidade.
+```
+
+### 4. Deploy
+Deploy imediato de `ai-autopilot-chat`.
+
+### Arquivos afetados
+- `supabase/functions/ai-autopilot-chat/index.ts` — 3 edições pontuais
+
+### Impacto
+A IA passará a pedir apenas número do pedido ou código de rastreio, eliminando a instrução conflitante sobre email/CPF.
+
