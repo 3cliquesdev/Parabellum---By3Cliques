@@ -7331,14 +7331,18 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       assistantMessage = 'Para solicitar o saque, preciso primeiro confirmar sua identidade. Qual é o seu e-mail de cadastro?';
     } else if (isFinancialRequest) {
       assistantMessage = 'Entendi sua solicitação financeira. Para prosseguir com segurança, qual é o seu e-mail de cadastro?';
+    } else if (flow_context && flowObjective) {
+      // 🆕 FIX: Resposta vazia em nó de IA com objetivo → saudação contextual orientativa
+      // Em vez de usar flowFallbackMessage genérico ("Não consegui resolver por aqui."),
+      // geramos uma mensagem que guia o cliente a detalhar o que precisa.
+      const collectedProduct = flow_context?.collectedData?.produto || flow_context?.collectedData?.product || null;
+      const productContext = collectedProduct ? ` sobre ${collectedProduct}` : '';
+      assistantMessage = `Olá! Estou aqui para te ajudar${productContext} 😊 Pode me contar mais sobre o que precisa? Por exemplo: rastrear um pedido, tirar uma dúvida ou resolver um problema.`;
+      console.log('[ai-autopilot-chat] 🔄 FIX: Usando saudação contextual orientativa (AI retornou vazio)', { flowObjective: flowObjective?.substring(0, 80), collectedProduct });
     } else if (flowFallbackMessage) {
-      // Usar fallback configurado no fluxo
+      // Usar fallback configurado no fluxo (quando não tem objective)
       assistantMessage = flowFallbackMessage;
       console.log('[ai-autopilot-chat] 🔄 Usando flowFallbackMessage como resposta');
-    } else if (flowObjective) {
-      // Gerar resposta contextual baseada no objetivo do fluxo
-      assistantMessage = `Estou aqui para ajudá-lo. Como posso auxiliar você hoje?`;
-      console.log('[ai-autopilot-chat] 🔄 Usando fallback contextual baseado no flowObjective');
     } else {
       assistantMessage = 'Estou aqui para ajudá-lo. Pode me dizer como posso auxiliar?';
       console.log('[ai-autopilot-chat] 🔄 Usando fallback genérico aprimorado');
@@ -8828,7 +8832,7 @@ Conversa: ${conversationId}`;
       // Se mudou de nÃ³, resetar contador
       if (aiNodeId !== flow_context.node_id) {
         // Novo nÃ³, resetar
-      } else if (aiNodeFallbackCount >= 5) {
+      } else if (aiNodeFallbackCount >= 3) {
         console.log('[ai-autopilot-chat] ðŸš¨ ANTI-LOOP: MÃ¡ximo de 5 fallbacks atingido no nÃ³ AI â†’ forÃ§ando flow_advance_needed', {
           node_id: flow_context.node_id,
           fallback_count: aiNodeFallbackCount
