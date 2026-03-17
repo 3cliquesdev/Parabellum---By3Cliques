@@ -218,7 +218,7 @@ async function getMessageTemplate(
       content = content.replace(new RegExp(`\\{\\{${varKey}\\}\\}`, 'g'), value || '');
     });
 
-    console.log(`[getMessageTemplate] âœ… Template "${key}" carregado com sucesso`);
+    console.log(`[getMessageTemplate] ✅ Template "${key}" carregado com sucesso`);
     return content;
   } catch (error) {
     console.error(`[getMessageTemplate] Erro ao buscar template "${key}":`, error);
