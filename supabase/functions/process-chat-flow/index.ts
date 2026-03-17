@@ -2811,8 +2811,8 @@ serve(async (req) => {
                 conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
                 contactId: activeContactData?.id || null, subject, description,
                 category: nextNode.data?.ticket_category || 'outro', priority: nextNode.data?.ticket_priority || 'medium',
-                departmentId: nextNode.data?.department_id || null, internalNote,
-                useCollectedData: nextNode.data?.use_collected_data || false, collectedData,
+                departmentId: nextNode.data?.department_id || null, assignedTo: nextNode.data?.assigned_to || null,
+                internalNote, useCollectedData: nextNode.data?.use_collected_data || false, collectedData,
               });
               if (ticket) collectedData.__last_ticket_id = ticket.id;
               console.log(`[process-chat-flow] 🎫 [generic] Auto-advancing past create_ticket ${nextNode.id}`);
