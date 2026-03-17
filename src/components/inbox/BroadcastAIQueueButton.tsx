@@ -11,7 +11,8 @@ interface BroadcastAIQueueButtonProps {
   filter: string;
 }
 
-const ALLOWED_ROLES = ["admin", "manager", "general_manager"];
+// Todos os roles com acesso ao inbox podem ver/interagir com broadcast na fila IA
+const ALLOWED_ROLES = ["admin", "manager", "general_manager", "support_manager", "financial_manager", "cs_manager", "sales_rep", "support_agent", "financial_agent", "consultant"];
 
 export function BroadcastAIQueueButton({ queueCount, filter }: BroadcastAIQueueButtonProps) {
   const [dialogOpen, setDialogOpen] = useState(false);

@@ -154,7 +154,9 @@ export function useConversations(filters?: ConversationFilters) {
         .limit(5000); // Alinhado com useInboxCounts para consistência
 
       // Role-based filtering por departamento
-      if (role && user?.id && !hasFullInboxAccess(role)) {
+      // EXCEÇÃO: Fila IA (ai_queue) é visível para todos os roles — pular filtro de visibilidade
+      const isAiQueueFilter = filters?.status?.includes("ai_queue" as any) || false;
+      if (role && user?.id && !hasFullInboxAccess(role) && !isAiQueueFilter) {
         // Roles operacionais: ver apenas conversas atribuídas a eles OU não atribuídas do seu departamento OU pool geral (sem departamento)
         if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
           if (departmentIds && departmentIds.length > 0) {
