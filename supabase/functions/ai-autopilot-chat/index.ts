@@ -6684,6 +6684,15 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
       const cd = flow_context?.collectedData;
       if (!cd || typeof cd !== 'object') return '';
       const lines: string[] = [];
+
+      // === INJEÇÃO EXPLÍCITA DO STATUS DE VALIDAÇÃO DE CLIENTE ===
+      if (cd.customer_validated === true || cd.customer_validated === 'true') {
+        const validatedName = cd.customer_verified_name || cd.customer_name_found || customer_context?.name || '';
+        lines.push(`- ✅ CLIENTE JÁ VALIDADO: Este contato foi verificado automaticamente como cliente${validatedName ? ` (${validatedName})` : ''}. NÃO pergunte se ele é cliente. Trate-o como cliente confirmado.`);
+      } else if (cd.customer_validated === false || cd.customer_validated === 'false') {
+        lines.push(`- ❌ CONTATO NÃO É CLIENTE: Este contato NÃO foi encontrado na base de clientes.`);
+      }
+
       if (cd.produto) lines.push(`- Produto escolhido: ${cd.produto}`);
       if (cd.assunto) lines.push(`- Assunto escolhido: ${cd.assunto}`);
       if (cd.customer_name_found) lines.push(`- Nome do cliente: ${cd.customer_name_found}`);
@@ -6697,7 +6706,17 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
         }
       }
       if (lines.length === 0) return '';
-      return `\n\n**📋 CONTEXTO DO FLUXO (dados já coletados do cliente):**\n${lines.join('\n')}\nUse estas informações para contextualizar suas respostas. O cliente já passou por menus e escolheu essas opções — NÃO pergunte novamente o que ele já informou.\n`;
+
+      // Instrução anti-pergunta quando cliente já validado
+      const antiAskInstruction = (cd.customer_validated === true || cd.customer_validated === 'true')
+        ? `\n\n🚫 REGRA DE VALIDAÇÃO AUTOMÁTICA: O cliente já foi VALIDADO AUTOMATICAMENTE pelo sistema. Você NUNCA deve:
+- Perguntar se ele é cliente
+- Perguntar email, CPF ou telefone para identificação
+- Sugerir "se for nosso cliente" / "se não for"
+Vá direto ao atendimento usando o nome dele.`
+        : '';
+
+      return `\n\n**📋 CONTEXTO DO FLUXO (dados já coletados do cliente):**\n${lines.join('\n')}\nUse estas informações para contextualizar suas respostas. O cliente já passou por menus e escolheu essas opções — NÃO pergunte novamente o que ele já informou.${antiAskInstruction}\n`;
     })();
 
     const contextualizedSystemPrompt = `${agentContextBlock}${flowCollectedDataBlock}${priorityInstruction}${flowAntiTransferInstruction}${antiHallucinationInstruction}${businessHoursPrompt}${financialGuardInstruction}${cancellationGuardInstruction}${commercialGuardInstruction}${consultorGuardInstruction}
