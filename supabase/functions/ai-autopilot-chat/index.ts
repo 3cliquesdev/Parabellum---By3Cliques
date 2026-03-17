@@ -5696,7 +5696,7 @@ Se foram pagos recentemente, pode ser que ainda nÃ£o tenham entrado em prepara
       }
       
       // Mensagem para cliente identificado
-      const handoffMessage = `OlÃ¡ ${contactName}! Para te ajudar melhor com essa questÃ£o, vou te conectar com um de nossos especialistas. Um momento, por favor.`;
+      const handoffMessage = `Olá ${contactName}! Para te ajudar melhor com essa questão, vou te conectar com um de nossos especialistas. Um momento, por favor.`;
       
       // Salvar mensagem
       await supabaseClient.from('messages').insert({
