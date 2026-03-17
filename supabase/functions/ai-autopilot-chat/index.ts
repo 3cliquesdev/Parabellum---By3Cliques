@@ -2585,12 +2585,12 @@ serve(async (req) => {
             if (originalIntent && originalIntentCategory) {
               // TEM CONTEXTO: Mensagem que retoma o assunto original
               const intentLabel = getIntentCategoryLabel(originalIntentCategory);
-              successMessage = `Ã“timo, ${customerName}! âœ…\n\nIdentifiquei vocÃª em nosso sistema. VocÃª mencionou sobre **${intentLabel}** - vou te ajudar com isso agora!\n\n_Processando sua solicitaÃ§Ã£o..._`;
+              successMessage = `Ótimo, ${customerName}! ✅\n\nIdentifiquei você em nosso sistema. Você mencionou sobre **${intentLabel}** - vou te ajudar com isso agora!\n\n_Processando sua solicitação..._`;
               
-              console.log('[ai-autopilot-chat] ðŸŽ¯ Preservando contexto:', intentLabel);
+              console.log('[ai-autopilot-chat] 🎯 Preservando contexto:', intentLabel);
             } else {
-              // SEM CONTEXTO: Mensagem genÃ©rica (comportamento antigo)
-              successMessage = `Ã“timo, ${customerName}! âœ…\n\nIdentifiquei vocÃª em nosso sistema. Como posso ajudar hoje?`;
+              // SEM CONTEXTO: Mensagem genérica (comportamento antigo)
+              successMessage = `Ótimo, ${customerName}! ✅\n\nIdentifiquei você em nosso sistema. Como posso ajudar hoje?`;
             }
             
             await supabaseClient.from('messages').insert({
