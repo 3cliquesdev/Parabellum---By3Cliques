@@ -2901,9 +2901,10 @@ serve(async (req) => {
               const ticket = await createTicketFromFlow(supabaseClient, {
                 conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
                 contactId: activeContactData?.id || null, subject, description,
-                category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
+                category: actionData.category || actionData.ticket_category || nextNode.data.ticket_category || 'outro',
                 priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
                 departmentId: actionData.department_id || nextNode.data.department_id || null,
+                assignedTo: actionData.assigned_to || nextNode.data.assigned_to || null,
                 internalNote, useCollectedData: actionData.use_collected_data || nextNode.data.use_collected_data || false, collectedData,
               });
               if (ticket) collectedData.__last_ticket_id = ticket.id;
