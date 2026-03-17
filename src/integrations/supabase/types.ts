@@ -3476,6 +3476,39 @@ export type Database = {
         }
         Relationships: []
       }
+      email_send_log: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          message_id: string | null
+          metadata: Json | null
+          recipient_email: string | null
+          status: string | null
+          template_name: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          recipient_email?: string | null
+          status?: string | null
+          template_name?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          recipient_email?: string | null
+          status?: string | null
+          template_name?: string | null
+        }
+        Relationships: []
+      }
       email_senders: {
         Row: {
           created_at: string | null
@@ -10179,6 +10212,7 @@ export type Database = {
         Args: { p_contact_id: string }
         Returns: Json
       }
+      custom_auth_email_hook: { Args: { event: Json }; Returns: Json }
       distribute_client_to_consultant: {
         Args: { p_contact_id: string }
         Returns: Json
