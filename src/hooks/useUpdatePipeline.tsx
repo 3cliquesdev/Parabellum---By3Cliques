@@ -6,6 +6,7 @@ interface UpdatePipelineData {
   id: string;
   name: string;
   is_default?: boolean;
+  department_id?: string | null;
 }
 
 export function useUpdatePipeline() {
