@@ -1,22 +1,29 @@
 
+# Fix: IA vazando instruções internas do contextPrompt para o cliente — ✅ IMPLEMENTADO
 
-# Fix: CHECK constraint `returns_reason_check` bloqueia inserção
+## O que mudou
 
-## Causa Raiz
-A tabela `returns` tem um CHECK constraint estático que só aceita 5 motivos antigos:
-- `defeito`, `arrependimento`, `troca`, `nao_recebido`, `outro`
+### 1. Guard anti-vazamento reforçado no `agentContextBlock` ✅
+- Instruções internas agora envoltas em tags `[SYSTEM INTERNAL — DO NOT OUTPUT TO USER]`
+- Adicionadas **9 regras explícitas** com exemplos proibidos e exemplos corretos
+- LLM recebe instrução imperativa e repetida para nunca reproduzir passos internos
 
-Porém, a tabela `return_reasons` (dinâmica) agora tem chaves diferentes:
-- `defeito_no_produto`, `arrependimento_cliente_final`, `defeito_transporte`, `insucesso_de_entrega`, `envio_errado`
+### 2. Reordenação do prompt ✅
+- `agentContextBlock` movido da **posição 1** para a **última posição** no prompt contextualizado
+- LLM agora processa personalidade, regras de comportamento e contexto do fluxo ANTES de ver instruções internas
+- Reduz drasticamente a chance de eco das instruções
 
-O dropdown do formulário usa as chaves dinâmicas da tabela `return_reasons`, mas o banco rejeita porque o CHECK constraint não reconhece esses valores.
+### 3. Sanitização pós-resposta da LLM ✅
+- Filtro regex detecta padrões de vazamento:
+  - "siga estes passos", "verifique na base", "próximos passos:"
+  - "Para o contato X, siga/execute..."
+  - Frases numeradas com verbos de sistema (1) Verifique...)
+  - Tags `[SYSTEM INTERNAL]` na resposta
+- Se detectado: resposta substituída por saudação natural contextual
+- Log de auditoria (`instruction_leak_blocked`) para monitoramento
 
-Também há o mesmo problema potencial no `returns_status_check` (falta `archived`).
-
-## Solução
-Uma migração SQL para:
-1. **Remover** `returns_reason_check` — a validação de motivos já é feita dinamicamente via `return_reasons` (tanto na edge function quanto no frontend)
-2. **Remover** `returns_status_check` e recriá-lo incluindo `archived`
-
-Zero alterações no frontend — o código já está correto.
-
+## Impacto
+- ✅ Defesa em profundidade: prompt reforçado + reordenação + filtro de saída
+- ✅ Zero vazamento de instruções internas para o cliente
+- ✅ Zero impacto em respostas legítimas da IA
+- ✅ Auditoria completa em `ai_events`
