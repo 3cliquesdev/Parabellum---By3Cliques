@@ -3520,7 +3520,7 @@ serve(async (req) => {
                 fallbackMessage: flowResult.fallbackMessage || null,
                 objective: flowResult.objective || null,
                 maxSentences: flowResult.maxSentences ?? 3,
-                forbidQuestions: flowResult.forbidQuestions ?? true,
+                forbidQuestions: flowResult.forbidQuestions ?? false, // 🤖 JARVIS: default permite perguntas
                 forbidOptions: flowResult.forbidOptions ?? true,
                 forbidFinancial: flowResult.forbidFinancial ?? false,
                 forbidCommercial: flowResult.forbidCommercial ?? false,
