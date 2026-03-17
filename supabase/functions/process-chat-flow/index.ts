@@ -3595,7 +3595,9 @@ serve(async (req) => {
           }
 
           // ✅ UPGRADE: max_interactions ou aiExitForced deve AVANÇAR para próximo nó
-          if ((maxReached || aiExitForced) && !keywordMatch) {
+          const isExplicitIntentExit = financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || saqueIntentMatch || devolucaoIntentMatch || pedidosIntentMatch || sistemaIntentMatch || internacionalIntentMatch;
+          
+          if ((maxReached || (aiExitForced && !isExplicitIntentExit)) && !keywordMatch) {
             const fallbackMsg = currentNode.data?.fallback_message;
             if (fallbackMsg && String(fallbackMsg).trim().length > 0) {
               try {
@@ -3603,7 +3605,7 @@ serve(async (req) => {
                 await supabaseClient.from('messages').insert({
                   conversation_id: conversationId,
                   content: String(fallbackMsg),
-                  sender_type: 'user',
+                  sender_type: 'bot',
                   is_ai_generated: true,
                   is_internal: false,
                   status: 'sent',
@@ -4650,7 +4652,7 @@ serve(async (req) => {
             try {
               await supabaseClient.from('messages').insert({
                 conversation_id: conversationId, content: preMsgs,
-                sender_type: 'user', is_ai_generated: true, is_internal: false, status: 'sent', channel: 'web_chat',
+                sender_type: 'bot', is_ai_generated: true, is_internal: false, status: 'sent', channel: 'web_chat',
               });
             } catch (e) { console.error('[process-chat-flow] ⚠️ Failed to send pre-transfer messages:', e); }
           }
