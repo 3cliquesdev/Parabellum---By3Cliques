@@ -1,25 +1,48 @@
 
-# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-## O que mudou
+# Plano de Correção — Auditoria de Conversas Ativas
 
-### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
-- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
-- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
-- Ao trocar departamento, responsável é limpo automaticamente
-- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
+## Problemas Identificados
 
-### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
-- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
-  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
-  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
-  - Dados salvos em `end_action` e `action_data` no node data
-- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
+### 1. Mojibake massivo ainda presente (3.894 ocorrências)
+A limpeza anterior corrigiu apenas ~100 linhas, mas o arquivo `ai-autopilot-chat/index.ts` (9.897 linhas) ainda tem **3.894 strings com caracteres corrompidos**. Isso afeta:
+- **Console.log/warnings**: logs ilegíveis no painel (ex: `âœ… Resposta processada` em vez de `✅ Resposta processada`)
+- **Strings de prompt injetadas na LLM**: instruções como `NÃƒO PEÃ‡A OTP` em vez de `NÃO PEÇA OTP` — a IA pode interpretar mal
+- **Handler de reembolso** (linhas 6528-6536): texto corrompido `Reembolsos sÃ£o processados automaticamente` sendo injetado no prompt
+- **Handler de cancelamento** (linhas 6543-6550): mesmo problema
+- **Handler de saque/OTP** (linhas 6511-6518): `Para sua seguranÃ§a` corrompido
 
-### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
-- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
-- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
+### 2. Conversa #832496f2 (Diego Teixeira) — IA fora de escopo
+- Cliente no `node_ia_financeiro` pedindo reembolso
+- Fix do `isInFinanceiroNode` foi aplicado corretamente (linha 6524-6525) ✅
+- **Porém**: a IA respondeu "Obrigado pelo envio. Como prefere que eu ajude agora? Quer que eu redija uma resposta ao Miguel?" — completamente fora do escopo financeiro
+- **Causa**: As instruções do prompt financeiro estão com mojibake, a LLM não consegue interpretar o objetivo corretamente e "inventa" comportamentos
 
-### 4. Continuidade do Fluxo ✅
-- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
-- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
+### 3. Source Violations (sandbox_not_allowed)
+- Conversa `ce541d98` (Casaiq/Pedidos): IA respondeu sobre código de rastreio não encontrado usando conteúdo "sandbox" — warning registrado mas não bloqueado
+
+## Plano de Correção
+
+### Etapa 1: Limpeza completa de mojibake no arquivo inteiro
+Substituir TODAS as 3.894 ocorrências de caracteres corrompidos pelo equivalente UTF-8 correto em `supabase/functions/ai-autopilot-chat/index.ts`. Mapeamento principal:
+- `Ã£` → `ã`, `Ã§` → `ç`, `Ã©` → `é`, `Ãµ` → `õ`, `Ã¡` → `á`, `Ã³` → `ó`, `Ãª` → `ê`, `Ã­` → `í`, `Ãº` → `ú`, `Ã‚` → `Â`, `Ãƒ` → `Ã`
+- Emojis: `ðŸ` → emojis reais, `âœ…` → `✅`, `âš ï¸` → `⚠️`, `âŒ` → `❌`, `â†'` → `→`
+- Operação: reescrever o arquivo completo com encoding UTF-8 limpo
+
+### Etapa 2: Deploy da edge function
+Após a limpeza, deploy imediato para que todas as conversas ativas passem a receber prompts corretos.
+
+### Etapa 3: Reset do estado da conversa #832496f2
+A conversa do Diego está "poluída" com histórico de respostas fora de escopo. Opções:
+- Forçar restart do fluxo financeiro (limpar `chat_flow_states` e reiniciar no nó)
+- Ou transferir para humano manualmente
+
+## Impacto Esperado
+- Prompts injetados na LLM ficam legíveis → IA segue instruções corretamente
+- Logs ficam legíveis para auditoria
+- Handlers de reembolso/cancelamento/saque funcionam como esperado
+- A conversa do Diego é corrigida
+
+## Risco
+Zero risco funcional — apenas substituição de texto. A lógica do código não muda.
+
