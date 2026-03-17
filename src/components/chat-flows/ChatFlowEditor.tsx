@@ -239,13 +239,19 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const normalizedEdges = useMemo(() => {
-    return (initialFlow?.edges || []).map(edge => ({
-      ...edge,
-      type: 'buttonEdge',
-      style: edge.style || { strokeWidth: 2, stroke: 'hsl(var(--primary))' },
-      markerEnd: edge.markerEnd || { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
-    }));
-  }, [initialFlow?.edges]);
+    const allNodes = initialFlow?.nodes || [];
+    return (initialFlow?.edges || []).map(edge => {
+      const color = getEdgeColorFromSource(allNodes, edge.source, edge.sourceHandle);
+      const strokeColor = color || 'hsl(var(--primary))';
+      return {
+        ...edge,
+        type: 'buttonEdge',
+        style: { strokeWidth: 2, stroke: strokeColor },
+        markerEnd: { type: MarkerType.ArrowClosed, color: strokeColor },
+        label: color ? undefined : edge.label,
+      };
+    });
+  }, [initialFlow?.edges, initialFlow?.nodes]);
 
   const [edges, setEdges, onEdgesChange] = useEdgesState(normalizedEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
