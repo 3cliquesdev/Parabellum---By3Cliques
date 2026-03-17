@@ -940,8 +940,8 @@ serve(async (req) => {
                                   status: "closed",
                                   ai_mode: "autopilot",
                                   closed_at: new Date().toISOString(),
-                                  metadata: {
-                                    ...(conversation.metadata || {}),
+                                  customer_metadata: {
+                                    ...(conversation.customer_metadata || {}),
                                     close_reason: "after_hours_handoff",
                                   },
                                 })
