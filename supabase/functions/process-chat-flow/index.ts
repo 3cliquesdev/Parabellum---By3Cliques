@@ -3094,6 +3094,24 @@ serve(async (req) => {
           console.log('[process-chat-flow] invalidOption conv=' + conversationId + ' flow=' + activeState.flow_id + ' node=' + currentNode.id + ' msg="' + userMessage + '"');
           console.log('[process-chat-flow] ❌ Invalid option response:', userMessage, '| Options:', options.map((o: any) => o.label).join(', '));
           
+          // 🆕 Dedup: não reenviar "Desculpe" se já enviou nos últimos 30s
+          const { data: recentRetry } = await supabaseClient
+            .from('messages')
+            .select('id')
+            .eq('conversation_id', conversationId)
+            .ilike('content', 'Desculpe, não entendi%')
+            .gte('created_at', new Date(Date.now() - 30000).toISOString())
+            .limit(1)
+            .maybeSingle();
+
+          if (recentRetry) {
+            console.log('[process-chat-flow] 🔇 Dedup: "Desculpe" já enviado recentemente, silenciando');
+            return new Response(
+              JSON.stringify({ useAI: false, skipAutoResponse: true, reason: 'dedup_retry_ask_options' }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
           // Formatar opções para reenvio
           const formattedOptions = options.map((opt: any) => ({
             label: opt.label,
