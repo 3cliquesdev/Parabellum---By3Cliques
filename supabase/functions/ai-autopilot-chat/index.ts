@@ -8613,7 +8613,7 @@ Conversa: ${conversationId}`;
                 confidence_score: 1.0,
                 context: { category: args.category, summary: args.summary, resolution_notes: args.resolution_notes, severity: args.severity, tags: args.tags }
               });
-              assistantMessage = `ClassificaÃ§Ã£o sugerida: ${args.category} (shadow mode - nÃ£o aplicada).`;
+              assistantMessage = `Classificação sugerida: ${args.category} (shadow mode - não aplicada).`;
               break;
             }
 
