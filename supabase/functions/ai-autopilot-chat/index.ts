@@ -8290,7 +8290,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
               console.log('[ai-autopilot-chat] ðŸ“§ email_verified_in_db:', conversation.customer_metadata?.email_verified_in_db);
               
               // Retornar mensagem instruindo a pedir email primeiro
-              assistantMessage = 'Para poder te conectar com um atendente, preciso primeiro confirmar sua identidade. Qual Ã© o seu email de cadastro?';
+              assistantMessage = 'Para poder te conectar com um atendente, preciso primeiro confirmar sua identidade. Qual é o seu email de cadastro?';
               
               // NÃ£o executa o handoff - forÃ§a a IA a pedir email
               continue;
