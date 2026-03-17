@@ -6960,7 +6960,7 @@ Resolução desejada: Reembolso integral"
 - resend_otp: Use quando cliente disser "não recebi email" ou pedir reenvio. Reenvia código para email JÁ cadastrado.
 - verify_otp_code: Valide códigos OTP de 6 dígitos
 - request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver.
-- check_tracking: Consulta rastreio de pedidos. Use quando cliente perguntar sobre entrega ou status de envio.
+- check_tracking: Consulta rastreio de pedidos. Use quando cliente perguntar sobre entrega ou status de envio. REGRA: peça APENAS número do pedido ou código de rastreio. NUNCA peça email, CPF ou telefone para consultar pedidos/rastreio.
 - close_conversation: Encerre SOMENTE quando o cliente indicar CLARAMENTE que não tem mais dúvidas (ex: "era só isso", "não tenho mais dúvidas", "é isso", "pode encerrar"). NÃO interprete agradecimentos ("obrigado", "valeu", "muito obrigado") como sinal de encerramento — agradecer é educação, não significa que acabou. SEMPRE pergunte antes (customer_confirmed=false). Só use customer_confirmed=true após cliente confirmar "sim". Se cliente disser "não" ou tiver mais dúvidas, continue normalmente.
 - classify_and_resolve_ticket: Após encerrar conversa (close_conversation confirmado), classifique e registre a resolução. Use a categoria mais adequada do enum. Escreva summary curto e resolution_notes objetivo.
 
