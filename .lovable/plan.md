@@ -1,29 +1,28 @@
 
-# Fix: IA vazando instruções internas do contextPrompt para o cliente — ✅ IMPLEMENTADO
+# Configurar quila@3cliques.net como Atendente no Departamento Operacional
 
-## O que mudou
+## Usuário encontrado
+- **Nome:** quila@3cliques.net
+- **ID:** `c88004fa-e717-46d7-bbcd-8cfe1e87b3e7`
+- **Role atual:** `user` (cliente)
+- **Departamento:** nenhum
 
-### 1. Guard anti-vazamento reforçado no `agentContextBlock` ✅
-- Instruções internas agora envoltas em tags `[SYSTEM INTERNAL — DO NOT OUTPUT TO USER]`
-- Adicionadas **9 regras explícitas** com exemplos proibidos e exemplos corretos
-- LLM recebe instrução imperativa e repetida para nunca reproduzir passos internos
+## Departamento encontrado
+- **Operacional:** `fcba332e-d8d6-4db3-acc1-8b5fab6941be`
 
-### 2. Reordenação do prompt ✅
-- `agentContextBlock` movido da **posição 1** para a **última posição** no prompt contextualizado
-- LLM agora processa personalidade, regras de comportamento e contexto do fluxo ANTES de ver instruções internas
-- Reduz drasticamente a chance de eco das instruções
+## Ações necessárias
 
-### 3. Sanitização pós-resposta da LLM ✅
-- Filtro regex detecta padrões de vazamento:
-  - "siga estes passos", "verifique na base", "próximos passos:"
-  - "Para o contato X, siga/execute..."
-  - Frases numeradas com verbos de sistema (1) Verifique...)
-  - Tags `[SYSTEM INTERNAL]` na resposta
-- Se detectado: resposta substituída por saudação natural contextual
-- Log de auditoria (`instruction_leak_blocked`) para monitoramento
+### 1. Alterar role de `user` → `support_agent`
+Atualizar a tabela `user_roles` para mudar o papel de cliente para agente de suporte.
 
-## Impacto
-- ✅ Defesa em profundidade: prompt reforçado + reordenação + filtro de saída
-- ✅ Zero vazamento de instruções internas para o cliente
-- ✅ Zero impacto em respostas legítimas da IA
-- ✅ Auditoria completa em `ai_events`
+### 2. Atualizar departamento no perfil
+Setar `department = 'Operacional'` na tabela `profiles`.
+
+### 3. Vincular ao departamento via `agent_departments`
+Inserir registro em `agent_departments` com `department_id` do Operacional como departamento primário, usando a RPC `set_agent_departments`.
+
+### 4. Atualizar nome de exibição
+O `full_name` atual é o próprio email — pode ser mantido ou atualizado se houver um nome real.
+
+## Resultado
+O usuário passará a aparecer como agente de suporte no departamento Operacional, podendo receber conversas e atendimentos direcionados a esse departamento.
