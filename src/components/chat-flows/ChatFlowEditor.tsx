@@ -190,7 +190,11 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
   const { data: ticketCategories = [] } = useTicketCategories();
   const { data: allTags = [] } = useTags();
   const { data: departments = [] } = useDepartments({ activeOnly: true });
-  
+
+  // Agentes do departamento selecionado no nó create_ticket
+  const selectedCreateTicketDeptId = selectedNode?.type === "create_ticket" ? selectedNode?.data?.department_id : null;
+  const { data: agentsByDepartment = [] } = useUsersByDepartment(selectedCreateTicketDeptId || undefined);
+
 
   // Criar nó de início se não houver nós
   const initialNodes = useMemo(() => {
