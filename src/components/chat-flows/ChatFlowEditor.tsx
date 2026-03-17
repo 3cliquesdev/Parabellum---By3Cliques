@@ -215,6 +215,10 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
+  // Agentes do departamento selecionado no nó create_ticket
+  const selectedCreateTicketDeptId = selectedNode?.type === "create_ticket" ? selectedNode?.data?.department_id : null;
+  const { data: agentsByDepartment = [] } = useUsersByDepartment(selectedCreateTicketDeptId || undefined);
+
   // Notificar mudanças no fluxo para o parent
   useEffect(() => {
     if (onFlowChange) {
