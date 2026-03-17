@@ -278,6 +278,7 @@ async function createTicketFromFlow(
     category: string;
     priority: string;
     departmentId?: string | null;
+    assignedTo?: string | null;
     internalNote?: string | null;
     useCollectedData?: boolean;
     collectedData?: Record<string, any>;
@@ -324,6 +325,7 @@ async function createTicketFromFlow(
     metadata,
   };
   if (opts.departmentId) insertPayload.department_id = opts.departmentId;
+  if (opts.assignedTo) insertPayload.assigned_to = opts.assignedTo;
   if (opts.internalNote) insertPayload.internal_note = opts.internalNote;
 
   const { data: ticket, error } = await supabaseClient
@@ -460,6 +462,10 @@ async function buildVariablesContext(
     if (!contactData.name && (contactData.first_name || contactData.last_name)) {
       ctx['contact_name'] = [contactData.first_name, contactData.last_name].filter(Boolean).join(' ');
     }
+    // Aliases: customer_* → contact_* (UI usa customer_name, motor gera contact_name)
+    if (ctx['contact_name']) ctx['customer_name'] = ctx['contact_name'];
+    if (ctx['contact_email']) ctx['customer_email'] = ctx['contact_email'];
+    if (ctx['contact_phone']) ctx['customer_phone'] = ctx['contact_phone'];
   }
   if (conversationData) {
     for (const f of ['channel','status','priority','protocol_number','queue','created_at','resolved_at']) {
@@ -2042,9 +2048,10 @@ serve(async (req) => {
                       conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
                       contactId: activeContactData?.id || null,
                       subject, description,
-                      category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                      category: actionData.category || actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
                       priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
                       departmentId: actionData.department_id || resolvedNode.data.department_id || null,
+                      assignedTo: actionData.assigned_to || resolvedNode.data.assigned_to || null,
                       internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
                       collectedData,
                     });
@@ -2804,8 +2811,8 @@ serve(async (req) => {
                 conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
                 contactId: activeContactData?.id || null, subject, description,
                 category: nextNode.data?.ticket_category || 'outro', priority: nextNode.data?.ticket_priority || 'medium',
-                departmentId: nextNode.data?.department_id || null, internalNote,
-                useCollectedData: nextNode.data?.use_collected_data || false, collectedData,
+                departmentId: nextNode.data?.department_id || null, assignedTo: nextNode.data?.assigned_to || null,
+                internalNote, useCollectedData: nextNode.data?.use_collected_data || false, collectedData,
               });
               if (ticket) collectedData.__last_ticket_id = ticket.id;
               console.log(`[process-chat-flow] 🎫 [generic] Auto-advancing past create_ticket ${nextNode.id}`);
@@ -4423,6 +4430,7 @@ serve(async (req) => {
             category: nextNode.data?.ticket_category || 'outro',
             priority: nextNode.data?.ticket_priority || 'medium',
             departmentId: nextNode.data?.department_id || null,
+            assignedTo: nextNode.data?.assigned_to || null,
             internalNote,
             useCollectedData: nextNode.data?.use_collected_data || false,
             collectedData,
@@ -4552,9 +4560,10 @@ serve(async (req) => {
             contactId: activeContactData?.id || null,
             subject,
             description,
-            category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
+            category: actionData.category || actionData.ticket_category || nextNode.data.ticket_category || 'outro',
             priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
             departmentId: actionData.department_id || nextNode.data.department_id || null,
+            assignedTo: actionData.assigned_to || nextNode.data.assigned_to || null,
             internalNote,
             useCollectedData: actionData.use_collected_data || nextNode.data.use_collected_data || false,
             collectedData,
@@ -5349,9 +5358,10 @@ serve(async (req) => {
               conversationId, flowStateId: stateId || '', nodeId: node.id,
               contactId: contactData?.id || null,
               subject, description,
-              category: actionData.ticket_category || node.data.ticket_category || 'outro',
+              category: actionData.category || actionData.ticket_category || node.data.ticket_category || 'outro',
               priority: actionData.ticket_priority || node.data.ticket_priority || 'medium',
               departmentId: actionData.department_id || node.data.department_id || null,
+              assignedTo: actionData.assigned_to || node.data.assigned_to || null,
               internalNote, useCollectedData: actionData.use_collected_data || node.data.use_collected_data || false,
               collectedData: {},
             });

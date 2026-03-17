@@ -1,74 +1,25 @@
 
+# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-# Auditoria Completa — Bugs Encontrados
+## O que mudou
 
-## Status Geral
-A UI (variáveis clicáveis, cores de edges) está funcional. Porém encontrei **3 bugs críticos** que impediriam o ticket de funcionar corretamente no fluxo de saque.
+### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
+- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
+- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
+- Ao trocar departamento, responsável é limpo automaticamente
+- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
 
----
+### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
+- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
+  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
+  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
+  - Dados salvos em `end_action` e `action_data` no node data
+- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
 
-## Bug 1: `category` vs `ticket_category` — CRÍTICO
-**Impacto**: Categoria do ticket sempre cai em "outro", ignorando a seleção do usuário.
+### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
+- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
+- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
 
-- A UI (`AIResponsePropertiesPanel.tsx` linha 303) salva em `action_data.category`
-- O motor (`process-chat-flow/index.ts` linha 2045) lê `actionData.ticket_category`
-- Como `ticket_category` nunca existe no `action_data`, cai no fallback `'outro'`
-
-**Fix**: No motor, em TODOS os `end_action === 'create_ticket'`, alterar para ler `actionData.category || actionData.ticket_category || ...`
-
----
-
-## Bug 2: `assigned_to` não é passado para `createTicketFromFlow` — CRÍTICO
-**Impacto**: Mesmo selecionando um responsável na UI, o ticket é criado sem responsável.
-
-- A função `createTicketFromFlow` (linha 269-355) não tem `assigned_to` nos parâmetros
-- O `insertPayload` (linha 315) nunca inclui `assigned_to`
-- A UI salva corretamente em `action_data.assigned_to`, mas ninguém lê esse valor
-
-**Fix**: Adicionar `assignedTo?: string | null` na interface da função e incluir no `insertPayload`
-
----
-
-## Bug 3: Variáveis de sistema com nomes errados — MODERADO
-**Impacto**: `{{customer_name}}`, `{{customer_email}}`, `{{customer_phone}}` nos badges não são substituídos no ticket.
-
-- A UI usa `customer_name`, `customer_email`, `customer_phone`
-- O motor gera `contact_name`, `contact_email`, `contact_phone` (linha 456-462 do `buildVariablesContext`)
-- `replaceVariables()` não encontra match e deixa o texto literal `{{customer_name}}`
-
-**Fix**: Adicionar aliases no `buildVariablesContext`: `ctx['customer_name'] = ctx['contact_name']`, etc.
-
----
-
-## O que está OK ✅
-1. **Variáveis clicáveis** — UI funciona, insere `{{var}}` nos campos
-2. **Cores das edges** — `getEdgeColorFromSource` mapeia corretamente as cores das opções
-3. **replaceVariables** — função genérica funciona se as chaves existirem
-4. **collectedData** — pix_key, bank, amount, reason são corretamente incluídos no context via `{ ...collectedData }`
-5. **Idempotência** — `createTicketFromFlow` verifica ticket duplicado por chave
-6. **use_collected_data** — snapshot é salvo no metadata do ticket
-7. **departmentId** — é passado corretamente do `action_data` para a função
-
----
-
-## Plano de Correção
-
-### Arquivo 1: `supabase/functions/process-chat-flow/index.ts`
-
-**A) Função `createTicketFromFlow`** — adicionar parâmetro `assignedTo` e incluir no `insertPayload`
-
-**B) `buildVariablesContext`** — adicionar aliases:
-```
-ctx['customer_name'] = ctx['contact_name']
-ctx['customer_email'] = ctx['contact_email']  
-ctx['customer_phone'] = ctx['contact_phone']
-```
-
-**C) Todas as chamadas `end_action === 'create_ticket'`** (~8 ocorrências) — duas mudanças:
-1. Ler `actionData.category` em vez de `actionData.ticket_category`
-2. Passar `assignedTo: actionData.assigned_to || resolvedNode.data.assigned_to || null`
-
-**D) Todas as chamadas de `createTicketFromFlow` em nós `create_ticket` diretos** (~3 ocorrências) — passar `assignedTo: nextNode.data?.assigned_to || null`
-
-### Total: ~25 linhas alteradas em 1 arquivo (edge function)
-
+### 4. Continuidade do Fluxo ✅
+- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
+- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
