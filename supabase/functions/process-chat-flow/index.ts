@@ -278,6 +278,7 @@ async function createTicketFromFlow(
     category: string;
     priority: string;
     departmentId?: string | null;
+    assignedTo?: string | null;
     internalNote?: string | null;
     useCollectedData?: boolean;
     collectedData?: Record<string, any>;
