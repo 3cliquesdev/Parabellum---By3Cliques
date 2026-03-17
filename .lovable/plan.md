@@ -1,25 +1,19 @@
 
-# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-## O que mudou
+# Adicionar campos V2 ao export do Relatório Comercial (V1)
 
-### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
-- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
-- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
-- Ao trocar departamento, responsável é limpo automaticamente
-- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
+## Problema
+O V1 (`CommercialConversationsReport`) e o V2 (`ConversationsReport`) são páginas separadas — ambas existem corretamente. Porém o **export do V1** (`useExportCommercialConversationsCSV.tsx`) está sem as 3 colunas novas que a RPC já retorna.
 
-### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
-- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
-  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
-  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
-  - Dados salvos em `end_action` e `action_data` no node data
-- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
+## Alteração
+**Arquivo**: `src/hooks/useExportCommercialConversationsCSV.tsx`
 
-### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
-- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
-- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
+Na aba "Detalhado" (linhas 177-214):
+1. Adicionar 3 headers ao array: `"Handoff"`, `"Tempo 1ª Resposta Humana"`, `"Tempo Resolução Humana"`
+2. Adicionar os 3 valores no mapeamento de cada row:
+   - `row.handoff_at` → formatado com `format(new Date(...), "dd/MM/yyyy HH:mm")`
+   - `row.human_first_response_seconds` → `formatDuration()`
+   - `row.human_resolution_seconds` → `formatDuration()`
 
-### 4. Continuidade do Fluxo ✅
-- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
-- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
+Nenhuma mudança SQL necessária — a RPC já retorna esses campos.
+
