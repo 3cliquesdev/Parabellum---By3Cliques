@@ -737,11 +737,11 @@ const FALLBACK_PHRASES = [
   'vou te encaminhar',
   'encaminhar para o setor',
   'transferir para o setor',
-  'vou transferir vocÃª para um especialista',
-  // Redirecionamentos explÃ­citos
+  'vou transferir você para um especialista',
+  // Redirecionamentos explícitos
   'redirecionar para',
-  'encaminhar vocÃª',
-  'direcionar vocÃª',
+  'encaminhar você',
+  'direcionar você',
 ];
 
 // ðŸ” BARREIRA FINANCEIRA - Palavras que identificam contexto FINANCEIRO (sem OTP obrigatÃ³rio)
