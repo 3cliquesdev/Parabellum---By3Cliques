@@ -2345,7 +2345,7 @@ serve(async (req) => {
             // NÃ£o retorna - cai no fluxo normal para IA continuar atendimento
           } else {
             // AmbÃ­guo - repetir pergunta
-            const ambiguousMsg = 'SÃ³ confirmando: posso encerrar seu atendimento? Responda **sim** ou **nÃ£o**.';
+            const ambiguousMsg = 'So confirmando: posso encerrar seu atendimento? Responda **sim** ou **nao**.';
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId, content: ambiguousMsg,
               sender_type: 'user', is_ai_generated: true, is_bot_message: true
