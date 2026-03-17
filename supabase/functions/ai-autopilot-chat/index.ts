@@ -10,7 +10,7 @@ const corsHeaders = {
 };
 
 // ============================================================
-// ðŸ†• INTERFACE DE CONFIGURAÃ‡ÃƒO RAG DINÃ‚MICA
+// 🆕 INTERFACE DE CONFIGURAÇÃO RAG DINÂMICA
 // Lido do banco system_configurations
 // ============================================================
 interface RAGConfig {
