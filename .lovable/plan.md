@@ -1,25 +1,20 @@
 
-# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-## O que mudou
+# Adicionar Guia/Instrução na "Ação ao Sair" do Nó IA
 
-### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
-- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
-- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
-- Ao trocar departamento, responsável é limpo automaticamente
-- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
+## O que fazer
 
-### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
-- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
-  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
-  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
-  - Dados salvos em `end_action` e `action_data` no node data
-- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
+Adicionar um texto explicativo abaixo do select "Ação ao Sair" para orientar o usuário sobre quando e por que ativar essa função.
 
-### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
-- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
-- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
+## Alteração
 
-### 4. Continuidade do Fluxo ✅
-- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
-- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
+**Arquivo:** `src/components/chat-flows/AIResponsePropertiesPanel.tsx`
+
+1. Adicionar um tooltip no título "AÇÃO AO SAIR" com explicação completa
+2. Adicionar um parágrafo descritivo abaixo do select explicando:
+   - **Quando usar**: "Ative quando a IA precisar formalizar a solicitação do cliente em um ticket antes de encerrar o atendimento (ex: saque, reembolso, devolução)"
+   - **Como funciona**: "O ticket será criado automaticamente com os dados coletados pela IA quando ela finalizar o atendimento neste nó"
+3. Quando "Criar Ticket" é selecionado, adicionar uma nota guia no topo da seção expandida: "Configure abaixo os dados do ticket. Departamento define para qual equipe o ticket será direcionado. O responsável é opcional — se não selecionado, o ticket vai para o pool do departamento."
+
+Alteração única em `AIResponsePropertiesPanel.tsx`, ~10 linhas adicionadas.
+
