@@ -1,53 +1,25 @@
 
+# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-# Auto-sync de Permissões: Novos menus disponíveis automaticamente
+## O que mudou
 
-## Problema
-Quando você adiciona um novo item de menu em `routes.ts` com uma `permission` key nova (ex: `returns.view`), essa key **não existe** na tabela `role_permissions` do banco. O painel de permissões (`RolePermissionsManager`) só mostra o que está no banco. Resultado: o menu novo não aparece para configurar.
+### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
+- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
+- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
+- Ao trocar departamento, responsável é limpo automaticamente
+- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
 
-Hoje, cada nova permission exige uma migration SQL manual para inserir a key em todos os roles.
+### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
+- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
+  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
+  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
+  - Dados salvos em `end_action` e `action_data` no node data
+- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
 
-## Solução
-Criar uma **migration SQL** que faz sync automático: lê todas as permission keys únicas que existem em `routes.ts` (hardcoded na migration) e insere as que faltam para cada role, com `enabled = false` por padrão (exceto admin/general_manager).
+### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
+- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
+- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
 
-Além disso, para o futuro, adicionar um **botão "Sincronizar Permissões"** no painel de permissões que chama uma edge function para detectar e criar as keys faltantes automaticamente.
-
-### Etapa 1 — Migration imediata
-SQL que extrai todas as permission keys de `routes.ts` e insere as faltantes para cada role:
-
-```sql
--- Para cada permission_key usada em routes.ts que NÃO existe no banco,
--- inserir para todos os roles com enabled=false (admin/gm = true)
-INSERT INTO role_permissions (role, permission_key, permission_label, permission_category, enabled)
-SELECT 
-  r.role,
-  k.key,
-  k.label,
-  k.category,
-  r.role IN ('admin', 'general_manager')
-FROM (VALUES
-  -- Todas as keys de routes.ts
-  ('dashboard.view', 'Ver Dashboard', 'dashboard'),
-  ('analytics.view', 'Ver Analytics', 'analytics'),
-  -- ... (todas as ~30 keys)
-) AS k(key, label, category)
-CROSS JOIN (SELECT DISTINCT role FROM role_permissions) AS r(role)
-WHERE NOT EXISTS (
-  SELECT 1 FROM role_permissions rp 
-  WHERE rp.role = r.role AND rp.permission_key = k.key
-);
-```
-
-### Etapa 2 — Botão "Sync Permissões" no painel admin
-Adicionar no `RolePermissionsManager.tsx` um botão que:
-1. Lê `universalMenuGroups` do frontend
-2. Compara com as keys existentes no banco
-3. Insere as faltantes via `supabase.from('role_permissions').insert()`
-
-Isso garante que **qualquer menu novo adicionado no código** pode ser sincronizado com um clique, sem precisar de migration.
-
-### Arquivos alterados
-1. **Nova migration SQL** — insere todas as permission keys faltantes
-2. **`src/components/users/RolePermissionsManager.tsx`** — botão "Sincronizar Permissões"
-3. **Novo hook `src/hooks/useSyncPermissions.ts`** — lógica de detecção e inserção de keys faltantes
-
+### 4. Continuidade do Fluxo ✅
+- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
+- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
