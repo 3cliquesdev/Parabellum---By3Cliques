@@ -1,29 +1,31 @@
 
-# Fix: IA vazando instruções internas do contextPrompt para o cliente — ✅ IMPLEMENTADO
+# Liberar Criação de Devoluções para Agentes (support_agent)
 
-## O que mudou
+## Problema
+A tabela `returns` possui apenas 2 políticas de INSERT:
+- `client_insert_returns`: permite apenas clientes (`created_by = 'customer'`)
+- `mgmt_all_returns`: permite apenas managers/admins via `is_manager_or_admin()`
 
-### 1. Guard anti-vazamento reforçado no `agentContextBlock` ✅
-- Instruções internas agora envoltas em tags `[SYSTEM INTERNAL — DO NOT OUTPUT TO USER]`
-- Adicionadas **9 regras explícitas** com exemplos proibidos e exemplos corretos
-- LLM recebe instrução imperativa e repetida para nunca reproduzir passos internos
+O usuário `quila@3cliques.net` tem role `support_agent`, que não é coberto por nenhuma dessas políticas. Logo, o INSERT falha com erro de RLS.
 
-### 2. Reordenação do prompt ✅
-- `agentContextBlock` movido da **posição 1** para a **última posição** no prompt contextualizado
-- LLM agora processa personalidade, regras de comportamento e contexto do fluxo ANTES de ver instruções internas
-- Reduz drasticamente a chance de eco das instruções
+## Solução
+Adicionar uma nova política RLS de INSERT (e SELECT/UPDATE) para agentes operacionais na tabela `returns`.
 
-### 3. Sanitização pós-resposta da LLM ✅
-- Filtro regex detecta padrões de vazamento:
-  - "siga estes passos", "verifique na base", "próximos passos:"
-  - "Para o contato X, siga/execute..."
-  - Frases numeradas com verbos de sistema (1) Verifique...)
-  - Tags `[SYSTEM INTERNAL]` na resposta
-- Se detectado: resposta substituída por saudação natural contextual
-- Log de auditoria (`instruction_leak_blocked`) para monitoramento
+### Migração SQL
+Criar política `agent_manage_returns` que permite `support_agent`, `financial_agent`, `consultant` e `sales_rep` fazerem INSERT, SELECT e UPDATE na tabela `returns`:
 
-## Impacto
-- ✅ Defesa em profundidade: prompt reforçado + reordenação + filtro de saída
-- ✅ Zero vazamento de instruções internas para o cliente
-- ✅ Zero impacto em respostas legítimas da IA
-- ✅ Auditoria completa em `ai_events`
+```sql
+CREATE POLICY "agent_manage_returns" ON public.returns
+FOR ALL TO authenticated
+USING (
+  has_any_role(auth.uid(), ARRAY['support_agent','financial_agent','consultant','sales_rep']::app_role[])
+)
+WITH CHECK (
+  has_any_role(auth.uid(), ARRAY['support_agent','financial_agent','consultant','sales_rep']::app_role[])
+);
+```
+
+Isso permite que qualquer agente autenticado (não-cliente, não-manager) crie e gerencie devoluções.
+
+### Zero alterações no frontend
+O código já usa `created_by: "admin"` no insert — isso é um campo de texto descritivo, não afeta a política. A política nova vai simplesmente permitir o INSERT baseado no role do usuário.
