@@ -66,6 +66,7 @@ const CATEGORY_ORDER = [
 export function RolePermissionsManager() {
   const { data: permissions, isLoading } = useAllRolePermissions();
   const updatePermission = useUpdatePermission();
+  const { syncPermissions, syncing } = useSyncPermissions();
   const [activeRole, setActiveRole] = useState("general_manager");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(CATEGORY_ORDER));
