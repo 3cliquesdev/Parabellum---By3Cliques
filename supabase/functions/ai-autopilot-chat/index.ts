@@ -8097,74 +8097,7 @@ Via: Atendimento Automatizado (IA)`;
             }
           }
         }
-        // TOOL: check_order_status - Consultar pedidos do cliente
-        else if (toolCall.function.name === 'check_order_status') {
-          try {
-            const args = safeParseToolArgs(toolCall.function.arguments);
-            const customerEmail = args.customer_email?.toLowerCase().trim();
-            console.log('[ai-autopilot-chat] ðŸ“¦ Consultando pedidos para:', customerEmail);
-
-            // Buscar contato pelo email
-            const { data: customerContact, error: contactError } = await supabaseClient
-              .from('contacts')
-              .select('id, first_name, last_name, email, status')
-              .eq('email', customerEmail)
-              .maybeSingle();
-
-            if (contactError || !customerContact) {
-              assistantMessage = `Não encontrei nenhum cliente cadastrado com o email ${customerEmail}. Poderia verificar se é o email correto de compra?`;
-              continue;
-            }
-
-            // Buscar deals desse contato
-            const { data: deals, error: dealsError } = await supabaseClient
-              .from('deals')
-              .select(`
-                id, title, value, currency, status, 
-                created_at, closed_at,
-                products (name)
-              `)
-              .eq('contact_id', customerContact.id)
-              .order('created_at', { ascending: false })
-              .limit(5);
-
-            if (!deals || deals.length === 0) {
-              assistantMessage = `Olá ${customerContact.first_name}! Encontrei seu cadastro, mas não há pedidos registrados para este email. Posso te ajudar com outra coisa?`;
-              continue;
-            }
-
-            // Formatar resposta
-            const dealsFormatted = deals.map(d => {
-              const productData = d.products as any;
-              const product = Array.isArray(productData) 
-                ? productData[0]?.name 
-                : productData?.name || 'Produto nÃ£o especificado';
-              
-              const statusLabels: Record<string, string> = {
-                'open': 'Em andamento',
-                'won': 'Concluído',
-                'lost': 'Cancelado'
-              };
-              const statusLabel = statusLabels[d.status] || d.status;
-              
-              const value = d.value ? `R$ ${d.value.toFixed(2)}` : 'R$ 0.00';
-              
-              return `â€¢ **${product}** - ${statusLabel}\n  Valor: ${value}`;
-            }).join('\n\n');
-
-            assistantMessage = `Olá ${customerContact.first_name}! 
-
-Encontrei os seguintes pedidos vinculados ao seu email:
-
-${dealsFormatted}
-
-Sobre qual pedido você gostaria de saber mais?`;
-
-          } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao consultar pedidos:', error);
-            assistantMessage = 'Ocorreu um erro ao consultar seus pedidos. Poderia tentar novamente?';
-          }
-        }
+        // TOOL: check_order_status - REMOVIDO (legado que pedia email)
         // TOOL: check_tracking - Consultar rastreio via MySQL externo (suporta mÃºltiplos cÃ³digos)
         else if (toolCall.function.name === 'check_tracking') {
           console.log('[ai-autopilot-chat] ðŸšš CHECK_TRACKING INVOCADO');
