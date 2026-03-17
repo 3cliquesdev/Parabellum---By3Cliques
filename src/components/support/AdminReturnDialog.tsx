@@ -39,11 +39,13 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("pending");
   const [searching, setSearching] = useState(false);
+  const [searchingOrder, setSearchingOrder] = useState(false);
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
   const [buyerName, setBuyerName] = useState<string | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const lastSearchedRef = useRef<string>("");
+  const lastSearchedTrackingRef = useRef<string>("");
+  const lastSearchedOrderRef = useRef<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
@@ -55,10 +57,13 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
     setDescription("");
     setStatus("pending");
     setSearching(false);
+    setSearchingOrder(false);
     setLookupResult(null);
     setBuyerName(null);
     setPhotos([]);
     setUploadingPhoto(false);
+    lastSearchedTrackingRef.current = "";
+    lastSearchedOrderRef.current = "";
   };
 
   const handleUploadPhoto = async (file: File) => {
@@ -97,19 +102,20 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleTrackingBlur = async () => {
+  // Busca por RASTREIO → preenche pedido, seller, produtos
+  const handleSearchByTracking = async () => {
     const trimmed = trackingOriginal.trim();
-    if (!trimmed || trimmed === lastSearchedRef.current) {
+    if (!trimmed || trimmed === lastSearchedTrackingRef.current) {
       if (!trimmed) {
-      setLookupResult(null);
-      setOrderId("");
-      setOrderIdManual(false);
-      setBuyerName(null);
+        setLookupResult(null);
+        setOrderId("");
+        setOrderIdManual(false);
+        setBuyerName(null);
       }
       return;
     }
 
-    lastSearchedRef.current = trimmed;
+    lastSearchedTrackingRef.current = trimmed;
     setSearching(true);
     try {
       const { data, error } = await supabase.functions.invoke('lookup-order-by-tracking', {
@@ -117,7 +123,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
       });
 
       if (error) {
-        console.error('[AdminReturnDialog] Lookup error:', error);
+        console.error('[AdminReturnDialog] Lookup by tracking error:', error);
         setLookupResult({ found: false });
         setOrderIdManual(true);
         return;
@@ -130,17 +136,65 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
         setOrderId(result.external_order_id);
         setBuyerName(result.buyer_name || null);
         setOrderIdManual(false);
+        lastSearchedOrderRef.current = result.external_order_id;
       } else {
         setOrderId("");
         setBuyerName(null);
         setOrderIdManual(true);
       }
     } catch (err) {
-      console.error('[AdminReturnDialog] Lookup error:', err);
+      console.error('[AdminReturnDialog] Lookup by tracking error:', err);
       setLookupResult({ found: false });
       setOrderIdManual(true);
     } finally {
       setSearching(false);
+    }
+  };
+
+  // Busca por PEDIDO → preenche rastreio, seller, produtos
+  const handleSearchByOrderId = async () => {
+    const trimmed = orderId.trim();
+    if (!trimmed || trimmed === lastSearchedOrderRef.current) return;
+
+    lastSearchedOrderRef.current = trimmed;
+    setSearchingOrder(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('lookup-order-by-id', {
+        body: { order_id: trimmed },
+      });
+
+      if (error) {
+        console.error('[AdminReturnDialog] Lookup by order error:', error);
+        return;
+      }
+
+      const result = data as LookupResult;
+      if (result.found) {
+        setLookupResult(result);
+        setBuyerName(result.buyer_name || null);
+        if (result.tracking_code && !trackingOriginal.trim()) {
+          setTrackingOriginal(result.tracking_code);
+          lastSearchedTrackingRef.current = result.tracking_code;
+        }
+      }
+    } catch (err) {
+      console.error('[AdminReturnDialog] Lookup by order error:', err);
+    } finally {
+      setSearchingOrder(false);
+    }
+  };
+
+  const handleTrackingKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSearchByTracking();
+    }
+  };
+
+  const handleOrderKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSearchByOrderId();
     }
   };
 
@@ -159,12 +213,14 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
     onOpenChange(false);
   };
 
+  const isSearching = searching || searchingOrder;
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Nova Devolução (Admin)</DialogTitle>
-          <DialogDescription>Cadastre uma devolução manualmente</DialogDescription>
+          <DialogDescription>Cadastre uma devolução manualmente. Use o bipe/scanner nos campos de rastreio ou pedido.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -176,12 +232,13 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
                 value={trackingOriginal}
                 onChange={(e) => {
                   setTrackingOriginal(e.target.value);
-                  lastSearchedRef.current = "";
+                  lastSearchedTrackingRef.current = "";
                   setLookupResult(null);
                   setOrderIdManual(false);
                 }}
-                onBlur={handleTrackingBlur}
-                placeholder="Cole o código de rastreio original"
+                onBlur={handleSearchByTracking}
+                onKeyDown={handleTrackingKeyDown}
+                placeholder="Escaneie ou cole o código de rastreio"
               />
               {searching && (
                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
@@ -212,14 +269,24 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
 
           {/* 2. Número do Pedido */}
           <div className="space-y-2">
-            <Label>Número do Pedido *</Label>
-            <Input
-              value={orderId}
-              onChange={(e) => setOrderId(e.target.value)}
-              placeholder="Ex: SA-12345"
-              readOnly={!orderIdManual && lookupResult?.found === true}
-              className={!orderIdManual && lookupResult?.found ? "bg-muted/50 cursor-default" : ""}
-            />
+            <Label>Número do Pedido * (busca reversa)</Label>
+            <div className="relative">
+              <Input
+                value={orderId}
+                onChange={(e) => {
+                  setOrderId(e.target.value);
+                  lastSearchedOrderRef.current = "";
+                }}
+                onBlur={handleSearchByOrderId}
+                onKeyDown={handleOrderKeyDown}
+                placeholder="Escaneie ou digite o nº do pedido"
+                readOnly={!orderIdManual && lookupResult?.found === true}
+                className={!orderIdManual && lookupResult?.found ? "bg-muted/50 cursor-default" : ""}
+              />
+              {searchingOrder && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
           </div>
 
           {/* Produto e SKU - abaixo do número do pedido */}
@@ -333,7 +400,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
             />
           </div>
 
-          <Button className="w-full" onClick={handleSubmit} disabled={!orderId || !reason || createReturn.isPending}>
+          <Button className="w-full" onClick={handleSubmit} disabled={!orderId || !reason || createReturn.isPending || isSearching}>
             {createReturn.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Cadastrar
           </Button>
