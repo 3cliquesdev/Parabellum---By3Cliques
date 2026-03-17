@@ -176,12 +176,13 @@ export function useExportCommercialConversationsCSV() {
       // ===== ABA 3: DETALHADO =====
       const headers = [
         "ID Curto", "ID Conversa", "Status", "Nome Contato", "Email",
-        "Telefone", "Organização", "Criado em", "Fechado em",
-        "Tempo de Espera", "Duração", "Agente Responsável", "Participantes",
-        "Departamento", "Total Interações", "Origem", "CSAT", "Comentário CSAT",
+        "Telefone", "Organização", "Criado em", "Fechado em", "Handoff",
+        "Tempo de Espera", "Tempo Espera pós Atribuição", "Tempo 1ª Resposta Humana",
+        "Duração", "Tempo Resolução Humana",
+        "Agente Responsável", "Participantes", "Departamento",
+        "Total Interações", "Origem", "CSAT", "Comentário CSAT",
         "Ticket ID", "Modo IA", "Tags", "Última Tag Conversa",
-        "Primeira Mensagem", "Tempo Espera pós Atribuição",
-        "Handoff", "Tempo 1ª Resposta Humana", "Tempo Resolução Humana",
+        "Primeira Mensagem",
       ];
 
       const detailData: (string | number)[][] = [headers];
@@ -197,8 +198,12 @@ export function useExportCommercialConversationsCSV() {
           row.contact_organization || "",
           row.created_at ? format(new Date(row.created_at), "dd/MM/yyyy HH:mm") : "",
           row.closed_at ? format(new Date(row.closed_at), "dd/MM/yyyy HH:mm") : "",
+          row.handoff_at ? format(new Date(row.handoff_at), "dd/MM/yyyy HH:mm") : "",
           formatDuration(row.waiting_time_seconds),
+          formatDuration(row.waiting_after_assignment_seconds),
+          formatDuration(row.human_first_response_seconds),
           formatDuration(row.duration_seconds),
+          formatDuration(row.human_resolution_seconds),
           row.assigned_agent_name || "",
           Array.isArray(row.participants) ? row.participants.join(", ") : (row.participants || ""),
           row.department_name || "",
@@ -211,10 +216,6 @@ export function useExportCommercialConversationsCSV() {
           Array.isArray(row.tags_all) ? row.tags_all.join(", ") : (row.tags_all || ""),
           row.last_conversation_tag || "",
           row.first_customer_message || "",
-          formatDuration(row.waiting_after_assignment_seconds),
-          row.handoff_at ? format(new Date(row.handoff_at), "dd/MM/yyyy HH:mm") : "",
-          formatDuration(row.human_first_response_seconds),
-          formatDuration(row.human_resolution_seconds),
         ]);
       });
 

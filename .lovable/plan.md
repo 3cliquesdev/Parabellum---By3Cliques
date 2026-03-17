@@ -1,34 +1,25 @@
 
+# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-# Reagrupar colunas de tempo nos exports V1 e V2
+## O que mudou
 
-## Alterações
+### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
+- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
+- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
+- Ao trocar departamento, responsável é limpo automaticamente
+- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
 
-### V2 (`useExportConversationsCSV.tsx`) — linhas 78-105
-Reordenar o objeto para agrupar tempos juntos:
+### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
+- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
+  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
+  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
+  - Dados salvos em `end_action` e `action_data` no node data
+- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
 
-```
-Protocolo, ID Conversa, Status, Nome, Email, Telefone,
-Data Entrada, Hora Entrada, Data Encerramento, Hora Encerramento,
-Data Handoff, Hora Handoff,
-Tempo Espera, Tempo Espera pós Atribuição, Tempo 1ª Resposta Humana,
-Duração, Tempo Resolução Humana,
-Responsável, Participantes, Grupo Responsável,
-Total Interações, Origem, CSAT, Ticket, Tags, Primeira Mensagem
-```
+### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
+- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
+- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
 
-### V1 (`useExportCommercialConversationsCSV.tsx`) — linhas 177-218
-Reordenar headers e dados da aba "Detalhado":
-
-```
-ID Curto, ID Conversa, Status, Nome Contato, Email, Telefone, Organização,
-Criado em, Fechado em, Handoff,
-Tempo de Espera, Tempo Espera pós Atribuição, Tempo 1ª Resposta Humana,
-Duração, Tempo Resolução Humana,
-Agente Responsável, Participantes, Departamento,
-Total Interações, Origem, CSAT, Comentário CSAT,
-Ticket ID, Modo IA, Tags, Última Tag Conversa, Primeira Mensagem
-```
-
-Nenhuma mudança SQL — apenas reordenação de colunas nos dois arquivos.
-
+### 4. Continuidade do Fluxo ✅
+- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
+- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
