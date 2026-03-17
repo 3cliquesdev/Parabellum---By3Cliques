@@ -119,7 +119,7 @@ export const universalMenuGroups: MenuGroup[] = [
     items: [
       { title: "Projetos", href: "/projects", icon: Kanban, permission: "projects.view" },
       { title: "Definir Metas", href: "/goals-management", icon: Target, permission: "goals.set" },
-      { title: "Solicitações Internas", href: "/internal-requests", icon: ClipboardList, permission: "tickets.view" },
+      { title: "Solicitações Internas", href: "/internal-requests", icon: ClipboardList, permission: "tickets.view_internal" },
       { title: "Relatórios", href: "/reports", icon: FileText, permission: "analytics.export" },
       { title: "Distribuição CS", href: "/reports/consultant-distribution", icon: BarChart3, permission: "reports.distribution" },
       { title: "Distribuição Vendas", href: "/reports/sales-distribution", icon: BarChart3, permission: "reports.lead_distribution" },
