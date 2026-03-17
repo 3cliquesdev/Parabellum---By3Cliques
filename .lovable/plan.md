@@ -1,28 +1,31 @@
 
-# Configurar quila@3cliques.net como Atendente no Departamento Operacional
 
-## Usuário encontrado
-- **Nome:** quila@3cliques.net
-- **ID:** `c88004fa-e717-46d7-bbcd-8cfe1e87b3e7`
-- **Role atual:** `user` (cliente)
-- **Departamento:** nenhum
+# Liberar Visibilidade da Fila IA para Todos os Atendentes
 
-## Departamento encontrado
-- **Operacional:** `fcba332e-d8d6-4db3-acc1-8b5fab6941be`
+## Problema Identificado
+A política RLS `canonical_select_conversations` na tabela `conversations` restringe agentes (support_agent, sales_rep, financial_agent, consultant) a verem apenas conversas **não atribuídas do mesmo departamento**. Isso impede que vejam a fila completa da IA.
 
-## Ações necessárias
+## Solução
+Atualizar a política RLS `canonical_select_conversations` para permitir que **todos os agentes autenticados** vejam conversas em modo autopilot (fila IA) independente do departamento.
 
-### 1. Alterar role de `user` → `support_agent`
-Atualizar a tabela `user_roles` para mudar o papel de cliente para agente de suporte.
+### Alteração na política RLS
+Adicionar uma nova condição OR na política SELECT:
 
-### 2. Atualizar departamento no perfil
-Setar `department = 'Operacional'` na tabela `profiles`.
+```text
+Condição atual (agentes):
+  status = 'open' AND assigned_to IS NULL 
+  AND role IN (sales_rep, support_agent, financial_agent, consultant)
+  AND department = profile.department   ← BLOQUEIO
 
-### 3. Vincular ao departamento via `agent_departments`
-Inserir registro em `agent_departments` com `department_id` do Operacional como departamento primário, usando a RPC `set_agent_departments`.
+Nova condição adicional:
+  ai_mode = 'autopilot' AND status != 'closed'
+  AND has_any_role(auth.uid(), [todos os roles não-user])
+```
 
-### 4. Atualizar nome de exibição
-O `full_name` atual é o próprio email — pode ser mantido ou atualizado se houver um nome real.
+Isso permite que qualquer agente autenticado (não-cliente) veja conversas na fila da IA, mantendo as restrições de departamento para as demais filas.
 
-## Resultado
-O usuário passará a aparecer como agente de suporte no departamento Operacional, podendo receber conversas e atendimentos direcionados a esse departamento.
+### Resumo técnico
+- **1 migração SQL**: DROP + CREATE da política `canonical_select_conversations` com a condição adicional para `ai_mode = 'autopilot'`
+- Zero alterações no frontend — sidebar e botão "Assumir" já existem
+- A permissão `inbox.access` já está habilitada para todos os roles
+
