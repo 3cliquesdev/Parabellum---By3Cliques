@@ -4,11 +4,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Shield, ShieldCheck, ShieldX, Search, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import { Loader2, Shield, ShieldCheck, ShieldX, Search, ChevronDown, ChevronRight } from "lucide-react";
 import { useAllRolePermissions, useUpdatePermission, RolePermission } from "@/hooks/useRolePermissions";
-import { useSyncPermissions } from "@/hooks/useSyncPermissions";
 import { toast } from "sonner";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -66,7 +64,6 @@ const CATEGORY_ORDER = [
 export function RolePermissionsManager() {
   const { data: permissions, isLoading } = useAllRolePermissions();
   const updatePermission = useUpdatePermission();
-  const { syncPermissions, syncing } = useSyncPermissions();
   const [activeRole, setActiveRole] = useState("general_manager");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(CATEGORY_ORDER));
@@ -163,26 +160,13 @@ export function RolePermissionsManager() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              <CardTitle>Permissões por Cargo</CardTitle>
-            </div>
-            <CardDescription className="mt-1.5">
-              Configure as permissões de acesso para cada cargo do sistema ({totalCount} permissões disponíveis)
-            </CardDescription>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => syncPermissions()}
-            disabled={syncing}
-          >
-            {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Sincronizar Permissões
-          </Button>
+        <div className="flex items-center gap-2">
+          <Shield className="h-5 w-5 text-primary" />
+          <CardTitle>Permissões por Cargo</CardTitle>
         </div>
+        <CardDescription>
+          Configure as permissões de acesso para cada cargo do sistema ({totalCount} permissões disponíveis)
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs value={activeRole} onValueChange={setActiveRole}>

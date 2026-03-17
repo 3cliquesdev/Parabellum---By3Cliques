@@ -5,7 +5,6 @@ import { useToast } from "@/hooks/use-toast";
 interface CreatePipelineData {
   name: string;
   is_default?: boolean;
-  department_id?: string | null;
 }
 
 export function useCreatePipeline() {
@@ -20,7 +19,6 @@ export function useCreatePipeline() {
         .insert({
           name: data.name,
           is_default: data.is_default || false,
-          department_id: data.department_id || null,
         })
         .select()
         .single();

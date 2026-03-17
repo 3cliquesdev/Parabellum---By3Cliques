@@ -86,13 +86,8 @@ export function useExportConversationsCSV() {
         "Hora Entrada": formatTime(r.created_at),
         "Data Encerramento": formatDate(r.closed_at),
         "Hora Encerramento": formatTime(r.closed_at),
-        "Data Handoff": r.handoff_at ? formatDate(r.handoff_at) : "",
-        "Hora Handoff": r.handoff_at ? formatTime(r.handoff_at) : "",
         "Tempo Espera": formatDuration(r.waiting_time_seconds),
-        "Tempo Espera pós Atribuição": formatDuration(r.waiting_after_assignment_seconds),
-        "Tempo 1ª Resposta Humana": formatDuration(r.human_first_response_seconds),
         "Duração": formatDuration(r.duration_seconds),
-        "Tempo Resolução Humana": formatDuration(r.human_resolution_seconds),
         "Responsável": r.assigned_agent_name || "",
         "Participantes": r.participants || "",
         "Grupo Responsável": r.department_name || "",
@@ -101,6 +96,7 @@ export function useExportConversationsCSV() {
         "CSAT": r.csat_score ?? "",
         "Ticket": r.ticket_id || "",
         "Tags": Array.isArray(r.tags_all) ? r.tags_all.join(", ") : "",
+        "Tempo Espera pós Atribuição": formatDuration(r.waiting_after_assignment_seconds),
         "Primeira Mensagem": r.first_customer_message || "",
       }));
 

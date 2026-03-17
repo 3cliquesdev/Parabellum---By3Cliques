@@ -127,7 +127,7 @@ export function CommercialDetailedTable({
         ) : (
           <>
             <ScrollArea className="w-full">
-              <div className="min-w-[1600px]">
+              <div className="min-w-[1200px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -142,10 +142,7 @@ export function CommercialDetailedTable({
                       <TableHead>Tempo Espera</TableHead>
                       <TableHead>Duração</TableHead>
                       <TableHead>CSAT</TableHead>
-                      <TableHead>Tags</TableHead>
-                      <TableHead>Handoff</TableHead>
-                      <TableHead>TFR Humano</TableHead>
-                      <TableHead>Resolução Humano</TableHead>
+                      <TableHead>Tag</TableHead>
                       <TableHead>Modo IA</TableHead>
                       <TableHead>Criado em</TableHead>
                       <TableHead className="w-[60px]"></TableHead>
@@ -181,21 +178,12 @@ export function CommercialDetailedTable({
                           ) : "-"}
                         </TableCell>
                         <TableCell>
-                          {(row.tags_all && row.tags_all.length > 0) ? (
-                            <div className="flex flex-wrap gap-1 max-w-[200px]">
-                              {row.tags_all.map((tag, i) => (
-                                <Badge key={i} variant="secondary" className="text-xs truncate max-w-[150px]">
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
+                          {row.last_conversation_tag ? (
+                            <Badge variant="secondary" className="text-xs truncate max-w-[100px]">
+                              {row.last_conversation_tag}
+                            </Badge>
                           ) : "-"}
                         </TableCell>
-                        <TableCell className="text-xs">
-                          {row.handoff_at ? format(new Date(row.handoff_at), "dd/MM HH:mm", { locale: ptBR }) : "-"}
-                        </TableCell>
-                        <TableCell>{formatDuration(row.human_first_response_seconds)}</TableCell>
-                        <TableCell>{formatDuration(row.human_resolution_seconds)}</TableCell>
                         <TableCell className="text-xs">{row.bot_flow || "-"}</TableCell>
                         <TableCell className="text-xs">
                           {format(new Date(row.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}

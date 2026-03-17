@@ -105,56 +105,32 @@ serve(async (req) => {
 
       for (const { conversation_id: convId } of conversationsToProcess) {
         try {
-          // ========================================
-          // ATOMIC CLAIM: UPDATE...RETURNING prevents race conditions
-          // Two cron cycles can never claim the same messages because
-          // UPDATE with WHERE processed=false is atomic in PostgreSQL.
-          // The first UPDATE wins; the second finds 0 rows and skips.
-          // ========================================
-
-          // First, check if newest message is old enough (read-only, no race risk)
-          const { data: newestCheck } = await supabase
-            .from("message_buffer")
-            .select("created_at")
-            .eq("conversation_id", convId)
-            .eq("processed", false)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (!newestCheck) {
-            continue; // Already claimed by another worker
+          // Advisory lock — skip if another worker is processing this conversation
+          const { data: gotLock } = await supabase.rpc("try_lock_conversation_buffer", { conv_id: convId });
+          if (gotLock === false) {
+            console.log(`[process-buffered-messages] 🔒 Lock not acquired for ${convId} — skipping`);
+            continue;
           }
 
-          const newestAge = (Date.now() - new Date(newestCheck.created_at).getTime()) / 1000;
+          // Double-check: still has unprocessed messages after lock
+          const { data: msgs, error: msgsErr } = await supabase
+            .from("message_buffer")
+            .select("id, message_content, created_at, contact_id, instance_id, from_number, flow_context, flow_data")
+            .eq("conversation_id", convId)
+            .eq("processed", false)
+            .order("created_at", { ascending: true });
+
+          if (msgsErr || !msgs || msgs.length === 0) {
+            continue;
+          }
+
+          // Check newest message is old enough (re-verify after lock)
+          const newestMsg = msgs[msgs.length - 1];
+          const newestAge = (Date.now() - new Date(newestMsg.created_at).getTime()) / 1000;
           if (newestAge < batchDelaySeconds) {
             console.log(`[process-buffered-messages] ⏳ Conv ${convId}: newest msg is ${newestAge.toFixed(1)}s old < ${batchDelaySeconds}s — waiting`);
             continue;
           }
-
-          // ATOMIC CLAIM: mark as processed AND return the rows in one operation
-          // If another worker already claimed them, this returns 0 rows
-          const { data: msgs, error: claimErr } = await supabase
-            .from("message_buffer")
-            .update({ processed: true })
-            .eq("conversation_id", convId)
-            .eq("processed", false)
-            .lte("created_at", cutoffTime)
-            .select("id, message_content, created_at, contact_id, instance_id, from_number, flow_context, flow_data")
-            .order("created_at", { ascending: true });
-
-          if (claimErr) {
-            console.error(`[process-buffered-messages] ❌ Claim error for ${convId}:`, claimErr);
-            errorCount++;
-            continue;
-          }
-
-          if (!msgs || msgs.length === 0) {
-            console.log(`[process-buffered-messages] 🔒 Conv ${convId}: 0 rows claimed — another worker got them`);
-            continue;
-          }
-
-          console.log(`[process-buffered-messages] 🔑 Conv ${convId}: atomically claimed ${msgs.length} messages`);
 
           // Concatenate messages
           const concatenatedMessage = msgs.map((m: any) => m.message_content).join("\n");
@@ -176,19 +152,21 @@ serve(async (req) => {
             .single();
 
           if (!conversation) {
-            console.error(`[process-buffered-messages] ❌ Conversation not found: ${convId} — keeping claimed`);
+            console.error(`[process-buffered-messages] ❌ Conversation not found: ${convId}`);
+            // Mark as processed to avoid infinite retry
+            await supabase.from("message_buffer").update({ processed: true }).in("id", msgs.map((m: any) => m.id));
             continue;
           }
 
           // Check still autopilot
           if (conversation.ai_mode !== "autopilot") {
-            console.log(`[process-buffered-messages] ⏭️ Conv ${convId} no longer autopilot (${conversation.ai_mode}) — already claimed, done`);
+            console.log(`[process-buffered-messages] ⏭️ Conv ${convId} no longer autopilot (${conversation.ai_mode}) — marking processed`);
+            await supabase.from("message_buffer").update({ processed: true }).in("id", msgs.map((m: any) => m.id));
             processedCount++;
             continue;
           }
 
           // Process via pipeline
-          const claimedIds = msgs.map((m: any) => m.id);
           const pipelineSuccess = await callPipeline(supabase, {
             conversationId: convId,
             concatenatedMessage,
@@ -200,20 +178,19 @@ serve(async (req) => {
           });
 
           if (pipelineSuccess) {
-            // Already marked as processed during claim — nothing more to do
+            // Mark processed ONLY on success
+            await supabase.from("message_buffer").update({ processed: true }).in("id", msgs.map((m: any) => m.id));
             processedCount++;
             console.log(`[process-buffered-messages] ✅ Conv ${convId} processed successfully`);
           } else {
-            // ROLLBACK: revert processed=true so next cycle can retry
-            console.error(`[process-buffered-messages] ❌ Conv ${convId} pipeline failed — ROLLING BACK claim for retry`);
-            await supabase.from("message_buffer").update({ processed: false }).in("id", claimedIds);
             errorCount++;
+            console.error(`[process-buffered-messages] ❌ Conv ${convId} pipeline failed — will retry next cycle`);
+            // Do NOT mark as processed — retry on next cron cycle
           }
         } catch (convErr) {
           errorCount++;
           console.error(`[process-buffered-messages] ❌ Error processing conv ${convId}:`, convErr);
-          // Note: if claim succeeded but pipeline crashed, messages stay processed=true
-          // This is intentional — prevents infinite crash loops. Stuck message alert handles it.
+          // Do NOT mark as processed — retry on next cron cycle
         }
       }
 
@@ -363,9 +340,7 @@ async function callPipeline(
 
       const autopilotBody: Record<string, unknown> = {
         conversationId,
-        customerMessage: (flowData?.firstEntry && flowData?.selectedOption)
-          ? `Cliente selecionou: ${flowData.selectedOption}`
-          : concatenatedMessage,
+        customerMessage: concatenatedMessage,
         contact_id: contactId,
         whatsapp_provider: "meta",
         whatsapp_meta_instance_id: instanceId,
@@ -391,7 +366,6 @@ async function callPipeline(
           forbidOptions: flowData.forbidOptions ?? true,
           forbidFinancial: flowData.forbidFinancial ?? false,
           forbidCommercial: flowData.forbidCommercial ?? false,
-          collectedData: flowData.collectedData || null,
         };
       }
 
@@ -660,29 +634,31 @@ async function handleFlowReInvoke(
   }
 }
 
-// 🆕 FIX 3 v2: Contador de retries baseado em ai_failure_logs (persistente e confiável)
-// Não depende mais do estado processed do buffer que muda durante claim/rollback
+// 🆕 FIX 3: Contador de retries por conversa para evitar retry infinito em quota errors
+// Usa um campo em memória baseado nos buffers não-processados mais antigos
 async function incrementBufferRetryCount(
   supabase: any,
   conversationId: string
 ): Promise<number> {
   try {
-    // Contar falhas QUOTA_ERROR nos últimos 10 minutos para esta conversa
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    const { count, error } = await supabase
-      .from("ai_failure_logs")
-      .select("id", { count: "exact", head: true })
+    // Contar quantos ciclos de cron este buffer já sobreviveu
+    // Aproximação: idade do buffer mais antigo não-processado / intervalo do cron (60s)
+    const { data: oldestBuffer } = await supabase
+      .from("message_buffer")
+      .select("created_at")
       .eq("conversation_id", conversationId)
-      .ilike("error_message", "%QUOTA_ERROR%")
-      .gte("created_at", tenMinutesAgo);
+      .eq("processed", false)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
-    if (error) {
-      console.error("[process-buffered-messages] ⚠️ Error counting retries from ai_failure_logs:", error);
-      return 0;
-    }
+    if (!oldestBuffer) return 0;
 
-    const retryCount = count || 0;
-    console.log(`[process-buffered-messages] 📊 Conv ${conversationId}: ${retryCount} QUOTA_ERROR failures in last 10min`);
+    const ageSeconds = (Date.now() - new Date(oldestBuffer.created_at).getTime()) / 1000;
+    // Cada ciclo de cron é ~60s, batch delay ~8s
+    // Retry count = quantos ciclos completos já passaram
+    const retryCount = Math.floor(ageSeconds / 60);
+    console.log(`[process-buffered-messages] 📊 Conv ${conversationId}: buffer age ${ageSeconds.toFixed(0)}s → ~${retryCount} retries`);
     return retryCount;
   } catch (err) {
     console.error("[process-buffered-messages] ⚠️ Error counting retries:", err);

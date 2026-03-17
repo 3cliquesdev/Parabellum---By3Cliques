@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRightLeft, Bot, X, CheckSquare, XCircle, Send } from "lucide-react";
+import { ArrowRightLeft, Bot, X, CheckSquare, XCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface InboxBulkDistributeBarProps {
@@ -10,11 +10,9 @@ interface InboxBulkDistributeBarProps {
   onDistribute: () => void;
   onReactivateAI: () => void;
   onCloseConversations?: () => void;
-  onReengage?: () => void;
   isDistributing?: boolean;
   isReactivating?: boolean;
   isClosing?: boolean;
-  isArchived?: boolean;
 }
 
 export function InboxBulkDistributeBar({
@@ -25,11 +23,9 @@ export function InboxBulkDistributeBar({
   onDistribute,
   onReactivateAI,
   onCloseConversations,
-  onReengage,
   isDistributing,
   isReactivating,
   isClosing,
-  isArchived,
 }: InboxBulkDistributeBarProps) {
   if (selectedCount === 0) return null;
 
@@ -61,53 +57,39 @@ export function InboxBulkDistributeBar({
 
           <div className="h-6 border-l border-border" />
 
-          {isArchived ? (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={onDistribute}
+            disabled={isDistributing}
+            className="gap-2"
+          >
+            <ArrowRightLeft className="h-4 w-4" />
+            Distribuir
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onReactivateAI}
+            disabled={isReactivating}
+            className="gap-2"
+          >
+            <Bot className="h-4 w-4" />
+            Reativar IA
+          </Button>
+
+          {onCloseConversations && (
             <Button
-              variant="default"
+              variant="destructive"
               size="sm"
-              onClick={onReengage}
+              onClick={onCloseConversations}
+              disabled={isClosing}
               className="gap-2"
             >
-              <Send className="h-4 w-4" />
-              Reengajar e Distribuir
+              <XCircle className="h-4 w-4" />
+              Encerrar
             </Button>
-          ) : (
-            <>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={onDistribute}
-                disabled={isDistributing}
-                className="gap-2"
-              >
-                <ArrowRightLeft className="h-4 w-4" />
-                Distribuir
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onReactivateAI}
-                disabled={isReactivating}
-                className="gap-2"
-              >
-                <Bot className="h-4 w-4" />
-                Reativar IA
-              </Button>
-
-              {onCloseConversations && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={onCloseConversations}
-                  disabled={isClosing}
-                  className="gap-2"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Encerrar
-                </Button>
-              )}
-            </>
           )}
 
           <div className="h-6 border-l border-border" />

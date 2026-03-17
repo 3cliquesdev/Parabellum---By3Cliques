@@ -1,14 +1,10 @@
 import { Node } from "reactflow";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Sparkles, AlertTriangle, GraduationCap, Ticket } from "lucide-react";
+import { Bot, Sparkles, AlertTriangle, GraduationCap } from "lucide-react";
 import { usePersonas } from "@/hooks/usePersonas";
-import { useTicketCategories } from "@/hooks/useTicketCategories";
-import { useDepartments } from "@/hooks/useDepartments";
-import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,7 +19,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
-import { VariableBadgesRow } from "./ClickableVariableBadge";
 
 interface AIResponsePropertiesPanelProps {
   selectedNode: Node;
@@ -35,11 +30,6 @@ export function AIResponsePropertiesPanel({
   updateNodeData,
 }: AIResponsePropertiesPanelProps) {
   const { data: personas, isLoading: loadingPersonas } = usePersonas();
-  const { data: ticketCategories = [] } = useTicketCategories();
-  const { data: departments = [] } = useDepartments({ activeOnly: true });
-  
-  const actionDeptId = selectedNode.data.action_data?.department_id;
-  const { data: actionAgents = [] } = useUsersByDepartment(actionDeptId || undefined);
 
   // Personas ativas
   const activePersonas = personas?.filter((p) => p.is_active) || [];
@@ -184,200 +174,6 @@ export function AIResponsePropertiesPanel({
         <p className="text-[10px] text-muted-foreground">
           Ex: "Foque em explicar o processo de saque" ou "Seja breve e objetivo"
         </p>
-      </div>
-
-      <Separator />
-
-      {/* Seção: Ação ao Sair */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Ticket className="h-4 w-4 text-violet-500" />
-          <Label className="text-xs font-semibold uppercase tracking-wide">Ação ao Sair</Label>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-[260px] text-xs">
-                Permite que a IA crie automaticamente um ticket ao finalizar o atendimento neste nó. Ideal para formalizar solicitações como saque, reembolso ou devolução.
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-        <Select
-          value={selectedNode.data.end_action || "none"}
-          onValueChange={(v) => {
-            updateNodeData("end_action", v === "none" ? null : v);
-            if (v === "none") updateNodeData("action_data", null);
-            else if (!selectedNode.data.action_data) {
-              updateNodeData("action_data", {
-                subject: "",
-                description: "",
-                category: "outro",
-                priority: "medium",
-                department_id: null,
-                department_name: null,
-                assigned_to: null,
-                assigned_to_name: null,
-                use_collected_data: true,
-              });
-            }
-          }}
-        >
-          <SelectTrigger><SelectValue placeholder="Nenhuma ação" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Nenhuma</SelectItem>
-            <SelectItem value="create_ticket">🎫 Criar Ticket</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-[10px] text-muted-foreground leading-relaxed">
-          Ative quando a IA precisar formalizar a solicitação do cliente em um ticket antes de encerrar (ex: saque, reembolso). O ticket será criado automaticamente com os dados coletados pela IA.
-        </p>
-
-        {selectedNode.data.end_action === "create_ticket" && selectedNode.data.action_data && (() => {
-          const SYSTEM_VARS = [
-            { key: "customer_name", label: "Nome", color: "text-blue-600 dark:text-blue-400" },
-            { key: "customer_email", label: "Email", color: "text-blue-600 dark:text-blue-400" },
-            { key: "customer_phone", label: "Telefone", color: "text-blue-600 dark:text-blue-400" },
-          ];
-          const COLLECTION_MAP: Record<string, { label: string; color: string }> = {
-            name: { label: "Nome coletado", color: "text-amber-600 dark:text-amber-400" },
-            email: { label: "Email coletado", color: "text-amber-600 dark:text-amber-400" },
-            phone: { label: "Telefone coletado", color: "text-amber-600 dark:text-amber-400" },
-            cpf: { label: "CPF", color: "text-amber-600 dark:text-amber-400" },
-            address: { label: "Endereço", color: "text-amber-600 dark:text-amber-400" },
-            pix_key: { label: "Chave PIX", color: "text-emerald-600 dark:text-emerald-400" },
-            bank: { label: "Banco", color: "text-emerald-600 dark:text-emerald-400" },
-            reason: { label: "Motivo", color: "text-rose-600 dark:text-rose-400" },
-            amount: { label: "Valor", color: "text-emerald-600 dark:text-emerald-400" },
-          };
-          const collectionFields: string[] = selectedNode.data.smart_collection_fields || [];
-          const collectionVars = collectionFields.map((f) => ({
-            key: f,
-            label: COLLECTION_MAP[f]?.label || f,
-            color: COLLECTION_MAP[f]?.color || "text-amber-600 dark:text-amber-400",
-          }));
-          const allVars = [...SYSTEM_VARS, ...collectionVars];
-
-          const insertIntoSubject = (varText: string) => {
-            const current = selectedNode.data.action_data.subject || "";
-            updateNodeData("action_data", { ...selectedNode.data.action_data, subject: current + (current && !current.endsWith(" ") ? " " : "") + varText });
-          };
-          const insertIntoDescription = (varText: string) => {
-            const current = selectedNode.data.action_data.description || "";
-            updateNodeData("action_data", { ...selectedNode.data.action_data, description: current + (current && !current.endsWith(" ") ? " " : "") + varText });
-          };
-
-          return (
-          <div className="space-y-2 pl-2 border-l-2 border-violet-500/30">
-            <p className="text-[10px] text-muted-foreground bg-muted/50 rounded p-2 leading-relaxed">
-              📋 Configure os dados do ticket abaixo. <strong>Departamento</strong> define para qual equipe será direcionado. <strong>Responsável</strong> é opcional — se não selecionado, o ticket vai para o pool do departamento.
-            </p>
-            <div className="space-y-1">
-              <Label className="text-[10px]">Assunto</Label>
-              <Input
-                value={selectedNode.data.action_data.subject || ""}
-                onChange={(e) => updateNodeData("action_data", { ...selectedNode.data.action_data, subject: e.target.value })}
-                placeholder="Ex: Saque {{customer_name}} - {{amount}}"
-                className="h-8 text-xs"
-              />
-              <VariableBadgesRow variables={allVars} onInsert={insertIntoSubject} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px]">Descrição</Label>
-              <Textarea
-                onKeyDown={(e) => e.stopPropagation()}
-                value={selectedNode.data.action_data.description || ""}
-                onChange={(e) => updateNodeData("action_data", { ...selectedNode.data.action_data, description: e.target.value })}
-                placeholder="Ex: PIX: {{pix_key}} | Valor: {{amount}} | Motivo: {{reason}}"
-                rows={2}
-                className="resize-none text-xs"
-              />
-              <VariableBadgesRow variables={allVars} onInsert={insertIntoDescription} />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-[10px]">Categoria</Label>
-                <Select
-                  value={selectedNode.data.action_data.category || "outro"}
-                  onValueChange={(v) => updateNodeData("action_data", { ...selectedNode.data.action_data, category: v })}
-                >
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ticketCategories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
-                    ))}
-                    {ticketCategories.length === 0 && (
-                      <SelectItem value="outro" disabled>Nenhuma categoria</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[10px]">Prioridade</Label>
-                <Select
-                  value={selectedNode.data.action_data.priority || "medium"}
-                  onValueChange={(v) => updateNodeData("action_data", { ...selectedNode.data.action_data, priority: v })}
-                >
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Baixa</SelectItem>
-                    <SelectItem value="medium">Média</SelectItem>
-                    <SelectItem value="high">Alta</SelectItem>
-                    <SelectItem value="urgent">Urgente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[10px]">Departamento</Label>
-              <Select
-                value={selectedNode.data.action_data.department_id || "none"}
-                onValueChange={(v) => {
-                  if (v === "none") {
-                    updateNodeData("action_data", { ...selectedNode.data.action_data, department_id: null, department_name: null, assigned_to: null, assigned_to_name: null });
-                  } else {
-                    const dept = departments.find(d => d.id === v);
-                    updateNodeData("action_data", { ...selectedNode.data.action_data, department_id: v, department_name: dept?.name || null, assigned_to: null, assigned_to_name: null });
-                  }
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Sem departamento" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sem departamento</SelectItem>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedNode.data.action_data.department_id && (
-              <div className="space-y-1">
-                <Label className="text-[10px]">Responsável</Label>
-                <Select
-                  value={selectedNode.data.action_data.assigned_to || "none"}
-                  onValueChange={(v) => {
-                    if (v === "none") {
-                      updateNodeData("action_data", { ...selectedNode.data.action_data, assigned_to: null, assigned_to_name: null });
-                    } else {
-                      const agent = actionAgents.find((a: any) => a.id === v);
-                      updateNodeData("action_data", { ...selectedNode.data.action_data, assigned_to: v, assigned_to_name: agent?.full_name || null });
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Pool do departamento" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem responsável (pool)</SelectItem>
-                    {actionAgents.map((agent: any) => (
-                      <SelectItem key={agent.id} value={agent.id}>{agent.full_name || "Sem nome"}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          );
-        })()}
       </div>
 
       <Separator />

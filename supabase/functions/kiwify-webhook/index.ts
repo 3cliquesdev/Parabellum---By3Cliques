@@ -1134,7 +1134,7 @@ async function handlePaidOrder(
   }
 
   // 2. ✅ CRIAR Login no Supabase Auth (senha = 5 primeiros dígitos CPF)
-  const password = Customer.CPF?.replace(/\D/g, '').substring(0, 6) || 'temp12345';
+  const password = Customer.CPF?.replace(/\D/g, '').substring(0, 5) || '12345';
   
   try {
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
@@ -1144,8 +1144,7 @@ async function handlePaidOrder(
       user_metadata: {
         full_name: Customer.full_name,
         contact_id: contact.id,
-        source: 'kiwify',
-        role: 'client'
+        source: 'kiwify'
       }
     });
 
@@ -1167,7 +1166,7 @@ async function handlePaidOrder(
       type: 'recovery',
       email: Customer.email,
       options: {
-        redirectTo: `${frontendUrl}/portal`
+        redirectTo: `${frontendUrl}/client-portal`
       }
     });
 

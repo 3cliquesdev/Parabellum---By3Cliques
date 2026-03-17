@@ -974,7 +974,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
       if (!kiwifyErr && kiwifyMatches && kiwifyMatches.length > 0) {
         // Cliente tem compra Kiwify - confirma que vai para Suporte
         targetDepartmentId = SUPORTE_DEPT_ID;
-        const products = [...new Set(kiwifyMatches.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
+        const products = [...new Set(kiwifyMatches.map(e => e.payload?.Product?.product_name || 'Produto'))];
         const customerData = kiwifyMatches[0].payload?.Customer || {};
         console.log(`[handle-whatsapp-event] ✅ Cliente Kiwify confirmado (inline) - Suporte. Produtos: ${products.join(', ')}`);
 
@@ -1321,7 +1321,6 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             forbidCancellation: flowResult.forbidCancellation ?? false,
             forbidConsultant: flowResult.forbidConsultant ?? false,
             collectedData: flowResult.collectedData || null,
-            forbidSupport: flowResult.forbidSupport ?? false,
           };
 
           console.log('[handle-whatsapp-event] 📋 flow_context:', JSON.stringify({
@@ -1336,9 +1335,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-autopilot-chat', {
             body: {
               conversationId: conversationId,
-              customerMessage: (flowResult.firstEntry && flowResult.selectedOption)
-                ? `Cliente selecionou: ${flowResult.selectedOption}`
-                : messageText,
+              customerMessage: messageText,
               customer_context: isKnownCustomer ? {
                 name: contactName,
                 email: existingContact?.email,
@@ -1374,7 +1371,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
                       to: targetNumber,
                       message: safetyMsg,
                       conversationId: conversationId,
-                      instanceId: instance?.id,
+                      instanceId: instanceId,
                       is_bot_message: true,
                     }
                   });

@@ -423,16 +423,12 @@ serve(async (req) => {
             full_name,
             availability_status,
             department,
-            agent_departments(department_id),
             profiles_skills!inner(
               skill_id,
               skills!inner(name)
             ),
             agent_support_channels(
               channel_id
-            ),
-            agent_departments(
-              department_id
             )
           `)
           .eq('availability_status', 'online')
@@ -474,7 +470,7 @@ serve(async (req) => {
             // a.agent_departments pode ser array ou single object (PostgREST inlining)
             const agentDepts = Array.isArray(a.agent_departments) 
               ? a.agent_departments.map((d: any) => d.department_id)
-              : [(a.agent_departments as any)?.department_id].filter(Boolean);
+              : [a.agent_departments?.department_id].filter(Boolean);
             return skillDeptIds.some(d => agentDepts.includes(d));
           });
           
@@ -590,7 +586,7 @@ serve(async (req) => {
             full_name, 
             availability_status, 
             department,
-            agent_departments!inner(department_id),
+            agent_departments(department_id),
             agent_support_channels(channel_id)
           `)
           .eq('availability_status', 'online')
@@ -613,7 +609,7 @@ serve(async (req) => {
           }
           console.log(`[route-conversation] 📂 Searching in departments: [target, children, parent, siblings] = ${deptIds.length} total`);
           // N:N: Filter by department using agent_departments
-          agentsQuery = agentsQuery.in('agent_departments.department_id', deptIds);
+          agentsQuery = agentsQuery.overlaps('agent_departments.department_id', deptIds);
         }
 
         const result = await agentsQuery;

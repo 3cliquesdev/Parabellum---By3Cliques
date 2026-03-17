@@ -18,27 +18,18 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCreatePipeline } from "@/hooks/useCreatePipeline";
 import { useUpdatePipeline } from "@/hooks/useUpdatePipeline";
 import { useDeletePipeline } from "@/hooks/useDeletePipeline";
 import { usePipelines } from "@/hooks/usePipelines";
-import { useDepartments } from "@/hooks/useDepartments";
 import { Settings, Trash2, Edit } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 const pipelineSchema = z.object({
   name: z.string().min(3, "Nome deve ter no mínimo 3 caracteres"),
   is_default: z.boolean().optional(),
-  department_id: z.string().nullable().optional(),
 });
 
 type PipelineFormData = z.infer<typeof pipelineSchema>;
@@ -52,7 +43,6 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
   const [editingPipeline, setEditingPipeline] = useState<Tables<"pipelines"> | null>(null);
   
   const { data: pipelines } = usePipelines();
-  const { data: departments } = useDepartments({ activeOnly: true });
   const createPipeline = useCreatePipeline();
   const updatePipeline = useUpdatePipeline();
   const deletePipeline = useDeletePipeline();
@@ -62,7 +52,6 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
     defaultValues: {
       name: "",
       is_default: false,
-      department_id: null,
     },
   });
 
@@ -72,13 +61,11 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
         id: editingPipeline.id,
         name: data.name,
         is_default: data.is_default,
-        department_id: data.department_id || null,
       });
     } else {
       await createPipeline.mutateAsync({
         name: data.name,
         is_default: data.is_default,
-        department_id: data.department_id || null,
       });
     }
     form.reset();
@@ -91,7 +78,6 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
     form.reset({
       name: pipeline.name,
       is_default: pipeline.is_default || false,
-      department_id: (pipeline as any).department_id || null,
     });
   };
 
@@ -107,14 +93,6 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
       setEditingPipeline(null);
       form.reset();
     }
-  };
-
-  const getDepartmentName = (pipeline: any) => {
-    return pipeline.departments?.name || null;
-  };
-
-  const getDepartmentColor = (pipeline: any) => {
-    return pipeline.departments?.color || null;
   };
 
   return (
@@ -140,7 +118,7 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-foreground">Pipelines Existentes</h3>
               <div className="space-y-2">
-                {pipelines?.map((pipeline: any) => (
+                {pipelines?.map((pipeline) => (
                   <div
                     key={pipeline.id}
                     className="flex items-center justify-between p-3 border-2 border-border rounded-lg bg-card"
@@ -150,17 +128,6 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
                       {pipeline.is_default && (
                         <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
                           Padrão
-                        </span>
-                      )}
-                      {getDepartmentName(pipeline) && (
-                        <span
-                          className="text-xs px-2 py-1 rounded"
-                          style={{
-                            backgroundColor: getDepartmentColor(pipeline) ? `${getDepartmentColor(pipeline)}20` : undefined,
-                            color: getDepartmentColor(pipeline) || undefined,
-                          }}
-                        >
-                          {getDepartmentName(pipeline)}
                         </span>
                       )}
                     </div>
@@ -209,46 +176,6 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
 
               <FormField
                 control={form.control}
-                name="department_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">
-                      Departamento
-                    </FormLabel>
-                    <Select
-                      value={field.value || "none"}
-                      onValueChange={(val) => field.onChange(val === "none" ? null : val)}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Todos os departamentos" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">Todos os departamentos</SelectItem>
-                        {departments?.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.id}>
-                            <div className="flex items-center gap-2">
-                              <div
-                                className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: dept.color }}
-                              />
-                              {dept.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Sem departamento = visível para todos
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="is_default"
                 render={({ field }) => (
                   <FormItem className="flex items-center space-x-2">
@@ -275,7 +202,7 @@ export default function PipelineDialog({ trigger }: PipelineDialogProps) {
                     variant="outline"
                     onClick={() => {
                       setEditingPipeline(null);
-                      form.reset({ name: "", is_default: false, department_id: null });
+                      form.reset({ name: "", is_default: false });
                     }}
                   >
                     Cancelar

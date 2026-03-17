@@ -110,7 +110,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   const { data: aiMode, isLoading: aiModeLoading } = useAIMode(conversation?.id || null);
   const { data: activePersona } = useActivePersona(conversation?.id || null);
   const sendMessage = useSendMessage();
-  const { sendInstant, retrySend } = useSendMessageInstant();
+  const { sendInstant } = useSendMessageInstant();
   const sendEmail = useSendEmail();
   const takeControl = useTakeControl();
   const returnToAutopilot = useReturnToAutopilot();
@@ -781,7 +781,6 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                       isManager={isManager}
                       messagesEndRef={messagesEndRef}
                       _tick={tickCounter}
-                      onRetryMessage={retrySend}
                     />
 
                     {/* Typing indicator */}

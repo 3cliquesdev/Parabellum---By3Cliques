@@ -97,7 +97,7 @@ async function inlineKiwifyValidation(
 
     const first = matching[0];
     const customer = first.payload?.Customer || {};
-    const products: string[] = [...new Set(matching.map((e: any) => e.payload?.Product?.product_name || 'Produto'))] as string[];
+    const products = [...new Set(matching.map((e: any) => e.payload?.Product?.product_name || 'Produto'))];
 
     const result = {
       found: true,
@@ -158,7 +158,7 @@ interface AskOption {
   id?: string;
 }
 
-function matchAskOptionSingle(
+function matchAskOption(
   userInput: string,
   options: AskOption[]
 ): AskOption | null {
@@ -178,6 +178,7 @@ function matchAskOptionSingle(
   if (exactMatch) return exactMatch;
 
   // 3️⃣ Resposta começa com o label da opção
+  // Ex: "Não sou cliente" → match "Não"
   const startsWithMatch = options.find(opt => {
     const label = opt.label.toLowerCase();
     return normalized.startsWith(label + ' ') || normalized.startsWith(label + ',') || normalized.startsWith(label + '.');
@@ -185,73 +186,16 @@ function matchAskOptionSingle(
   if (startsWithMatch) return startsWithMatch;
 
   // 4️⃣ Label contido na resposta como palavra (somente se unambíguo)
+  // Ex: "eu quero sim" → match "Sim" (mas só se 1 opção bate)
   const containsMatches = options.filter(opt => {
     const label = opt.label.toLowerCase();
-    if (label.length < 2) return false;
+    if (label.length < 2) return false; // Evita match de labels muito curtos
     const regex = new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
     return regex.test(normalized);
   });
   if (containsMatches.length === 1) return containsMatches[0];
 
-  // 5️⃣ Input contido no label como palavra (reverso do Layer 4)
-  if (normalized.length >= 3) {
-    const reverseMatches = options.filter(opt => {
-      const label = opt.label.toLowerCase();
-      const val = opt.value ? opt.value.toLowerCase() : '';
-      const regex = new RegExp(`\\b${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      return regex.test(label) || regex.test(val);
-    });
-    if (reverseMatches.length === 1) return reverseMatches[0];
-  }
-
-  // 6️⃣ Keyword partial match fallback
-  if (normalized.length >= 3) {
-    const keywordMatches = options.filter(opt => {
-      const label = opt.label.toLowerCase();
-      const val = opt.value ? opt.value.toLowerCase() : '';
-      return label.includes(normalized) || val.includes(normalized);
-    });
-    if (keywordMatches.length === 1) return keywordMatches[0];
-  }
-
-  // 7️⃣ Strip emojis (Unicode-aware) na checagem final
-  const labelWithoutEmojisMatches = options.filter(opt => {
-    const textOnlyLabel = opt.label
-      .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
-      .trim().toLowerCase();
-    if (textOnlyLabel.length < 3) return false;
-    return textOnlyLabel === normalized || textOnlyLabel.includes(normalized);
-  });
-  if (labelWithoutEmojisMatches.length === 1) return labelWithoutEmojisMatches[0];
   return null;
-}
-
-/**
- * matchAskOption — wrapper com Layer 0 para multi-line (buffer concatenation).
- * Quando o buffer junta várias mensagens com \n, tenta cada linha individualmente
- * (da última para a primeira) antes de tentar o input completo.
- */
-function matchAskOption(
-  userInput: string,
-  options: AskOption[]
-): AskOption | null {
-  const trimmed = userInput.trim();
-
-  // Layer 0: Multi-line split (buffer concatenation fix)
-  const lines = trimmed.split('\n').map(l => l.trim()).filter(Boolean);
-  if (lines.length > 1) {
-    // Tenta da última linha para a primeira (última intenção do usuário)
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const match = matchAskOptionSingle(lines[i], options);
-      if (match) {
-        console.log(`[matchAskOption] ✅ Layer 0 multi-line match on line[${i}]: "${lines[i]}" → "${match.label}"`);
-        return match;
-      }
-    }
-  }
-
-  // Fallback: tenta o input original completo
-  return matchAskOptionSingle(trimmed, options);
 }
 
 // Validadores
@@ -323,7 +267,6 @@ async function createTicketFromFlow(
     category: string;
     priority: string;
     departmentId?: string | null;
-    assignedTo?: string | null;
     internalNote?: string | null;
     useCollectedData?: boolean;
     collectedData?: Record<string, any>;
@@ -370,7 +313,6 @@ async function createTicketFromFlow(
     metadata,
   };
   if (opts.departmentId) insertPayload.department_id = opts.departmentId;
-  if (opts.assignedTo) insertPayload.assigned_to = opts.assignedTo;
   if (opts.internalNote) insertPayload.internal_note = opts.internalNote;
 
   const { data: ticket, error } = await supabaseClient
@@ -507,10 +449,6 @@ async function buildVariablesContext(
     if (!contactData.name && (contactData.first_name || contactData.last_name)) {
       ctx['contact_name'] = [contactData.first_name, contactData.last_name].filter(Boolean).join(' ');
     }
-    // Aliases: customer_* → contact_* (UI usa customer_name, motor gera contact_name)
-    if (ctx['contact_name']) ctx['customer_name'] = ctx['contact_name'];
-    if (ctx['contact_email']) ctx['customer_email'] = ctx['contact_email'];
-    if (ctx['contact_phone']) ctx['customer_phone'] = ctx['contact_phone'];
   }
   if (conversationData) {
     for (const f of ['channel','status','priority','protocol_number','queue','created_at','resolved_at']) {
@@ -912,7 +850,7 @@ serve(async (req) => {
     // waiting_human: Cliente na fila, aguardando humano
     // copilot: Humano atendendo com sugestões da IA
     // disabled: Atendimento 100% manual
-    if ((currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') && !isTestMode && !manualTrigger) {
+    if ((currentAiMode === 'waiting_human' || currentAiMode === 'copilot' || currentAiMode === 'disabled') && !isTestMode) {
       // 🔓 SOBERANIA DO FLUXO: verificar se existe fluxo ativo antes de bloquear
       const { data: activeFlowCheck } = await supabaseClient
         .from('chat_flow_states')
@@ -923,24 +861,6 @@ serve(async (req) => {
         .maybeSingle();
 
       if (activeFlowCheck) {
-        // 🆕 DEFESA EM PROFUNDIDADE: Se tem agente atribuído E está em copilot, o humano tem prioridade
-        if (convState?.assigned_to && currentAiMode === 'copilot') {
-          console.log(`[process-chat-flow] 🛡️ HUMANO > FLUXO: agente ${convState.assigned_to} atribuído + copilot → cancelando flow state residual`);
-          await supabaseClient.from('chat_flow_states')
-            .update({ status: 'transferred', completed_at: new Date().toISOString() })
-            .eq('id', activeFlowCheck.id);
-          
-          return new Response(JSON.stringify({
-            useAI: false,
-            aiNodeActive: false,
-            skipAutoResponse: true,
-            reason: 'agent_has_priority_over_stale_flow',
-            message: 'Agente humano atribuído - fluxo residual cancelado'
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
-        }
-
         console.log(`[process-chat-flow] 🔓 SOBERANIA DO FLUXO: ai_mode=${currentAiMode} mas fluxo ativo (${activeFlowCheck.status}) → processando`);
         // Restaurar ai_mode para autopilot (foi corrompido pelo handoff dentro do fluxo)
         await supabaseClient.from('conversations')
@@ -1390,19 +1310,13 @@ serve(async (req) => {
         .from('chat_flow_states')
         .delete()
         .eq('conversation_id', conversationId)
-        .in('status', ['active', 'waiting_input', 'in_progress', 'cancelled', 'transferred', 'completed']);
+        .in('status', ['active', 'waiting_input', 'in_progress', 'cancelled']);
 
       if (deleteError) {
         console.error('[process-chat-flow] Error cleaning up old states:', deleteError);
       } else {
         console.log('[process-chat-flow] 🧹 Cleaned up old flow states for manual trigger');
       }
-
-      // 🔄 Resetar ai_mode para autopilot no trigger manual (para que o novo fluxo processe mensagens)
-      await supabaseClient.from('conversations')
-        .update({ ai_mode: 'autopilot', assigned_to: null })
-        .eq('id', conversationId);
-      console.log('[process-chat-flow] 🔄 Reset ai_mode → autopilot para trigger manual');
 
       // Criar estado do fluxo no nó de conteúdo (não no start)
       // Add inactivity metadata if stopped at inactivity condition
@@ -1567,7 +1481,7 @@ serve(async (req) => {
             manualTrigger: true,
             personaId: contentNode.data?.persona_id || null,
             kbCategories: contentNode.data?.kb_categories || null,
-            kbProductFilter: mapProductToKbFilter(collectedDataForState || {}),
+            kbProductFilter: mapProductToKbFilter(collectedData || {}),
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -2111,10 +2025,9 @@ serve(async (req) => {
                       conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
                       contactId: activeContactData?.id || null,
                       subject, description,
-                      category: actionData.category || actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                      category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
                       priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
                       departmentId: actionData.department_id || resolvedNode.data.department_id || null,
-                      assignedTo: actionData.assigned_to || resolvedNode.data.assigned_to || null,
                       internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
                       collectedData,
                     });
@@ -2340,10 +2253,9 @@ serve(async (req) => {
                       conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
                       contactId: activeContactData?.id || null,
                       subject, description,
-                      category: actionData.category || actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                      category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
                       priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
                       departmentId: actionData.department_id || resolvedNode.data.department_id || null,
-                      assignedTo: actionData.assigned_to || resolvedNode.data.assigned_to || null,
                       internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
                       collectedData,
                     });
@@ -2523,10 +2435,9 @@ serve(async (req) => {
                         conversationId, flowStateId: activeState.id, nodeId: resolvedNode.id,
                 contactId: activeContactData?.id || null,
                         subject, description,
-                        category: actionData.category || actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
+                        category: actionData.ticket_category || resolvedNode.data.ticket_category || 'outro',
                         priority: actionData.ticket_priority || resolvedNode.data.ticket_priority || 'medium',
                         departmentId: actionData.department_id || resolvedNode.data.department_id || null,
-                        assignedTo: actionData.assigned_to || resolvedNode.data.assigned_to || null,
                         internalNote, useCollectedData: actionData.use_collected_data || resolvedNode.data.use_collected_data || false,
                         collectedData,
                       });
@@ -2876,8 +2787,8 @@ serve(async (req) => {
                 conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
                 contactId: activeContactData?.id || null, subject, description,
                 category: nextNode.data?.ticket_category || 'outro', priority: nextNode.data?.ticket_priority || 'medium',
-                departmentId: nextNode.data?.department_id || null, assignedTo: nextNode.data?.assigned_to || null,
-                internalNote, useCollectedData: nextNode.data?.use_collected_data || false, collectedData,
+                departmentId: nextNode.data?.department_id || null, internalNote,
+                useCollectedData: nextNode.data?.use_collected_data || false, collectedData,
               });
               if (ticket) collectedData.__last_ticket_id = ticket.id;
               console.log(`[process-chat-flow] 🎫 [generic] Auto-advancing past create_ticket ${nextNode.id}`);
@@ -2964,10 +2875,9 @@ serve(async (req) => {
               const ticket = await createTicketFromFlow(supabaseClient, {
                 conversationId, flowStateId: activeState.id, nodeId: nextNode.id,
                 contactId: activeContactData?.id || null, subject, description,
-                category: actionData.category || actionData.ticket_category || nextNode.data.ticket_category || 'outro',
+                category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
                 priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
                 departmentId: actionData.department_id || nextNode.data.department_id || null,
-                assignedTo: actionData.assigned_to || nextNode.data.assigned_to || null,
                 internalNote, useCollectedData: actionData.use_collected_data || nextNode.data.use_collected_data || false, collectedData,
               });
               if (ticket) collectedData.__last_ticket_id = ticket.id;
@@ -3006,36 +2916,7 @@ serve(async (req) => {
           if (nextNode.type === 'ai_response') {
             collectedData.__ai = { interaction_count: 0 };
             await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'active', updated_at: new Date().toISOString() }).eq('id', activeState.id);
-            // 🆕 FIX: Detectar primeira entrada no AI node vindo de ask_options
-            const savedChoice = collectedData[currentNode.data?.save_as || 'choice'];
-            const isFirstEntryFromMenu = currentNode.type === 'ask_options' && savedChoice;
-            return new Response(JSON.stringify({
-              useAI: true,
-              aiNodeActive: true,
-              nodeId: nextNode.id,
-              flowId: activeState.flow_id,
-              flowName: activeState.chat_flows?.name || null,
-              contextPrompt: nextNode.data?.context_prompt,
-              useKnowledgeBase: nextNode.data?.use_knowledge_base !== false,
-              collectedData,
-              allowedSources: buildAllowedSources(nextNode.data),
-              responseFormat: 'text_only',
-              personaId: nextNode.data?.persona_id || null,
-              personaName: nextNode.data?.persona_name || null,
-              kbCategories: nextNode.data?.kb_categories || null,
-              kbProductFilter: mapProductToKbFilter(collectedData || {}),
-              fallbackMessage: nextNode.data?.fallback_message || null,
-              objective: nextNode.data?.objective ? replaceVariables(nextNode.data.objective, variablesContext || await rebuildCtx()) : null,
-              maxSentences: nextNode.data?.max_sentences ?? 3,
-              forbidQuestions: nextNode.data?.forbid_questions ?? true,
-              forbidOptions: nextNode.data?.forbid_options ?? true,
-              forbidFinancial: nextNode.data?.forbid_financial ?? false,
-              forbidCommercial: nextNode.data?.forbid_commercial ?? false,
-              forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
-              forbidSupport: nextNode.data?.forbid_support ?? false,
-              forbidConsultant: nextNode.data?.forbid_consultant ?? false,
-              ...(isFirstEntryFromMenu ? { firstEntry: true, selectedOption: String(savedChoice) } : {}),
-            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify({ useAI: true, aiNodeActive: true, nodeId: nextNode.id, flowId: activeState.flow_id, contextPrompt: nextNode.data?.context_prompt, useKnowledgeBase: nextNode.data?.use_knowledge_base !== false, collectedData }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
           // 🆕 BUG 4 FIX (2nd check): verify_customer_otp after auto-advance
           if (nextNode.type === 'verify_customer_otp') {
@@ -3112,24 +2993,6 @@ serve(async (req) => {
           console.log('[process-chat-flow] invalidOption conv=' + conversationId + ' flow=' + activeState.flow_id + ' node=' + currentNode.id + ' msg="' + userMessage + '"');
           console.log('[process-chat-flow] ❌ Invalid option response:', userMessage, '| Options:', options.map((o: any) => o.label).join(', '));
           
-          // 🆕 Dedup: não reenviar "Desculpe" se já enviou nos últimos 30s
-          const { data: recentRetry } = await supabaseClient
-            .from('messages')
-            .select('id')
-            .eq('conversation_id', conversationId)
-            .ilike('content', 'Desculpe, não entendi%')
-            .gte('created_at', new Date(Date.now() - 30000).toISOString())
-            .limit(1)
-            .maybeSingle();
-
-          if (recentRetry) {
-            console.log('[process-chat-flow] 🔇 Dedup: "Desculpe" já enviado recentemente, silenciando');
-            return new Response(
-              JSON.stringify({ useAI: false, skipAutoResponse: true, reason: 'dedup_retry_ask_options' }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-
           // Formatar opções para reenvio
           const formattedOptions = options.map((opt: any) => ({
             label: opt.label,
@@ -3522,8 +3385,7 @@ serve(async (req) => {
         }
 
         // Verificar exit keyword (word-boundary match — evita falso positivo por substring)
-        // 🆕 Guard: termos ambíguos NÃO disparam exit por keyword — a IA deve desambiguar primeiro
-        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && !supportIntentMatch && !consultorIntentMatch && !isFinancialAmbiguous && !isCancellationAmbiguous && !isCommercialAmbiguous && !isConsultorAmbiguous && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
+        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && !supportIntentMatch && !consultorIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
           const kwClean = String(kw || '').toLowerCase().trim();
           if (!kwClean) return false;
           try {
@@ -3656,9 +3518,7 @@ serve(async (req) => {
           }
 
           // ✅ UPGRADE: max_interactions ou aiExitForced deve AVANÇAR para próximo nó
-          const isExplicitIntentExit = financialIntentMatch || cancellationIntentMatch || commercialIntentMatch || supportIntentMatch || consultorIntentMatch || saqueIntentMatch || devolucaoIntentMatch || pedidosIntentMatch || sistemaIntentMatch || internacionalIntentMatch;
-          
-          if ((maxReached || (aiExitForced && !isExplicitIntentExit)) && !keywordMatch) {
+          if ((maxReached || aiExitForced) && !keywordMatch) {
             const fallbackMsg = currentNode.data?.fallback_message;
             if (fallbackMsg && String(fallbackMsg).trim().length > 0) {
               try {
@@ -3666,7 +3526,7 @@ serve(async (req) => {
                 await supabaseClient.from('messages').insert({
                   conversation_id: conversationId,
                   content: String(fallbackMsg),
-                  sender_type: 'bot',
+                  sender_type: 'user',
                   is_ai_generated: true,
                   is_internal: false,
                   status: 'sent',
@@ -3766,8 +3626,8 @@ serve(async (req) => {
               fallbackMessage: currentNode.data?.fallback_message || null,
               objective: currentNode.data?.objective ? replaceVariables(currentNode.data.objective, variablesContext || await rebuildCtx()) : null,
               maxSentences: currentNode.data?.max_sentences ?? 3,
-              forbidQuestions: currentNode.data?.forbid_questions ?? false,
-              forbidOptions: currentNode.data?.forbid_options ?? false,
+              forbidQuestions: currentNode.data?.forbid_questions ?? true,
+              forbidOptions: currentNode.data?.forbid_options ?? true,
               forbidFinancial: currentNode.data?.forbid_financial ?? false,
               forbidCommercial: currentNode.data?.forbid_commercial ?? false,
               forbidCancellation: currentNode.data?.forbid_cancellation ?? false,
@@ -4259,10 +4119,9 @@ serve(async (req) => {
             contactId: activeContactData?.id || null,
             subject,
             description,
-            category: actionData.category || actionData.ticket_category || nextNode.data.ticket_category || 'outro',
+            category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
             priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
             departmentId: actionData.department_id || nextNode.data.department_id || null,
-            assignedTo: actionData.assigned_to || nextNode.data.assigned_to || null,
             internalNote,
             useCollectedData: actionData.use_collected_data || nextNode.data.use_collected_data || false,
             collectedData,
@@ -4415,9 +4274,6 @@ serve(async (req) => {
       // Se é um nó de resposta IA
       if (nextNode.type === 'ai_response') {
         console.log(`[process-chat-flow] 🤖 AI response node: id=${nextNode.id} persona=${nextNode.data?.persona_id || 'default'} maxInteractions=${nextNode.data?.max_ai_interactions || 0} exitKeywords=[${(nextNode.data?.exit_keywords || []).join(',')}]`);
-        // 🆕 FIX: Detectar primeira entrada vindo de ask_options
-        const savedChoiceMain = collectedData[currentNode.data?.save_as || 'choice'];
-        const isFirstEntryFromMenuMain = currentNode.type === 'ask_options' && savedChoiceMain;
         // Reinicializar contador de interações para novo nó AI
         collectedData.__ai = { interaction_count: 0 };
         // 🆕 BUG 5 FIX: Adicionado status 'active' no ai_response re-entry
@@ -4482,14 +4338,13 @@ serve(async (req) => {
             fallbackMessage: nextNode.data?.fallback_message || null,
             objective: nextNode.data?.objective ? replaceVariables(nextNode.data.objective, variablesContext || await rebuildCtx()) : null,
             maxSentences: nextNode.data?.max_sentences ?? 3,
-            forbidQuestions: nextNode.data?.forbid_questions ?? false,
-            forbidOptions: nextNode.data?.forbid_options ?? false,
+            forbidQuestions: nextNode.data?.forbid_questions ?? true,
+            forbidOptions: nextNode.data?.forbid_options ?? true,
             forbidFinancial: nextNode.data?.forbid_financial ?? false,
             forbidCommercial: nextNode.data?.forbid_commercial ?? false,
             forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
             forbidSupport: nextNode.data?.forbid_support ?? false,
             forbidConsultant: nextNode.data?.forbid_consultant ?? false,
-            ...(isFirstEntryFromMenuMain ? { firstEntry: true, selectedOption: String(savedChoiceMain) } : {}),
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -4520,7 +4375,6 @@ serve(async (req) => {
             category: nextNode.data?.ticket_category || 'outro',
             priority: nextNode.data?.ticket_priority || 'medium',
             departmentId: nextNode.data?.department_id || null,
-            assignedTo: nextNode.data?.assigned_to || null,
             internalNote,
             useCollectedData: nextNode.data?.use_collected_data || false,
             collectedData,
@@ -4650,10 +4504,9 @@ serve(async (req) => {
             contactId: activeContactData?.id || null,
             subject,
             description,
-            category: actionData.category || actionData.ticket_category || nextNode.data.ticket_category || 'outro',
+            category: actionData.ticket_category || nextNode.data.ticket_category || 'outro',
             priority: actionData.ticket_priority || nextNode.data.ticket_priority || 'medium',
             departmentId: actionData.department_id || nextNode.data.department_id || null,
-            assignedTo: actionData.assigned_to || nextNode.data.assigned_to || null,
             internalNote,
             useCollectedData: actionData.use_collected_data || nextNode.data.use_collected_data || false,
             collectedData,
@@ -4713,7 +4566,7 @@ serve(async (req) => {
             try {
               await supabaseClient.from('messages').insert({
                 conversation_id: conversationId, content: preMsgs,
-                sender_type: 'bot', is_ai_generated: true, is_internal: false, status: 'sent', channel: 'web_chat',
+                sender_type: 'user', is_ai_generated: true, is_internal: false, status: 'sent', channel: 'web_chat',
               });
             } catch (e) { console.error('[process-chat-flow] ⚠️ Failed to send pre-transfer messages:', e); }
           }
@@ -5013,24 +4866,6 @@ serve(async (req) => {
         console.log('[process-chat-flow] ⚠️ Estado ativo encontrado - NÃO iniciar Master Flow');
         console.log('[process-chat-flow] Existing state:', existingActiveFlowState.id, 'flow:', existingActiveFlowState.flow_id, 'node:', existingActiveFlowState.current_node_id);
         
-        // 🆕 Dedup: não reenviar "Desculpe" se já enviou nos últimos 30s
-        const { data: recentRetryFallback } = await supabaseClient
-          .from('messages')
-          .select('id')
-          .eq('conversation_id', conversationId)
-          .ilike('content', 'Desculpe, não entendi%')
-          .gte('created_at', new Date(Date.now() - 30000).toISOString())
-          .limit(1)
-          .maybeSingle();
-
-        if (recentRetryFallback) {
-          console.log('[process-chat-flow] 🔇 Dedup fallback: "Desculpe" já enviado recentemente, silenciando');
-          return new Response(
-            JSON.stringify({ useAI: false, skipAutoResponse: true, reason: 'dedup_retry_fallback' }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
         // Mensagem genérica de retry para evitar perda de estado
         return new Response(
           JSON.stringify({
@@ -5073,7 +4908,7 @@ serve(async (req) => {
               masterFlowId: masterFlow.id,
               personaId: aiNode?.data?.persona_id || null,
               kbCategories: aiNode?.data?.kb_categories || null,
-              kbProductFilter: mapProductToKbFilter({}),
+              kbProductFilter: mapProductToKbFilter(collectedData || {}),
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -5463,13 +5298,12 @@ serve(async (req) => {
             const internalNote = (actionData.internal_note || node.data.internal_note)
               ? replaceVariables(actionData.internal_note || node.data.internal_note, masterVariablesContext) : null;
             await createTicketFromFlow(supabaseClient, {
-              conversationId, flowStateId: stateId || '', nodeId: node.id,
+              conversationId, flowStateId: stateId, nodeId: node.id,
               contactId: contactData?.id || null,
               subject, description,
-              category: actionData.category || actionData.ticket_category || node.data.ticket_category || 'outro',
+              category: actionData.ticket_category || node.data.ticket_category || 'outro',
               priority: actionData.ticket_priority || node.data.ticket_priority || 'medium',
               departmentId: actionData.department_id || node.data.department_id || null,
-              assignedTo: actionData.assigned_to || node.data.assigned_to || null,
               internalNote, useCollectedData: actionData.use_collected_data || node.data.use_collected_data || false,
               collectedData: {},
             });
@@ -5727,7 +5561,7 @@ serve(async (req) => {
           responseFormat: 'text_only',
           personaId: startNode.data?.persona_id || null,
           kbCategories: startNode.data?.kb_categories || null,
-          kbProductFilter: mapProductToKbFilter({}),
+          kbProductFilter: mapProductToKbFilter(collectedData || {}),
           contextPrompt: startNode.data?.context_prompt || null,
           fallbackMessage: startNode.data?.fallback_message || null,
           // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
@@ -5836,10 +5670,9 @@ serve(async (req) => {
           conversationId, flowStateId: newState.id, nodeId: startNode.id,
           contactId: trigContactData?.id || null,
           subject, description,
-          category: actionData.category || actionData.ticket_category || startNode.data.ticket_category || 'outro',
+          category: actionData.ticket_category || startNode.data.ticket_category || 'outro',
           priority: actionData.ticket_priority || startNode.data.ticket_priority || 'medium',
           departmentId: actionData.department_id || startNode.data.department_id || null,
-          assignedTo: actionData.assigned_to || startNode.data.assigned_to || null,
           internalNote, useCollectedData: actionData.use_collected_data || startNode.data.use_collected_data || false,
           collectedData: {},
         });

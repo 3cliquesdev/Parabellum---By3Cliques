@@ -42,15 +42,7 @@ type CacheEntry = {
 
 // Small in-memory cache to absorb UI burst traffic and prevent cold-start thrash.
 // Keyed by userId + role (role affects visibility rules).
-const CACHE_TTL_MS = 10_000; // 10s — reduz cache misses em ~40% vs 6s
-
-// ==========================================
-// 🛡️ ANTI-THUNDERING HERD (PROMISE COALESCING)
-// ==========================================
-// Se 50 abas pedirem os counts exatamente no mesmo milisegundo (Cache Miss),
-// essa estrutura garante que apenar UMA requisição vai pro banco, e as outras 
-// 49 abas aguardam a mesma Promise resolver (Coalescing), poupando RAM e IO.
-const activePromises = new Map<string, Promise<any>>();
+const CACHE_TTL_MS = 4_000;
 const cache = new Map<string, CacheEntry>();
 
 function isManagementRole(role: AppRole | null | undefined) {
@@ -71,24 +63,6 @@ Deno.serve(async (req: Request) => {
 
   try {
     const startedAt = Date.now();
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      console.error("[get-inbox-counts] Missing required environment variables");
-      return new Response(JSON.stringify({ error: "Configuração do servidor incompleta." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const maybeWarmup = req.method === "POST" ? await req.json().catch(() => null) : null;
-    if (maybeWarmup?.warmup === true) {
-      return new Response(JSON.stringify({ success: true, warmed: true }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
-      });
-    }
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -99,8 +73,8 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabaseAdmin = createClient(
-      supabaseUrl,
-      serviceRoleKey,
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       {
         auth: { autoRefreshToken: false, persistSession: false },
         db: { schema: "public" },
@@ -108,8 +82,6 @@ Deno.serve(async (req: Request) => {
     );
 
     const token = authHeader.replace("Bearer ", "");
-    
-    // ✅ Paralelizar auth + role lookup (economiza ~50ms por request)
     const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
     if (authError || !authData?.user) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -134,7 +106,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // 1. Verificar Cache "Stale" (Pronto e ainda quente)
+    // Cache hit (after role is known, since visibility depends on role).
     const cacheKey = `${userId}:${role}`;
     const now = Date.now();
     const cached = cache.get(cacheKey);
@@ -150,37 +122,26 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // 2. Promise Coalescing (Thundering Herd Protection)
-    // Se já tem um cálculo idêntico acontecendo (Cache Miss + Concorrência), junta-se à fila.
-    if (activePromises.has(cacheKey)) {
-      console.log(`[get-inbox-counts] 🛡️ Thundering Herd Evitado para ${cacheKey}. Aguardando promise irmã...`);
-      const sharedResult = await activePromises.get(cacheKey);
-      return new Response(JSON.stringify({ ...sharedResult, cached: true, coalesced: true }), {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store",
-          "X-Counts-Cache": "hit-coalesced",
-        },
-      });
-    }
-
-    // 3. Calculation Promise (Primeiro request a chegar)
-    const computationPromise = (async () => {
     // Base filters: for non-management roles we restrict by department rules similar to the UI.
     // For management roles, return global counts.
     const isManager = isManagementRole(role);
 
-    // ✅ Meta + profile em paralelo (3 queries simultâneas em vez de 3 sequenciais)
-    const [{ data: deptsData }, { data: tagsData }, { data: userProfile }] = await Promise.all([
+    // Meta (run in parallel)
+    const [{ data: deptsData }, { data: tagsData }] = await Promise.all([
       supabaseAdmin.from("departments").select("id, name, color").eq("is_active", true),
       supabaseAdmin.from("tags").select("id, name, color"),
-      supabaseAdmin.from("profiles").select("department").eq("id", userId).maybeSingle(),
     ]);
 
     const departments = (deptsData || []) as Array<{ id: string; name: string; color: string | null }>;
     const tags = (tagsData || []) as Array<{ id: string; name: string; color: string | null }>;
+
+    // Buscar departamento do perfil do usuário para visibilidade baseada em departamento
+    const { data: userProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("department")
+      .eq("id", userId)
+      .maybeSingle();
+    
     const userDepartmentId = userProfile?.department ?? null;
 
     // Helper to apply non-management visibility constraints.
@@ -233,8 +194,7 @@ Deno.serve(async (req: Request) => {
         .select("id", { count: "exact", head: true })
         .neq("status", "closed")
         .eq("assigned_to", userId),
-      // Fila IA: contagem GLOBAL (sem applyVisibility) para que todos os roles vejam
-      supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
+      applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
         .neq("status", "closed")
         .eq("ai_mode", "autopilot"),
       applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
@@ -320,33 +280,33 @@ Deno.serve(async (req: Request) => {
     
     const unread = inbox.reduce((sum: number, i: any) => sum + (i.unread_count || 0), 0);
 
-    // -------- byDepartment + byTag — ✅ UMA query para IDs+dept, reusar para tags
-    const { data: activeConvWithDept } = await applyVisibility(
-      supabaseAdmin.from("conversations").select("id, department")
-    ).neq("status", "closed").limit(5000);
+    // -------- byDepartment (active)
+    const byDepartment = await Promise.all(
+      departments.map(async (dept) => {
+        const { count = 0 } = await applyVisibility(
+          supabaseAdmin.from("conversations").select("id", { count: "exact", head: true })
+        )
+          .neq("status", "closed")
+          .eq("department", dept.id);
+        return { id: dept.id, name: dept.name, color: dept.color, count };
+      })
+    );
 
-    const deptCountMap = new Map<string, number>();
-    const activeIds: string[] = [];
-    for (const row of activeConvWithDept || []) {
-      activeIds.push(row.id);
-      if (row.department) {
-        deptCountMap.set(row.department, (deptCountMap.get(row.department) || 0) + 1);
-      }
-    }
-    const byDepartment = departments.map((dept) => ({
-      id: dept.id,
-      name: dept.name,
-      color: dept.color,
-      count: deptCountMap.get(dept.id) || 0,
-    }));
+    // -------- byTag (active)
+    // Get active conversation ids (bounded). This is safe for current scale and avoids raw SQL.
+    const { data: activeConvIdsRows } = await applyVisibility(
+      supabaseAdmin.from("conversations").select("id")
+    )
+      .neq("status", "closed")
+      .limit(5000);
+    const activeConvIds = (activeConvIdsRows || []).map((r: any) => r.id);
 
-    // -------- byTag — reusar activeIds (zero queries extras para IDs)
     let tagCounts = new Map<string, number>();
-    if (activeIds.length > 0) {
+    if (activeConvIds.length > 0) {
       const { data: convTags } = await supabaseAdmin
         .from("conversation_tags")
         .select("conversation_id, tag_id")
-        .in("conversation_id", activeIds);
+        .in("conversation_id", activeConvIds);
       for (const ct of convTags || []) {
         tagCounts.set(ct.tag_id, (tagCounts.get(ct.tag_id) || 0) + 1);
       }
@@ -359,49 +319,37 @@ Deno.serve(async (req: Request) => {
       count: tagCounts.get(t.id) || 0,
     }));
 
-      const counts: InboxCounts = {
-        total: totalActive || 0,
-        mine: mine || 0,
-        aiQueue: aiQueue || 0,
-        humanQueue: humanQueue || 0,
-        slaCritical,
-        slaWarning,
-        notResponded,
-        myNotResponded,
-        unassigned: unassigned || 0,
-        unread,
-        closed: totalClosed || 0,
-        byDepartment,
-        byTag,
-      };
+    const counts: InboxCounts = {
+      total: totalActive || 0,
+      mine: mine || 0,
+      aiQueue: aiQueue || 0,
+      humanQueue: humanQueue || 0,
+      slaCritical,
+      slaWarning,
+      notResponded,
+      myNotResponded,
+      unassigned: unassigned || 0,
+      unread,
+      closed: totalClosed || 0,
+      byDepartment,
+      byTag,
+    };
 
-      // Store in cache
-      cache.set(cacheKey, {
-        expiresAt: Date.now() + CACHE_TTL_MS,
-        value: { counts, role },
-      });
+    // Store in cache
+    cache.set(cacheKey, {
+      expiresAt: Date.now() + CACHE_TTL_MS,
+      value: { counts, role },
+    });
 
-      return { counts, role, tookMs: Date.now() - startedAt };
-    })();
-
-    // Registra a Promise na RAM para as próximas abas colarem nela
-    activePromises.set(cacheKey, computationPromise);
-
-    try {
-      const result = await computationPromise;
-      return new Response(JSON.stringify({ ...result, cached: false }), {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store",
-          "X-Counts-Cache": "miss",
-        },
-      });
-    } finally {
-      // Limpa do registro para que a próxima janela de cache de 6s comece fresca
-      activePromises.delete(cacheKey);
-    }
+    return new Response(JSON.stringify({ counts, role, cached: false, tookMs: Date.now() - startedAt }), {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        "X-Counts-Cache": "miss",
+      },
+    });
   } catch (error: any) {
     const errMsg = error?.message || error?.msg || (typeof error === 'string' ? error : JSON.stringify(error));
     console.error("[get-inbox-counts] Error:", errMsg, error);

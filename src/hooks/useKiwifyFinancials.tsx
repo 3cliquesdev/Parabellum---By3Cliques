@@ -28,8 +28,6 @@ export interface KiwifyFinancialData {
     affiliateEmail: string;
     salesCount: number;
     totalCommission: number;
-    totalGrossRevenue: number;
-    commissionPercent: number;
   }>;
 }
 
@@ -213,7 +211,6 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
         affiliateEmail: string;
         salesCount: number;
         totalCommission: number;
-        totalGrossRevenue: number;
       }>();
 
       events.forEach(event => {
@@ -290,13 +287,11 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
               affiliateEmail: affiliateEmail || "Email não disponível",
               salesCount: 0,
               totalCommission: 0,
-              totalGrossRevenue: 0,
             });
           }
           const affiliate = affiliateMap.get(key)!;
           affiliate.salesCount++;
           affiliate.totalCommission += affiliateCommission;
-          affiliate.totalGrossRevenue += grossValue;
         }
       });
 
@@ -308,10 +303,6 @@ export function useKiwifyFinancials(startDate?: Date, endDate?: Date) {
       const monthlyEvolution = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
 
       const topAffiliates = Array.from(affiliateMap.values())
-        .map(a => ({
-          ...a,
-          commissionPercent: a.totalGrossRevenue > 0 ? (a.totalCommission / a.totalGrossRevenue) * 100 : 0,
-        }))
         .sort((a, b) => b.totalCommission - a.totalCommission);
 
       console.log("✅ useKiwifyFinancials: Dados calculados de kiwify_events", {

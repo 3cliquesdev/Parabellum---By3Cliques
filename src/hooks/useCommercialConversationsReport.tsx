@@ -38,9 +38,6 @@ export interface ReportRow {
   last_conversation_tag: string | null;
   first_customer_message: string | null;
   waiting_after_assignment_seconds: number | null;
-  handoff_at: string | null;
-  human_first_response_seconds: number | null;
-  human_resolution_seconds: number | null;
   total_count: number;
 }
 

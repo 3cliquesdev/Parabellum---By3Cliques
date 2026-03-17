@@ -95,7 +95,7 @@ export function PipelineTemplateDialog({
         contact_id: contactId,
         channel: "whatsapp",
         status: "open",
-        ai_mode: "copilot",
+        ai_mode: "waiting_human",
         assigned_to: user?.id,
         whatsapp_meta_instance_id: instanceId,
       };
@@ -161,9 +161,6 @@ export function PipelineTemplateDialog({
 
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
-      queryClient.invalidateQueries({ queryKey: ["ai-mode"] });
-      queryClient.invalidateQueries({ queryKey: ["my-inbox-items"] });
-      queryClient.invalidateQueries({ queryKey: ["my-not-responded-inbox"] });
       onOpenChange(false);
       setSelectedTemplateId(null);
       setVariables({});

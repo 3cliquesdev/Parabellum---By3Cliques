@@ -14,34 +14,6 @@ import { User, Session } from "@supabase/supabase-js";
 
 type Step = "send_code" | "verify_otp" | "set_password";
 
-/**
- * Detecta se a URL contém parâmetros de recovery do Supabase.
- * Formatos possíveis:
- * - Hash: #type=recovery&access_token=...
- * - Query PKCE: ?code=...&type=recovery
- * - Query: ?type=recovery
- */
-function detectRecoveryFromUrl(): boolean {
-  try {
-    // Check hash params (implicit flow)
-    const hash = window.location.hash;
-    if (hash) {
-      const hashParams = new URLSearchParams(hash.substring(1));
-      if (hashParams.get("type") === "recovery") return true;
-    }
-    // Check query params (PKCE flow)
-    const searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.get("type") === "recovery") return true;
-    if (searchParams.has("code") && !searchParams.has("type")) {
-      // Could be a recovery code - let Supabase handle it
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
 export default function SetupPassword() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
@@ -53,102 +25,40 @@ export default function SetupPassword() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [isRecoveryFlow, setIsRecoveryFlow] = useState(false);
-  const [recoveryProcessed, setRecoveryProcessed] = useState(false);
 
-  // Processar tokens de recovery ANTES de qualquer redirect
+  // Verificar sessão diretamente no componente para evitar race conditions
   useEffect(() => {
     let mounted = true;
 
-    const processAuth = async () => {
-      const urlHasRecovery = detectRecoveryFromUrl();
-      
-      if (urlHasRecovery) {
-        console.log("[SetupPassword] Recovery URL detected, processing...");
-        if (mounted) setIsRecoveryFlow(true);
-
-        // Para PKCE flow com ?code=, trocar o código por sessão
-        const searchParams = new URLSearchParams(window.location.search);
-        const code = searchParams.get("code");
-        
-        if (code) {
-          console.log("[SetupPassword] PKCE code found, exchanging...");
-          try {
-            const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-            if (exchangeError) {
-              console.error("[SetupPassword] Code exchange failed:", exchangeError);
-            } else if (data.session) {
-              console.log("[SetupPassword] Code exchanged successfully");
-              if (mounted) {
-                setSession(data.session);
-                setUser(data.session.user);
-                setStep("set_password");
-                setAuthLoading(false);
-                setRecoveryProcessed(true);
-              }
-              // Limpar a URL sem recarregar
-              window.history.replaceState({}, "", window.location.pathname);
-              return;
-            }
-          } catch (err) {
-            console.error("[SetupPassword] Code exchange error:", err);
-          }
-        }
-
-        // Para hash flow (#type=recovery), o Supabase processa automaticamente
-        // mas precisamos esperar o evento PASSWORD_RECOVERY
-      }
-
-      // Configurar listener ANTES de getSession para capturar eventos de recovery
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-        if (!mounted) return;
-        console.log("[SetupPassword] Auth event:", event, "hasSession:", !!newSession);
-        
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-        
-        if (event === "PASSWORD_RECOVERY" && newSession?.user) {
-          console.log("[SetupPassword] PASSWORD_RECOVERY event received");
-          setIsRecoveryFlow(true);
-          setStep("set_password");
-          setAuthLoading(false);
-          setRecoveryProcessed(true);
-          // Limpar hash da URL
-          window.history.replaceState({}, "", window.location.pathname);
-        }
-      });
-
-      // Verificar sessão existente
+    const checkSession = async () => {
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
         if (!mounted) return;
         
-        if (currentSession) {
-          setSession(currentSession);
-          setUser(currentSession.user);
-          
-          // Se veio pela URL de recovery e já tem sessão, ir direto para set_password
-          if (urlHasRecovery && !recoveryProcessed) {
-            setStep("set_password");
-            setRecoveryProcessed(true);
-          }
-        }
-        
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
         setAuthLoading(false);
       } catch (err) {
-        console.error("[SetupPassword] Error checking session:", err);
-        if (mounted) setAuthLoading(false);
+        console.error("SetupPassword: Error checking session", err);
+        if (mounted) {
+          setAuthLoading(false);
+        }
       }
-
-      return () => {
-        subscription.unsubscribe();
-      };
     };
 
-    processAuth();
+    checkSession();
+
+    // Listener para mudanças de auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (!mounted) return;
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+    });
 
     return () => {
       mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -156,50 +66,28 @@ export default function SetupPassword() {
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/20 to-background">
-        <div className="text-center space-y-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-          <p className="text-sm text-muted-foreground">
-            {isRecoveryFlow ? "Validando link de recuperação..." : "Verificando autenticação..."}
-          </p>
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  // Redirecionar para login se não autenticado E não é recovery flow em andamento
+  // Redirecionar para login se não autenticado
   if (!user || !user.email) {
-    // Se é recovery flow, não redirecionar - esperar o Supabase processar
-    if (isRecoveryFlow && !recoveryProcessed) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/20 to-background">
-          <div className="text-center space-y-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-            <p className="text-sm text-muted-foreground">Processando link de recuperação...</p>
-          </div>
-        </div>
-      );
-    }
-    
-    const isClientContext = window.location.search.includes("portal") ||
-      document.referrer.includes("/portal") ||
-      document.referrer.includes("/client-portal");
-    return <Navigate to={isClientContext ? "/portal" : "/auth"} replace />;
+    return <Navigate to="/auth" replace />;
   }
 
-  const userEmail = user.email;
+const userEmail = user.email;
   const userName = user.user_metadata?.full_name || "Usuário";
-  const isClient = user?.user_metadata?.role === "client";
-  const loginRoute = isClient ? "/portal" : "/auth";
 
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut({ scope: "local" });
       setUser(null);
       setSession(null);
-      navigate(loginRoute);
+      navigate("/auth");
     } catch (error) {
       console.error("Logout error:", error);
-      navigate(loginRoute);
+      navigate("/auth");
     }
   };
 
@@ -218,6 +106,7 @@ export default function SetupPassword() {
       });
 
       if (response.error) {
+        // Handle rate limit error (429)
         if (response.error.message?.includes("Edge Function returned a non-2xx status code")) {
           throw new Error("Limite de códigos atingido. Aguarde 1 hora antes de tentar novamente.");
         }
@@ -276,6 +165,7 @@ export default function SetupPassword() {
   const handleSetPassword = async () => {
     setError("");
 
+    // Validações
     if (newPassword.length < 8) {
       setError("A senha deve ter pelo menos 8 caracteres");
       return;
@@ -289,12 +179,14 @@ export default function SetupPassword() {
     setLoading(true);
 
     try {
+      // 1. Atualizar senha
       const { error: passwordError } = await supabase.auth.updateUser({
         password: newPassword,
       });
 
       if (passwordError) throw passwordError;
 
+      // 2. Remover flag must_change_password
       const { error: metadataError } = await supabase.auth.updateUser({
         data: {
           must_change_password: false,
@@ -303,12 +195,11 @@ export default function SetupPassword() {
 
       if (metadataError) throw metadataError;
 
-      toast.success("Senha definida com sucesso!");
+      toast.success("Conta ativada com segurança!");
       
-      const destination = isClient ? "/client-portal" : "/";
-      
+      // Pequeno delay para garantir que a atualização foi processada
       setTimeout(() => {
-        navigate(destination);
+        navigate("/");
       }, 500);
     } catch (err: any) {
       console.error("Erro ao definir senha:", err);
@@ -328,14 +219,11 @@ export default function SetupPassword() {
             alt="Seu Armazém Drop" 
             className="h-16 w-auto mx-auto mb-4 object-contain" 
           />
-          <CardTitle className="text-2xl">
-            {isRecoveryFlow ? "Redefinir Senha" : "Primeiro Acesso - Validação de Segurança"}
-          </CardTitle>
+          <CardTitle className="text-2xl">Primeiro Acesso - Validação de Segurança</CardTitle>
           <CardDescription>
-            {step === "send_code" && !isRecoveryFlow && "Este é seu primeiro acesso. Para ativar sua conta, precisamos validar seu e-mail."}
-            {step === "send_code" && isRecoveryFlow && "Aguarde, validando seu link..."}
+            {step === "send_code" && "Este é seu primeiro acesso. Para ativar sua conta, precisamos validar seu e-mail."}
             {step === "verify_otp" && "Digite o código enviado para seu email"}
-            {step === "set_password" && (isRecoveryFlow ? "Defina sua nova senha" : "Defina sua senha definitiva")}
+            {step === "set_password" && "Defina sua senha definitiva"}
           </CardDescription>
         </CardHeader>
 
@@ -454,7 +342,7 @@ export default function SetupPassword() {
               <Alert className="bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800">
                 <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
                 <AlertDescription className="text-green-900 dark:text-green-100">
-                  {isRecoveryFlow ? "Link validado! Defina sua nova senha." : "Email validado! Agora defina sua senha definitiva."}
+                  Email validado! Agora defina sua senha definitiva.
                 </AlertDescription>
               </Alert>
 

@@ -99,7 +99,6 @@ serve(async (req) => {
 
     // 3. Determine assignee based on distribution rule
     let assigned_to: string | null = null;
-    let pipeline_id: string | undefined = undefined;
     
     // Field-based routing: look up answer in mappings
     if (form.distribution_rule === "field_based") {
@@ -112,7 +111,7 @@ serve(async (req) => {
       }
     } else {
       // Determinar o pipeline_id para round robin
-      pipeline_id = form.target_pipeline_id;
+      let pipeline_id = form.target_pipeline_id;
       if (!pipeline_id && form.target_type === "deal") {
         const { data: defaultPipeline } = await supabase
           .from("pipelines")
@@ -153,18 +152,10 @@ serve(async (req) => {
     const schema = form.schema || {};
     const ticketSettings = schema.ticket_settings || {};
 
-    // Guardar pipeline_id fora do bloco else para uso posterior
-    let resolvedPipelineId: string | null = null;
-    if (form.distribution_rule !== "field_based") {
-      resolvedPipelineId = form.target_pipeline_id || null;
-      if (!resolvedPipelineId && form.target_type === "deal") {
-        const { data: defPipe } = await supabase.from("pipelines").select("id").eq("is_default", true).single();
-        resolvedPipelineId = defPipe?.id || null;
-      }
-    }
-
     if (form.target_type === "deal") {
-      const dealPipelineId = resolvedPipelineId;
+      // O pipeline_id já foi determinado acima para o round robin
+      // Usar o mesmo para criar o deal
+      const dealPipelineId = pipeline_id;
 
       // Verificar se já existe deal aberto para este contato no mesmo pipeline
       const { data: existingDeal } = await supabase

@@ -19,7 +19,6 @@ import { ActiveFilterChips } from "@/components/inbox/ActiveFilterChips";
 import { BulkActionsBar } from "@/components/inbox/BulkActionsBar";
 import { InboxBulkDistributeBar } from "@/components/inbox/InboxBulkDistributeBar";
 import { InboxBulkDistributeDialog } from "@/components/inbox/InboxBulkDistributeDialog";
-import { BulkReengageDialog } from "@/components/inbox/BulkReengageDialog";
 import { BroadcastAIQueueButton } from "@/components/inbox/BroadcastAIQueueButton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +56,6 @@ const DEFAULT_FILTERS: InboxFilters = {
   hasAudio: undefined,
   hasAttachments: undefined,
   aiMode: undefined,
-  departmentId: undefined,
   includeArchived: undefined,
   waitingTime: 'oldest', // Por padrão, mostrar mais antigas primeiro para priorização
 };
@@ -81,7 +79,6 @@ export default function Inbox() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDistributeDialog, setShowDistributeDialog] = useState(false);
-  const [showReengageDialog, setShowReengageDialog] = useState(false);
   const [isContactPanelOpen, setIsContactPanelOpen] = useState(true);
   const bulkReactivate = useBulkReactivateAI();
   const bulkClose = useBulkCloseConversations();
@@ -112,13 +109,13 @@ export default function Inbox() {
     hasAudio: filters.hasAudio,
     hasAttachments: filters.hasAttachments,
     aiMode: filters.aiMode as InboxViewFiltersType['aiMode'],
-    department: filters.departmentId || departmentFilter || undefined,
+    department: departmentFilter || undefined,
     tags: filters.tags && filters.tags.length > 0
       ? filters.tags
       : (tagFilter ? [tagFilter] : undefined),
   }), [filters.dateRange, filters.channels, filters.status, filters.assignedTo,
        filters.search, filters.slaExpired, filters.hasAudio, filters.hasAttachments,
-       filters.aiMode, filters.departmentId, departmentFilter, tagFilter, filters.tags]);
+       filters.aiMode, departmentFilter, tagFilter, filters.tags]);
   
   // ✅ FIX: Passar scope explícito — 2 caches brutos (active/archived)
   const isArchived = filter === "archived";
@@ -679,24 +676,14 @@ export default function Inbox() {
         onDistribute={() => setShowDistributeDialog(true)}
         onReactivateAI={handleBulkReactivateAI}
         onCloseConversations={handleBulkCloseConversations}
-        onReengage={() => setShowReengageDialog(true)}
         isReactivating={bulkReactivate.isPending}
         isClosing={bulkClose.isPending}
-        isArchived={isArchived}
       />
 
       {/* Bulk Distribute Dialog */}
       <InboxBulkDistributeDialog
         open={showDistributeDialog}
         onOpenChange={setShowDistributeDialog}
-        conversationIds={Array.from(selectedIds)}
-        onSuccess={handleClearSelection}
-      />
-
-      {/* Bulk Reengage Dialog */}
-      <BulkReengageDialog
-        open={showReengageDialog}
-        onOpenChange={setShowReengageDialog}
         conversationIds={Array.from(selectedIds)}
         onSuccess={handleClearSelection}
       />

@@ -44,7 +44,6 @@ export function TopAffiliatesWidget({ startDate, endDate }: TopAffiliatesWidgetP
   };
 
   const affiliates = data?.topAffiliates || [];
-  const totalSales = affiliates.reduce((sum, a) => sum + a.salesCount, 0);
 
   return (
     <Card>
@@ -65,15 +64,13 @@ export function TopAffiliatesWidget({ startDate, endDate }: TopAffiliatesWidgetP
                 <TableHead className="text-foreground font-semibold">Afiliado</TableHead>
                 <TableHead className="text-foreground font-semibold">Email</TableHead>
                 <TableHead className="text-center text-foreground font-semibold">Vendas</TableHead>
-                <TableHead className="text-center text-foreground font-semibold">% Vendas</TableHead>
-                <TableHead className="text-center text-foreground font-semibold">% Comissão</TableHead>
                 <TableHead className="text-right text-foreground font-semibold">Comissão Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {affiliates.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                     Nenhuma venda com afiliado no período selecionado
                   </TableCell>
                 </TableRow>
@@ -88,12 +85,6 @@ export function TopAffiliatesWidget({ startDate, endDate }: TopAffiliatesWidgetP
                     </TableCell>
                     <TableCell className="text-center text-foreground">
                       {affiliate.salesCount}
-                    </TableCell>
-                    <TableCell className="text-center text-foreground">
-                      {totalSales > 0 ? ((affiliate.salesCount / totalSales) * 100).toFixed(1) : '0.0'}%
-                    </TableCell>
-                    <TableCell className="text-center font-semibold text-amber-600">
-                      {affiliate.commissionPercent.toFixed(1)}%
                     </TableCell>
                     <TableCell className="text-right font-semibold text-purple-600">
                       {formatCurrency(affiliate.totalCommission)}

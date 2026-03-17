@@ -7,12 +7,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { PortalGuard } from "./components/auth/PortalGuard";
 import RealtimeNotifications from "./components/RealtimeNotifications";
 import { WhatsAppDisconnectMonitor } from "./components/WhatsAppDisconnectMonitor";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { UpdateAvailableBanner } from "./components/UpdateAvailableBanner";
-import { ErrorTrackerInit } from "./components/ErrorTrackerInit";
 import { TourProvider } from "./components/tour/TourProvider";
 
 import { PageLoadingSkeleton } from "./components/PageLoadingSkeleton";
@@ -44,7 +42,6 @@ const PublicChatWindow = lazy(() => import("./pages/PublicChatWindow"));
 const ChatLinksSettings = lazy(() => import("./pages/ChatLinksSettings"));
 const WidgetBuilder = lazy(() => import("./pages/WidgetBuilder"));
 const Auth = lazy(() => import("./pages/Auth"));
-const ClientLogin = lazy(() => import("./pages/ClientLogin"));
 const Automations = lazy(() => import("./pages/Automations"));
 // Analytics removed — now inline redirect
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
@@ -163,12 +160,10 @@ const App = () => {
               <BrowserRouter>
                 <RealtimeNotifications />
                 <WhatsAppDisconnectMonitor />
-                <ErrorTrackerInit />
                 <Suspense fallback={<PageLoadingSkeleton />}>
             <Routes>
               {/* Public routes - no auth required */}
               <Route path="/auth" element={<Auth />} />
-              <Route path="/portal" element={<ClientLogin />} />
               <Route path="/setup-password" element={<SetupPassword />} />
               <Route path="/public/form/:formId" element={<PublicFormV2 />} />
               <Route path="/public-chat" element={<PublicChat />} />
@@ -183,8 +178,8 @@ const App = () => {
               <Route path="/meu-cadastro" element={<CustomerFiscalData />} />
               <Route path="/onboarding-form" element={<PublicOnboardingForm />} />
               
-              {/* Client portal - protected by PortalGuard (only role 'user') */}
-              <Route path="/client-portal" element={<PortalGuard><ClientPortal /></PortalGuard>} />
+              {/* Client portal - for users with role 'user' */}
+              <Route path="/client-portal" element={<ProtectedRoute><ClientPortal /></ProtectedRoute>} />
 
               {/* Debug routes - dev only */}
               <Route path="/debug/routes" element={<DebugRoutes />} />
@@ -218,11 +213,11 @@ const App = () => {
               <Route path="/playbook-executions" element={<ProtectedRoute requiredPermission="playbooks.view_executions"><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
               <Route path="/analytics" element={<Navigate to="/" replace />} />
               <Route path="/analytics/premium" element={<Navigate to="/?tab=overview" replace />} />
-               <Route path="/dashboards" element={<ProtectedRoute requiredPermission="analytics.view_dashboards"><Layout><DashboardsList /></Layout></ProtectedRoute>} />
-              <Route path="/dashboard/:id" element={<ProtectedRoute requiredPermission="analytics.view_dashboards"><Layout><DashboardView /></Layout></ProtectedRoute>} />
-              <Route path="/subscriptions" element={<ProtectedRoute requiredPermission="analytics.view_subscriptions"><Layout><Subscriptions /></Layout></ProtectedRoute>} />
+              <Route path="/dashboards" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><DashboardsList /></Layout></ProtectedRoute>} />
+              <Route path="/dashboard/:id" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><DashboardView /></Layout></ProtectedRoute>} />
+              <Route path="/subscriptions" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Subscriptions /></Layout></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute requiredPermission="analytics.export"><Layout><Reports /></Layout></ProtectedRoute>} />
-              <Route path="/report-builder" element={<ProtectedRoute requiredPermission="analytics.view_report_builder"><Layout><ReportBuilder /></Layout></ProtectedRoute>} />
+              <Route path="/report-builder" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ReportBuilder /></Layout></ProtectedRoute>} />
               <Route path="/reports/consultant-distribution" element={<ProtectedRoute requiredPermission="reports.distribution"><Layout><ConsultantDistribution /></Layout></ProtectedRoute>} />
               <Route path="/reports/fiscal-export" element={<ProtectedRoute requiredPermission="reports.fiscal_export"><Layout><FiscalExport /></Layout></ProtectedRoute>} />
               <Route path="/reports/fraud-detection" element={<ProtectedRoute requiredPermission="reports.fraud_detection"><Layout><FraudDetection /></Layout></ProtectedRoute>} />
@@ -237,13 +232,13 @@ const App = () => {
               <Route path="/reports/inbox-time" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><InboxTimeReport /></Layout></ProtectedRoute>} />
               <Route path="/goals" element={<ProtectedRoute requiredPermission="goals.view_own"><Layout><Goals /></Layout></ProtectedRoute>} />
               <Route path="/goals-management" element={<ProtectedRoute requiredPermission="goals.set"><Layout><GoalsManagement /></Layout></ProtectedRoute>} />
-              <Route path="/internal-requests" element={<ProtectedRoute requiredPermission="tickets.view_internal"><Layout><InternalRequests /></Layout></ProtectedRoute>} />
+              <Route path="/internal-requests" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><InternalRequests /></Layout></ProtectedRoute>} />
               <Route path="/cadences" element={<ProtectedRoute requiredPermission="cadences.manage"><Layout><Cadences /></Layout></ProtectedRoute>} />
               <Route path="/cadences/:id/edit" element={<ProtectedRoute requiredPermission="cadences.manage"><CadenceEditorPage /></ProtectedRoute>} />
               <Route path="/sales-tasks" element={<ProtectedRoute requiredPermission="sales.view_workzone"><Layout><SalesTasks /></Layout></ProtectedRoute>} />
               <Route path="/support" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><Support /></Layout></ProtectedRoute>} />
               <Route path="/support/:ticketId" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><TicketDetail /></Layout></ProtectedRoute>} />
-              <Route path="/returns" element={<ProtectedRoute requiredPermission="cadastros.view_returns"><Layout><ReturnsManagement /></Layout></ProtectedRoute>} />
+              <Route path="/returns" element={<ProtectedRoute requiredPermission="tickets.view"><Layout><ReturnsManagement /></Layout></ProtectedRoute>} />
               <Route path="/support-dashboard" element={<Navigate to="/?tab=support" replace />} />
               <Route path="/knowledge" element={<ProtectedRoute requiredPermission="inbox.view_knowledge"><Layout><Knowledge /></Layout></ProtectedRoute>} />
               <Route path="/knowledge/curation" element={<ProtectedRoute requiredPermission="knowledge.manage_articles"><Layout><KnowledgeCuration /></Layout></ProtectedRoute>} />
@@ -273,11 +268,11 @@ const App = () => {
               <Route path="/settings/teams" element={<ProtectedRoute requiredPermission="settings.teams"><Layout><Teams /></Layout></ProtectedRoute>} />
               <Route path="/settings/tags" element={<ProtectedRoute requiredPermission="cadastros.view_tags"><Layout><Tags /></Layout></ProtectedRoute>} />
               <Route path="/settings/recovery" element={<ProtectedRoute requiredPermission="settings.recovery"><Layout><SalesRecovery /></Layout></ProtectedRoute>} />
-              <Route path="/settings/ai-messages" element={<ProtectedRoute requiredPermission="ai.manage_messages"><Layout><AIMessagesSettings /></Layout></ProtectedRoute>} />
+              <Route path="/settings/ai-messages" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AIMessagesSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/ticket-notifications" element={<ProtectedRoute requiredPermission="email.manage_templates"><Layout><TicketNotificationRulesSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/sla" element={<ProtectedRoute requiredPermission="settings.view"><Layout><SLASettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/return-reasons" element={<Navigate to="/settings/returns-config" replace />} />
-              <Route path="/settings/returns-config" element={<ProtectedRoute requiredPermission="settings.view_returns_config"><Layout><ReturnsConfigSettings /></Layout></ProtectedRoute>} />
+              <Route path="/settings/returns-config" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ReturnsConfigSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/scoring" element={<ProtectedRoute requiredPermission="settings.view"><Layout><ScoringSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/sales-channels" element={<ProtectedRoute requiredPermission="sales.manage_pipelines"><Layout><SalesChannelsSettings /></Layout></ProtectedRoute>} />
               <Route path="/settings/ticket-statuses" element={<ProtectedRoute requiredPermission="settings.view"><Layout><TicketStatusSettings /></Layout></ProtectedRoute>} />

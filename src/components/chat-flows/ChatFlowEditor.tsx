@@ -59,8 +59,6 @@ import { VariableAutocomplete } from "./VariableAutocomplete";
 import { CONDITION_CONTACT_FIELDS, CONDITION_CONVERSATION_FIELDS, getAncestorNodeIds } from "./variableCatalog";
 import { useTicketCategories } from "@/hooks/useTicketCategories";
 import { useTags } from "@/hooks/useTags";
-import { useDepartments } from "@/hooks/useDepartments";
-import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 // Tipos de nós para chat flows
@@ -186,49 +184,9 @@ const SAVE_AS_SUGGESTIONS: Record<string, { value: string; label: string }[]> = 
   ],
 };
 
-// Cores fixas para handles (mesmas dos nós AskOptionsNode / ConditionV2Node)
-const optionColors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
-
-function getEdgeColorFromSource(allNodes: Node[], sourceId: string, sourceHandleId: string | null | undefined): string | null {
-  if (!sourceHandleId) return null;
-  const sourceNode = allNodes.find(n => n.id === sourceId);
-  if (!sourceNode) return null;
-
-  if (sourceNode.type === 'ask_options') {
-    const options = sourceNode.data?.options || [];
-    const idx = options.findIndex((o: any) => o.id === sourceHandleId);
-    if (idx >= 0) return optionColors[idx % optionColors.length];
-  }
-
-  if (sourceNode.type === 'condition_v2') {
-    const rules = sourceNode.data?.condition_rules || [];
-    if (sourceHandleId === 'else') return '#6b7280';
-    // Check _false handles
-    const falseMatch = sourceHandleId.endsWith('_false');
-    const ruleId = falseMatch ? sourceHandleId.replace('_false', '') : sourceHandleId;
-    const ruleIdx = rules.findIndex((r: any) => r.id === ruleId);
-    if (ruleIdx >= 0) return falseMatch ? '#dc2626' : '#16a34a';
-  }
-
-  if (sourceNode.type === 'condition') {
-    if (sourceHandleId === 'true') return '#16a34a';
-    if (sourceHandleId === 'false') return '#dc2626';
-    if (sourceHandleId === 'else') return '#6b7280';
-    // Multi-rule handles
-    const rules = sourceNode.data?.condition_rules || [];
-    const idx = rules.findIndex((r: any) => r.id === sourceHandleId);
-    if (idx >= 0) return optionColors[idx % optionColors.length];
-  }
-
-  return null;
-}
-
 function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSaving }: ChatFlowEditorProps) {
   const { data: ticketCategories = [] } = useTicketCategories();
   const { data: allTags = [] } = useTags();
-  const { data: departments = [] } = useDepartments({ activeOnly: true });
-
-
   // Criar nó de início se não houver nós
   const initialNodes = useMemo(() => {
     if (initialFlow?.nodes && initialFlow.nodes.length > 0) {
@@ -239,28 +197,18 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const normalizedEdges = useMemo(() => {
-    const allNodes = initialFlow?.nodes || [];
-    return (initialFlow?.edges || []).map(edge => {
-      const color = getEdgeColorFromSource(allNodes, edge.source, edge.sourceHandle);
-      const strokeColor = color || 'hsl(var(--primary))';
-      return {
-        ...edge,
-        type: 'buttonEdge',
-        style: { strokeWidth: 2, stroke: strokeColor },
-        markerEnd: { type: MarkerType.ArrowClosed, color: strokeColor },
-        label: color ? undefined : edge.label,
-      };
-    });
-  }, [initialFlow?.edges, initialFlow?.nodes]);
+    return (initialFlow?.edges || []).map(edge => ({
+      ...edge,
+      type: 'buttonEdge',
+      style: edge.style || { strokeWidth: 2, stroke: 'hsl(var(--primary))' },
+      markerEnd: edge.markerEnd || { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
+    }));
+  }, [initialFlow?.edges]);
 
   const [edges, setEdges, onEdgesChange] = useEdgesState(normalizedEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-
-  // Agentes do departamento selecionado no nó create_ticket
-  const selectedCreateTicketDeptId = selectedNode?.type === "create_ticket" ? selectedNode?.data?.department_id : null;
-  const { data: agentsByDepartment = [] } = useUsersByDepartment(selectedCreateTicketDeptId || undefined);
 
   // Notificar mudanças no fluxo para o parent
   useEffect(() => {
@@ -270,17 +218,13 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
   }, [nodes, edges, onFlowChange]);
 
   const onConnect = useCallback(
-    (params: Connection) => {
-      const color = getEdgeColorFromSource(nodes, params.source || '', params.sourceHandle);
-      const strokeColor = color || 'hsl(var(--primary))';
-      setEdges((eds) => addEdge({
-        ...params,
-        type: 'buttonEdge',
-        style: { strokeWidth: 2, stroke: strokeColor },
-        markerEnd: { type: MarkerType.ArrowClosed, color: strokeColor },
-      }, eds));
-    },
-    [setEdges, nodes]
+    (params: Connection) => setEdges((eds) => addEdge({
+      ...params,
+      type: 'buttonEdge',
+      style: { strokeWidth: 2 },
+      markerEnd: { type: MarkerType.ArrowClosed },
+    }, eds)),
+    [setEdges]
   );
 
   const defaultEdgeOptions = {
@@ -357,10 +301,6 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
         description_template: "",
         ticket_category: "outro",
         ticket_priority: "medium",
-        department_id: null,
-        department_name: null,
-        assigned_to: null,
-        assigned_to_name: null,
       },
     };
     return defaults[type] || { label: `Novo ${type}` };
@@ -1479,62 +1419,6 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Departamento</Label>
-                    <Select
-                      value={selectedNode.data.department_id || "none"}
-                      onValueChange={(v) => {
-                        if (v === "none") {
-                          updateNodeData("department_id", null);
-                          updateNodeData("department_name", null);
-                        } else {
-                          const dept = departments.find(d => d.id === v);
-                          updateNodeData("department_id", v);
-                          updateNodeData("department_name", dept?.name || null);
-                        }
-                        // Limpar responsável ao trocar departamento
-                        updateNodeData("assigned_to", null);
-                        updateNodeData("assigned_to_name", null);
-                      }}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Sem departamento" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sem departamento</SelectItem>
-                        {departments.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {selectedNode.data.department_id && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Responsável</Label>
-                      <Select
-                        value={selectedNode.data.assigned_to || "none"}
-                        onValueChange={(v) => {
-                          if (v === "none") {
-                            updateNodeData("assigned_to", null);
-                            updateNodeData("assigned_to_name", null);
-                          } else {
-                            const agent = agentsByDepartment.find((a: any) => a.id === v);
-                            updateNodeData("assigned_to", v);
-                            updateNodeData("assigned_to_name", agent?.full_name || null);
-                          }
-                        }}
-                      >
-                        <SelectTrigger><SelectValue placeholder="Pool do departamento" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Sem responsável (pool)</SelectItem>
-                          {agentsByDepartment.map((agent: any) => (
-                            <SelectItem key={agent.id} value={agent.id}>{agent.full_name || "Sem nome"}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-[10px] text-muted-foreground">
-                        Agente que receberá o ticket neste departamento
-                      </p>
-                    </div>
-                  )}
                   <div className="space-y-1.5">
                     <Label className="text-xs">Nota interna</Label>
                     <VariableAutocomplete
