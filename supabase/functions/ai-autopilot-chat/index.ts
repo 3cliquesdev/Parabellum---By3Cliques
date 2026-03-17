@@ -1513,7 +1513,7 @@ serve(async (req) => {
     // ðŸ†• FASE 1: VariÃ¡veis de Controle de Comportamento Anti-AlucinaÃ§Ã£o
     const flowObjective: string | null = flow_context?.objective || null;
     const flowMaxSentences: number = flow_context?.maxSentences ?? 3;
-    const flowForbidQuestions: boolean = flow_context?.forbidQuestions ?? true;
+    const flowForbidQuestions: boolean = false; // 🤖 OVERRIDDEN PARA MODO JARVIS
     const flowForbidOptions: boolean = flow_context?.forbidOptions ?? true;
     const flowForbidFinancial: boolean = flow_context?.forbidFinancial ?? false;
     const flowForbidCancellation: boolean = flow_context?.forbidCancellation ?? false;
