@@ -2690,7 +2690,7 @@ serve(async (req) => {
               body: { conversationId, department_id: DEPT_COMERCIAL_ID }
             });
             
-            const leadHandoffMessage = `Obrigado! 📋\n\nRegistramos seu contato (${detectedEmail}). Um de nossos consultores vai entrar em contato em breve para te ajudar.\n\nAguarde um momento, por favor.`; = `Obrigado! ðŸ“\n\nRegistramos seu contato (${detectedEmail}). Um de nossos consultores vai entrar em contato em breve para te ajudar.\n\nAguarde um momento, por favor.`;
+            const leadHandoffMessage = `Obrigado! 📋\n\nRegistramos seu contato (${detectedEmail}). Um de nossos consultores vai entrar em contato em breve para te ajudar.\n\nAguarde um momento, por favor.`;\n\nRegistramos seu contato (${detectedEmail}). Um de nossos consultores vai entrar em contato em breve para te ajudar.\n\nAguarde um momento, por favor.`; = `Obrigado! ðŸ“\n\nRegistramos seu contato (${detectedEmail}). Um de nossos consultores vai entrar em contato em breve para te ajudar.\n\nAguarde um momento, por favor.`;
             
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId,
