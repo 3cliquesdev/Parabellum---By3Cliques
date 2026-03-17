@@ -235,6 +235,9 @@ export function AIResponsePropertiesPanel({
 
         {selectedNode.data.end_action === "create_ticket" && selectedNode.data.action_data && (
           <div className="space-y-2 pl-2 border-l-2 border-violet-500/30">
+            <p className="text-[10px] text-muted-foreground bg-muted/50 rounded p-2 leading-relaxed">
+              📋 Configure os dados do ticket abaixo. <strong>Departamento</strong> define para qual equipe será direcionado. <strong>Responsável</strong> é opcional — se não selecionado, o ticket vai para o pool do departamento.
+            </p>
             <div className="space-y-1">
               <Label className="text-[10px]">Assunto</Label>
               <Input
