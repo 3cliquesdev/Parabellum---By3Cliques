@@ -181,6 +181,7 @@ export function useExportCommercialConversationsCSV() {
         "Departamento", "Total Interações", "Origem", "CSAT", "Comentário CSAT",
         "Ticket ID", "Modo IA", "Tags", "Última Tag Conversa",
         "Primeira Mensagem", "Tempo Espera pós Atribuição",
+        "Handoff", "Tempo 1ª Resposta Humana", "Tempo Resolução Humana",
       ];
 
       const detailData: (string | number)[][] = [headers];
@@ -211,6 +212,9 @@ export function useExportCommercialConversationsCSV() {
           row.last_conversation_tag || "",
           row.first_customer_message || "",
           formatDuration(row.waiting_after_assignment_seconds),
+          row.handoff_at ? format(new Date(row.handoff_at), "dd/MM/yyyy HH:mm") : "",
+          formatDuration(row.human_first_response_seconds),
+          formatDuration(row.human_resolution_seconds),
         ]);
       });
 
