@@ -183,7 +183,7 @@ function extractWhatsAppNumber(whatsappId: string | null | undefined): string | 
     .replace('@c.us', '')
     .replace(/\D/g, '');
   
-  // Validar se tem pelo menos 10 dÃ­gitos (nÃºmero vÃ¡lido)
+  // Validar se tem pelo menos 10 dígitos (número válido)
   if (cleaned.length >= 10) {
     return cleaned;
   }
