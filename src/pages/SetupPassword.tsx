@@ -224,11 +224,14 @@ const userEmail = user.email;
 
       if (metadataError) throw metadataError;
 
-      toast.success("Conta ativada com segurança!");
+      toast.success("Senha definida com sucesso!");
       
-      // Pequeno delay para garantir que a atualização foi processada
+      // Redirecionar baseado no role do usuário
+      const isClient = user?.user_metadata?.role === "client";
+      const destination = isClient ? "/client-portal" : "/";
+      
       setTimeout(() => {
-        navigate("/");
+        navigate(destination);
       }, 500);
     } catch (err: any) {
       console.error("Erro ao definir senha:", err);
