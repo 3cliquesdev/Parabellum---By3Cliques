@@ -8569,7 +8569,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
                 model: ragConfig.model,
                 output_json: { category: args.category, summary: args.summary, blocked: true, reason: 'active_flow', flow_state_id: activeFlowState.id }
               });
-              assistantMessage = 'ClassificaÃ§Ã£o bloqueada: fluxo ativo gerencia tickets.';
+              assistantMessage = 'Classificação bloqueada: fluxo ativo gerencia tickets.';
               break;
             }
 
