@@ -5367,7 +5367,7 @@ Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado e
       
       if (!welcomeMessage) {
         const firstName = contactName ? contactName.split(' ')[0] : '';
-        welcomeMessage = `Ola${firstName ? `, ${firstName}` : ''}! 👋\n\nFicamos felizes com seu contato! Em que posso te ajudar hoje?`;Ã¡${firstName ? `, ${firstName}` : ''}! ðŸ‘‹\n\nFicamos felizes com seu contato! Em que posso te ajudar hoje?`;
+        welcomeMessage = `Ola${firstName ? `, ${firstName}` : ''}! 👋\n\nFicamos felizes com seu contato! Em que posso te ajudar hoje?`; ? `, ${firstName}` : ''}! 👋\n\nFicamos felizes com seu contato! Em que posso te ajudar hoje?`;Ã¡${firstName ? `, ${firstName}` : ''}! ðŸ‘‹\n\nFicamos felizes com seu contato! Em que posso te ajudar hoje?`;
       }
       
       // Salvar mensagem
