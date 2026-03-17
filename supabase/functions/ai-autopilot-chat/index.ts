@@ -9296,6 +9296,47 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
       }
     }
 
+    // 🛡️ PÓS-FILTRO DE SEGURANÇA: Detectar e remover vazamento de instruções internas
+    if (assistantMessage && flowContextPrompt) {
+      const LEAKED_INSTRUCTION_PATTERNS = [
+        /siga\s+(?:estes|esses|os\s+seguintes)\s+passos/i,
+        /(?:para\s+o\s+contato|para\s+o\s+cliente)\s+.{1,60}\s*(?:siga|execute|realize|faça)/i,
+        /verifique\s+na\s+base/i,
+        /próximos\s+passos\s*:/i,
+        /^\s*(?:1[\)\.]\s*(?:verifi|consult|busc|chequ))/im,
+        /(?:passos|etapas)\s*(?:a seguir|abaixo|do sistema|internos)/i,
+        /\[SYSTEM\s+INTERNAL/i,
+        /instruções?\s+internas?/i,
+      ];
+      
+      const hasLeakedInstructions = LEAKED_INSTRUCTION_PATTERNS.some(p => p.test(assistantMessage));
+      if (hasLeakedInstructions) {
+        console.warn('[ai-autopilot-chat] 🛡️ VAZAMENTO DE INSTRUÇÕES DETECTADO na resposta! Sanitizando...');
+        console.warn('[ai-autopilot-chat] Resposta original (truncada):', assistantMessage.substring(0, 200));
+        
+        // Log auditoria
+        Promise.resolve(supabaseClient.from('ai_events').insert({
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          event_type: 'instruction_leak_blocked',
+          model: configuredAIModel || 'gpt-5-mini',
+          output_json: {
+            blocked_preview: assistantMessage.substring(0, 300),
+            flow_id: flow_context?.flow_id,
+            node_id: flow_context?.node_id,
+            reason: 'internal_instruction_leak_detected',
+          },
+          input_summary: customerMessage?.substring(0, 200) || '',
+        })).catch(() => {});
+        
+        // Substituir por resposta natural contextual
+        const collectedProduct = flow_context?.collectedData?.produto || flow_context?.collectedData?.product || null;
+        const productCtx = collectedProduct ? ` sobre ${collectedProduct}` : '';
+        assistantMessage = `Olá${contactName ? `, ${contactName.split(' ')[0]}` : ''}! Como posso te ajudar${productCtx} hoje? 😊`;
+        console.log('[ai-autopilot-chat] ✅ Resposta substituída por saudação segura');
+      }
+    }
+
     const { data: savedMessage, error: saveError } = await supabaseClient
       .from('messages')
       .insert({
