@@ -177,7 +177,7 @@ function extractWhatsAppNumber(whatsappId: string | null | undefined): string | 
     return null;
   }
   
-  // Remove sufixos do WhatsApp e caracteres nÃ£o numÃ©ricos
+  // Remove sufixos do WhatsApp e caracteres não numéricos
   const cleaned = whatsappId
     .replace('@s.whatsapp.net', '')
     .replace('@c.us', '')
