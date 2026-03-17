@@ -3440,7 +3440,8 @@ serve(async (req) => {
         }
 
         // Verificar exit keyword (word-boundary match — evita falso positivo por substring)
-        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && !supportIntentMatch && !consultorIntentMatch && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
+        // 🆕 Guard: termos ambíguos NÃO disparam exit por keyword — a IA deve desambiguar primeiro
+        const keywordMatch = !financialIntentMatch && !commercialIntentMatch && !cancellationIntentMatch && !supportIntentMatch && !consultorIntentMatch && !isFinancialAmbiguous && !isCancellationAmbiguous && !isCommercialAmbiguous && !isConsultorAmbiguous && exitKeywords.length > 0 && exitKeywords.some((kw: string) => {
           const kwClean = String(kw || '').toLowerCase().trim();
           if (!kwClean) return false;
           try {
