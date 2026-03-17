@@ -96,8 +96,13 @@ export default function SetupPassword() {
   }
 
   // Redirecionar para login se não autenticado
+  // Clientes vão para /portal, funcionários para /auth
   if (!user || !user.email) {
-    return <Navigate to="/auth" replace />;
+    const isClientContext = user?.user_metadata?.role === "client" || 
+      window.location.search.includes("portal") ||
+      document.referrer.includes("/portal") ||
+      document.referrer.includes("/client-portal");
+    return <Navigate to={isClientContext ? "/portal" : "/auth"} replace />;
   }
 
 const userEmail = user.email;
