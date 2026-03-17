@@ -8832,7 +8832,7 @@ Conversa: ${conversationId}`;
       // Se mudou de nÃ³, resetar contador
       if (aiNodeId !== flow_context.node_id) {
         // Novo nÃ³, resetar
-      } else if (aiNodeFallbackCount >= 5) {
+      } else if (aiNodeFallbackCount >= 3) {
         console.log('[ai-autopilot-chat] ðŸš¨ ANTI-LOOP: MÃ¡ximo de 5 fallbacks atingido no nÃ³ AI â†’ forÃ§ando flow_advance_needed', {
           node_id: flow_context.node_id,
           fallback_count: aiNodeFallbackCount
