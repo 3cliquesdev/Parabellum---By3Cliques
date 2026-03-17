@@ -97,6 +97,10 @@ export function useExportConversationsCSV() {
         "Ticket": r.ticket_id || "",
         "Tags": Array.isArray(r.tags_all) ? r.tags_all.join(", ") : "",
         "Tempo Espera pós Atribuição": formatDuration(r.waiting_after_assignment_seconds),
+        "Hora Handoff": r.handoff_at ? formatTime(r.handoff_at) : "",
+        "Data Handoff": r.handoff_at ? formatDate(r.handoff_at) : "",
+        "Tempo 1ª Resposta Humana": formatDuration(r.human_first_response_seconds),
+        "Tempo Resolução Humana": formatDuration(r.human_resolution_seconds),
         "Primeira Mensagem": r.first_customer_message || "",
       }));
 

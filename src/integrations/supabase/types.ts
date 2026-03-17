@@ -10430,6 +10430,9 @@ export type Database = {
           department_name: string
           duration_seconds: number
           first_customer_message: string
+          handoff_at: string
+          human_first_response_seconds: number
+          human_resolution_seconds: number
           interactions_count: number
           last_conversation_tag: string
           origin: string
