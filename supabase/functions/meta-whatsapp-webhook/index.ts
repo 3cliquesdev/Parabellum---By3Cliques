@@ -626,7 +626,23 @@ serve(async (req) => {
                 continue;
               }
 
-              // Inserir mensagem (sem external_id - coluna não existe)
+              // Dedup check: verificar se msg.id do WhatsApp já foi salva
+              const whatsappMsgId = msg.id;
+              if (whatsappMsgId) {
+                const { data: existingMsg } = await supabase
+                  .from("messages")
+                  .select("id")
+                  .eq("provider_message_id", whatsappMsgId)
+                  .limit(1)
+                  .maybeSingle();
+                
+                if (existingMsg) {
+                  console.log("[meta-whatsapp-webhook] ⏩ Dedup: mensagem já existe, skipping:", whatsappMsgId);
+                  continue;
+                }
+              }
+
+              // Inserir mensagem com provider_message_id para idempotência
               const { data: savedMessage, error: msgError } = await supabase
                 .from("messages")
                 .insert({
@@ -637,6 +653,7 @@ serve(async (req) => {
                   message_type: mediaType || "text",
                   attachment_url: mediaId ? `meta:${mediaId}` : null,
                   attachment_type: mediaType || null,
+                  provider_message_id: whatsappMsgId || null,
                 })
                 .select("id")
                 .single();
