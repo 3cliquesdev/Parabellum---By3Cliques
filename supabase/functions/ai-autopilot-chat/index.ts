@@ -2276,7 +2276,7 @@ serve(async (req) => {
                 await supabaseClient.from('conversations')
                   .update({ ai_mode: 'waiting_human', customer_metadata: cleanMeta })
                   .eq('id', conversationId);
-                const tagMsg = 'Obrigado pelo contato! Um atendente vai finalizar seu atendimento em instantes. ðŸ˜Š';
+                const tagMsg = 'Obrigado pelo contato! Um atendente vai finalizar seu atendimento em instantes. 😊';
                 await supabaseClient.from('messages').insert({
                   conversation_id: conversationId, content: tagMsg,
                   sender_type: 'user', is_ai_generated: true, is_bot_message: true
