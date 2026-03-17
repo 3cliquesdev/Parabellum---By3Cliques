@@ -1,10 +1,14 @@
 import { Node } from "reactflow";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Sparkles, AlertTriangle, GraduationCap } from "lucide-react";
+import { Bot, Sparkles, AlertTriangle, GraduationCap, Ticket } from "lucide-react";
 import { usePersonas } from "@/hooks/usePersonas";
+import { useTicketCategories } from "@/hooks/useTicketCategories";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useUsersByDepartment } from "@/hooks/useUsersByDepartment";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
