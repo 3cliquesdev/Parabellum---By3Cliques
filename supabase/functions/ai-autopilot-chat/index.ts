@@ -6935,7 +6935,7 @@ Resolução desejada: Reembolso integral"
 
 **REGRAS DO CENÁRIO C:**
 - NUNCA crie ticket sem saber tipo de resolução (A, B ou C)
-- NUNCA crie ticket sem número do pedido (se cliente não souber, pergunte: "Qual email usou na compra? Vou buscar para você.")
+- NUNCA crie ticket sem número do pedido (se cliente não souber o número, peça o código de rastreio como alternativa)
 - NUNCA crie ticket sem saber o que veio errado vs o que era esperado
 - SEMPRE peça foto para evidência (mas prossiga se cliente não puder enviar)
 - Se cliente mencionar "envio errado" mas já escolheu resolução, pule direto para PASSO 2
@@ -6960,7 +6960,7 @@ Resolução desejada: Reembolso integral"
 - resend_otp: Use quando cliente disser "não recebi email" ou pedir reenvio. Reenvia código para email JÁ cadastrado.
 - verify_otp_code: Valide códigos OTP de 6 dígitos
 - request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver.
-- check_tracking: Consulta rastreio de pedidos. Use quando cliente perguntar sobre entrega ou status de envio.
+- check_tracking: Consulta rastreio de pedidos. Use quando cliente perguntar sobre entrega ou status de envio. REGRA: peça APENAS número do pedido ou código de rastreio. NUNCA peça email, CPF ou telefone para consultar pedidos/rastreio.
 - close_conversation: Encerre SOMENTE quando o cliente indicar CLARAMENTE que não tem mais dúvidas (ex: "era só isso", "não tenho mais dúvidas", "é isso", "pode encerrar"). NÃO interprete agradecimentos ("obrigado", "valeu", "muito obrigado") como sinal de encerramento — agradecer é educação, não significa que acabou. SEMPRE pergunte antes (customer_confirmed=false). Só use customer_confirmed=true após cliente confirmar "sim". Se cliente disser "não" ou tiver mais dúvidas, continue normalmente.
 - classify_and_resolve_ticket: Após encerrar conversa (close_conversation confirmado), classifique e registre a resolução. Use a categoria mais adequada do enum. Escreva summary curto e resolution_notes objetivo.
 
@@ -7204,10 +7204,6 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
                 items: { type: 'string' },
                 description: 'Lista de cÃ³digos de rastreio ou nÃºmeros de pedido (ex: ["BR123456789BR", "MS-12345", "16315521"]). Aceita um ou vÃ¡rios cÃ³digos.'
               },
-              customer_email: { 
-                type: 'string', 
-                description: 'Email do cliente para buscar pedidos com rastreio cadastrado.' 
-              }
             },
             required: []
           }
