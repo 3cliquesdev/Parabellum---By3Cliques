@@ -171,7 +171,7 @@ async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
 function extractWhatsAppNumber(whatsappId: string | null | undefined): string | null {
   if (!whatsappId) return null;
   
-  // Se for nÃºmero @lid (lead ID do Meta), retornar null - nÃ£o Ã© um nÃºmero vÃ¡lido
+  // Se for número @lid (lead ID do Meta), retornar null - não é um número válido
   if (whatsappId.includes('@lid')) {
     console.log('[extractWhatsAppNumber] âš ï¸ Lead ID detectado, ignorando:', whatsappId);
     return null;
