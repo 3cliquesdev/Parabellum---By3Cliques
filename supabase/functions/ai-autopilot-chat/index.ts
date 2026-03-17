@@ -4359,10 +4359,10 @@ ${a.content}`).join('\n\n---\n\n')}`;
           { 
             role: 'system', 
             content: `Classifique a mensagem:
-- "skip" APENAS se for: saudaÃ§Ã£o pura (oi, olÃ¡, bom dia), confirmaÃ§Ã£o pura (ok, entendi, beleza), ou elogio/agradecimento puro (obrigado, valeu)
-- "search" para QUALQUER outra coisa (perguntas, dÃºvidas, problemas, informaÃ§Ãµes, etc.)
+- "skip" APENAS se for: saudação pura (oi, olá, bom dia), confirmação pura (ok, entendi, beleza), ou elogio/agradecimento puro (obrigado, valeu)
+- "search" para QUALQUER outra coisa (perguntas, dúvidas, problemas, informações, etc.)
 
-Se tiver QUALQUER indÃ­cio de pergunta ou dÃºvida, responda "search".
+Se tiver QUALQUER indício de pergunta ou dúvida, responda "search".
 Responda APENAS: skip ou search`
           },
           { role: 'user', content: customerMessage }
