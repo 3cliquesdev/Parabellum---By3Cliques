@@ -8591,7 +8591,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhÃ£ pela manhÃ£ para v
             const internalNote = `[AI RESOLVED]
 Categoria: ${args.category}
 Resumo: ${args.summary}
-ResoluÃ§Ã£o: ${args.resolution_notes}
+Resolução: ${args.resolution_notes}
 Severidade: ${args.severity || 'N/A'}
 Tags: ${args.tags?.join(', ') || 'N/A'}
 Conversa: ${conversationId}`;
