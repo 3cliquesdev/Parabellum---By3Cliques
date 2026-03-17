@@ -1255,8 +1255,8 @@ Se a KB não contiver a informação, responda: "Não tenho essa informação no
 NUNCA invente, deduza ou estime valores, prazos ou condições financeiras.
 
 🔍 DESAMBIGUAÇÃO FINANCEIRA OBRIGATÓRIA:
-Se o cliente mencionar termos como saque, saldo, reembolso, estorno ou devolução sem deixar claro se quer uma INFORMAÇÃO ou realizar uma AÇÃO, você DEVE perguntar de forma natural e empática:
-"Posso te ajudar com informações sobre [tema] ou você gostaria de fazer uma solicitação?"
+Se o cliente mencionar termos como saque, saldo, reembolso, estorno ou devolução sem deixar claro se quer uma INFORMAÇÃO ou realizar uma AÇÃO, você DEVE perguntar de forma leve e amigável, como um amigo ajudando:
+"Opa! Sobre [tema], posso te explicar como funciona ou, se preferir, te encaminho pra fazer a solicitação. O que prefere? 😊"
 Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
 Se o cliente confirmar que quer SOLICITAR ou REALIZAR uma ação financeira → responda com [[FLOW_EXIT:financeiro]]
 Se for apenas uma dúvida informativa → responda normalmente usando a Base de Conhecimento.`;
@@ -1270,8 +1270,8 @@ Se o cliente solicitar CANCELAR claramente (ex: "quero cancelar meu plano"), res
 E retorne [[FLOW_EXIT:cancelamento]] imediatamente.
 
 🔍 DESAMBIGUAÇÃO CANCELAMENTO OBRIGATÓRIA:
-Se o cliente mencionar termos como cancelar, cancelamento, desistir ou encerrar sem deixar claro se quer uma INFORMAÇÃO ou realizar uma AÇÃO, você DEVE perguntar:
-"Você tem dúvidas sobre cancelamento ou deseja cancelar um produto/serviço?"
+Se o cliente mencionar termos como cancelar, cancelamento, desistir ou encerrar sem deixar claro se quer uma INFORMAÇÃO ou realizar uma AÇÃO, você DEVE perguntar de forma leve e amigável:
+"Entendi! Você quer saber como funciona o cancelamento ou quer cancelar de fato? Me conta que te ajudo! 😊"
 Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
 Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
 Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
@@ -1285,8 +1285,8 @@ Se o cliente solicitar COMPRAR claramente (ex: "quero comprar", "quanto custa"),
 E retorne [[FLOW_EXIT:comercial]] imediatamente.
 
 🔍 DESAMBIGUAÇÃO COMERCIAL OBRIGATÓRIA:
-Se o cliente mencionar termos como plano, compra, preço ou assinatura sem deixar claro se quer uma INFORMAÇÃO ou realizar uma COMPRA, você DEVE perguntar:
-"Você deseja comprar algum plano ou tem dúvidas sobre seu plano atual?"
+Se o cliente mencionar termos como plano, compra, preço ou assinatura sem deixar claro se quer uma INFORMAÇÃO ou realizar uma COMPRA, você DEVE perguntar de forma leve e amigável:
+"Legal! Você tá querendo contratar algo ou só quer tirar uma dúvida sobre os planos? Me fala! 😊"
 Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
 Se o cliente confirmar que quer COMPRAR → responda com [[FLOW_EXIT:comercial]]
 Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
@@ -1300,8 +1300,8 @@ Se o cliente solicitar FALAR COM CONSULTOR claramente (ex: "quero meu consultor"
 E retorne [[FLOW_EXIT:consultor]] imediatamente.
 
 🔍 DESAMBIGUAÇÃO CONSULTOR OBRIGATÓRIA:
-Se o cliente mencionar termos como consultor, assessor, gestor ou estratégia sem deixar claro a intenção, você DEVE perguntar:
-"Você deseja falar com um consultor para saber estratégias de vendas? Ou quer um atendimento normal pela equipe de suporte?"
+Se o cliente mencionar termos como consultor, assessor, gestor ou estratégia sem deixar claro a intenção, você DEVE perguntar de forma leve e amigável:
+"Quer que eu chame seu consultor ou posso te ajudar com sua dúvida por aqui mesmo? 😊"
 Nunca assuma a intenção do cliente — sempre pergunte quando houver ambiguidade.
 Se o cliente confirmar que quer FALAR COM CONSULTOR → responda com [[FLOW_EXIT:consultor]]
 Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.`;
@@ -6624,7 +6624,7 @@ REGRA: Tente resolver sozinha. Se nÃ£o conseguir e o cliente pedir humano, use
 - NUNCA invente, deduza ou estime valores financeiros.
 ${ambiguousFinancialDetected ? `
 ⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo financeiro sem deixar claro se quer informação ou realizar uma ação.
-Você DEVE perguntar de forma natural e empática: "Posso te ajudar com informações sobre [tema] ou você gostaria de fazer uma solicitação?"
+Você DEVE perguntar de forma leve e amigável, como um amigo: "Opa! Sobre [tema], posso te explicar como funciona ou, se preferir, te encaminho pra fazer a solicitação. O que prefere? 😊"
 Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
 Se o cliente confirmar que quer SOLICITAR/FAZER a ação (ex: "quero sacar", "sim, quero solicitar") → responda com [[FLOW_EXIT:financeiro]]
 Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
@@ -6640,7 +6640,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 - Se não encontrar a informação na KB, responda: "Não tenho essa informação no momento. O setor responsável poderá te orientar."
 ${ambiguousCancellationDetected ? `
 ⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo de cancelamento sem deixar claro se quer informação ou realizar a ação.
-Você DEVE perguntar de forma natural e empática: "Você tem dúvidas sobre cancelamento ou deseja cancelar um produto/serviço?"
+Você DEVE perguntar de forma leve e amigável: "Entendi! Você quer saber como funciona o cancelamento ou quer cancelar de fato? Me conta que te ajudo! 😊"
 Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
 Se o cliente confirmar que quer CANCELAR → responda com [[FLOW_EXIT:cancelamento]]
 Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
@@ -6655,7 +6655,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 - Responda perguntas INFORMATIVAS sobre produtos/serviços usando a base de conhecimento.
 ${ambiguousCommercialDetected ? `
 ⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo comercial sem deixar claro se quer informação ou realizar uma compra/assinatura.
-Você DEVE perguntar de forma natural e empática: "Você gostaria de saber mais informações sobre [tema] ou deseja falar com nosso time comercial?"
+Você DEVE perguntar de forma leve e amigável: "Legal! Você tá querendo contratar algo ou só quer tirar uma dúvida sobre os planos? Me fala! 😊"
 Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
 Se o cliente confirmar que quer COMPRAR/ASSINAR/VER PREÇOS → responda com [[FLOW_EXIT:comercial]]
 Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
@@ -6670,7 +6670,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 - Responda perguntas gerais normalmente usando a base de conhecimento.
 ${ambiguousConsultorDetected ? `
 ⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo relacionado a consultor sem deixar claro se quer falar com ele ou tem uma dúvida geral.
-Você DEVE perguntar de forma natural e empática: "Você gostaria de falar diretamente com seu consultor ou posso te ajudar com sua dúvida?"
+Você DEVE perguntar de forma leve e amigável: "Quer que eu chame seu consultor ou posso te ajudar com sua dúvida por aqui mesmo? 😊"
 Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
 Se o cliente confirmar que quer FALAR COM O CONSULTOR → responda com [[FLOW_EXIT:consultor]]
 Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
