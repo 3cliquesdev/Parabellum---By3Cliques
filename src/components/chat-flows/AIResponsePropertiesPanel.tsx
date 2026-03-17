@@ -192,6 +192,16 @@ export function AIResponsePropertiesPanel({
         <div className="flex items-center gap-2">
           <Ticket className="h-4 w-4 text-violet-500" />
           <Label className="text-xs font-semibold uppercase tracking-wide">Ação ao Sair</Label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[260px] text-xs">
+                Permite que a IA crie automaticamente um ticket ao finalizar o atendimento neste nó. Ideal para formalizar solicitações como saque, reembolso ou devolução.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
         <Select
           value={selectedNode.data.end_action || "none"}
@@ -219,9 +229,15 @@ export function AIResponsePropertiesPanel({
             <SelectItem value="create_ticket">🎫 Criar Ticket</SelectItem>
           </SelectContent>
         </Select>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Ative quando a IA precisar formalizar a solicitação do cliente em um ticket antes de encerrar (ex: saque, reembolso). O ticket será criado automaticamente com os dados coletados pela IA.
+        </p>
 
         {selectedNode.data.end_action === "create_ticket" && selectedNode.data.action_data && (
           <div className="space-y-2 pl-2 border-l-2 border-violet-500/30">
+            <p className="text-[10px] text-muted-foreground bg-muted/50 rounded p-2 leading-relaxed">
+              📋 Configure os dados do ticket abaixo. <strong>Departamento</strong> define para qual equipe será direcionado. <strong>Responsável</strong> é opcional — se não selecionado, o ticket vai para o pool do departamento.
+            </p>
             <div className="space-y-1">
               <Label className="text-[10px]">Assunto</Label>
               <Input
