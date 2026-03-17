@@ -10863,8 +10863,8 @@ export type Database = {
           }
         | {
             Args: {
-              match_count: number
-              match_threshold: number
+              match_count?: number
+              match_threshold?: number
               product_filter?: string[]
               query_embedding: string
             }
