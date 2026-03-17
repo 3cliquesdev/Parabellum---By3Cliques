@@ -462,6 +462,10 @@ async function buildVariablesContext(
     if (!contactData.name && (contactData.first_name || contactData.last_name)) {
       ctx['contact_name'] = [contactData.first_name, contactData.last_name].filter(Boolean).join(' ');
     }
+    // Aliases: customer_* → contact_* (UI usa customer_name, motor gera contact_name)
+    if (ctx['contact_name']) ctx['customer_name'] = ctx['contact_name'];
+    if (ctx['contact_email']) ctx['customer_email'] = ctx['contact_email'];
+    if (ctx['contact_phone']) ctx['customer_phone'] = ctx['contact_phone'];
   }
   if (conversationData) {
     for (const f of ['channel','status','priority','protocol_number','queue','created_at','resolved_at']) {
