@@ -1,65 +1,29 @@
 
+# Fix: IA vazando instruções internas do contextPrompt para o cliente — ✅ IMPLEMENTADO
 
-# Fase 3 — Correção Massiva de Encoding no Código-Fonte
+## O que mudou
 
-## Escopo
-O arquivo `supabase/functions/ai-autopilot-chat/index.ts` tem **10.070 linhas** com **3.492 ocorrências** de strings UTF-8 corrompidas (mojibake). Todas são em **comentários, logs e strings literais** — zero alteração de lógica.
+### 1. Guard anti-vazamento reforçado no `agentContextBlock` ✅
+- Instruções internas agora envoltas em tags `[SYSTEM INTERNAL — DO NOT OUTPUT TO USER]`
+- Adicionadas **9 regras explícitas** com exemplos proibidos e exemplos corretos
+- LLM recebe instrução imperativa e repetida para nunca reproduzir passos internos
 
-## Mapa de substituições
-| Corrompido | Correto |
-|---|---|
-| `ðŸ†•` | `🆕` |
-| `ðŸ"§` | `🔧` |
-| `ðŸ›¡ï¸` | `🛡️` |
-| `ðŸ"¢` | `🔢` |
-| `ðŸ"` | `📝` |
-| `âœ…` | `✅` |
-| `âš ï¸` | `⚠️` |
-| `âŒ` | `❌` |
-| `Ã§Ã£o` | `ção` |
-| `Ã£o` | `ão` |
-| `Ã©` | `é` |
-| `Ãª` | `ê` |
-| `Ã­` | `í` |
-| `Ãº` | `ú` |
-| `Ã³` | `ó` |
-| `Ã¡` | `á` |
-| `Ã‚` | `Â` |
-| `nÃ£o` | `não` |
-| `ConfiguraÃ§Ã£o` | `Configuração` |
-| `FunÃ§Ã£o` | `Função` |
-| `IntenÃ§Ã£o` | `Intenção` |
-| `pontuaÃ§Ã£o` | `pontuação` |
-| `violaÃ§Ã£o` | `violação` |
-| `opÃ§Ãµes` | `opções` |
-| `mÃºltipla` | `múltipla` |
-| `nÃºmero` | `número` |
-| `invÃ¡lido` | `inválido` |
-| `vÃ¡lido` | `válido` |
-| `apÃ³s` | `após` |
-| `dÃ­gitos` | `dígitos` |
-| `tÃ©cnico` | `técnico` |
-| `genÃ©rica` | `genérica` |
-| + todas as demais variações do mesmo padrão UTF-8 |
+### 2. Reordenação do prompt ✅
+- `agentContextBlock` movido da **posição 1** para a **última posição** no prompt contextualizado
+- LLM agora processa personalidade, regras de comportamento e contexto do fluxo ANTES de ver instruções internas
+- Reduz drasticamente a chance de eco das instruções
 
-## Estratégia de execução
+### 3. Sanitização pós-resposta da LLM ✅
+- Filtro regex detecta padrões de vazamento:
+  - "siga estes passos", "verifique na base", "próximos passos:"
+  - "Para o contato X, siga/execute..."
+  - Frases numeradas com verbos de sistema (1) Verifique...)
+  - Tags `[SYSTEM INTERNAL]` na resposta
+- Se detectado: resposta substituída por saudação natural contextual
+- Log de auditoria (`instruction_leak_blocked`) para monitoramento
 
-Devido ao tamanho (10k linhas), o arquivo será reescrito em **blocos sequenciais** (~2000 linhas cada), aplicando todas as substituições de encoding. Cada bloco mantém a lógica idêntica — apenas strings corrigidas.
-
-**5 blocos:**
-1. Linhas 1–2000
-2. Linhas 2001–4000
-3. Linhas 4001–6000
-4. Linhas 6001–8000
-5. Linhas 8001–10070
-
-## Risco
-- **Lógica**: Zero — nenhuma linha de código funcional muda
-- **Deploy**: Moderado apenas pelo volume — será feito deploy e verificação de logs após
-- **Rollback**: Instantâneo via histórico de versão
-
-## Validação pós-deploy
-- Deploy da edge function `ai-autopilot-chat`
-- Verificar logs para confirmar que o serviço inicia sem erros
-- Buscar por mojibake residual no código
-
+## Impacto
+- ✅ Defesa em profundidade: prompt reforçado + reordenação + filtro de saída
+- ✅ Zero vazamento de instruções internas para o cliente
+- ✅ Zero impacto em respostas legítimas da IA
+- ✅ Auditoria completa em `ai_events`

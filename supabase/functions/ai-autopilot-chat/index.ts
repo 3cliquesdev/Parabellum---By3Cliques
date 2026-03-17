@@ -10,7 +10,7 @@ const corsHeaders = {
 };
 
 // ============================================================
-// ðŸ†• INTERFACE DE CONFIGURAÃ‡ÃƒO RAG DINÃ‚MICA
+// 🆕 INTERFACE DE CONFIGURAÇÃO RAG DINÂMICA
 // Lido do banco system_configurations
 // ============================================================
 interface RAGConfig {
@@ -44,7 +44,7 @@ const DEFAULT_RAG_CONFIG: RAGConfig = {
   maxFallback: 3,
 };
 
-// Helper: Buscar TODAS as configuraÃ§Ãµes RAG do banco
+// Helper: Buscar TODAS as configurações RAG do banco
 async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
   try {
     const { data, error } = await supabaseClient
@@ -98,7 +98,7 @@ async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
       maxFallback: parseInt(configMap.get('ai_max_fallback_phrases') ?? '3'),
     };
     
-    console.log('[getRAGConfig] âœ… ConfiguraÃ§Ã£o RAG carregada:', {
+    console.log('[getRAGConfig] ✅ Configuração RAG carregada:', {
       model: config.model,
       minThreshold: config.minThreshold,
       directThreshold: config.directThreshold,
@@ -208,17 +208,17 @@ async function getMessageTemplate(
       .maybeSingle();
 
     if (error || !data) {
-      console.log(`[getMessageTemplate] Template "${key}" nÃ£o encontrado ou inativo`);
+      console.log(`[getMessageTemplate] Template "${key}" não encontrado ou inativo`);
       return null;
     }
 
-    // Substituir variÃ¡veis {{var}} pelos valores
+    // Substituir variáveis {{var}} pelos valores
     let content = data.content;
     Object.entries(variables).forEach(([varKey, value]) => {
       content = content.replace(new RegExp(`\\{\\{${varKey}\\}\\}`, 'g'), value || '');
     });
 
-    console.log(`[getMessageTemplate] âœ… Template "${key}" carregado com sucesso`);
+    console.log(`[getMessageTemplate] ✅ Template "${key}" carregado com sucesso`);
     return content;
   } catch (error) {
     console.error(`[getMessageTemplate] Erro ao buscar template "${key}":`, error);
@@ -226,13 +226,13 @@ async function getMessageTemplate(
   }
 }
 
-// FASE 2: FunÃ§Ã£o para gerar hash SHA-256 da pergunta normalizada
+// FASE 2: Função para gerar hash SHA-256 da pergunta normalizada
 async function generateQuestionHash(message: string): Promise<string> {
   const normalized = message
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // Remove acentos
-    .replace(/[^\w\s]/g, "") // Remove pontuaÃ§Ã£o
+    .replace(/[^\w\s]/g, "") // Remove pontuação
     .trim();
   
   const encoder = new TextEncoder();
@@ -364,9 +364,9 @@ function formatOptionsAsText(options: Array<{label: string; value: string}> | nu
 }
 
 // ============================================================
-// ðŸ†• DETECTOR DE INTENÃ‡ÃƒO PARA PRESERVAÃ‡ÃƒO DE CONTEXTO
-// Identifica a categoria da intenÃ§Ã£o original do cliente
-// para recuperar contexto apÃ³s verificaÃ§Ã£o de email
+// 🆕 DETECTOR DE INTENÇÃO PARA PRESERVAÇÃO DE CONTEXTO
+// Identifica a categoria da intenção original do cliente
+// para recuperar contexto após verificação de email
 // ============================================================
 function detectIntentCategory(message: string): string | null {
   const msgLower = message.toLowerCase()
