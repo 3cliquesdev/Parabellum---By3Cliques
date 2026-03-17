@@ -8114,7 +8114,7 @@ Via: Atendimento Automatizado (IA)`;
             } else if (args.tracking_code) {
               trackingCodes = [args.tracking_code.trim()];
             }
-            const customerEmail = args.customer_email?.toLowerCase().trim();
+            // customer_email REMOVIDO
             
             console.log('[ai-autopilot-chat] ðŸ“¦ Consultando rastreio:', { trackingCodes, customerEmail, numCodes: trackingCodes.length });
 
