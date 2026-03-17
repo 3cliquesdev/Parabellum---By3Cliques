@@ -5509,7 +5509,7 @@ Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado e
         
         if (!askEmailMessage) {
           const firstName = contactName ? contactName.split(' ')[0] : '';
-          askEmailMessage = `OlÃ¡${firstName ? `, ${firstName}` : ''}! ðŸ‘‹\n\nPara garantir um atendimento personalizado e seguro, preciso que vocÃª me informe seu email.\n\nðŸ“§ *Envie apenas o email em uma linha (ex: seunome@email.com)*`;
+          askEmailMessage = `Ola${firstName ? `, ${firstName}` : ''}! 👋\n\nPara garantir um atendimento personalizado e seguro, preciso que voce me informe seu email.\n\n📧 *Envie apenas o email em uma linha (ex: seunome@email.com)*`;Ã¡${firstName ? `, ${firstName}` : ''}! ðŸ‘‹\n\nPara garantir um atendimento personalizado e seguro, preciso que vocÃª me informe seu email.\n\nðŸ“§ *Envie apenas o email em uma linha (ex: seunome@email.com)*`;
         }
         
         // Salvar mensagem pedindo email
