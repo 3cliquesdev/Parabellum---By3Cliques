@@ -9222,8 +9222,8 @@ Nossa equipe estÃ¡ ocupada no momento, mas vocÃª estÃ¡ na fila e serÃ¡ a
       }
       
       // ValidaÃ§Ã£o de restriÃ§Ãµes (forbidQuestions, forbidOptions, forbidFinancial)
-      const forbidQuestions = flow_context.forbidQuestions ?? true;
-      const forbidOptions = flow_context.forbidOptions ?? true;
+      const forbidQuestions = flow_context.forbidQuestions ?? false;
+      const forbidOptions = flow_context.forbidOptions ?? false;
       const forbidFinancial = flow_context.forbidFinancial ?? false;
       const restrictionCheck = validateResponseRestrictions(assistantMessage, forbidQuestions, forbidOptions, flow_context); // FIX LOOP: passa contexto para detectar triagem
       
