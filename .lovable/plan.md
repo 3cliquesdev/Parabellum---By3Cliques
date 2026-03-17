@@ -1,25 +1,37 @@
 
-# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-## O que mudou
+# Colorir Linhas (Edges) com a Cor da Opção de Origem
 
-### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
-- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
-- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
-- Ao trocar departamento, responsável é limpo automaticamente
-- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
+## Problema
+As linhas que saem dos nós de múltipla escolha (AskOptionsNode) e condição (ConditionNode/ConditionV2Node) são todas da mesma cor padrão, tornando impossível saber visualmente qual linha pertence a qual opção.
 
-### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
-- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
-  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
-  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
-  - Dados salvos em `end_action` e `action_data` no node data
-- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
+## Solução
+Quando uma conexão sai de um handle com cor específica (opções, condições, switch), a linha deve herdar essa cor. Isso envolve dois pontos:
 
-### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
-- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
-- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
+### 1. `ChatFlowEditor.tsx` — `onConnect` e `normalizedEdges`
 
-### 4. Continuidade do Fluxo ✅
-- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
-- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
+Ao criar uma nova conexão (`onConnect`), verificar o nó de origem: se for `ask_options`, `condition_v2`, ou outro nó com handles coloridos, pegar a cor do handle correspondente ao `sourceHandle` e aplicar no `style.stroke` e `markerEnd.color` da edge.
+
+Criar uma função auxiliar `getEdgeColorFromSource(nodes, sourceId, sourceHandleId)` que:
+- Encontra o nó de origem
+- Se for `ask_options`: mapeia o índice da opção pelo `sourceHandle` (option.id) → retorna `optionColors[idx]`
+- Se for `condition_v2`: mapeia pela regra → retorna `ruleColors[idx]`
+- Senão: retorna `null` (usa cor padrão)
+
+Aplicar essa mesma lógica no `normalizedEdges` (para edges já salvas no banco).
+
+### 2. `ButtonEdge.tsx` — já funciona
+
+O `ButtonEdge` já usa `style` recebido via props, então passar `stroke` com a cor correta já vai funcionar sem alteração neste componente.
+
+### Arquivos alterados
+- `src/components/chat-flows/ChatFlowEditor.tsx` — adicionar função `getEdgeColorFromSource`, atualizar `onConnect` e `normalizedEdges`
+
+### Resultado visual
+- Linha azul → opção "Pedidos" (azul)
+- Linha verde → opção "Financeiro" (verde)
+- Linha amarela → opção "Suporte" (amarelo)
+- etc.
+
+As cores seguirão exatamente o array `optionColors` já usado nos handles e labels dos nós.
+
