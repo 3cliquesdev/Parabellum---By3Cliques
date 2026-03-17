@@ -3068,10 +3068,10 @@ serve(async (req) => {
           
           console.log('âœ… [CACHE] Handoff executado, cache invalidado');
           
-          // ðŸ†• 6. RETORNAR RESPOSTA IMEDIATA DE HANDOFF (nÃ£o usar cache ruim!)
+          // 🆕 6. RETORNAR RESPOSTA IMEDIATA DE HANDOFF (não usar cache ruim!)
           const handoffMessage = isFinancial && ticketProtocol
-            ? `Entendi sua solicitaÃ§Ã£o financeira. Estou transferindo vocÃª para um especialista humano que vai te ajudar com isso.\n\nProtocolo criado: #${ticketProtocol}`
-            : `Entendi sua dÃºvida. Estou transferindo vocÃª para um especialista humano que poderÃ¡ te ajudar melhor.`;
+            ? `Entendi sua solicitação financeira. Estou transferindo você para um especialista humano que vai te ajudar com isso.\n\nProtocolo criado: #${ticketProtocol}`
+            : `Entendi sua dúvida. Estou transferindo você para um especialista humano que poderá te ajudar melhor.`;
           
           // Salvar mensagem de handoff no banco
           const { data: handoffMessageData } = await supabaseClient
