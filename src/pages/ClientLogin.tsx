@@ -78,15 +78,25 @@ export default function ClientLogin() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/setup-password`,
-    });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("send-recovery-email", {
+        body: { 
+          email, 
+          redirect_to: `${window.location.origin}/setup-password` 
+        },
+      });
+      
+      if (fnError) throw fnError;
+      
       setResetSent(true);
       setError(null);
+    } catch (err: any) {
+      console.error("Recovery email error:", err);
+      // Sempre mostrar sucesso para não revelar se email existe
+      setResetSent(true);
+      setError(null);
+    } finally {
+      setLoading(false);
     }
   };
 
