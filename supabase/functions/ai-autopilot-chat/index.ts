@@ -5250,16 +5250,6 @@ Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado e
           const notFoundMessage = allExtractedCodes.length === 1
             ? `Não encontrei o pedido **${allExtractedCodes[0]}** no sistema de rastreio.\n\n🤔 Esse número está correto?\n\nSe foi pago recentemente, pode ser que ainda não tenha entrado em preparação. Caso contrário, me envie o número correto para eu verificar novamente.`
             : `Não encontrei os códigos ${allExtractedCodes.join(', ')} no sistema de rastreio.\n\n🤔 Esses números estão corretos?\n\nSe foram pagos recentemente, pode ser que ainda não tenham entrado em preparação.`;
-            ? `NÃ£o encontrei o pedido **${allExtractedCodes[0]}** no sistema de rastreio.
-
-ðŸ¤” Esse nÃºmero estÃ¡ correto?
-
-Se foi pago recentemente, pode ser que ainda nÃ£o tenha entrado em preparaÃ§Ã£o. Caso contrÃ¡rio, me envie o nÃºmero correto para eu verificar novamente.`
-            : `NÃ£o encontrei os cÃ³digos ${allExtractedCodes.join(', ')} no sistema de rastreio.
-
-ðŸ¤” Esses nÃºmeros estÃ£o corretos?
-
-Se foram pagos recentemente, pode ser que ainda nÃ£o tenham entrado em preparaÃ§Ã£o.`;
           
           // Salvar mensagem no banco
           const { data: savedNotFoundMsg } = await supabaseClient
