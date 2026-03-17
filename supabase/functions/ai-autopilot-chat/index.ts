@@ -4891,7 +4891,7 @@ Responda APENAS: skip ou search`
         }
         
         // Mensagem padronizada de handoff para modo estrito
-        const strictHandoffMessage = `OlÃ¡ ${contactName}! Para te ajudar da melhor forma com essa questÃ£o especÃ­fica, vou te conectar com um de nossos especialistas.\n\nUm momento, por favor.`;
+        const strictHandoffMessage = `Olá ${contactName}! Para te ajudar da melhor forma com essa questão específica, vou te conectar com um de nossos especialistas.\n\nUm momento, por favor.`;
         
         // Salvar mensagem
         await supabaseClient.from('messages').insert({
