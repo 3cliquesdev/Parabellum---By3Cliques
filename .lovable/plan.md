@@ -1,25 +1,25 @@
 
+# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-# Filtros de busca na gestão de devoluções
+## O que mudou
 
-## O que será feito
-Adicionar um campo de busca textual ao lado do filtro de status existente, permitindo buscar por:
-- **Rastreio original** (`tracking_code_original`)
-- **Pedido** (`external_order_id`)
-- **Rastreio reverso** (`tracking_code_return`)
+### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
+- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
+- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
+- Ao trocar departamento, responsável é limpo automaticamente
+- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
 
-## Implementação
+### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
+- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
+  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
+  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
+  - Dados salvos em `end_action` e `action_data` no node data
+- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
 
-### 1. `ReturnsManagement.tsx`
-- Adicionar estado `searchTerm` (string)
-- Adicionar um `Input` com ícone de busca e placeholder "Buscar por pedido, rastreio ou rastreio reverso..."
-- Filtrar `returns` client-side: se `searchTerm` não está vazio, filtrar os resultados verificando se `external_order_id`, `tracking_code_original` ou `tracking_code_return` contém o termo (case-insensitive)
-- Posicionar o input entre o select de status e o botão "Nova Devolução"
+### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
+- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
+- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
 
-### Layout da barra de filtros
-```text
-[Status ▼] [🔍 Buscar por pedido, rastreio ou rastreio reverso...          ] [+ Nova Devolução]
-```
-
-Filtragem client-side (sem mudanças no hook/query), pois os dados já são carregados completos.
-
+### 4. Continuidade do Fluxo ✅
+- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
+- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`

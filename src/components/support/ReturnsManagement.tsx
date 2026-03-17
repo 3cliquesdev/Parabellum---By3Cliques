@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAdminReturns, AdminReturn } from "@/hooks/useReturns";
 import { STATUS_CONFIG } from "@/hooks/useClientReturns";
 import { useReasonLabelsMap } from "@/hooks/useReturnReasons";
@@ -10,7 +10,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Plus, RotateCcw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Plus, RotateCcw, Search } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AdminReturnDialog } from "./AdminReturnDialog";
@@ -19,14 +20,26 @@ import { PageContainer } from "@/components/ui/page-container";
 
 export default function ReturnsManagement() {
   const [statusFilter, setStatusFilter] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState<AdminReturn | null>(null);
   const { data: returns, isLoading } = useAdminReturns(statusFilter);
   const reasonLabels = useReasonLabelsMap();
 
+  const filteredReturns = useMemo(() => {
+    if (!returns) return [];
+    if (!searchTerm.trim()) return returns;
+    const term = searchTerm.trim().toLowerCase();
+    return returns.filter((r) =>
+      (r.external_order_id && r.external_order_id.toLowerCase().includes(term)) ||
+      (r.tracking_code_original && r.tracking_code_original.toLowerCase().includes(term)) ||
+      (r.tracking_code_return && r.tracking_code_return.toLowerCase().includes(term))
+    );
+  }, [returns, searchTerm]);
+
   return (
     <PageContainer>
-      <div className="flex items-center justify-between gap-4 mb-4">
+      <div className="flex items-center gap-4 mb-4">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Filtrar por status" />
@@ -41,6 +54,16 @@ export default function ReturnsManagement() {
           </SelectContent>
         </Select>
 
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por pedido, rastreio ou rastreio reverso..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
         <Button onClick={() => setShowCreate(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Nova Devolução
@@ -51,7 +74,7 @@ export default function ReturnsManagement() {
         <div className="flex justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : !returns || returns.length === 0 ? (
+      ) : filteredReturns.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <RotateCcw className="h-12 w-12 text-muted-foreground/40 mb-4" />
           <p className="text-muted-foreground">Nenhuma devolução encontrada</p>
@@ -71,7 +94,7 @@ export default function ReturnsManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {returns.map((ret) => {
+            {filteredReturns.map((ret) => {
                 const statusCfg = STATUS_CONFIG[ret.status] || STATUS_CONFIG.pending;
                 const clientName = ret.contacts
                   ? `${ret.contacts.first_name} ${ret.contacts.last_name}`
