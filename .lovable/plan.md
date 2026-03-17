@@ -1,29 +1,25 @@
 
+# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-# Adicionar Variáveis Clicáveis nos Campos de Assunto e Descrição do Ticket
+## O que mudou
 
-## Problema
-Campos de "Assunto" e "Descrição" na seção "Ação ao Sair" aceitam variáveis `{{campo}}`, mas o usuário comum não sabe quais variáveis usar nem como digitá-las.
+### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
+- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
+- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
+- Ao trocar departamento, responsável é limpo automaticamente
+- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
 
-## Solução
-Adicionar badges clicáveis abaixo dos campos Assunto e Descrição — ao clicar, a variável é inserida automaticamente no campo. As variáveis disponíveis vêm dos **campos de coleta inteligente** ativados no mesmo nó + variáveis fixas do sistema (ex: `customer_name`, `customer_email`).
+### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
+- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
+  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
+  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
+  - Dados salvos em `end_action` e `action_data` no node data
+- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
 
-## Alterações
+### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
+- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
+- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
 
-### `src/components/chat-flows/AIResponsePropertiesPanel.tsx`
-
-1. **Definir lista de variáveis disponíveis** — combinar campos da coleta inteligente (`smart_collection_fields`) com variáveis fixas do sistema (`customer_name`, `customer_email`, `customer_phone`)
-
-2. **Abaixo do campo Assunto** — renderizar badges clicáveis com as variáveis. Ao clicar, insere `{{variavel}}` no final do valor atual do campo assunto
-
-3. **Abaixo do campo Descrição** — mesma lógica, inserindo no campo descrição
-
-4. **Texto auxiliar** — "Clique para inserir a variável no campo acima"
-
-5. **Visual** — usar o mesmo estilo de badge compacto, com `code` em mono e cor por categoria, similar ao `ReadOnlyVariableBadge` mas com ação de inserção em vez de copiar
-
-### Comportamento
-- Clicar no badge → appenda `{{variavel}}` ao campo correspondente (assunto ou descrição)
-- Se não houver campos de coleta ativados, exibe apenas as variáveis fixas do sistema
-- Badges ficam em `flex-wrap` compactos para não ocupar muito espaço
-
+### 4. Continuidade do Fluxo ✅
+- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
+- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`

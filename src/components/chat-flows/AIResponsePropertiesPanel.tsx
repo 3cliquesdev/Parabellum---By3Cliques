@@ -23,6 +23,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
+import { VariableBadgesRow } from "./ClickableVariableBadge";
 
 interface AIResponsePropertiesPanelProps {
   selectedNode: Node;
@@ -233,7 +234,41 @@ export function AIResponsePropertiesPanel({
           Ative quando a IA precisar formalizar a solicitação do cliente em um ticket antes de encerrar (ex: saque, reembolso). O ticket será criado automaticamente com os dados coletados pela IA.
         </p>
 
-        {selectedNode.data.end_action === "create_ticket" && selectedNode.data.action_data && (
+        {selectedNode.data.end_action === "create_ticket" && selectedNode.data.action_data && (() => {
+          const SYSTEM_VARS = [
+            { key: "customer_name", label: "Nome", color: "text-blue-600 dark:text-blue-400" },
+            { key: "customer_email", label: "Email", color: "text-blue-600 dark:text-blue-400" },
+            { key: "customer_phone", label: "Telefone", color: "text-blue-600 dark:text-blue-400" },
+          ];
+          const COLLECTION_MAP: Record<string, { label: string; color: string }> = {
+            name: { label: "Nome coletado", color: "text-amber-600 dark:text-amber-400" },
+            email: { label: "Email coletado", color: "text-amber-600 dark:text-amber-400" },
+            phone: { label: "Telefone coletado", color: "text-amber-600 dark:text-amber-400" },
+            cpf: { label: "CPF", color: "text-amber-600 dark:text-amber-400" },
+            address: { label: "Endereço", color: "text-amber-600 dark:text-amber-400" },
+            pix_key: { label: "Chave PIX", color: "text-emerald-600 dark:text-emerald-400" },
+            bank: { label: "Banco", color: "text-emerald-600 dark:text-emerald-400" },
+            reason: { label: "Motivo", color: "text-rose-600 dark:text-rose-400" },
+            amount: { label: "Valor", color: "text-emerald-600 dark:text-emerald-400" },
+          };
+          const collectionFields: string[] = selectedNode.data.smart_collection_fields || [];
+          const collectionVars = collectionFields.map((f) => ({
+            key: f,
+            label: COLLECTION_MAP[f]?.label || f,
+            color: COLLECTION_MAP[f]?.color || "text-amber-600 dark:text-amber-400",
+          }));
+          const allVars = [...SYSTEM_VARS, ...collectionVars];
+
+          const insertIntoSubject = (varText: string) => {
+            const current = selectedNode.data.action_data.subject || "";
+            updateNodeData("action_data", { ...selectedNode.data.action_data, subject: current + (current && !current.endsWith(" ") ? " " : "") + varText });
+          };
+          const insertIntoDescription = (varText: string) => {
+            const current = selectedNode.data.action_data.description || "";
+            updateNodeData("action_data", { ...selectedNode.data.action_data, description: current + (current && !current.endsWith(" ") ? " " : "") + varText });
+          };
+
+          return (
           <div className="space-y-2 pl-2 border-l-2 border-violet-500/30">
             <p className="text-[10px] text-muted-foreground bg-muted/50 rounded p-2 leading-relaxed">
               📋 Configure os dados do ticket abaixo. <strong>Departamento</strong> define para qual equipe será direcionado. <strong>Responsável</strong> é opcional — se não selecionado, o ticket vai para o pool do departamento.
@@ -243,9 +278,10 @@ export function AIResponsePropertiesPanel({
               <Input
                 value={selectedNode.data.action_data.subject || ""}
                 onChange={(e) => updateNodeData("action_data", { ...selectedNode.data.action_data, subject: e.target.value })}
-                placeholder="Assunto do ticket com {{variáveis}}"
+                placeholder="Ex: Saque {{customer_name}} - {{amount}}"
                 className="h-8 text-xs"
               />
+              <VariableBadgesRow variables={allVars} onInsert={insertIntoSubject} />
             </div>
             <div className="space-y-1">
               <Label className="text-[10px]">Descrição</Label>
@@ -253,10 +289,11 @@ export function AIResponsePropertiesPanel({
                 onKeyDown={(e) => e.stopPropagation()}
                 value={selectedNode.data.action_data.description || ""}
                 onChange={(e) => updateNodeData("action_data", { ...selectedNode.data.action_data, description: e.target.value })}
-                placeholder="Descrição do ticket..."
+                placeholder="Ex: PIX: {{pix_key}} | Valor: {{amount}} | Motivo: {{reason}}"
                 rows={2}
                 className="resize-none text-xs"
               />
+              <VariableBadgesRow variables={allVars} onInsert={insertIntoDescription} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
@@ -339,7 +376,8 @@ export function AIResponsePropertiesPanel({
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       <Separator />
