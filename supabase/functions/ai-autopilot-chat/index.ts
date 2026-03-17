@@ -3764,7 +3764,7 @@ serve(async (req) => {
             // Buscar template de lead direcionado
             let leadMessage = await getMessageTemplate(supabaseClient, 'lead_direcionado_comercial', {});
             if (!leadMessage) {
-              leadMessage = 'Obrigado! Como você ainda não é nosso cliente, vou te direcionar para nosso time Comercial que poderá te ajudar. 🤝\n\nAguarde um momento que logo um de nossos consultores irá te atender!';Ãª ainda nÃ£o Ã© nosso cliente, vou te direcionar para nosso time Comercial que poderÃ¡ te ajudar. ðŸ¤\n\nAguarde um momento que logo um de nossos consultores irÃ¡ te atender!';
+              leadMessage = 'Obrigado! Como você ainda não é nosso cliente, vou te direcionar para nosso time Comercial que poderá te ajudar. 🤝\n\nAguarde um momento que logo um de nossos consultores irá te atender!';
             }
             
             // Atualizar conversa: departamento = Comercial, ai_mode = waiting_human
