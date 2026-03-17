@@ -5732,9 +5732,10 @@ serve(async (req) => {
           conversationId, flowStateId: newState.id, nodeId: startNode.id,
           contactId: trigContactData?.id || null,
           subject, description,
-          category: actionData.ticket_category || startNode.data.ticket_category || 'outro',
+          category: actionData.category || actionData.ticket_category || startNode.data.ticket_category || 'outro',
           priority: actionData.ticket_priority || startNode.data.ticket_priority || 'medium',
           departmentId: actionData.department_id || startNode.data.department_id || null,
+          assignedTo: actionData.assigned_to || startNode.data.assigned_to || null,
           internalNote, useCollectedData: actionData.use_collected_data || startNode.data.use_collected_data || false,
           collectedData: {},
         });
