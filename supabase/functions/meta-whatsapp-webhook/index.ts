@@ -923,8 +923,8 @@ serve(async (req) => {
                               await supabase
                                 .from("conversations")
                                 .update({
-                                  metadata: {
-                                    ...(conversation.metadata || {}),
+                                  customer_metadata: {
+                                    ...(conversation.customer_metadata || {}),
                                     after_hours_handoff_requested_at: new Date().toISOString(),
                                     after_hours_next_open_text: bhInfo.next_open_text,
                                     pending_department_id: conversation.department || null,
