@@ -44,7 +44,7 @@ const DEFAULT_RAG_CONFIG: RAGConfig = {
   maxFallback: 3,
 };
 
-// Helper: Buscar TODAS as configuraÃ§Ãµes RAG do banco
+// Helper: Buscar TODAS as configurações RAG do banco
 async function getRAGConfig(supabaseClient: any): Promise<RAGConfig> {
   try {
     const { data, error } = await supabaseClient
