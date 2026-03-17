@@ -218,11 +218,11 @@ const App = () => {
               <Route path="/playbook-executions" element={<ProtectedRoute requiredPermission="playbooks.view_executions"><Layout><PlaybookExecutions /></Layout></ProtectedRoute>} />
               <Route path="/analytics" element={<Navigate to="/" replace />} />
               <Route path="/analytics/premium" element={<Navigate to="/?tab=overview" replace />} />
-              <Route path="/dashboards" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><DashboardsList /></Layout></ProtectedRoute>} />
-              <Route path="/dashboard/:id" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><DashboardView /></Layout></ProtectedRoute>} />
-              <Route path="/subscriptions" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><Subscriptions /></Layout></ProtectedRoute>} />
+               <Route path="/dashboards" element={<ProtectedRoute requiredPermission="analytics.view_dashboards"><Layout><DashboardsList /></Layout></ProtectedRoute>} />
+              <Route path="/dashboard/:id" element={<ProtectedRoute requiredPermission="analytics.view_dashboards"><Layout><DashboardView /></Layout></ProtectedRoute>} />
+              <Route path="/subscriptions" element={<ProtectedRoute requiredPermission="analytics.view_subscriptions"><Layout><Subscriptions /></Layout></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute requiredPermission="analytics.export"><Layout><Reports /></Layout></ProtectedRoute>} />
-              <Route path="/report-builder" element={<ProtectedRoute requiredPermission="analytics.view"><Layout><ReportBuilder /></Layout></ProtectedRoute>} />
+              <Route path="/report-builder" element={<ProtectedRoute requiredPermission="analytics.view_report_builder"><Layout><ReportBuilder /></Layout></ProtectedRoute>} />
               <Route path="/reports/consultant-distribution" element={<ProtectedRoute requiredPermission="reports.distribution"><Layout><ConsultantDistribution /></Layout></ProtectedRoute>} />
               <Route path="/reports/fiscal-export" element={<ProtectedRoute requiredPermission="reports.fiscal_export"><Layout><FiscalExport /></Layout></ProtectedRoute>} />
               <Route path="/reports/fraud-detection" element={<ProtectedRoute requiredPermission="reports.fraud_detection"><Layout><FraudDetection /></Layout></ProtectedRoute>} />
