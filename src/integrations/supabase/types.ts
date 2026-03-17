@@ -10302,6 +10302,7 @@ export type Database = {
             }
             Returns: string
           }
+      get_auth_email: { Args: never; Returns: string }
       get_avg_first_response_time: {
         Args: { p_end: string; p_start: string }
         Returns: number
