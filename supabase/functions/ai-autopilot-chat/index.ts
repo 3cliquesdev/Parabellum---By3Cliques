@@ -231,7 +231,7 @@ async function generateQuestionHash(message: string): Promise<string> {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // Remove acentos
-    .replace(/[^\w\s]/g, "") // Remove pontuaÃ§Ã£o
+    .replace(/[^\w\s]/g, "") // Remove pontuação
     .trim();
   
   const encoder = new TextEncoder();
