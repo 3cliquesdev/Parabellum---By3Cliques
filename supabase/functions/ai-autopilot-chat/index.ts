@@ -6670,7 +6670,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 - Responda perguntas gerais normalmente usando a base de conhecimento.
 ${ambiguousConsultorDetected ? `
 ⚠️ DESAMBIGUAÇÃO OBRIGATÓRIA: O cliente mencionou um termo relacionado a consultor sem deixar claro se quer falar com ele ou tem uma dúvida geral.
-Você DEVE perguntar de forma natural e empática: "Você gostaria de falar diretamente com seu consultor ou posso te ajudar com sua dúvida?"
+Você DEVE perguntar de forma leve e amigável: "Quer que eu chame seu consultor ou posso te ajudar com sua dúvida por aqui mesmo? 😊"
 Nunca assuma a intenção do cliente. Essa pergunta é OBRIGATÓRIA antes de qualquer resposta.
 Se o cliente confirmar que quer FALAR COM O CONSULTOR → responda com [[FLOW_EXIT:consultor]]
 Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
