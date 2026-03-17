@@ -1,25 +1,38 @@
 
-# Ticket no Nó IA + Departamento + Responsável + Continuidade do Fluxo — ✅ IMPLEMENTADO
 
-## O que mudou
+# Fix: Senha inicial de 5 caracteres vs validação mínima de 6
 
-### 1. Nó `create_ticket` — Campo de Departamento + Responsável ✅
-- **`ChatFlowEditor.tsx`**: Adicionado `<Select>` de departamento (departments ativos) + `<Select>` de responsável (agentes do departamento via `useUsersByDepartment`)
-- Defaults atualizados com `department_id: null, department_name: null, assigned_to: null, assigned_to_name: null`
-- Ao trocar departamento, responsável é limpo automaticamente
-- **`CreateTicketNode.tsx`**: Badges visuais do departamento e do responsável
+## O Problema
+A senha temporária do cliente é `cpf.substring(0, 5)` = **5 caracteres**, mas o formulário de login (`ClientLogin.tsx`) exige `.min(6)`. Resultado: **nenhum cliente com CPF consegue fazer login** com a senha temporária.
 
-### 2. Nó `ai_response` — Ação ao Sair: Criar Ticket ✅
-- **`AIResponsePropertiesPanel.tsx`**: Nova seção "Ação ao Sair" com opção `create_ticket`
-  - Campos: assunto, descrição, categoria, prioridade, departamento, responsável, usar dados coletados
-  - Departamento + responsável com mesma lógica reativa (agentes filtrados por departamento)
-  - Dados salvos em `end_action` e `action_data` no node data
-- **`AIResponseNode.tsx`**: Badge "🎫 Ticket" quando `end_action === 'create_ticket'`
+## Correção (2 pontos, ambos precisam mudar)
 
-### 3. Motor `process-chat-flow` — Zero alteração necessária ✅
-- O motor já suporta `end_action: create_ticket` e `assigned_to` nos dados do nó
-- Lê `action_data.subject`, `action_data.description`, `action_data.category`, `action_data.priority`, `action_data.department_id`, `action_data.assigned_to`
+### 1. `supabase/functions/sync-kiwify-sales/index.ts` (linha 310)
+Mudar de `substring(0, 5)` para `substring(0, 6)` — usar os primeiros **6 dígitos** do CPF como senha temporária.
 
-### 4. Continuidade do Fluxo ✅
-- O nó `create_ticket` já faz auto-advance para o próximo nó conectado
-- A solução é **visual**: conectar `create_ticket` → `ask_options` (escape) em vez de → `transfer`
+```typescript
+// Antes
+const tempPassword = sale.customer.cpf?.substring(0, 5) || 'temp12345';
+
+// Depois  
+const tempPassword = sale.customer.cpf?.substring(0, 6) || 'temp12345';
+```
+
+### 2. Clientes já criados com senha de 5 dígitos
+Clientes que **já foram sincronizados** terão senha de 5 caracteres. Não há como alterar retroativamente sem resetar as senhas. Duas opções:
+- **Opção A**: Aceitar que clientes antigos precisarão usar "Esqueci minha senha" (que acabamos de corrigir)
+- **Opção B**: Reduzir a validação do login para `.min(5)` temporariamente
+
+**Recomendação**: Aplicar as duas mudanças — `substring(0, 6)` para novos clientes e `.min(5)` no login para compatibilidade com os existentes.
+
+### Arquivo: `src/pages/ClientLogin.tsx` (linha 17)
+```typescript
+// Antes
+password: z.string().min(6, { message: "Senha deve ter no mínimo 6 caracteres" }),
+
+// Depois
+password: z.string().min(5, { message: "Senha deve ter no mínimo 5 caracteres" }),
+```
+
+### Total: 2 linhas em 2 arquivos
+
