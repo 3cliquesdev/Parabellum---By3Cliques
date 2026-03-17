@@ -1675,7 +1675,7 @@ serve(async (req) => {
     if (flowForbidCancellation && customerMessage && customerMessage.trim().length > 0 && isCancellationAction && !isFinancialInfo) {
       console.warn('[ai-autopilot-chat] ðŸš« TRAVA CANCELAMENTO (ENTRADA): IntenÃ§Ã£o de cancelamento detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
-      const cancelMsg = 'Entendi que vocÃª deseja cancelar. Vou te direcionar para o processo de cancelamento.';
+      const cancelMsg = 'Entendi que você deseja cancelar. Vou te direcionar para o processo de cancelamento.';Ãª deseja cancelar. Vou te direcionar para o processo de cancelamento.';
       const hasFlowContext = !!(flow_context);
 
       try {
