@@ -1338,6 +1338,13 @@ Use apenas texto simples, sem formatação.
 Se não houver dados suficientes, responda exatamente:
 "No momento não tenho essa informação."
 
+🚫 REGRA ANTI-ALUCINAÇÃO OTP (ABSOLUTA):
+NUNCA diga que vai enviar código de verificação, OTP ou código de segurança.
+NUNCA prometa "enviei um código para seu email" — isso é feito automaticamente pelo sistema.
+Se o cliente pedir saque, reembolso ou estorno, NÃO prometa envio de código.
+Se o sistema precisar de verificação, ele fará isso SOZINHO sem sua intervenção.
+Você NUNCA deve mencionar envio de códigos, verificação por email ou OTP nas suas respostas.
+
 📦 CONSULTA DE PEDIDOS (REGRA ABSOLUTA):
 Para consultar pedidos, SEMPRE peça o NÚMERO DO PEDIDO ou CÓDIGO DE RASTREIO.
 NUNCA peça email, CPF ou telefone para consultar pedidos.
@@ -6418,10 +6425,10 @@ Digite **"reenviar"** se precisar de um novo código.`;
     // - Cancelamento Kiwify -> Sem OTP
     // - Duvida informativa -> Sem OTP
     // ============================================================
-    if (contactHasEmail && isFinancialActionRequest && !hasRecentOTPVerification && !flow_context) {
-      // 🆕 GUARD: Se existe flow_context (qualquer), PULAR o bloco OTP inteiro.
-      // O fluxo visual é soberano e tem seu próprio ramo financeiro com OTP nativo.
-      // Ref: flow-sovereignty-principle
+    if (contactHasEmail && isFinancialActionRequest && !hasRecentOTPVerification) {
+      // 🆕 V15 Bug 29: Removido guard !flow_context — OTP é camada de segurança transversal.
+      // Mesmo dentro de fluxos ativos, ações financeiras (saque/reembolso) DEVEM passar pelo OTP.
+      // O fluxo visual NÃO tem nó OTP nativo no V5 Enterprise, então o código assume.
       
       const maskedEmail = maskEmail(contactEmail);
       
