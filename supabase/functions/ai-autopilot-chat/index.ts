@@ -6109,7 +6109,8 @@ Posso ajudar em mais alguma coisa?`;
 
     // Se existe contexto de OTP, mas o usuário enviou dígitos com tamanho inválido,
     // responder determinístico e NÃO seguir para IA/handoff.
-    const hasOTPPendingContext = contactHasEmail && (hasAwaitingOTP || hasRecentOTPPending || hasFirstContactOTPPending);
+    // 🆕 FIX BUG 1: OTP pending context depende APENAS de flags reais
+    const hasOTPPendingContext = contactHasEmail && (hasAwaitingOTP || hasRecentOTPPending);
     if (!shouldValidateOTP && hasOTPPendingContext && otpDigitsOnly.length > 0 && otpDigitsOnly.length !== 6) {
       const otpFormatResponse = `**Código inválido**\n\nO código deve ter **6 dígitos**.\n\nPor favor, envie apenas os 6 números (pode ser com ou sem espaços).\n\nDigite **"reenviar"** se precisar de um novo código.`;
 
