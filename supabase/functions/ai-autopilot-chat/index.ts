@@ -8037,7 +8037,13 @@ Você quer:
                 .replace(/\{\{issue_type\}\}/g, args.issue_type || '')
                 .replace(/\{\{customer_name\}\}/g, contactName || '')
                 .replace(/\{\{order_id\}\}/g, args.order_id || '')
-                .replace(/\{\{subject\}\}/g, args.subject || '');
+                .replace(/\{\{subject\}\}/g, args.subject || '')
+                .replace(/\{\{customer_email\}\}/g, contact?.email || '')
+                .replace(/\{\{customer_phone\}\}/g, contact?.phone || '')
+                .replace(/\{\{pix_key\}\}/g, args.pix_key || '')
+                .replace(/\{\{amount\}\}/g, args.withdrawal_amount ? `R$ ${args.withdrawal_amount.toFixed(2)}` : '')
+                .replace(/\{\{reason\}\}/g, args.description || '')
+                .replace(/\{\{bank\}\}/g, args.bank || '');
               if (!ticketSubject.trim()) ticketSubject = args.subject;
             }
             if (!ticketSubject) {
