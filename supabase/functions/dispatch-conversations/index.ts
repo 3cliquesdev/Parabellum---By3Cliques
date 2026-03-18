@@ -64,53 +64,53 @@ serve(async (req) => {
 
     // ==================== FIX 2: Reconcile orphan waiting_human conversations ====================
     try {
-      const { data: orphans } = await supabase
-        .from('conversations')
-        .select('id, department')
-        .eq('ai_mode', 'waiting_human')
-        .eq('status', 'open')
-        .is('assigned_to', null);
+      // 🆕 Check business hours FIRST — skip reconciliation outside hours (no agents available)
+      const bizInfo = await getBusinessHoursInfo(supabase);
+      if (!bizInfo.within_hours) {
+        console.log(`[dispatch-conversations] ⏳ Fora do horário (${bizInfo.current_time}), skip orphan reconciliation`);
+      } else {
+        const { data: orphans } = await supabase
+          .from('conversations')
+          .select('id, department')
+          .eq('ai_mode', 'waiting_human')
+          .eq('status', 'open')
+          .is('assigned_to', null);
 
-      let reconciled = 0;
-      for (const orphan of orphans ?? []) {
-        const { data: job } = await supabase
-          .from('conversation_dispatch_jobs')
-          .select('id')
-          .eq('conversation_id', orphan.id)
-          .in('status', ['pending', 'escalated'])
-          .maybeSingle();
-
-        if (!job && orphan.department) {
-          // 🆕 FIX: Cooldown de 30min — evitar loop infinito de reconciliação
-          // Se já existe job completed nos últimos 30min, não recriar
-          const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-          const { data: recentCompleted } = await supabase
+        let reconciled = 0;
+        for (const orphan of orphans ?? []) {
+          const { data: job } = await supabase
             .from('conversation_dispatch_jobs')
             .select('id')
             .eq('conversation_id', orphan.id)
-            .eq('status', 'completed')
-            .gte('updated_at', thirtyMinAgo)
+            .in('status', ['pending', 'escalated'])
             .maybeSingle();
 
-          if (recentCompleted) {
-            console.log(`[RECONCILE] ⏳ Cooldown: conversation ${orphan.id.substring(0, 8)} has recent completed job, skipping`);
-            continue;
-          }
+          if (!job && orphan.department) {
+            // 🆕 FIX: Use UPSERT to handle UNIQUE constraint on conversation_id
+            // If a completed job exists, reset it to pending instead of failing silently
+            const { error: upsertError } = await supabase
+              .from('conversation_dispatch_jobs')
+              .upsert({
+                conversation_id: orphan.id,
+                department_id: orphan.department,
+                priority: 1,
+                status: 'pending',
+                attempts: 0,
+                next_attempt_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'conversation_id' });
 
-          await supabase.from('conversation_dispatch_jobs').insert({
-            conversation_id: orphan.id,
-            department_id: orphan.department,
-            priority: 1,
-            status: 'pending',
-            next_attempt_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
-          reconciled++;
-          console.log(`[RECONCILE] Created missing dispatch job for orphan conversation ${orphan.id.substring(0, 8)}`);
+            if (upsertError) {
+              console.error(`[RECONCILE] ❌ Upsert failed for ${orphan.id.substring(0, 8)}:`, upsertError.message);
+              continue;
+            }
+            reconciled++;
+            console.log(`[RECONCILE] ♻️ Upserted dispatch job for orphan conversation ${orphan.id.substring(0, 8)}`);
+          }
         }
-      }
-      if (reconciled > 0) {
-        console.log(`[dispatch-conversations] 🔒 Reconciled ${reconciled} orphan conversations`);
+        if (reconciled > 0) {
+          console.log(`[dispatch-conversations] 🔒 Reconciled ${reconciled} orphan conversations`);
+        }
       }
     } catch (reconcileErr) {
       console.error('[dispatch-conversations] ⚠️ Reconciliation error (non-blocking):', reconcileErr);
