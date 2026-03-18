@@ -396,6 +396,12 @@ export function MessagesWithMedia({
               isAdmin={isAdmin}
               isManager={isManager}
               attachments={attachments}
+              onRetryMessage={
+                message.status === 'failed' && !isCustomer
+                  ? () => retryMutation.mutate({ messageId: message.id, conversationId: conversation.id })
+                  : undefined
+              }
+              isRetrying={retryMutation.isPending && retryMutation.variables?.messageId === message.id}
             />
             {flowName && (
               <p className="text-[10px] text-muted-foreground mt-0.5 ml-10 opacity-70">
