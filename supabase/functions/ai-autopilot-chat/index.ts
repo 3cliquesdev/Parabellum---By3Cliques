@@ -1440,6 +1440,7 @@ interface AutopilotChatRequest {
 }
 
 serve(async (req) => {
+  console.log('[ai-autopilot-chat] BUILD-V3 2026-03-18');
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
