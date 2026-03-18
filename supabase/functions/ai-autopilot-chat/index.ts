@@ -748,20 +748,18 @@ const FALLBACK_PHRASES = [
 
 // 🔒 BARREIRA FINANCEIRA - Palavras que identificam contexto FINANCEIRO (sem OTP obrigatório)
 // Estas palavras detectam intenção financeira mas NÃO exigem OTP
+// 🆕 V8 FIX Bug 4: Removidos termos genéricos ('pagamento', 'cancelar', 'cancelamento')
+// que causavam falsos positivos em contextos de suporte/acesso e cancelamento de assinatura.
+// Mantidos apenas termos que indicam AÇÃO FINANCEIRA real.
 const FINANCIAL_BARRIER_KEYWORDS = [
   'saque',
   'sacar',
   'saldo',
   'pix',
-  'dinheiro',
-  'pagamento',
   'reembolso',
   'comissão',
   'carteira',
-  'transferência',
   'estorno',
-  'cancelar',
-  'cancelamento',
   'devolução',
   'devolver',
   'meu dinheiro'
