@@ -661,36 +661,44 @@ export default function Deals() {
                   <SelectValue placeholder="Selecione um pipeline" />
                 </SelectTrigger>
                 <SelectContent>
-                  {pipelines.map((pipeline) => (
-                    <SelectItem key={pipeline.id} value={pipeline.id}>
-                      {pipeline.name}
-                      {pipeline.is_default && " (Padrão)"}
-                    </SelectItem>
-                  ))}
+                  {pipelines.map((pipeline) => {
+                    const isUserDefault = (profile as any)?.default_pipeline_id === pipeline.id;
+                    return (
+                      <SelectItem key={pipeline.id} value={pipeline.id}>
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="flex-1">
+                            {pipeline.name}
+                            {isUserDefault
+                              ? " (Meu Padrão)"
+                              : pipeline.is_default
+                              ? " (Padrão)"
+                              : ""}
+                          </span>
+                          <button
+                            type="button"
+                            className="ml-2 p-0.5 rounded hover:bg-accent/50 transition-colors"
+                            onPointerDown={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              setDefaultPipeline.mutate(pipeline.id, {
+                                onSuccess: () => refetchProfile(),
+                              });
+                            }}
+                          >
+                            <Star
+                              className={`h-3.5 w-3.5 ${
+                                isUserDefault
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-muted-foreground hover:text-yellow-400"
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
-
-              {/* Set as personal default */}
-              {selectedPipeline && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9"
-                        onClick={() => setDefaultPipeline.mutate(selectedPipeline, { onSuccess: () => refetchProfile() })}
-                        disabled={setDefaultPipeline.isPending}
-                      >
-                        <Star
-                          className={`h-4 w-4 ${(profile as any)?.default_pipeline_id === selectedPipeline ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
-                        />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Definir como meu pipeline padrão</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
               
               {/* Pipeline Config Buttons */}
               {canManagePipelines && selectedPipeline && (
