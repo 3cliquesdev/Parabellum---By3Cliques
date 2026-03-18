@@ -7381,13 +7381,23 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     } else if (isFinancialRequest) {
       assistantMessage = 'Entendi sua solicitação financeira. Para prosseguir com segurança, qual é o seu e-mail de cadastro?';
     } else {
-      const ctxFallbackMsg = flow_context?.fallbackMessage;
-      if (ctxFallbackMsg) {
-        assistantMessage = ctxFallbackMsg;
+      // 🆕 FIX: Fallback Inteligente — se LLM retornou vazio mas KB encontrou artigos,
+      // gerar resposta contextual oferecendo transferência em vez de mensagem genérica
+      const hasKBArticles = knowledgeArticles && knowledgeArticles.length > 0;
+      const hasFlowCtx = !!flow_context;
+
+      if (hasKBArticles && hasFlowCtx) {
+        console.log('[ai-autopilot-chat] 🧠 Fallback inteligente: LLM vazio + KB artigos encontrados mas irrelevantes → resposta contextual');
+        assistantMessage = 'Não encontrei informações específicas sobre isso na base de conhecimento. Posso transferir você para um atendente especializado, ou deseja tentar descrever a situação de outra forma?';
       } else {
-        assistantMessage = persona?.name
-          ? 'Não encontrei uma resposta específica para isso. Pode me contar com mais detalhes o que você precisa? Estou aqui para ajudar!'
-          : 'Não consegui processar sua mensagem. Pode me dar mais detalhes sobre o que precisa?';
+        const ctxFallbackMsg = flow_context?.fallbackMessage;
+        if (ctxFallbackMsg) {
+          assistantMessage = ctxFallbackMsg;
+        } else {
+          assistantMessage = persona?.name
+            ? 'Não encontrei uma resposta específica para isso. Pode me contar com mais detalhes o que você precisa? Estou aqui para ajudar!'
+            : 'Não consegui processar sua mensagem. Pode me dar mais detalhes sobre o que precisa?';
+        }
       }
     }
     const isEmptyAIResponse = !rawAIContent;
