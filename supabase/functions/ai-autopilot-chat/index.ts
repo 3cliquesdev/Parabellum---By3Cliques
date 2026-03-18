@@ -5990,13 +5990,13 @@ Posso ajudar em mais alguma coisa?`;
     // ============================================================
     // 🎯 DECISION MATRIX - Log unificado para debugging de fluxo
     // ============================================================
-    // 🆕 OTP APENAS para SAQUE DE SALDO (isWithdrawalRequest)
-    // Reembolsos e cancelamentos NÃO precisam de OTP
-    const needsOTPForFinancial = isWithdrawalRequest && !contactHasEmail && isValidatedCustomer;
+    // 🆕 OTP para AÇÕES FINANCEIRAS que geram ticket (saque + reembolso/estorno)
+    // Dúvidas informativas NÃO precisam de OTP
+    const needsOTPForFinancial = isFinancialActionRequest && !contactHasEmail && isValidatedCustomer;
     const willAskForEmail = !isValidatedCustomer; // Só pede email se não for cliente conhecido
     const willSendOTP = contactHasEmail && !hasEverVerifiedOTP;
-    const willAskFinancialOTP = contactHasEmail && hasEverVerifiedOTP && isWithdrawalRequest && !hasRecentOTPVerification;
-    const willProcessNormally = isValidatedCustomer && !isWithdrawalRequest;
+    const willAskFinancialOTP = contactHasEmail && hasEverVerifiedOTP && isFinancialActionRequest && !hasRecentOTPVerification;
+    const willProcessNormally = isValidatedCustomer && !isFinancialActionRequest;
     
     console.log('[ai-autopilot-chat] 🎯 DECISION MATRIX:', {
       // Inputs
@@ -6006,9 +6006,11 @@ Posso ajudar em mais alguma coisa?`;
       hasEverVerifiedOTP,
       hasRecentOTPVerification,
       isFinancialRequest,
-      isWithdrawalRequest,    // 🆕 ÁšNICA que exige OTP
-      isRefundRequest,        // 🆕 Sem OTP
-      isCancellationRequest,  // 🆕 Sem OTP
+      isFinancialActionRequest,  // 🆕 Ações que exigem OTP
+      isWithdrawalRequest,
+      isRefundRequest,
+      isCancellationRequest,
+      isInformationalQuestion,
       // Outputs (decisions)
       willAskForEmail,
       willSendOTP,
