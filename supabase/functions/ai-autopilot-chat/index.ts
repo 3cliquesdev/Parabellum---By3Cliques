@@ -6158,10 +6158,11 @@ Posso ajudar em mais alguma coisa?`;
         .single();
 
       if (responseChannel === 'whatsapp' && contact?.phone) {
-        // 🆕 FIX Resíduo 3: Unificar assinatura para 3 parâmetros (igual à saudação proativa)
+        // 🆕 FIX Resíduo 1: Restaurar assinatura correta de 4 parâmetros
         const whatsappResult = await getWhatsAppInstanceForConversation(
           supabaseClient,
           conversationId,
+          conversation.whatsapp_instance_id,
           conversation
         );
         if (whatsappResult) {
