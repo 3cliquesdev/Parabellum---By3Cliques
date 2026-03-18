@@ -7207,11 +7207,13 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     let skipLLMForGreeting = false;
     if (flow_context && (isFirstNodeInteraction || isMenuNoise)) {
       const personaGreetName = persona?.name || 'nossa equipe';
+      const personaRole = (persona as any)?.role || '';
       // NÃO usar flow_context.objective — contém instruções internas do sistema
       const greetProduto = (flow_context.collectedData?.produto || flow_context.collectedData?.Produto || '') as string;
       const greetDepartment = (flow_context.collectedData?.assunto || flow_context.collectedData?.Assunto || '') as string;
       let greetingMsg = 'Olá! Sou ' + personaGreetName;
-      if (greetProduto) greetingMsg += ' do time de atendimento do ' + greetProduto;
+      if (personaRole) greetingMsg += ', ' + personaRole;
+      if (greetProduto) greetingMsg += ' do ' + greetProduto;
       greetingMsg += '.';
       if (greetDepartment) greetingMsg += ' Vou te ajudar com ' + greetDepartment + '.';
       greetingMsg += ' Como posso te ajudar? 😊';
