@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,7 +17,7 @@ import {
   type AuditIssue,
 } from "@/hooks/useKnowledgeAudit";
 import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
-import { AlertCircle, AlertTriangle, CheckCircle2, Search, Tag, FolderOpen, Save } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Search, Tag, FolderOpen, Save, Loader2, Zap, Send, ShieldCheck } from "lucide-react";
 
 type IssueFilter = "all" | "no_embedding" | "no_category" | "empty_product_tags" | "orphan_category" | "clean";
 
@@ -56,6 +57,8 @@ export function KnowledgeAuditTab() {
   const [editingCell, setEditingCell] = useState<{ id: string; field: "category" | "product_tags" } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
+  const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
+  const [bulkApproving, setBulkApproving] = useState(false);
 
   const validCategories = useMemo(() => {
     return [...new Set([...personaCategories, ...existingCategories])].sort();
@@ -151,6 +154,180 @@ export function KnowledgeAuditTab() {
     }
   };
 
+  // ---- Actions: Generate Embedding ----
+  const handleGenerateEmbedding = async (articleId: string) => {
+    setActionLoading((prev) => new Set(prev).add(articleId));
+    try {
+      // Fetch article content
+      const { data: article, error: fetchErr } = await supabase
+        .from("knowledge_articles")
+        .select("title, content, problem, solution")
+        .eq("id", articleId)
+        .single();
+      if (fetchErr || !article) throw new Error("Artigo não encontrado");
+
+      const content = [article.title, article.content, article.problem, article.solution]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const { error } = await supabase.functions.invoke("generate-article-embedding", {
+        body: { article_id: articleId, content },
+      });
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["knowledge-audit-articles"] });
+      toast({ title: "✅ Embedding gerado", description: "Artigo indexado para busca semântica." });
+    } catch (err: any) {
+      toast({ title: "Erro ao gerar embedding", description: err.message, variant: "destructive" });
+    } finally {
+      setActionLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(articleId);
+        return next;
+      });
+    }
+  };
+
+  // ---- Actions: Publish ----
+  const handlePublish = async (articleId: string) => {
+    setActionLoading((prev) => new Set(prev).add(articleId));
+    try {
+      const { error } = await supabase
+        .from("knowledge_articles")
+        .update({ is_published: true, published_at: new Date().toISOString() })
+        .eq("id", articleId);
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["knowledge-audit-articles"] });
+      toast({ title: "✅ Artigo publicado" });
+    } catch (err: any) {
+      toast({ title: "Erro ao publicar", description: err.message, variant: "destructive" });
+    } finally {
+      setActionLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(articleId);
+        return next;
+      });
+    }
+  };
+
+  // ---- Bulk Approve ----
+  const handleBulkApprove = async () => {
+    const eligibleArticles = filtered.filter(
+      (a) => selected.has(a.id) && a.issues.length === 0
+    );
+    if (eligibleArticles.length === 0) {
+      toast({ title: "Nenhum artigo elegível", description: "Selecione artigos sem problemas para aprovar.", variant: "destructive" });
+      return;
+    }
+
+    setBulkApproving(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const article of eligibleArticles) {
+      try {
+        // Generate embedding if needed
+        if (!article.embedding_generated) {
+          const { data: fullArticle } = await supabase
+            .from("knowledge_articles")
+            .select("title, content, problem, solution")
+            .eq("id", article.id)
+            .single();
+
+          if (fullArticle) {
+            const content = [fullArticle.title, fullArticle.content, fullArticle.problem, fullArticle.solution]
+              .filter(Boolean)
+              .join("\n\n");
+
+            await supabase.functions.invoke("generate-article-embedding", {
+              body: { article_id: article.id, content },
+            });
+          }
+        }
+
+        // Publish if draft
+        if (!article.is_published) {
+          await supabase
+            .from("knowledge_articles")
+            .update({ is_published: true, published_at: new Date().toISOString() })
+            .eq("id", article.id);
+        }
+
+        successCount++;
+      } catch {
+        errorCount++;
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: ["knowledge-audit-articles"] });
+    setBulkApproving(false);
+    setSelected(new Set());
+
+    toast({
+      title: `✅ Aprovação em lote concluída`,
+      description: `${successCount} aprovados${errorCount > 0 ? `, ${errorCount} erros` : ""}`,
+    });
+  };
+
+  const getActionButton = (article: typeof articlesWithIssues[0]) => {
+    const isLoading = actionLoading.has(article.id);
+    const hasIssues = article.issues.filter(i => i.type !== "no_embedding").length > 0;
+    const needsEmbedding = !article.embedding_generated;
+    const isDraft = !article.is_published;
+
+    if (isLoading) {
+      return (
+        <Button size="xs" variant="ghost" disabled>
+          <Loader2 className="h-3 w-3 animate-spin" />
+        </Button>
+      );
+    }
+
+    // Has issues other than embedding → disabled with tooltip
+    if (hasIssues) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button size="xs" variant="ghost" disabled className="opacity-50">
+                  <AlertTriangle className="h-3 w-3" />
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>Corrija os problemas primeiro</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    // Needs embedding
+    if (needsEmbedding) {
+      return (
+        <Button size="xs" variant="outline" onClick={() => handleGenerateEmbedding(article.id)}>
+          <Zap className="h-3 w-3 mr-1" /> Embedding
+        </Button>
+      );
+    }
+
+    // Has embedding but is draft → publish
+    if (isDraft) {
+      return (
+        <Button size="xs" variant="default" onClick={() => handlePublish(article.id)}>
+          <Send className="h-3 w-3 mr-1" /> Publicar
+        </Button>
+      );
+    }
+
+    // All good
+    return (
+      <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-300 bg-emerald-50">
+        <ShieldCheck className="h-3 w-3 mr-1" /> Auditado
+      </Badge>
+    );
+  };
+
   const issueBadge = (issue: AuditIssue) => (
     <Badge
       key={issue.type}
@@ -160,6 +337,10 @@ export function KnowledgeAuditTab() {
       {issue.severity === "error" ? "🔴" : "🟡"} {issue.label}
     </Badge>
   );
+
+  const selectedEligibleCount = filtered.filter(
+    (a) => selected.has(a.id) && a.issues.length === 0
+  ).length;
 
   return (
     <div className="space-y-4">
@@ -213,6 +394,22 @@ export function KnowledgeAuditTab() {
           <Button size="sm" variant="outline" disabled={!bulkProductTag || saving} onClick={() => applyBulk("product_tags")}>
             <Tag className="h-3 w-3 mr-1" /> Aplicar tags
           </Button>
+
+          <div className="border-l border-border h-6 mx-1" />
+
+          <Button
+            size="sm"
+            variant="success"
+            disabled={selectedEligibleCount === 0 || bulkApproving}
+            onClick={handleBulkApprove}
+          >
+            {bulkApproving ? (
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            ) : (
+              <ShieldCheck className="h-3 w-3 mr-1" />
+            )}
+            Aprovar auditados ({selectedEligibleCount})
+          </Button>
         </div>
       )}
 
@@ -232,6 +429,7 @@ export function KnowledgeAuditTab() {
               <TableHead>Tags</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Problemas</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -329,11 +527,14 @@ export function KnowledgeAuditTab() {
                     )}
                   </div>
                 </TableCell>
+                <TableCell className="text-right">
+                  {getActionButton(article)}
+                </TableCell>
               </TableRow>
             ))}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   Nenhum artigo encontrado com os filtros atuais.
                 </TableCell>
               </TableRow>
