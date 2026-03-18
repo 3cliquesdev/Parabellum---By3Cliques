@@ -3803,6 +3803,7 @@ serve(async (req) => {
             });
             
             autoResponse = leadMessage;
+            } // end else (non-financial or already asked)
           } else {
             // Fallback: email processado mas sem ação clara
             autoResponse = `Obrigado! Estou verificando seu email **${maskedEmailResponse}**...`;
