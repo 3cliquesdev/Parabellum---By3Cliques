@@ -457,6 +457,7 @@ serve(async (req) => {
           whatsapp_provider: "meta",
           sent_via: "send-meta-whatsapp",
           phone_number_id: instance.phone_number_id,
+          ...(body.template ? { template_name: body.template.name, template_language: body.template.language_code, template_body: templateBodyText || null, template_components: body.template.components || null } : {}),
           ...(body.metadata || {}),
         },
       });
