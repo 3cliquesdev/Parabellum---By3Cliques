@@ -17,7 +17,8 @@ import {
   type AuditIssue,
 } from "@/hooks/useKnowledgeAudit";
 import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
-import { AlertCircle, AlertTriangle, CheckCircle2, Search, Tag, FolderOpen, Save, Loader2, Zap, Send, ShieldCheck } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Search, Tag, FolderOpen, Save, Loader2, Zap, Send, ShieldCheck, Pencil } from "lucide-react";
+import { AuditArticleEditDialog } from "@/components/knowledge/AuditArticleEditDialog";
 
 type IssueFilter = "all" | "no_embedding" | "no_category" | "empty_product_tags" | "orphan_category" | "clean";
 
@@ -59,6 +60,8 @@ export function KnowledgeAuditTab() {
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
   const [bulkApproving, setBulkApproving] = useState(false);
+  const [editArticleId, setEditArticleId] = useState<string | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const validCategories = useMemo(() => {
     return [...new Set([...personaCategories, ...existingCategories])].sort();
@@ -509,7 +512,26 @@ export function KnowledgeAuditTab() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {getActionButton(article)}
+                    <div className="flex items-center gap-1">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditArticleId(article.id);
+                                setEditDialogOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Editar artigo</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      {getActionButton(article)}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
@@ -533,6 +555,12 @@ export function KnowledgeAuditTab() {
           </Table>
         </div>
       )}
+      <AuditArticleEditDialog
+        articleId={editArticleId}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        validCategories={validCategories}
+      />
     </div>
   );
 }
