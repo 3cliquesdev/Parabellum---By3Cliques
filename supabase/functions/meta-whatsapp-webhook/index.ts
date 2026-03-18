@@ -1146,7 +1146,14 @@ serve(async (req) => {
                 // 🆕 FIX v2: Se skipInitialMessage=true (transição ask_options → ai_response),
                 // NÃO enviar o dígito de menu — mas CHAMAR a IA com mensagem vazia para saudação proativa
                 if (flowData.skipInitialMessage === true) {
-                  console.log("[meta-whatsapp-webhook] ⏭️ skipInitialMessage=true — chamando IA com mensagem vazia para saudação proativa");
+                  console.log("[meta-whatsapp-webhook] ⏭️ V15 Bug27: skipInitialMessage=true — chamando IA com mensagem vazia para saudação proativa", {
+                    conversationId: conversation.id,
+                    contactId: contact.id,
+                    nodeId: (flowData as any).nodeId,
+                    flowId: (flowData as any).flowId,
+                    timestamp: new Date().toISOString(),
+                    originalMessage: messageContent?.substring(0, 20),
+                  });
                   try {
                     const greetResponse = await fetch(
                       `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-autopilot-chat`,
