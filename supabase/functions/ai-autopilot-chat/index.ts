@@ -3787,8 +3787,8 @@ serve(async (req) => {
               autoResponse = 'Nao encontrei esse email na nossa base de clientes.\n\nVoce possui outro email que possa ter usado na compra? Se sim, por favor envie aqui.\n\nSe esse e o unico email, me avise que vou te encaminhar para um atendente.';
               skipEarlyReturn = true;
             } else {
+            const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
 
-            
             // Buscar template de lead direcionado
             let leadMessage = await getMessageTemplate(supabaseClient, 'lead_direcionado_comercial', {});
             if (!leadMessage) {
