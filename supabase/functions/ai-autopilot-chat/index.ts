@@ -6091,12 +6091,13 @@ Posso ajudar em mais alguma coisa?`;
     const otpExpiresAt = conversationMetadata.otp_expires_at;
     const hasRecentOTPPending = otpExpiresAt && new Date(otpExpiresAt) > new Date();
     
-    // Verificar se primeiro contato enviou OTP (via IDENTITY WALL)
-    const hasFirstContactOTPPending = !hasEverVerifiedOTP && contactHasEmail;
+    // 🆕 FIX BUG 1: Removido hasFirstContactOTPPending — causava falso positivo de "código inválido"
+    // quando contato com email enviava mensagens contendo dígitos (ex: "dia 3 de março")
+    // OTP pendente DEVE depender APENAS de flags reais de que um OTP foi efetivamente enviado
     
-    // Só validar OTP se houver contexto de OTP pendente
+    // Só validar OTP se houver contexto de OTP pendente (flag explícita ou OTP recente)
     const shouldValidateOTP = isOTPCode && contactHasEmail && 
-      (hasAwaitingOTP || hasRecentOTPPending || hasFirstContactOTPPending);
+      (hasAwaitingOTP || hasRecentOTPPending);
     
     console.log('[ai-autopilot-chat] 🔒 OTP Detection Check:', {
       is_6_digit_code: isOTPCode,
