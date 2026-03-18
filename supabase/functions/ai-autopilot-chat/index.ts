@@ -6289,6 +6289,8 @@ Digite **"reenviar"** se precisar de um novo código.`;
       });
       
       // NÃO faz nada aqui - deixa o código continuar para atendimento normal pela IA
+    }
+    
     // ============================================================
     // OTP PARA ACOES FINANCEIRAS (SAQUE, REEMBOLSO, ESTORNO)
     // ============================================================
