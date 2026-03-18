@@ -1143,10 +1143,61 @@ serve(async (req) => {
 
               // CASO 3: Fluxo ativou AIResponseNode → Chamar IA com flow_context
               if (flowData.useAI && flowData.aiNodeActive) {
-                // 🆕 FIX: Se skipInitialMessage=true (transição ask_options → ai_response),
-                // NÃO enviar o dígito de menu como mensagem ao autopilot
+                // 🆕 FIX v2: Se skipInitialMessage=true (transição ask_options → ai_response),
+                // NÃO enviar o dígito de menu — mas CHAMAR a IA com mensagem vazia para saudação proativa
                 if (flowData.skipInitialMessage === true) {
-                  console.log("[meta-whatsapp-webhook] ⏭️ skipInitialMessage=true — ignorando dígito de menu, aguardando próxima mensagem real do cliente");
+                  console.log("[meta-whatsapp-webhook] ⏭️ skipInitialMessage=true — chamando IA com mensagem vazia para saudação proativa");
+                  try {
+                    const greetResponse = await fetch(
+                      `${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-autopilot-chat`,
+                      {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                        },
+                        body: JSON.stringify({
+                          conversationId: conversation.id,
+                          customerMessage: "",
+                          contact_id: contact.id,
+                          whatsapp_provider: "meta",
+                          whatsapp_meta_instance_id: instance.id,
+                          flow_context: flowData.flow_context || {
+                            flow_id: flowData.flowId,
+                            node_id: flowData.nodeId,
+                            node_type: 'ai_response',
+                            allowed_sources: (flowData as any).allowedSources || ['kb'],
+                            response_format: 'text_only',
+                            personaId: (flowData as any).personaId || null,
+                            kbCategories: (flowData as any).kbCategories || null,
+                            kbProductFilter: (flowData as any).kbProductFilter || null,
+                            contextPrompt: (flowData as any).contextPrompt || null,
+                            fallbackMessage: (flowData as any).fallbackMessage || null,
+                            objective: (flowData as any).objective || null,
+                            maxSentences: (flowData as any).maxSentences ?? 3,
+                            forbidQuestions: (flowData as any).forbidQuestions ?? true,
+                            forbidOptions: (flowData as any).forbidOptions ?? true,
+                            forbidFinancial: (flowData as any).forbidFinancial ?? false,
+                            forbidCommercial: (flowData as any).forbidCommercial ?? false,
+                            forbidCancellation: (flowData as any).forbidCancellation ?? false,
+                            forbidConsultant: (flowData as any).forbidConsultant ?? false,
+                            forbidSupport: (flowData as any).forbidSupport ?? false,
+                            returnReasons: (flowData as any).returnReasons || null,
+                            ticketConfig: (flowData as any).ticketConfig || null,
+                            otpVerified: (flowData as any).otpVerified || false,
+                            collectedData: (flowData as any).collectedData || null,
+                          },
+                        }),
+                      }
+                    );
+                    if (!greetResponse.ok) {
+                      console.error("[meta-whatsapp-webhook] ❌ Proactive greeting error:", await greetResponse.text());
+                    } else {
+                      console.log("[meta-whatsapp-webhook] ✅ Saudação proativa enviada via skipInitialMessage");
+                    }
+                  } catch (greetErr) {
+                    console.error("[meta-whatsapp-webhook] ❌ Proactive greeting exception:", greetErr);
+                  }
                   continue;
                 }
                 // FIX: Se process-chat-flow retornou aiNodeActive=true, a soberania do fluxo
