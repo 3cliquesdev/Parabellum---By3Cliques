@@ -10,6 +10,7 @@ import { useDeals, useUpdateDeal, useUpdateDealStage, DealFilters } from "@/hook
 import { useDealsMetrics } from "@/hooks/useDealsMetrics";
 import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
+import { useSetDefaultPipeline } from "@/hooks/useSetDefaultPipeline";
 import { useSalesReps } from "@/hooks/useSalesReps";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
