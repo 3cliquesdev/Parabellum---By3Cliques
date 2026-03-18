@@ -32,6 +32,13 @@ export function AIResponsePropertiesPanel({
   updateNodeData,
 }: AIResponsePropertiesPanelProps) {
   const { data: personas, isLoading: loadingPersonas } = usePersonas();
+  const { data: departments = [] } = useDepartments({ activeOnly: true });
+  const { data: categories = [] } = useTicketCategories();
+
+  const ticketConfig = selectedNode.data.ticket_config || {};
+  const updateTicketConfig = (field: string, value: any) => {
+    updateNodeData("ticket_config", { ...ticketConfig, [field]: value });
+  };
 
   // Personas ativas
   const activePersonas = personas?.filter((p) => p.is_active) || [];
