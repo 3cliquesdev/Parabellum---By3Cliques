@@ -1,11 +1,23 @@
 
 
-# Deploy Edge Functions
+# Auditoria Final: Resíduos de Lógica Antiga
 
-Deploy das duas edge functions atualizadas com as correções recentes (OTP, saudação proativa, create_lead, métricas de latência):
+A lógica principal (flags, barriers, porteiro financeiro, fallback) **já está correta**. Restam apenas **comentários desatualizados** que contradizem a nova regra. Nenhuma lógica funcional precisa mudar.
 
-1. **`ai-autopilot-chat`** — Correções: `is_bot_message: true`, remoção do `return` prematuro, métricas de latência
-2. **`process-chat-flow`** — Correções: `create_lead` no EndNode
+## Comentários a Corrigir
 
-Ação: Executar deploy de ambas via ferramenta de deploy.
+### 1. Linha 770-772 — `OTP_REQUIRED_KEYWORDS` header
+**Atual:** "APENAS SAQUE DE SALDO/CARTEIRA" e "Cancelamentos, reembolsos de pedidos Kiwify NÃO precisam de OTP"
+**Correto:** OTP é necessário para ações financeiras que geram ticket (saque + reembolso/estorno). Cancelamento segue sem OTP.
+
+### 2. Linha 1106-1107 — `REFUND_ACTION_PATTERNS` header
+**Atual:** "Padrões de REEMBOLSO DE PEDIDO (SEM OTP)"
+**Correto:** Remover "(SEM OTP)" — reembolso agora exige OTP quando é ação efetiva.
+
+### 3. Verificação final
+Todos os demais usos de `isWithdrawalRequest` são para **logging**, **dynamic labels**, ou **otp_reason dinâmico** — corretos e necessários para distinguir saque de reembolso no contexto.
+
+## Ações
+- Atualizar os 2 blocos de comentários acima
+- Redeploy da edge function
 
