@@ -87,9 +87,10 @@ export default function Deals() {
   const { role, loading: roleLoading } = useUserRole();
   const { hasPermission } = useRolePermissions();
   const { data: rottenDeals } = useRottenDeals();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const updateDealStage = useUpdateDealStage();
   const updateDeal = useUpdateDeal();
+  const setDefaultPipeline = useSetDefaultPipeline();
   const { toast } = useToast();
   
   // Dynamic permission checks
