@@ -7309,6 +7309,14 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         status: 'sending',
         channel: responseChannel,
       });
+      // 🆕 FIX Resíduo 2: Salvar flag de saudação no metadata para impedir loops
+      try {
+        const updatedMeta = { ...(customerMetadata as any || {}), [greetingFlagKey]: true };
+        await supabaseClient.from('conversations').update({ customer_metadata: updatedMeta }).eq('id', conversationId);
+        console.log(`[ai-autopilot-chat] 🏷️ Flag ${greetingFlagKey} salva no metadata`);
+      } catch (flagErr: any) {
+        console.warn('[ai-autopilot-chat] Falha ao salvar flag de saudação:', flagErr);
+      }
       // Bug fix 3+4: usar getWhatsAppInstanceForConversation com parâmetros corretos
       if (!greetSaveErr && (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta')) {
         try {
