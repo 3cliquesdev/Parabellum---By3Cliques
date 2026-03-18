@@ -253,12 +253,18 @@ export function MessageBubble({
                 .replace("*", "")
                 .replace("]", "")
                 .trim();
-              const bodyLines = lines.slice(1).filter(l => l.trim()).join("\n");
+              let bodyLines = lines.slice(1).filter(l => l.trim()).join("\n");
+              
+              // Fallback: se não tem body no content, buscar do metadata
+              if (!bodyLines && metadata?.template_body) {
+                bodyLines = metadata.template_body;
+              }
+              
               const isOutgoing = !isCustomer && !isAI;
               
               return (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
+                <div className="space-y-2 min-w-[200px]">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <FileText className={cn("h-3.5 w-3.5 shrink-0", isOutgoing ? "text-white/70" : "text-muted-foreground")} />
                     <span className={cn(
                       "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded",
@@ -268,13 +274,13 @@ export function MessageBubble({
                     )}>
                       Template
                     </span>
-                    <span className={cn("text-xs font-medium", isOutgoing ? "text-white/80" : "text-foreground/70")}>
+                    <span className={cn("text-xs font-medium truncate max-w-[180px]", isOutgoing ? "text-white/80" : "text-foreground/70")}>
                       {headerLine}
                     </span>
                   </div>
                   {bodyLines && (
                     <div className={cn(
-                      "text-sm whitespace-pre-wrap [word-break:break-word] pt-1",
+                      "text-sm whitespace-pre-wrap [word-break:break-word] pt-2 mt-1",
                       isOutgoing ? "border-t border-white/15" : "border-t border-border/50"
                     )}>
                       <SafeHTML html={bodyLines} />

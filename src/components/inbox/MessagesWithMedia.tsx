@@ -396,6 +396,7 @@ export function MessagesWithMedia({
               isAdmin={isAdmin}
               isManager={isManager}
               attachments={attachments}
+              metadata={message.metadata}
               onRetryMessage={
                 message.status === 'failed' && !isCustomer
                   ? () => retryMutation.mutate({ messageId: message.id, conversationId: conversation.id })
