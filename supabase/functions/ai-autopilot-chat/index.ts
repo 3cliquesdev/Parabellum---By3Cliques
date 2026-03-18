@@ -6523,7 +6523,7 @@ Qual é o seu **email de compra**?"
     
     
     // 🆕 HANDLER PARA CANCELAMENTO (SEM OTP)
-    if (isCancellationRequest && !isWithdrawalRequest) {
+    if (isCancellationRequest && !isFinancialActionRequest) {
       console.log('[ai-autopilot-chat] ❌ Detectado pedido de CANCELAMENTO - sem OTP necessário');
       
       identityWallNote += `\n\n**=== CANCELAMENTO DE ASSINATURA (SEM OTP) ===**
