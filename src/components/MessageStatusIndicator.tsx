@@ -28,14 +28,16 @@ export function MessageStatusIndicator({ status, className, errorDetail, onRetry
     case 'read':
       return <CheckCheck className={cn(iconClass, "text-blue-500")} aria-label="Lido" />;
     case 'failed': {
-      const icon = <AlertCircle className={cn(iconClass, "text-destructive")} aria-label="Falha no envio" />;
       const detail = errorDetail || "Falha no envio";
       return (
-        <span className="inline-flex items-center gap-1.5">
+        <div className="flex items-center gap-2 mt-0.5">
           <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="inline-flex cursor-help">{icon}</span>
+                <span className="inline-flex items-center gap-1 cursor-help">
+                  <AlertCircle className={cn("w-3.5 h-3.5", className || "text-destructive")} aria-label="Falha no envio" />
+                  <span className={cn("text-[11px] font-medium", className || "text-destructive")}>Falha</span>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="top" className="max-w-[250px] text-xs">
                 {detail}
@@ -46,18 +48,23 @@ export function MessageStatusIndicator({ status, className, errorDetail, onRetry
             <button
               onClick={(e) => { e.stopPropagation(); onRetry(); }}
               disabled={isRetrying}
-              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
+              className={cn(
+                "inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md transition-colors disabled:opacity-50",
+                className
+                  ? "bg-white/20 hover:bg-white/30 text-white"
+                  : "bg-destructive/10 hover:bg-destructive/20 text-destructive"
+              )}
               aria-label="Reenviar mensagem"
             >
               {isRetrying ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <RefreshCw className="w-3 h-3" />
+                <RefreshCw className="w-3.5 h-3.5" />
               )}
               Reenviar
             </button>
           )}
-        </span>
+        </div>
       );
     }
     default:

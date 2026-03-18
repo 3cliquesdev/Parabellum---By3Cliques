@@ -290,33 +290,33 @@ export function MessageBubble({
           })()}
 
           {/* Metadata Row */}
-          <div
-            className={cn(
-              "text-[11px] mt-1.5 flex items-center gap-1.5",
-              isCustomer
-                ? "text-slate-400 dark:text-zinc-500"
-                : isAI
-                ? "text-violet-600 dark:text-violet-400 opacity-70"
-                : "text-white opacity-70"
-            )}
-          >
-            <span>{relativeTime}</span>
-
-            {/* AI Debug for Admins */}
-            {isAI && (isAdmin || isManager) && usedArticles.length > 0 && (
-              <AIDebugTooltip usedArticles={usedArticles} />
-            )}
-
-            {/* Status Indicator */}
-            {!isCustomer && (
+          <div className={cn(
+            "mt-2 flex flex-col gap-1",
+            isCustomer
+              ? "text-slate-400 dark:text-zinc-500"
+              : isAI
+              ? "text-violet-600 dark:text-violet-400 opacity-70"
+              : "text-white opacity-70"
+          )}>
+            <div className="text-[11px] flex items-center gap-1.5">
+              <span>{relativeTime}</span>
+              {isAI && (isAdmin || isManager) && usedArticles.length > 0 && (
+                <AIDebugTooltip usedArticles={usedArticles} />
+              )}
+              {!isCustomer && status !== 'failed' && (
+                <MessageStatusIndicator
+                  status={status || 'sent'}
+                  className={isAI ? "text-violet-600 dark:text-violet-400" : "text-white"}
+                />
+              )}
+            </div>
+            {!isCustomer && status === 'failed' && (
               <MessageStatusIndicator
-                status={status || 'sent'}
+                status="failed"
                 errorDetail={errorDetail}
-                onRetry={status === 'failed' ? onRetryMessage : undefined}
+                onRetry={onRetryMessage}
                 isRetrying={isRetrying}
-                className={
-                  isAI ? "text-violet-600 dark:text-violet-400" : "text-white"
-                }
+                className="text-white"
               />
             )}
           </div>
