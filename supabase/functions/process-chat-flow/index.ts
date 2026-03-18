@@ -3693,21 +3693,11 @@ serve(async (req) => {
           if ((maxReached || aiExitForced) && !keywordMatch) {
             const fallbackMsg = currentNode.data?.fallback_message;
             if (fallbackMsg && String(fallbackMsg).trim().length > 0) {
-              try {
-                // 🔧 RISK 2 FIX: Usar canal real da conversa em vez de 'web_chat' hardcoded
-                await supabaseClient.from('messages').insert({
-                  conversation_id: conversationId,
-                  content: String(fallbackMsg),
-                  sender_type: 'user',
-                  is_ai_generated: true,
-                  is_internal: false,
-                  status: 'sent',
-                  channel: activeConversationData?.channel || 'web_chat',
-                });
-                console.log('[process-chat-flow] ✅ fallback_message inserted on AI exit (will advance)');
-              } catch (sendErr) {
-                console.error('[process-chat-flow] ⚠️ Failed to insert fallback_message:', sendErr);
-              }
+              // 🆕 V16 Bug 31: NÃO inserir fallback direto no DB.
+              // Acumular para combinar com a resposta do próximo nó (ex: ask_options).
+              // Isso garante que o caller receba UMA resposta com fallback + opções.
+              pendingFallbackMsg = String(fallbackMsg).trim();
+              console.log('[process-chat-flow] ✅ V16: fallback_message acumulado como pendingFallbackMsg (será combinado com próximo nó)');
             }
             console.log(`[process-chat-flow] 🔄 AI exit: reason=${aiExitForced ? 'ai_handoff_exit' : 'max_interactions'} (${aiCount}/${maxInteractions}) - advancing to next node`);
           }
