@@ -7440,7 +7440,12 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     if (rawAIContentNormalized) {
       assistantMessage = rawAIContentNormalized;
     } else if (isFinancialActionRequest) {
-      assistantMessage = 'Para prosseguir com sua solicitação financeira, preciso confirmar sua identidade. Qual é o seu e-mail de compra?';
+      // 🆕 FIX Resíduo 5: Se contato já tem email, não pedir novamente
+      if (contactHasEmail) {
+        assistantMessage = 'Identificamos seu cadastro. Para prosseguir com segurança, vou enviar um código de verificação para o seu e-mail. Um momento!';
+      } else {
+        assistantMessage = 'Para prosseguir com sua solicitação financeira, preciso confirmar sua identidade. Qual é o seu e-mail de compra?';
+      }
     } else if (isFinancialRequest) {
       // 🆕 FIX Resíduo 4: Resposta contextualizada em vez de genérica
       assistantMessage = 'Entendi sua situação financeira. Vou verificar o que está acontecendo. Pode me informar o e-mail utilizado na compra para que eu localize seus dados?';
