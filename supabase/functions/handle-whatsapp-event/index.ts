@@ -1411,19 +1411,44 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
               hasFlowContext: aiResponse.hasFlowContext,
             }));
 
-            // 🆕 INTERCEPTAR: contractViolation, flowExit, financialBlocked, commercialBlocked, cancellationBlocked, flow_advance_needed
-            const needsFlowAdvance = aiResponse.contractViolation || 
-                                     aiResponse.flowExit || 
-                                     aiResponse.financialBlocked || 
-                                     aiResponse.commercialBlocked ||
-                                     aiResponse.cancellationBlocked ||
-                                     aiResponse.status === 'flow_advance_needed';
+             // 🆕 V13 BUG 20+21: Handoff IMEDIATO para transfer intent e anti-loop (sem re-invocar flow)
+             if (aiResponse.flowExit && 
+                 (aiResponse.reason === 'customer_transfer_intent' || aiResponse.reason === 'global_anti_loop_handoff')) {
+               console.log("[handle-whatsapp-event] 🚀 V13: Handoff IMEDIATO (reason=" + aiResponse.reason + ") — pulando flow re-invocation");
+               
+               const DEPT_SUPORTE_IMMEDIATE = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+               const immediateDept = aiResponse.flow_context?.department || DEPT_SUPORTE_IMMEDIATE;
+               
+               await supabase.from('conversations').update({
+                 ai_mode: 'waiting_human',
+                 handoff_executed_at: new Date().toISOString(),
+                 department: immediateDept,
+                 assigned_to: null,
+               }).eq('id', conversationId);
+               
+               try {
+                 await supabase.functions.invoke('route-conversation', {
+                   body: { conversation_id: conversationId, department_id: immediateDept }
+                 });
+                 console.log("[handle-whatsapp-event] ✅ V13: route-conversation dispatched for immediate handoff");
+               } catch (routeErr) {
+                 console.error("[handle-whatsapp-event] ❌ V13: route-conversation failed:", routeErr);
+               }
+             }
+             // 🆕 INTERCEPTAR: contractViolation, flowExit, financialBlocked, commercialBlocked, cancellationBlocked, flow_advance_needed
+             else {
+             const needsFlowAdvance = aiResponse.contractViolation || 
+                                      aiResponse.flowExit || 
+                                      aiResponse.financialBlocked || 
+                                      aiResponse.commercialBlocked ||
+                                      aiResponse.cancellationBlocked ||
+                                      aiResponse.status === 'flow_advance_needed';
 
-            if (needsFlowAdvance) {
-              const exitType = aiResponse.financialBlocked ? 'forceFinancialExit' : 
-                               aiResponse.commercialBlocked ? 'forceCommercialExit' :
-                               aiResponse.cancellationBlocked ? 'forceCancellationExit' : 'forceAIExit';
-              console.log(`[handle-whatsapp-event] 🔄 Re-invocando process-chat-flow com ${exitType}`);
+             if (needsFlowAdvance) {
+               const exitType = aiResponse.financialBlocked ? 'forceFinancialExit' : 
+                                aiResponse.commercialBlocked ? 'forceCommercialExit' :
+                                aiResponse.cancellationBlocked ? 'forceCancellationExit' : 'forceAIExit';
+               console.log(`[handle-whatsapp-event] 🔄 Re-invocando process-chat-flow com ${exitType}`);
 
               try {
                 const { data: exitFlowResult, error: exitFlowError } = await supabase.functions.invoke('process-chat-flow', {
@@ -1496,8 +1521,9 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
               }
             } else {
               console.log('[handle-whatsapp-event] ✅ AI response OK (flow context) - no violations');
-            }
-          }
+             }
+           } // close else block from V13 guard
+           }
         } catch (aiFlowErr) {
           console.error('[handle-whatsapp-event] ❌ Error calling AI with flow_context:', aiFlowErr);
         }
