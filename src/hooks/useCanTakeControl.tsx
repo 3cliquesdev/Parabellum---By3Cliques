@@ -52,6 +52,11 @@ export function useCanTakeControl(conversation: ConversationTakeControlContext):
       if (isAvailableAIConversation) {
         return { canTake: true };
       }
+
+      // ✅ Bug 37: Se a conversa já está atribuída ao próprio usuário, sempre pode assumir
+      if (conversation.assignedTo === user.id) {
+        return { canTake: true };
+      }
       
       // Buscar role do usuário
       const { data: roleData, error: roleError } = await supabase
