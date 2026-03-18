@@ -3664,8 +3664,15 @@ serve(async (req) => {
               // Revincula a conversa ao contato correto
               console.log('[ai-autopilot-chat] 🔄 Revinculando conversa ao cliente existente:', existingCustomerId);
               
+            // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+              const { data: freshConvEmailRebind } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshMetaEmailRebind = (freshConvEmailRebind?.customer_metadata || {}) as Record<string, any>;
               const updatedMeta: Record<string, any> = {
-                ...(conversation.customer_metadata || {}),
+                ...freshMetaEmailRebind,
                 email_verified_at: new Date().toISOString(),
                 original_contact_id: contact.id, // Guardar referência do lead original
                 rebind_reason: 'email_matched_existing_customer'
