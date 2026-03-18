@@ -7403,9 +7403,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       assistantMessage = rawAIContentNormalized;
     } else if (isFinancialActionRequest) {
       assistantMessage = 'Para prosseguir com sua solicitação financeira, preciso confirmar sua identidade. Qual é o seu e-mail de compra?';
-    } else if (isFinancialRequest && !isInformationalQuestion) {
-      assistantMessage = 'Entendi sua solicitação financeira. Para prosseguir com segurança, qual é o seu e-mail de compra?';
-    } else if (isFinancialRequest && isInformationalQuestion) {
+    } else if (isFinancialRequest) {
+      // Dúvida financeira informativa OU qualquer outro caso financeiro não-ação
       assistantMessage = 'Posso ajudar com sua dúvida financeira! Como posso te ajudar?';
     } else {
       // 🆕 FIX: Fallback Inteligente — se LLM retornou vazio mas KB encontrou artigos,
