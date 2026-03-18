@@ -8013,14 +8013,33 @@ Você quer:
             // 🔒 SECURITY NOTE: Rate limiting is handled at conversation level (AI autopilot only runs for authenticated conversations)
             // Public ticket creation via forms should implement rate limiting separately
 
-            // Create ticket in database
-            const ticketCategory = args.issue_type === 'defeito' ? 'tecnico' : 
-                                   (args.issue_type === 'financeiro' || args.issue_type === 'saque') ? 'financeiro' : 
-                                   'financeiro';
+            // 🆕 Usar ticket_config do flow_context quando disponível
+            const tc = flow_context?.ticketConfig;
+            const ticketCategory = tc?.category || (
+              args.issue_type === 'defeito' ? 'tecnico' : 
+              (args.issue_type === 'financeiro' || args.issue_type === 'saque') ? 'financeiro' : 
+              'financeiro'
+            );
             
-            const ticketSubject = args.subject || 
-                                  (args.order_id ? `${args.issue_type.toUpperCase()} - Pedido ${args.order_id}` : 
-                                   `${args.issue_type.toUpperCase()} - ${args.description.substring(0, 50)}`);
+            const ticketPriority = tc?.default_priority || (
+              (args.issue_type === 'financeiro' || args.issue_type === 'saque') ? 'high' : 'medium'
+            );
+
+            // Template de assunto: usar template do nó se configurado
+            let ticketSubject = args.subject;
+            if (tc?.subject_template) {
+              ticketSubject = tc.subject_template
+                .replace(/\{\{issue_type\}\}/g, args.issue_type || '')
+                .replace(/\{\{customer_name\}\}/g, contactName || '')
+                .replace(/\{\{order_id\}\}/g, args.order_id || '')
+                .replace(/\{\{subject\}\}/g, args.subject || '');
+              if (!ticketSubject.trim()) ticketSubject = args.subject;
+            }
+            if (!ticketSubject) {
+              ticketSubject = args.order_id 
+                ? `${(args.issue_type || '').toUpperCase()} - Pedido ${args.order_id}` 
+                : `${(args.issue_type || '').toUpperCase()} - ${(args.description || '').substring(0, 50)}`;
+            }
 
             // FASE 4: Anotação estruturada para TODOS os tickets da IA
             const ticketType = args.ticket_type || 'outro';
