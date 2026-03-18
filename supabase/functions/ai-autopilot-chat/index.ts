@@ -9383,6 +9383,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           // 🆕 FIX: Substituir mensagem e FICAR no nó (não retornar flowExit)
           console.log('[ai-autopilot-chat] 🔄 Contract violation + flow_context â†’ substituindo mensagem e permanecendo no nó');
           assistantMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
+          isFallbackResponse = true; // FIX BUG 2: incrementar fallback count para anti-loop
           // Continua execução normal â€” mensagem será persistida abaixo
         }
       }
