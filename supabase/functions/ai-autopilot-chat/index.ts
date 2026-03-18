@@ -1101,6 +1101,16 @@ const WITHDRAWAL_ACTION_PATTERNS = [
   /saque\s+via\s+pix/i,                               // "saque via pix"
   /solicitar\s+saque/i,                               // "solicitar saque"
   /pedir\s+saque/i,                                   // "pedir saque"
+  // 🆕 FIX BUG 4: Patterns expandidos para cobranças sobre saque
+  /solicitei\s+(o\s+)?saque/i,                        // "solicitei o saque"
+  /saque\s+pendente/i,                                // "saque pendente"
+  /saque\s+(não|nao)\s+(caiu|chegou|recebi)/i,        // "saque não caiu", "saque não recebi"
+  /saque\s+h[áa]\s+\d+\s+dias?/i,                    // "saque há 9 dias"
+  /saque\s+e\s+at[ée]\s+agora/i,                      // "saque e até agora"
+  /meu\s+saque/i,                                     // "meu saque"
+  /saque\s+(não|nao)\s+foi/i,                         // "saque não foi processado"
+  /cadê\s+(meu\s+)?saque/i,                           // "cadê meu saque"
+  /\d+\s+dias?\s+(que\s+)?(solicitei|pedi)\s+(o\s+)?saque/i, // "9 dias que solicitei o saque"
 ];
 
 // 🆕 Padrões de REEMBOLSO DE PEDIDO (COM OTP) - Devolução de pedido Kiwify
@@ -3757,9 +3767,28 @@ serve(async (req) => {
           } else if (!verifyResult.found) {
             // 🎯 TRIAGEM: Email não encontrado = Lead â†’ Rotear para Comercial
             console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email não encontrado - roteando para Comercial');
+            // FIX BUG 5: Verificar contexto financeiro antes de redirecionar
+            const isFinancialCtx = isFinancialRequest || isFinancialActionRequest || isWithdrawalRequest;
+            const alreadyAskedAltEmail = (conversation.customer_metadata || {}).asked_alternative_email === true;
             
+            if (isFinancialCtx && !alreadyAskedAltEmail) {
+              console.log('[ai-autopilot-chat] Email nao encontrado em contexto FINANCEIRO - perguntando email alternativo');
+              
+              await supabaseClient.from('conversations')
+                .update({
+                  customer_metadata: {
+                    ...(conversation.customer_metadata || {}),
+                    asked_alternative_email: true,
+                    first_email_checked: emailInMessage.toLowerCase().trim()
+                  }
+                })
+                .eq('id', conversationId);
+              
+              autoResponse = 'Nao encontrei esse email na nossa base de clientes.\n\nVoce possui outro email que possa ter usado na compra? Se sim, por favor envie aqui.\n\nSe esse e o unico email, me avise que vou te encaminhar para um atendente.';
+              skipEarlyReturn = true;
+            } else {
             const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-            
+
             // Buscar template de lead direcionado
             let leadMessage = await getMessageTemplate(supabaseClient, 'lead_direcionado_comercial', {});
             if (!leadMessage) {
@@ -3793,6 +3822,7 @@ serve(async (req) => {
             });
             
             autoResponse = leadMessage;
+            } // end else (non-financial or already asked)
           } else {
             // Fallback: email processado mas sem ação clara
             autoResponse = `Obrigado! Estou verificando seu email **${maskedEmailResponse}**...`;
@@ -6091,25 +6121,26 @@ Posso ajudar em mais alguma coisa?`;
     const otpExpiresAt = conversationMetadata.otp_expires_at;
     const hasRecentOTPPending = otpExpiresAt && new Date(otpExpiresAt) > new Date();
     
-    // Verificar se primeiro contato enviou OTP (via IDENTITY WALL)
-    const hasFirstContactOTPPending = !hasEverVerifiedOTP && contactHasEmail;
+    // 🆕 FIX BUG 1: Removido hasFirstContactOTPPending — causava falso positivo de "código inválido"
+    // quando contato com email enviava mensagens contendo dígitos (ex: "dia 3 de março")
+    // OTP pendente DEVE depender APENAS de flags reais de que um OTP foi efetivamente enviado
     
-    // Só validar OTP se houver contexto de OTP pendente
+    // Só validar OTP se houver contexto de OTP pendente (flag explícita ou OTP recente)
     const shouldValidateOTP = isOTPCode && contactHasEmail && 
-      (hasAwaitingOTP || hasRecentOTPPending || hasFirstContactOTPPending);
+      (hasAwaitingOTP || hasRecentOTPPending);
     
     console.log('[ai-autopilot-chat] 🔒 OTP Detection Check:', {
       is_6_digit_code: isOTPCode,
       has_awaiting_otp_flag: hasAwaitingOTP,
       has_recent_otp_pending: hasRecentOTPPending,
-      has_first_contact_otp: hasFirstContactOTPPending,
       will_validate: shouldValidateOTP,
       code_preview: otpDigitsOnly.substring(0, 3) + '***'
     });
 
     // Se existe contexto de OTP, mas o usuário enviou dígitos com tamanho inválido,
     // responder determinístico e NÃO seguir para IA/handoff.
-    const hasOTPPendingContext = contactHasEmail && (hasAwaitingOTP || hasRecentOTPPending || hasFirstContactOTPPending);
+    // 🆕 FIX BUG 1: OTP pending context depende APENAS de flags reais
+    const hasOTPPendingContext = contactHasEmail && (hasAwaitingOTP || hasRecentOTPPending);
     if (!shouldValidateOTP && hasOTPPendingContext && otpDigitsOnly.length > 0 && otpDigitsOnly.length !== 6) {
       const otpFormatResponse = `**Código inválido**\n\nO código deve ter **6 dígitos**.\n\nPor favor, envie apenas os 6 números (pode ser com ou sem espaços).\n\nDigite **"reenviar"** se precisar de um novo código.`;
 
@@ -8916,8 +8947,9 @@ Conversa: ${conversationId}`;
       }
     }
 
-    // 🆕 FIX LOOP: Anti-loop counter - máximo 5 fallbacks consecutivos no mesmo nó AI
-    if (!isFallbackResponse && flow_context) {
+    // 🆕 FIX BUG 2/3: Anti-loop counter - máximo 2 fallbacks/violations consecutivos no mesmo nó AI
+    // Threshold reduzido de 5 para 2 — após 2 tentativas sem sucesso, forçar handoff obrigatório
+    if (flow_context) {
       const existingMetadata = conversation.customer_metadata || {};
       const aiNodeFallbackCount = existingMetadata.ai_node_fallback_count || 0;
       const aiNodeId = existingMetadata.ai_node_current_id || null;
@@ -8925,19 +8957,19 @@ Conversa: ${conversationId}`;
       // Se mudou de nó, resetar contador
       if (aiNodeId !== flow_context.node_id) {
         // Novo nó, resetar
-      } else if (aiNodeFallbackCount >= 5) {
-        console.log('[ai-autopilot-chat] 🚨 ANTI-LOOP: Máximo de 5 fallbacks atingido no nó AI â†’ forçando flow_advance_needed', {
+      } else if (aiNodeFallbackCount >= 2) {
+        console.log('[ai-autopilot-chat] 🚨 ANTI-LOOP: 2+ fallbacks/violations no nó AI → forçando flowExit com handoff OBRIGATÓRIO', {
           node_id: flow_context.node_id,
           fallback_count: aiNodeFallbackCount
         });
-        // 📊 FIX 4: Telemetria anti-alucinação â€” Anti-loop
+        // 📊 Telemetria anti-alucinação — Anti-loop
         console.log(JSON.stringify({
           event: 'ai_decision',
           conversation_id: conversationId,
           reason: 'anti_loop_max_fallbacks',
           score: 0,
           hasFlowContext: true,
-          exitType: 'flow_advance_needed',
+          exitType: 'flowExit_handoff',
           fallback_used: true,
           articles_found: 0,
           timestamp: new Date().toISOString()
@@ -8948,9 +8980,25 @@ Conversa: ${conversationId}`;
           event_type: 'ai_decision_anti_loop_max_fallbacks',
           model: 'system',
           score: 0,
-          output_json: { reason: 'anti_loop_max_fallbacks', exitType: 'flow_advance_needed', fallback_used: true, articles_found: 0, hasFlowContext: true },
+          output_json: { reason: 'anti_loop_max_fallbacks', exitType: 'flowExit_handoff', fallback_used: true, articles_found: 0, hasFlowContext: true, fallback_count: aiNodeFallbackCount },
         })).catch(() => {});
-        isFallbackResponse = true;
+        
+        // 🆕 FIX BUG 3: Forçar flowExit com handoff OBRIGATÓRIO — não ficar em loop
+        // Resetar contador para evitar loop infinito caso o webhook não processe
+        await supabaseClient.from('conversations').update({
+          customer_metadata: { ...existingMetadata, ai_node_fallback_count: 0 }
+        }).eq('id', conversationId);
+        
+        return new Response(JSON.stringify({
+          flowExit: true,
+          reason: 'anti_loop_max_fallbacks_handoff',
+          hasFlowContext: true,
+          response: 'Percebi que não estou conseguindo te ajudar adequadamente. Vou te transferir para um atendente que poderá resolver isso. Um momento! 🙏',
+          message: 'Percebi que não estou conseguindo te ajudar adequadamente. Vou te transferir para um atendente que poderá resolver isso. Um momento! 🙏',
+          flow_context: { flow_id: flow_context.flow_id, node_id: flow_context.node_id }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
     }
 
@@ -9355,6 +9403,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           // 🆕 FIX: Substituir mensagem e FICAR no nó (não retornar flowExit)
           console.log('[ai-autopilot-chat] 🔄 Contract violation + flow_context â†’ substituindo mensagem e permanecendo no nó');
           assistantMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
+          isFallbackResponse = true; // FIX BUG 2: incrementar fallback count para anti-loop
           // Continua execução normal â€” mensagem será persistida abaixo
         }
       }
