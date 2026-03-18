@@ -658,6 +658,28 @@ export default function Deals() {
                   ))}
                 </SelectContent>
               </Select>
+
+              {/* Set as personal default */}
+              {selectedPipeline && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9"
+                        onClick={() => setDefaultPipeline.mutate(selectedPipeline)}
+                        disabled={setDefaultPipeline.isPending}
+                      >
+                        <Star
+                          className={`h-4 w-4 ${(profile as any)?.default_pipeline_id === selectedPipeline ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
+                        />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Definir como meu pipeline padrão</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               
               {/* Pipeline Config Buttons */}
               {canManagePipelines && selectedPipeline && (
