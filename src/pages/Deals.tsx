@@ -4,12 +4,13 @@ import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings, Users, Search, Trophy, TrendingDown, CheckSquare, BarChart3, Upload } from "lucide-react";
+import { Plus, TrendingUp, Flame, Skull, DollarSign, Settings, Users, Search, Trophy, TrendingDown, CheckSquare, BarChart3, Upload, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDeals, useUpdateDeal, useUpdateDealStage, DealFilters } from "@/hooks/useDeals";
 import { useDealsMetrics } from "@/hooks/useDealsMetrics";
 import { useStages } from "@/hooks/useStages";
 import { usePipelines } from "@/hooks/usePipelines";
+import { useSetDefaultPipeline } from "@/hooks/useSetDefaultPipeline";
 import { useSalesReps } from "@/hooks/useSalesReps";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useRolePermissions } from "@/hooks/useRolePermissions";
@@ -86,9 +87,10 @@ export default function Deals() {
   const { role, loading: roleLoading } = useUserRole();
   const { hasPermission } = useRolePermissions();
   const { data: rottenDeals } = useRottenDeals();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const updateDealStage = useUpdateDealStage();
   const updateDeal = useUpdateDeal();
+  const setDefaultPipeline = useSetDefaultPipeline();
   const { toast } = useToast();
   
   // Dynamic permission checks
@@ -97,13 +99,16 @@ export default function Deals() {
   const canViewPendingQueue = hasPermission('deals.view_pending_queue');
   const canViewSalesDistribution = hasPermission('reports.lead_distribution');
 
-  // Selecionar pipeline default ao carregar
+  // Selecionar pipeline default ao carregar (preferência do usuário → global → primeiro)
   useEffect(() => {
     if (pipelines && pipelines.length > 0 && !selectedPipeline) {
-      const defaultPipeline = pipelines.find(p => p.is_default) || pipelines[0];
-      setSelectedPipeline(defaultPipeline.id);
+      const userDefault = (profile as any)?.default_pipeline_id;
+      const userPipeline = userDefault ? pipelines.find(p => p.id === userDefault) : null;
+      const globalDefault = pipelines.find(p => p.is_default);
+      const chosen = userPipeline || globalDefault || pipelines[0];
+      setSelectedPipeline(chosen.id);
     }
-  }, [pipelines, selectedPipeline]);
+  }, [pipelines, selectedPipeline, profile]);
 
   const filteredDeals = useMemo(() => {
     if (!deals) return [];
@@ -653,6 +658,28 @@ export default function Deals() {
                   ))}
                 </SelectContent>
               </Select>
+
+              {/* Set as personal default */}
+              {selectedPipeline && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9"
+                        onClick={() => setDefaultPipeline.mutate(selectedPipeline)}
+                        disabled={setDefaultPipeline.isPending}
+                      >
+                        <Star
+                          className={`h-4 w-4 ${(profile as any)?.default_pipeline_id === selectedPipeline ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
+                        />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Definir como meu pipeline padrão</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               
               {/* Pipeline Config Buttons */}
               {canManagePipelines && selectedPipeline && (
