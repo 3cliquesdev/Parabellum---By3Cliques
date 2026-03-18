@@ -7440,7 +7440,12 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     if (rawAIContentNormalized) {
       assistantMessage = rawAIContentNormalized;
     } else if (isFinancialActionRequest) {
-      assistantMessage = 'Para prosseguir com sua solicitação financeira, preciso confirmar sua identidade. Qual é o seu e-mail de compra?';
+      // 🆕 FIX Resíduo 5: Se contato já tem email, não pedir novamente
+      if (contactHasEmail) {
+        assistantMessage = 'Identificamos seu cadastro. Para prosseguir com segurança, vou enviar um código de verificação para o seu e-mail. Um momento!';
+      } else {
+        assistantMessage = 'Para prosseguir com sua solicitação financeira, preciso confirmar sua identidade. Qual é o seu e-mail de compra?';
+      }
     } else if (isFinancialRequest) {
       // 🆕 FIX Resíduo 4: Resposta contextualizada em vez de genérica
       assistantMessage = 'Entendi sua situação financeira. Vou verificar o que está acontecendo. Pode me informar o e-mail utilizado na compra para que eu localize seus dados?';
@@ -7497,7 +7502,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
             const { data: existingCustomer, error: searchError } = await supabaseClient
               .from('contacts')
               .select('id, first_name, email, status, document')
-              .eq('email', emailInformado)
+              .ilike('email', emailInformado)
               .single();
 
             // CENÁRIO A: EMAIL NÃO ENCONTRADO - PERGUNTAR SE ESTÁ CORRETO ANTES DE TRANSFERIR
@@ -9016,15 +9021,21 @@ Conversa: ${conversationId}`;
     }
 
     // 🆕 FIX LOOP: Atualizar contador de fallbacks no customer_metadata
+    // 🆕 FIX Resíduo 3: Refetch metadata fresco para não sobrescrever greeting flags
     if (flow_context) {
-      const existingMetadata = conversation.customer_metadata || {};
+      const { data: freshConv } = await supabaseClient
+        .from('conversations')
+        .select('customer_metadata')
+        .eq('id', conversationId)
+        .single();
+      const existingMetadata = (freshConv?.customer_metadata as Record<string, any>) || {};
       const aiNodeId = existingMetadata.ai_node_current_id || null;
       let newCount = 0;
       
       if (isFallbackResponse) {
         newCount = (aiNodeId === flow_context.node_id) ? ((existingMetadata.ai_node_fallback_count || 0) + 1) : 1;
       }
-      // Sempre atualizar o nó atual e o contador
+      // Sempre atualizar o nó atual e o contador (merge incremental preserva greeting flags)
       await supabaseClient
         .from('conversations')
         .update({
@@ -9132,7 +9143,9 @@ Conversa: ${conversationId}`;
         }
         
         // Se a mensagem ficou vazia após limpeza, usar fallback genérico
-        if (!cleanedMessage || cleanedMessage.length < 5) {
+        // 🆕 FIX Resíduo 2: Se ficou vazia, MANTER isFallbackResponse=true (IA não conseguiu responder)
+        const messageWasEmptied = !cleanedMessage || cleanedMessage.length < 5;
+        if (messageWasEmptied) {
           cleanedMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
         }
         
@@ -9140,7 +9153,7 @@ Conversa: ${conversationId}`;
           console.log('[ai-autopilot-chat] 🧹 Mensagem limpa de fallback phrases:', { original: assistantMessage.substring(0, 100), cleaned: cleanedMessage.substring(0, 100) });
         }
         
-        // Atualizar assistantMessage com versão limpa â€” será persistida e enviada pelo pipeline normal abaixo
+        // Atualizar assistantMessage com versão limpa — será persistida e enviada pelo pipeline normal abaixo
         assistantMessage = cleanedMessage;
         
         // Log de qualidade (sem sair do nó)
@@ -9153,10 +9166,14 @@ Conversa: ${conversationId}`;
           handoff_reason: 'fallback_stripped_flow_context',
           confidence_score: 0,
           articles_count: knowledgeArticles.length
-        })).catch((e: any) => console.error('[ai-autopilot-chat] âš ï¸ Falha ao logar fallback_cleaned:', e));
+        })).catch((e: any) => console.error('[ai-autopilot-chat] ⚠️ Falha ao logar fallback_cleaned:', e));
         
-        // Resetar flag â€” NÃO é mais fallback após limpeza
-        isFallbackResponse = false;
+        // 🆕 FIX Resíduo 2: Só resetar flag se a mensagem NÃO ficou vazia (IA conseguiu responder algo útil)
+        if (!messageWasEmptied) {
+          isFallbackResponse = false;
+        } else {
+          console.log('[ai-autopilot-chat] ⚠️ Mensagem ficou vazia após limpeza — mantendo isFallbackResponse=true para anti-loop');
+        }
         
         // 🆕 FIX: NÃO return â€” deixa cair no pipeline normal de persistência + envio WhatsApp
       } else {
@@ -9413,11 +9430,27 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             input_summary: customerMessage?.substring(0, 200) || '',
           })).catch((err: any) => console.error('[ai-autopilot-chat] âš ï¸ Failed to log escape event:', err));
           
-          // 🆕 FIX: Substituir mensagem e FICAR no nó (não retornar flowExit)
-          console.log('[ai-autopilot-chat] 🔄 Contract violation + flow_context â†’ substituindo mensagem e permanecendo no nó');
+          // FIX Residuo 1: Substituir msg + UPDATE DIRETO counter (race condition fix)
+          console.log('[ai-autopilot-chat] Contract violation - substituindo msg e permanecendo no no');
           assistantMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
-          isFallbackResponse = true; // FIX BUG 2: incrementar fallback count para anti-loop
-          // Continua execução normal â€” mensagem será persistida abaixo
+          isFallbackResponse = true;
+          try {
+            const { data: freshMetaCV } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .single();
+            const metaCV = (freshMetaCV?.customer_metadata as Record<string, any>) || {};
+            const cvNodeId = flow_context.node_id;
+            const cvPrevNode = metaCV.ai_node_current_id || null;
+            const cvCount = (cvPrevNode === cvNodeId) ? ((metaCV.ai_node_fallback_count || 0) + 1) : 1;
+            await supabaseClient.from('conversations').update({
+              customer_metadata: { ...metaCV, ai_node_current_id: cvNodeId, ai_node_fallback_count: cvCount }
+            }).eq('id', conversationId);
+            console.log('[ai-autopilot-chat] Contract violation counter: ' + cvCount);
+          } catch (counterErr: any) {
+            console.error('[ai-autopilot-chat] Falha counter direto:', counterErr);
+          }
         }
       }
       
