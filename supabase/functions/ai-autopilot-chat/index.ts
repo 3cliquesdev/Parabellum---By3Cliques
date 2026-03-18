@@ -6476,13 +6476,45 @@ Este cliente NÃO tem email cadastrado no sistema.
       console.log('[ai-autopilot-chat] âœ… Cliente identificado por telefone - bypass Identity Wall');
     }
     
-    // 🔒 PORTEIRO DE SAQUE ATIVADO (apenas para saque de saldo/carteira)
+    // 🔒 PORTEIRO FINANCEIRO ATIVADO (para ações financeiras que geram ticket)
     if (financialBarrierActive) {
       // Verificar se cliente já foi identificado por email (novo fluxo)
       const hasEmailVerifiedInDb = conversation.customer_metadata?.email_verified_in_db === true;
       const verifiedEmail = conversation.customer_metadata?.verified_email;
+      const actionLabel = isWithdrawalRequest ? 'saque de saldo' : 'solicitação financeira';
       
       if (contactHasEmail || hasEmailVerifiedInDb) {
+        const emailToUse = contactEmail || verifiedEmail;
+        const maskedEmailForPrompt = emailToUse ? maskEmail(emailToUse) : 'seu email cadastrado';
+        
+        identityWallNote += `\n\n**=== PORTEIRO FINANCEIRO - VERIFICAÇÃO OTP OBRIGATÓRIA ===**
+O cliente solicitou ${actionLabel} (${customerMessage}).
+Email verificado: ${maskedEmailForPrompt}
+
+**RESPOSTA OBRIGATÓRIA:**
+"Para sua segurança, preciso confirmar sua identidade antes de prosseguir com sua solicitação. 
+Vou enviar um código de verificação para ${maskedEmailForPrompt}."
+
+→ Use a ferramenta send_financial_otp para disparar o OTP
+→ NÃO mostre CPF, Nome, Saldo ou qualquer dado sensível
+→ NÃO permita criar ticket
+→ AGUARDE o cliente digitar o código de 6 dígitos`;
+      } else {
+        identityWallNote += `\n\n**=== PORTEIRO FINANCEIRO - IDENTIFICAÇÃO OBRIGATÓRIA ===**
+O cliente solicitou ${actionLabel} mas NÃO ESTÁ IDENTIFICADO.
+
+**RESPOSTA OBRIGATÓRIA:**
+"Para sua segurança, preciso validar seu cadastro antes de prosseguir. 
+Qual é o seu **email de compra**?"
+
+→ AGUARDE o cliente informar o email
+→ Use verify_customer_email para validar na base
+→ Se NÃO encontrado → Use confirm_email_not_found para transferir ao comercial
+→ NÃO fale de valores, prazos ou processos
+→ NÃO crie ticket
+→ PARE AQUI até identificação completa`;
+      }
+    }
         const emailToUse = contactEmail || verifiedEmail;
         const maskedEmailForPrompt = emailToUse ? maskEmail(emailToUse) : 'seu email cadastrado';
         
