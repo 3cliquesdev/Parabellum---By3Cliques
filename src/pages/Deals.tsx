@@ -87,7 +87,7 @@ export default function Deals() {
   const { role, loading: roleLoading } = useUserRole();
   const { hasPermission } = useRolePermissions();
   const { data: rottenDeals } = useRottenDeals();
-  const { user, profile } = useAuth();
+  const { user, profile, refetchProfile } = useAuth();
   const updateDealStage = useUpdateDealStage();
   const updateDeal = useUpdateDeal();
   const setDefaultPipeline = useSetDefaultPipeline();
