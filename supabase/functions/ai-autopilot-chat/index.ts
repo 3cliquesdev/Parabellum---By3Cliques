@@ -7755,13 +7755,19 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o código que você 
             }
 
             // Marcar OTP pendente na metadata
-            const currentMetadata = conversation.customer_metadata || {};
+            // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+            const { data: freshConvFinOtp } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshMetaFinOtp = (freshConvFinOtp?.customer_metadata || {}) as Record<string, any>;
             const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
             await supabaseClient
               .from('conversations')
               .update({ 
                 customer_metadata: {
-                  ...currentMetadata,
+                  ...freshMetaFinOtp,
                   awaiting_otp: true,
                   otp_expires_at: otpExpiresAt,
                   claimant_email: emailToUse,
