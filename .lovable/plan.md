@@ -1,5 +1,5 @@
 
-# Auditoria V12 — Correções Aplicadas ✅
+# Auditoria V13 — Correções Aplicadas ✅
 
 ## Fixes V8 (Produção Confirmada)
 | Fix | Status |
@@ -22,39 +22,32 @@
 ## Fixes V11 (Deploy realizado)
 
 ### Bug 12 ✅ — Cliente aceita transferência e IA ignora
-- **Fix:** Detecção PRÉ-LLM de intenção de transferência via regex (CUSTOMER_TRANSFER_INTENT + CUSTOMER_AFFIRM_TRANSFER)
-- Quando detectado + contexto de fallback recente → flowExit com handoff imediato sem chamar LLM
-
 ### Bug 13 ✅ — Contador anti-loop reseta entre nós
-- **Fix:** `ai_total_fallback_count` global no customer_metadata, nunca reseta entre nós
-- Threshold: >= 4 fallbacks totais → handoff obrigatório independente do nó
-
 ### Bug 14 ✅ — Greeting enviado DEPOIS de fallback
-- **Fix:** Verificação de 2+ msgs IA nos últimos 60s antes de enviar greeting
-- Se contexto já está ativo, suprime greeting pós-fallback
-
 ### Bug 15 ✅ — Build timestamp para rastreabilidade
-- **Fix:** `// BUILD: V11 — timestamp` no topo do arquivo
 
 ## Fixes V12 (Deploy realizado)
 
 ### Bug 16 ✅ — Regex de transferência incompleta
-- **Fix:** Expandido `CUSTOMER_TRANSFER_INTENT` para cobrir conjugações reais:
-  - `me\s+transfer[ea]` (transfere + transfera)
-  - `me\s+conect[ae]` (conecta + conecte)
-  - `equipe\s+de\s+suporte`
-  - `atendimento\s+humano`
-  - `falar\s+com\s+(suporte|equipe)`
-
 ### Bug 17 ✅ — Afirmativo "Sim" com pontuação não detectado
-- **Fix:** Expandido `CUSTOMER_AFFIRM_TRANSFER` com variantes de pontuação:
-  - `sim[,.]?\s*quero`
-  - `sim[,.]?\s*por\s+favor`
-  - `sim[,.]?\s*pode`
-  - `sim[,.]?\s*pode\s+ser`
-
 ### Bug 18 ✅ — Deploy forçado para ativar V8-V12
-- **Fix:** Re-deploy da edge function `ai-autopilot-chat` com BUILD V12 timestamp
+
+## Fixes V13 (Deploy realizado)
+
+### Bug 20+21 ✅ — flowExit de Transfer Intent re-invoca flow → mensagens duplicadas + handoff não executa
+- **Fix:** Guard PRÉ-flowExit nos dois webhooks (`meta-whatsapp-webhook` e `handle-whatsapp-event`)
+- Quando `reason === 'customer_transfer_intent'` ou `reason === 'global_anti_loop_handoff'`:
+  - **Pula** re-invocação do `process-chat-flow` (elimina mensagens duplicadas)
+  - Executa handoff **direto**: `ai_mode = 'waiting_human'`, `assigned_to = null`
+  - Chama `route-conversation` para dispatch imediato
+- Resultado: Cliente recebe apenas "Vou te transferir agora" e é transferido em < 5s
+
+### Bug 22 ✅ — Global anti-loop counter sem diagnóstico
+- **Fix:** Telemetria adicionada no bloco L9326 do `ai-autopilot-chat`:
+  - Log: `🔢 V13 Bug 22: Global counter — isFallback=X, current=Y, new=Z, nodeId=N`
+- Permite monitorar se `isFallbackResponse` está sendo setado e se o counter incrementa
 
 ## Deploy
-- `ai-autopilot-chat` ✅ re-deployed V12
+- `ai-autopilot-chat` ✅ re-deployed V13
+- `meta-whatsapp-webhook` ✅ re-deployed V13
+- `handle-whatsapp-event` ✅ re-deployed V13
