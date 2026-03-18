@@ -511,7 +511,26 @@ export function KnowledgeAuditTab() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {getActionButton(article)}
+                    <div className="flex items-center gap-1">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditArticleId(article.id);
+                                setEditDialogOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Editar artigo</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      {getActionButton(article)}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
