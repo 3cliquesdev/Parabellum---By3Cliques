@@ -1870,15 +1870,45 @@ serve(async (req) => {
                           continue;
                         }
                         
-                        // 🆕 CONTRACT VIOLATION / FLOW EXIT: IA fabricou transferência ou pediu [[FLOW_EXIT]]
-                        // Re-invocar process-chat-flow para avançar ao próximo nó do fluxo
-                        if ((autopilotData?.flowExit || autopilotData?.contractViolation) && autopilotData?.hasFlowContext && !flowExitHandledByConversation.has(conversation.id)) {
-                          flowExitHandledByConversation.add(conversation.id);
-                          console.log("[meta-whatsapp-webhook] 🔄 flowExit/contractViolation → re-invocando process-chat-flow com forceAIExit", {
-                            flowExit: autopilotData.flowExit,
-                            contractViolation: autopilotData.contractViolation,
-                            reason: autopilotData.reason,
-                          });
+                         // 🆕 V13 BUG 20+21: Handoff IMEDIATO para transfer intent e anti-loop (sem re-invocar flow)
+                         if ((autopilotData?.flowExit) && 
+                             (autopilotData?.reason === 'customer_transfer_intent' || autopilotData?.reason === 'global_anti_loop_handoff') &&
+                             !flowExitHandledByConversation.has(conversation.id)) {
+                           flowExitHandledByConversation.add(conversation.id);
+                           console.log("[meta-whatsapp-webhook] 🚀 V13: Handoff IMEDIATO (reason=" + autopilotData.reason + ") — pulando flow re-invocation");
+                           
+                           const DEPT_SUPORTE_IMMEDIATE = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+                           const immediateDept = autopilotData.flow_context?.department || conversation.department || DEPT_SUPORTE_IMMEDIATE;
+                           
+                           await supabase.from('conversations').update({
+                             ai_mode: 'waiting_human',
+                             handoff_executed_at: new Date().toISOString(),
+                             department: immediateDept,
+                             assigned_to: null,
+                           }).eq('id', conversation.id);
+                           
+                           // Dispatch job
+                           try {
+                             await supabase.functions.invoke('route-conversation', {
+                               body: { conversation_id: conversation.id, department_id: immediateDept }
+                             });
+                             console.log("[meta-whatsapp-webhook] ✅ V13: route-conversation dispatched for immediate handoff");
+                           } catch (routeErr) {
+                             console.error("[meta-whatsapp-webhook] ❌ V13: route-conversation failed:", routeErr);
+                           }
+                           
+                           continue;
+                         }
+                         
+                         // 🆕 CONTRACT VIOLATION / FLOW EXIT: IA fabricou transferência ou pediu [[FLOW_EXIT]]
+                         // Re-invocar process-chat-flow para avançar ao próximo nó do fluxo
+                         if ((autopilotData?.flowExit || autopilotData?.contractViolation) && autopilotData?.hasFlowContext && !flowExitHandledByConversation.has(conversation.id)) {
+                           flowExitHandledByConversation.add(conversation.id);
+                           console.log("[meta-whatsapp-webhook] 🔄 flowExit/contractViolation → re-invocando process-chat-flow com forceAIExit", {
+                             flowExit: autopilotData.flowExit,
+                             contractViolation: autopilotData.contractViolation,
+                             reason: autopilotData.reason,
+                           });
                           
                           try {
                             const cvFlowResponse = await fetch(

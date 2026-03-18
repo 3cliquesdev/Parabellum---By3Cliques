@@ -9323,9 +9323,10 @@ Conversa: ${conversationId}`;
         newCount = (aiNodeId === flow_context.node_id) ? ((existingMetadata.ai_node_fallback_count || 0) + 1) : 1;
       }
 
-      // 🆕 V11 FIX Bug 13: Contador GLOBAL de fallbacks — nunca reseta entre nós
-      const currentGlobalCount = existingMetadata.ai_total_fallback_count || 0;
-      const newGlobalCount = isFallbackResponse ? currentGlobalCount + 1 : currentGlobalCount;
+       // 🆕 V11 FIX Bug 13: Contador GLOBAL de fallbacks — nunca reseta entre nós
+       const currentGlobalCount = existingMetadata.ai_total_fallback_count || 0;
+       const newGlobalCount = isFallbackResponse ? currentGlobalCount + 1 : currentGlobalCount;
+       console.log(`[ai-autopilot-chat] 🔢 V13 Bug 22: Global counter — isFallback=${isFallbackResponse}, current=${currentGlobalCount}, new=${newGlobalCount}, nodeId=${flow_context.node_id}`);
 
       // Sempre atualizar o nó atual e o contador (merge incremental preserva greeting flags)
       await supabaseClient
