@@ -197,14 +197,15 @@ Deno.serve(async (req: Request) => {
         .eq("assigned_to", userId),
       applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
         .neq("status", "closed")
-        .eq("ai_mode", "autopilot"),
+        .in("ai_mode", ["autopilot", "waiting_human"])
+        .is("assigned_to", null),
       applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
         .neq("status", "closed")
-        .neq("ai_mode", "autopilot"),
+        .not("ai_mode", "in", '("autopilot","waiting_human")'),
       applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
         .neq("status", "closed")
         .is("assigned_to", null)
-        .neq("ai_mode", "autopilot"),
+        .not("ai_mode", "in", '("autopilot","waiting_human")'),
     ]);
 
     const totalActive = totalActiveRes.count ?? 0;
