@@ -1521,8 +1521,9 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
               }
             } else {
               console.log('[handle-whatsapp-event] ✅ AI response OK (flow context) - no violations');
-            }
-          }
+             }
+           } // close else block from V13 guard
+           }
         } catch (aiFlowErr) {
           console.error('[handle-whatsapp-event] ❌ Error calling AI with flow_context:', aiFlowErr);
         }
