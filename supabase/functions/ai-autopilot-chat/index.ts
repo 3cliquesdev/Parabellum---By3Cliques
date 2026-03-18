@@ -5855,11 +5855,22 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       pattern.test(customerMessage)
     );
     
+    // 🆕 PERGUNTA INFORMATIVA - Não ativar barreira OTP mesmo com palavras financeiras
+    const isInformationalQuestion = INFORMATIONAL_PATTERNS.some(pattern =>
+      pattern.test(customerMessage)
+    );
+    
+    // 🆕 AÇÃO FINANCEIRA QUE GERA TICKET (saque + reembolso/estorno) - EXIGE OTP
+    // Dúvidas informativas ("como funciona saque", "prazo reembolso") NÃO ativam barreira
+    const isFinancialActionRequest = (isWithdrawalRequest || isRefundRequest) && !isInformationalQuestion;
+    
     console.log('[ai-autopilot-chat] 🎯 FINANCIAL REQUEST DETECTION:', {
       isFinancialRequest,
-      isWithdrawalRequest,    // ÁšNICA que exige OTP
-      isRefundRequest,        // Sem OTP
-      isCancellationRequest,  // Sem OTP
+      isWithdrawalRequest,
+      isRefundRequest,
+      isCancellationRequest,
+      isInformationalQuestion,
+      isFinancialActionRequest,  // 🆕 AÇÃO que exige OTP (saque + reembolso)
       message_preview: customerMessage.substring(0, 50)
     });
 
