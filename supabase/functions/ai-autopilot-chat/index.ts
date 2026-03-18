@@ -9211,15 +9211,25 @@ Conversa: ${conversationId}`;
           handoff_executed_at: handoffTimestamp, // 🆕 Anti-race-condition flag
           needs_human_review: true,
           department: handoffDepartment, // 🆕 Definir departamento correto (Comercial para leads)
-          customer_metadata: {
-            ...(conversation.customer_metadata || {}),
-            ...(isLeadWithoutEmail && {
-              lead_routed_to_comercial_reason: 'fallback_handoff',
-              lead_routed_at: handoffTimestamp
-            })
-          }
         })
         .eq('id', conversationId);
+      
+      // 🆕 FIX Resíduo 4: Refetch metadata fresco para não sobrescrever greeting flags
+      if (isLeadWithoutEmail) {
+        try {
+          const { data: freshHandoff } = await supabaseClient.from('conversations').select('customer_metadata').eq('id', conversationId).single();
+          const freshHandoffMeta = (freshHandoff?.customer_metadata as any) || {};
+          await supabaseClient.from('conversations').update({
+            customer_metadata: {
+              ...freshHandoffMeta,
+              lead_routed_to_comercial_reason: 'fallback_handoff',
+              lead_routed_at: handoffTimestamp
+            }
+          }).eq('id', conversationId);
+        } catch (hErr: any) {
+          console.warn('[ai-autopilot-chat] ⚠️ Falha ao atualizar metadata no handoff:', hErr);
+        }
+      }
       
       console.log('[ai-autopilot-chat] âœ… ai_mode mudado para waiting_human, handoff_executed_at:', handoffTimestamp);
       
