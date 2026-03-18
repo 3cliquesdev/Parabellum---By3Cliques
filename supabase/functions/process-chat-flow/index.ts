@@ -2296,6 +2296,7 @@ serve(async (req) => {
                   return new Response(JSON.stringify({
                     useAI: true,
                     aiNodeActive: true,
+                    skipInitialMessage: true, // 🆕 FIX: OTP verified → ai_response
                     nodeId: resolvedNode.id,
                     response: "✅ Identidade verificada!",
                     flowId: activeState.flow_id,

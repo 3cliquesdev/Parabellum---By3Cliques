@@ -144,6 +144,17 @@ serve(async (req) => {
           const effFlowContext = metaMsg.flow_context;
           const effFlowData = metaMsg.flow_data;
 
+          // 🆕 FIX: Safety check — se skipInitialMessage está ativo, filtrar dígitos de menu do buffer
+          if (effFlowData?.skipInitialMessage === true) {
+            const isMenuDigit = /^\d{1,2}$/.test(concatenatedMessage.trim());
+            if (isMenuDigit) {
+              console.log(`[process-buffered-messages] ⏭️ Conv ${convId}: skipInitialMessage=true + menu digit "${concatenatedMessage.trim()}" — skipping autopilot`);
+              await supabase.from("message_buffer").update({ processed: true }).in("id", msgs.map((m: any) => m.id));
+              processedCount++;
+              continue;
+            }
+          }
+
           // Fetch conversation state
           const { data: conversation } = await supabase
             .from("conversations")
