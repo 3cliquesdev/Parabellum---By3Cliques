@@ -7497,7 +7497,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
             const { data: existingCustomer, error: searchError } = await supabaseClient
               .from('contacts')
               .select('id, first_name, email, status, document')
-              .eq('email', emailInformado)
+              .ilike('email', emailInformado)
               .single();
 
             // CENÁRIO A: EMAIL NÃO ENCONTRADO - PERGUNTAR SE ESTÁ CORRETO ANTES DE TRANSFERIR
