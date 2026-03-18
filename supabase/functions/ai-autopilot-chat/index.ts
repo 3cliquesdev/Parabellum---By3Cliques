@@ -5838,7 +5838,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       customerMessage.toLowerCase().includes(keyword)
     );
     
-    // 🔒 SAQUE DE SALDO - ÁšNICA operação que EXIGE OTP
+    // 🔒 SAQUE DE SALDO - operação que EXIGE OTP
     const isWithdrawalRequest = WITHDRAWAL_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     ) || OTP_REQUIRED_KEYWORDS.some(keyword =>
