@@ -9143,8 +9143,15 @@ Conversa: ${conversationId}`;
         
         // 🆕 FIX BUG 3: Forçar flowExit com handoff OBRIGATÓRIO — não ficar em loop
         // Resetar contador para evitar loop infinito caso o webhook não processe
+        // V7 FIX: Refetch metadata fresco antes do reset para não sobrescrever flags atualizadas mid-pipeline
+        const { data: freshConvAntiLoop } = await supabaseClient
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const freshMetaAntiLoop = (freshConvAntiLoop?.customer_metadata || {}) as Record<string, any>;
         await supabaseClient.from('conversations').update({
-          customer_metadata: { ...existingMetadata, ai_node_fallback_count: 0 }
+          customer_metadata: { ...freshMetaAntiLoop, ai_node_fallback_count: 0 }
         }).eq('id', conversationId);
         
         return new Response(JSON.stringify({
