@@ -1723,11 +1723,19 @@ async function handleOTPValidation(
       // 🚨 BLOQUEIO POR EXCESSO DE TENTATIVAS (MÁXIMO 3)
       console.log('[handle-whatsapp-event] 🚨 Max OTP attempts reached (3) - triggering fraud alert');
 
+      // 🆕 V5-F2: Refetch metadata fresco antes de bloquear OTP
+      const { data: freshOtpBlockConv } = await supabase
+        .from('conversations')
+        .select('customer_metadata')
+        .eq('id', conversationId)
+        .maybeSingle();
+      const freshOtpBlockMeta = (freshOtpBlockConv?.customer_metadata || {}) as Record<string, any>;
+
       await supabase
         .from('conversations')
         .update({
           customer_metadata: {
-            ...metadata,
+            ...freshOtpBlockMeta,
             otp_blocked: true,
             otp_blocked_at: new Date().toISOString(),
             otp_attempts: newAttempts,
