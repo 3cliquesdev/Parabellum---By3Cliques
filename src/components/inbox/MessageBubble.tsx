@@ -80,6 +80,7 @@ export function MessageBubble({
   className,
   onRetryMessage,
   isRetrying,
+  metadata,
 }: MessageBubbleProps) {
   const relativeTime = formatRelativeTime(createdAt);
   return (
