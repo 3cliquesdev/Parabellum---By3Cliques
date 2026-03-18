@@ -7751,8 +7751,14 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
           try {
             const args = safeParseToolArgs(toolCall.function.arguments);
             const confirmed = args.confirmed;
-            const currentMetadata = conversation.customer_metadata || {};
-            const pendingEmail = currentMetadata.pending_email_confirmation;
+            // Refetch metadata fresco para não sobrescrever updates incrementais
+            const { data: freshConfirmConv } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshConfirmMeta = (freshConfirmConv?.customer_metadata || {}) as Record<string, any>;
+            const pendingEmail = freshConfirmMeta.pending_email_confirmation;
             
             console.log('[ai-autopilot-chat] 📧 Confirmação de email não encontrado:', { confirmed, pendingEmail });
             
@@ -7762,7 +7768,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
                 .from('conversations')
                 .update({ 
                   customer_metadata: { 
-                    ...currentMetadata,
+                    ...freshConfirmMeta,
                     pending_email_confirmation: null,
                     pending_email_timestamp: null
                   }
