@@ -5591,11 +5591,19 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           originalIntentCategory
         });
         
+        // 🆕 V5-E: Refetch metadata fresco para não sobrescrever flags incrementais
+        const { data: freshHandoffLeadConv } = await supabaseClient
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const freshHandoffLeadMeta = (freshHandoffLeadConv?.customer_metadata || {}) as Record<string, any>;
+
         // Atualizar metadata para rastrear que estamos aguardando email + CONTEXTO ORIGINAL
         await supabaseClient.from('conversations')
           .update({
             customer_metadata: {
-              ...(conversation.customer_metadata || {}),
+              ...freshHandoffLeadMeta,
               awaiting_email_for_handoff: true,
               handoff_blocked_at: new Date().toISOString(),
               handoff_blocked_reason: 'low_confidence_lead_without_email',
