@@ -6516,50 +6516,6 @@ Qual é o seu **email de compra**?"
       }
     }
     
-        
-        // Cenário: Cliente identificado por email â†’ Precisa OTP para SAQUE
-        identityWallNote += `\n\n**=== PORTEIRO DE SAQUE - VERIFICAÇÃO OTP OBRIGATÓRIA ===**
-O cliente solicitou SAQUE DE SALDO (${customerMessage}).
-Email verificado: ${maskedEmailForPrompt}
-
-**RESPOSTA OBRIGATÓRIA:**
-"Para sua segurança, preciso confirmar sua identidade antes de prosseguir com o saque. 
-Vou enviar um código de verificação para ${maskedEmailForPrompt}."
-
-â†’ Use a ferramenta send_financial_otp para disparar o OTP
-â†’ NÃO mostre CPF, Nome, Saldo ou qualquer dado sensível
-â†’ NÃO permita criar ticket de saque
-â†’ AGUARDE o cliente digitar o código de 6 dígitos`;
-      } else {
-        // Cenário: Não tem email â†’ Pedir email primeiro
-        identityWallNote += `\n\n**=== PORTEIRO DE SAQUE - IDENTIFICAÇÃO OBRIGATÓRIA ===**
-O cliente solicitou SAQUE mas NÃO ESTÁ IDENTIFICADO.
-
-**RESPOSTA OBRIGATÓRIA:**
-"Para sua segurança, preciso validar seu cadastro antes de prosseguir com o saque. 
-Qual é o seu **email de cadastro**?"
-
-â†’ AGUARDE o cliente informar o email
-â†’ NÃO fale de valores, prazos ou processos
-â†’ NÃO crie ticket
-â†’ PARE AQUI até identificação completa`;
-      }
-    }
-    
-    // 🆕 HANDLER PARA REEMBOLSO (SEM OTP)
-    if (isRefundRequest && !isWithdrawalRequest) {
-      console.log('[ai-autopilot-chat] 📦 Detectado pedido de REEMBOLSO - sem OTP necessário');
-      
-      identityWallNote += `\n\n**=== REEMBOLSO DE PEDIDO (SEM OTP) ===**
-O cliente está perguntando sobre reembolso de um pedido Kiwify.
-
-**EXPLICAÇÃO A DAR:**
-- Reembolsos são processados automaticamente quando o pedido retorna ao galpão
-- O cliente NÃO precisa ficar cobrando, o processo é automático
-- Se o cliente INSISTIR que o reembolso não foi feito, aí sim ofereça transferir para humano
-
-**NÃO PEÇA OTP** para esta situação.`;
-    }
     
     // 🆕 HANDLER PARA CANCELAMENTO (SEM OTP)
     if (isCancellationRequest && !isWithdrawalRequest) {
