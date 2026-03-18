@@ -261,9 +261,11 @@ export function AIResponsePropertiesPanel({
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Template de assunto</Label>
               <Input
+                ref={subjectRef}
                 value={ticketConfig.subject_template || ""}
                 onChange={(e) => updateTicketConfig("subject_template", e.target.value)}
                 onKeyDown={(e) => e.stopPropagation()}
+                onFocus={() => (activeFieldRef.current = "subject")}
                 placeholder="{{issue_type}} - {{customer_name}}"
                 className="text-sm h-9"
               />
@@ -273,13 +275,43 @@ export function AIResponsePropertiesPanel({
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Template de descrição</Label>
               <Textarea
+                ref={descRef}
                 value={ticketConfig.description_template || ""}
                 onChange={(e) => updateTicketConfig("description_template", e.target.value)}
                 onKeyDown={(e) => e.stopPropagation()}
+                onFocus={() => (activeFieldRef.current = "description")}
                 placeholder="Detalhes adicionais para o ticket..."
                 rows={2}
                 className="resize-none text-sm"
               />
+            </div>
+
+            {/* Variáveis clicáveis */}
+            <div className="space-y-2 pt-1">
+              <Label className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
+                📌 Clique para inserir no campo ativo
+              </Label>
+
+              <div>
+                <p className="text-[9px] text-muted-foreground mb-1">Cliente</p>
+                <div className="flex flex-wrap gap-1">
+                  <ClickableVariableBadge variable="customer_name" description="Nome do cliente" colorClass="text-blue-600" onInsert={handleInsertVariable} />
+                  <ClickableVariableBadge variable="customer_email" description="Email do cliente" colorClass="text-blue-600" onInsert={handleInsertVariable} />
+                  <ClickableVariableBadge variable="customer_phone" description="Telefone do cliente" colorClass="text-blue-600" onInsert={handleInsertVariable} />
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[9px] text-muted-foreground mb-1">Coletados pela IA</p>
+                <div className="flex flex-wrap gap-1">
+                  <ClickableVariableBadge variable="issue_type" description="Tipo do problema identificado" colorClass="text-emerald-600" onInsert={handleInsertVariable} />
+                  <ClickableVariableBadge variable="subject" description="Assunto identificado pela IA" colorClass="text-emerald-600" onInsert={handleInsertVariable} />
+                  <ClickableVariableBadge variable="order_id" description="Número do pedido" colorClass="text-purple-600" onInsert={handleInsertVariable} />
+                  <ClickableVariableBadge variable="pix_key" description="Chave PIX informada" colorClass="text-purple-600" onInsert={handleInsertVariable} />
+                  <ClickableVariableBadge variable="amount" description="Valor solicitado" colorClass="text-purple-600" onInsert={handleInsertVariable} />
+                  <ClickableVariableBadge variable="reason" description="Motivo / justificativa" colorClass="text-amber-600" onInsert={handleInsertVariable} />
+                </div>
+              </div>
             </div>
 
             <p className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-500/10 p-2 rounded">
