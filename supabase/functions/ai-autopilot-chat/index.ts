@@ -6349,7 +6349,7 @@ Digite **"reenviar"** se precisar de um novo código.`;
               awaiting_otp: true,
               otp_expires_at: otpExpiresAt,
               claimant_email: contactEmail,
-              otp_reason: 'withdrawal' // 🆕 Marcar motivo do OTP
+              otp_reason: isWithdrawalRequest ? 'withdrawal' : 'financial_action' // 🆕 Motivo dinâmico
             }
           })
           .eq('id', conversationId);
