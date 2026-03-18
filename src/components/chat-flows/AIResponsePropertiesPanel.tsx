@@ -1,10 +1,13 @@
 import { Node } from "reactflow";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Sparkles, AlertTriangle, GraduationCap } from "lucide-react";
+import { Bot, Sparkles, AlertTriangle, GraduationCap, Ticket, Info } from "lucide-react";
 import { usePersonas } from "@/hooks/usePersonas";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useTicketCategories } from "@/hooks/useTicketCategories";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,7 +21,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Info } from "lucide-react";
 
 interface AIResponsePropertiesPanelProps {
   selectedNode: Node;
@@ -30,6 +32,13 @@ export function AIResponsePropertiesPanel({
   updateNodeData,
 }: AIResponsePropertiesPanelProps) {
   const { data: personas, isLoading: loadingPersonas } = usePersonas();
+  const { data: departments = [] } = useDepartments({ activeOnly: true });
+  const { data: categories = [] } = useTicketCategories();
+
+  const ticketConfig = selectedNode.data.ticket_config || {};
+  const updateTicketConfig = (field: string, value: any) => {
+    updateNodeData("ticket_config", { ...ticketConfig, [field]: value });
+  };
 
   // Personas ativas
   const activePersonas = personas?.filter((p) => p.is_active) || [];
@@ -153,6 +162,130 @@ export function AIResponsePropertiesPanel({
         selectedNode={selectedNode}
         updateNodeData={updateNodeData}
       />
+
+      <Separator />
+
+      {/* Seção: Criar Ticket */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Ticket className="h-4 w-4 text-blue-500" />
+            <Label className="text-xs font-semibold uppercase tracking-wide">
+              Criar Ticket
+            </Label>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-xs">
+                  <p className="text-xs">
+                    A IA coleta dados do cliente (assunto, descrição, tipo) e cria um ticket automaticamente com os defaults configurados aqui.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <Switch
+            checked={ticketConfig.enabled === true}
+            onCheckedChange={(checked) => updateTicketConfig("enabled", checked)}
+          />
+        </div>
+
+        {ticketConfig.enabled && (
+          <div className="space-y-3 pl-1">
+            {/* Departamento */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Departamento</Label>
+              <Select
+                value={ticketConfig.department_id || "none"}
+                onValueChange={(v) => updateTicketConfig("department_id", v === "none" ? null : v)}
+              >
+                <SelectTrigger className="text-sm h-9">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground">Nenhum (padrão)</span>
+                  </SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Categoria */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Categoria</Label>
+              <Select
+                value={ticketConfig.category || "none"}
+                onValueChange={(v) => updateTicketConfig("category", v === "none" ? null : v)}
+              >
+                <SelectTrigger className="text-sm h-9">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground">Nenhuma (padrão)</span>
+                  </SelectItem>
+                  {categories.filter(c => c.is_active).map((c) => (
+                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Prioridade */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Prioridade padrão</Label>
+              <Select
+                value={ticketConfig.default_priority || "medium"}
+                onValueChange={(v) => updateTicketConfig("default_priority", v)}
+              >
+                <SelectTrigger className="text-sm h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" sideOffset={4} className="z-[100] bg-popover text-popover-foreground shadow-lg border">
+                  <SelectItem value="low">🟢 Baixa</SelectItem>
+                  <SelectItem value="medium">🟡 Média</SelectItem>
+                  <SelectItem value="high">🟠 Alta</SelectItem>
+                  <SelectItem value="urgent">🔴 Urgente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Template de assunto */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Template de assunto</Label>
+              <Input
+                value={ticketConfig.subject_template || ""}
+                onChange={(e) => updateTicketConfig("subject_template", e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                placeholder="{{issue_type}} - {{customer_name}}"
+                className="text-sm h-9"
+              />
+            </div>
+
+            {/* Template de descrição */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Template de descrição</Label>
+              <Textarea
+                value={ticketConfig.description_template || ""}
+                onChange={(e) => updateTicketConfig("description_template", e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                placeholder="Detalhes adicionais para o ticket..."
+                rows={2}
+                className="resize-none text-sm"
+              />
+            </div>
+
+            <p className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-500/10 p-2 rounded">
+              🎫 A IA coleta assunto, descrição e tipo do problema com o cliente. Os defaults acima definem departamento, categoria e prioridade do ticket criado.
+            </p>
+          </div>
+        )}
+      </div>
 
       <Separator />
 

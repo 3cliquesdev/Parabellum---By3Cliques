@@ -1220,6 +1220,15 @@ interface FlowContext {
   forbidConsultant?: boolean;
   otpVerified?: boolean;
   collectedData?: any;
+  // 🆕 Configuração de ticket do nó de IA
+  ticketConfig?: {
+    enabled?: boolean;
+    department_id?: string | null;
+    category?: string | null;
+    default_priority?: string | null;
+    subject_template?: string | null;
+    description_template?: string | null;
+  } | null;
 }
 
 // 🆕 FASE 1: Função para gerar prompt RESTRITIVO baseado no flow_context
@@ -8004,14 +8013,33 @@ Você quer:
             // 🔒 SECURITY NOTE: Rate limiting is handled at conversation level (AI autopilot only runs for authenticated conversations)
             // Public ticket creation via forms should implement rate limiting separately
 
-            // Create ticket in database
-            const ticketCategory = args.issue_type === 'defeito' ? 'tecnico' : 
-                                   (args.issue_type === 'financeiro' || args.issue_type === 'saque') ? 'financeiro' : 
-                                   'financeiro';
+            // 🆕 Usar ticket_config do flow_context quando disponível
+            const tc = flow_context?.ticketConfig;
+            const ticketCategory = tc?.category || (
+              args.issue_type === 'defeito' ? 'tecnico' : 
+              (args.issue_type === 'financeiro' || args.issue_type === 'saque') ? 'financeiro' : 
+              'financeiro'
+            );
             
-            const ticketSubject = args.subject || 
-                                  (args.order_id ? `${args.issue_type.toUpperCase()} - Pedido ${args.order_id}` : 
-                                   `${args.issue_type.toUpperCase()} - ${args.description.substring(0, 50)}`);
+            const ticketPriority = tc?.default_priority || (
+              (args.issue_type === 'financeiro' || args.issue_type === 'saque') ? 'high' : 'medium'
+            );
+
+            // Template de assunto: usar template do nó se configurado
+            let ticketSubject = args.subject;
+            if (tc?.subject_template) {
+              ticketSubject = tc.subject_template
+                .replace(/\{\{issue_type\}\}/g, args.issue_type || '')
+                .replace(/\{\{customer_name\}\}/g, contactName || '')
+                .replace(/\{\{order_id\}\}/g, args.order_id || '')
+                .replace(/\{\{subject\}\}/g, args.subject || '');
+              if (!ticketSubject.trim()) ticketSubject = args.subject;
+            }
+            if (!ticketSubject) {
+              ticketSubject = args.order_id 
+                ? `${(args.issue_type || '').toUpperCase()} - Pedido ${args.order_id}` 
+                : `${(args.issue_type || '').toUpperCase()} - ${(args.description || '').substring(0, 50)}`;
+            }
 
             // FASE 4: Anotação estruturada para TODOS os tickets da IA
             const ticketType = args.ticket_type || 'outro';
@@ -8060,17 +8088,29 @@ Via: Atendimento Automatizado (IA)`;
 - [ ] Notificar cliente`;
             }
 
+            // 🆕 Descrição: usar template do nó se configurado
+            let ticketDescription = args.description;
+            if (tc?.description_template) {
+              const templatedDesc = tc.description_template
+                .replace(/\{\{description\}\}/g, args.description || '')
+                .replace(/\{\{issue_type\}\}/g, args.issue_type || '')
+                .replace(/\{\{customer_name\}\}/g, contactName || '')
+                .replace(/\{\{order_id\}\}/g, args.order_id || '');
+              if (templatedDesc.trim()) ticketDescription = templatedDesc;
+            }
+
             const { data: ticket, error: ticketError } = await supabaseClient
               .from('tickets')
               .insert({
                 customer_id: contact.id,
                 subject: ticketSubject,
-                description: args.description,
-                priority: (args.issue_type === 'financeiro' || args.issue_type === 'saque') ? 'high' : 'medium',
+                description: ticketDescription,
+                priority: ticketPriority,
                 status: 'open',
                 source_conversation_id: conversationId,
                 category: ticketCategory,
-                internal_note: internalNote
+                internal_note: internalNote,
+                ...(tc?.department_id ? { department_id: tc.department_id } : {}),
               })
               .select()
               .single();
