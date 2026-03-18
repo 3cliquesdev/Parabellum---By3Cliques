@@ -9884,6 +9884,7 @@ export type Database = {
       }
       whatsapp_message_templates: {
         Row: {
+          body_text: string | null
           category: string | null
           created_at: string | null
           description: string | null
@@ -9897,6 +9898,7 @@ export type Database = {
           variable_examples: Json | null
         }
         Insert: {
+          body_text?: string | null
           category?: string | null
           created_at?: string | null
           description?: string | null
@@ -9910,6 +9912,7 @@ export type Database = {
           variable_examples?: Json | null
         }
         Update: {
+          body_text?: string | null
           category?: string | null
           created_at?: string | null
           description?: string | null

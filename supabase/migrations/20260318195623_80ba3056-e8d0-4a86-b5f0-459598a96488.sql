@@ -1,0 +1,1 @@
+ALTER TABLE whatsapp_message_templates ADD COLUMN IF NOT EXISTS body_text text;
