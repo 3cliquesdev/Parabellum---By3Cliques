@@ -33,7 +33,7 @@ interface RAGConfig {
 
 const DEFAULT_RAG_CONFIG: RAGConfig = {
   model: 'gpt-5-mini',
-  minThreshold: 0.40,
+  minThreshold: 0.55, // 🆕 V8 FIX Bug 5: Aumentado de 0.40 para 0.55 para filtrar artigos irrelevantes
   directThreshold: 0.75,
   sources: { kb: true, crm: true, tracking: true, sandbox: true },
   strictMode: false,
