@@ -767,9 +767,9 @@ const FINANCIAL_BARRIER_KEYWORDS = [
   'meu dinheiro'
 ];
 
-// 🔒 OPERAÇÁ•ES QUE EXIGEM OTP OBRIGATÓRIO (APENAS SAQUE DE SALDO/CARTEIRA)
-// OTP é necessário APENAS quando cliente quer SACAR dinheiro da carteira
-// Cancelamentos, reembolsos de pedidos Kiwify NÃO precisam de OTP
+// 🔒 OPERAÇÕES QUE EXIGEM OTP OBRIGATÓRIO (AÇÕES FINANCEIRAS)
+// OTP é necessário para ações financeiras que geram ticket: SAQUE + REEMBOLSO/ESTORNO
+// Cancelamentos simples NÃO precisam de OTP
 const OTP_REQUIRED_KEYWORDS = [
   // 🆕 Removidos 'saque' e 'sacar' isolados â€” termos ambíguos devem ser desambiguados pela IA
   // A detecção de saque composto já é coberta por WITHDRAWAL_ACTION_PATTERNS
@@ -1103,8 +1103,8 @@ const WITHDRAWAL_ACTION_PATTERNS = [
   /pedir\s+saque/i,                                   // "pedir saque"
 ];
 
-// 🆕 Padrões de REEMBOLSO DE PEDIDO (SEM OTP) - Devolução de pedido Kiwify
-// A IA explica o processo e só transfere se cliente insistir
+// 🆕 Padrões de REEMBOLSO DE PEDIDO (COM OTP) - Devolução de pedido Kiwify
+// Reembolso agora exige OTP como ação financeira — mesma segurança do saque
 const REFUND_ACTION_PATTERNS = [
   /quero\s+reembolso/i,                               // "quero reembolso"
   /preciso\s+(de\s+)?reembolso/i,                     // "preciso de reembolso"
