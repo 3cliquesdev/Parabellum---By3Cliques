@@ -9511,6 +9511,22 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         // 🆕 FIX: Substituir mensagem pelo fallback e FICAR no nó (não retornar flow_advance_needed)
         console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇNÃO + flow_context â†’ substituindo mensagem e permanecendo no nó');
         assistantMessage = fallbackMessage;
+        isFallbackResponse = true; // 🆕 FIX Resíduo 2: Sinalizar como fallback para anti-loop
+        
+        // 🆕 FIX Resíduo 2: Incrementar counter anti-loop diretamente
+        try {
+          const { data: rvConv } = await supabaseClient.from('conversations').select('customer_metadata').eq('id', conversationId).single();
+          const rvMeta = (rvConv?.customer_metadata as any) || {};
+          const rvNodeId = flow_context.node_id || 'unknown';
+          const rvPrevNode = rvMeta.ai_node_current_id || '';
+          const rvCount = (rvPrevNode === rvNodeId) ? ((rvMeta.ai_node_fallback_count || 0) + 1) : 1;
+          await supabaseClient.from('conversations').update({
+            customer_metadata: { ...rvMeta, ai_node_current_id: rvNodeId, ai_node_fallback_count: rvCount }
+          }).eq('id', conversationId);
+          console.log(`[ai-autopilot-chat] 🔄 Restriction violation counter: ${rvCount} para nó ${rvNodeId}`);
+        } catch (rvErr: any) {
+          console.warn('[ai-autopilot-chat] ⚠️ Falha ao incrementar counter de restriction:', rvErr);
+        }
         
         Promise.resolve(supabaseClient.from('ai_quality_logs').insert({
           conversation_id: conversationId,
