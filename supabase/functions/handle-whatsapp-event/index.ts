@@ -1772,12 +1772,20 @@ async function handleOTPValidation(
         sender_id: null,
       });
     } else {
+      // 🆕 V5-F3: Refetch metadata fresco antes de incrementar tentativas OTP
+      const { data: freshOtpAttemptConv } = await supabase
+        .from('conversations')
+        .select('customer_metadata')
+        .eq('id', conversationId)
+        .maybeSingle();
+      const freshOtpAttemptMeta = (freshOtpAttemptConv?.customer_metadata || {}) as Record<string, any>;
+
       // Incrementar tentativas
       await supabase
         .from('conversations')
         .update({
           customer_metadata: {
-            ...metadata,
+            ...freshOtpAttemptMeta,
             otp_attempts: newAttempts,
           },
         })

@@ -2815,7 +2815,14 @@ serve(async (req) => {
           console.error('[ai-autopilot-chat] ❌ Erro ao verificar email:', verifyErr);
           
           // Em caso de erro, limpar estado e continuar processamento normal
-          const updatedMetadata = { ...customerMetadata };
+          // 🆕 V5-C2: Refetch metadata fresco no catch block também
+          const { data: freshErrConv } = await supabaseClient
+            .from('conversations')
+            .select('customer_metadata')
+            .eq('id', conversationId)
+            .maybeSingle();
+          const freshErrMeta = (freshErrConv?.customer_metadata || {}) as Record<string, any>;
+          const updatedMetadata = { ...freshErrMeta };
           delete updatedMetadata.awaiting_email_for_handoff;
           
           await supabaseClient.from('conversations')
