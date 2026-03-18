@@ -2091,6 +2091,7 @@ serve(async (req) => {
                     forbidCancellation: resolvedNode.data?.forbid_cancellation ?? false,
                     forbidSupport: resolvedNode.data?.forbid_support ?? false,
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
+                    ticketConfig: resolvedNode.data?.ticket_config || null,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
