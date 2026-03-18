@@ -290,15 +290,15 @@ export default function Inbox() {
     // Filter by URL param
     switch (filter) {
       case "ai_queue":
-        return result.filter(c => c.ai_mode === 'autopilot' && c.status !== 'closed');
+        return result.filter(c => (c.ai_mode === 'autopilot' || c.ai_mode === 'waiting_human') && !c.assigned_to && c.status !== 'closed');
       case "human_queue":
         if (role === 'admin' || role === 'manager' || role === 'support_manager' || role === 'cs_manager' || role === 'general_manager') {
-          return result.filter(c => c.ai_mode !== 'autopilot' && c.status !== 'closed');
+          return result.filter(c => c.ai_mode !== 'autopilot' && c.ai_mode !== 'waiting_human' && c.status !== 'closed');
         }
         if (departmentFilter) {
-          return result.filter(c => c.ai_mode !== 'autopilot' && c.status !== 'closed');
+          return result.filter(c => c.ai_mode !== 'autopilot' && c.ai_mode !== 'waiting_human' && c.status !== 'closed');
         }
-        return result.filter(c => c.ai_mode !== 'autopilot' && c.assigned_to === user?.id && c.status !== 'closed');
+        return result.filter(c => c.ai_mode !== 'autopilot' && c.ai_mode !== 'waiting_human' && c.assigned_to === user?.id && c.status !== 'closed');
       case "mine":
         return result.filter(c => c.assigned_to === user?.id && c.status !== 'closed');
       case "not_responded":
