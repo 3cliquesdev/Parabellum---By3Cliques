@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Search, Plus, Edit, Trash2, BookOpen, Eye, EyeOff, Upload, Sparkles, AlertTriangle, GraduationCap } from "lucide-react";
+import { Search, Plus, Edit, Trash2, BookOpen, Eye, EyeOff, Upload, Sparkles, AlertTriangle, GraduationCap, FileText, SearchCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useKnowledgeArticles } from "@/hooks/useKnowledgeArticles";
 import { useDeleteKnowledgeArticle } from "@/hooks/useDeleteKnowledgeArticle";
 import { useGenerateBatchEmbeddings } from "@/hooks/useGenerateBatchEmbeddings";
@@ -13,6 +14,7 @@ import { useRolePermissions } from "@/hooks/useRolePermissions";
 import { useKnowledgeStats } from "@/hooks/useKnowledgeStats";
 import { useKnowledgeCandidateStats } from "@/hooks/useKnowledgeCandidates";
 import { KnowledgeBrainStatus } from "@/components/KnowledgeBrainStatus";
+import { KnowledgeAuditTab } from "@/components/KnowledgeAuditTab";
 import KnowledgeArticleDialog from "@/components/KnowledgeArticleDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -37,8 +39,8 @@ export default function Knowledge() {
   const [selectedArticle, setSelectedArticle] = useState<any>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [articleToDelete, setArticleToDelete] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("artigos");
   
-  // 🆕 FASE 2: Filtrar por draft se ?filter=draft
   const [showDraftsOnly] = useState(filterParam === 'draft');
 
   const { data: articles = [], isLoading } = useKnowledgeArticles({ searchQuery, category });
@@ -48,13 +50,10 @@ export default function Knowledge() {
   const { data: stats } = useKnowledgeStats();
   const { data: candidateStats } = useKnowledgeCandidateStats();
 
-  // Dynamic permission check
   const canManageArticles = hasPermission('knowledge.manage_articles');
 
-  // Extract unique categories
   const categories = ["all", ...Array.from(new Set(articles.map(a => a.category).filter(Boolean)))];
   
-  // 🆕 FASE 2: Filtrar artigos (drafts ou todos)
   const filteredArticles = showDraftsOnly 
     ? articles.filter(a => !a.is_published) 
     : articles;
@@ -97,7 +96,6 @@ export default function Knowledge() {
         </div>
         {canManageArticles && (
           <div className="flex gap-2">
-            {/* 🆕 FASE 2: Botão de Curadoria com badge de pendentes */}
             {candidateStats && candidateStats.pending > 0 && (
               <Button 
                 variant="outline" 
@@ -177,118 +175,142 @@ export default function Knowledge() {
         </Alert>
       )}
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1" data-tour="knowledge-search">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por título ou conteúdo..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as categorias</SelectItem>
-                {categories.filter(c => c !== "all").map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Tabs: Artigos | Auditoria */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="artigos" className="gap-2">
+            <FileText className="h-4 w-4" />
+            Artigos
+          </TabsTrigger>
+          {canManageArticles && (
+            <TabsTrigger value="auditoria" className="gap-2">
+              <SearchCheck className="h-4 w-4" />
+              Auditoria
+            </TabsTrigger>
+          )}
+        </TabsList>
 
-      {/* Articles List */}
-      {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">
-          Carregando artigos...
-        </div>
-      ) : filteredArticles.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">
-              {searchQuery || category !== "all" 
-                ? "Nenhum artigo encontrado com os filtros aplicados"
-                : showDraftsOnly
-                ? "Nenhum rascunho disponível"
-                : "Nenhum artigo disponível ainda"}
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4">
-          {filteredArticles.map((article) => (
-            <Card key={article.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <CardTitle className="text-xl">{article.title}</CardTitle>
-                      {!article.is_published && (
-                        <Badge variant="secondary" className="gap-1">
-                          <EyeOff className="h-3 w-3" />
-                          Rascunho
-                        </Badge>
-                      )}
-                      {article.is_published && (
-                        <Badge variant="default" className="gap-1">
-                          <Eye className="h-3 w-3" />
-                          Publicado
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {article.category && (
-                        <Badge variant="outline">{article.category}</Badge>
-                      )}
-                      {article.tags?.map((tag: string) => (
-                        <Badge key={tag} variant="secondary" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
+        <TabsContent value="artigos" className="space-y-4">
+          {/* Filters */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1" data-tour="knowledge-search">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por título ou conteúdo..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
                   </div>
-                  {canManageArticles && (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(article)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteClick(article.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  )}
                 </div>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="line-clamp-3 whitespace-pre-wrap">
-                  {article.content}
-                </CardDescription>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger className="w-full sm:w-[200px]">
+                    <SelectValue placeholder="Categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as categorias</SelectItem>
+                    {categories.filter(c => c !== "all").map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Articles List */}
+          {isLoading ? (
+            <div className="text-center py-12 text-muted-foreground">
+              Carregando artigos...
+            </div>
+          ) : filteredArticles.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">
+                  {searchQuery || category !== "all" 
+                    ? "Nenhum artigo encontrado com os filtros aplicados"
+                    : showDraftsOnly
+                    ? "Nenhum rascunho disponível"
+                    : "Nenhum artigo disponível ainda"}
+                </p>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="grid gap-4">
+              {filteredArticles.map((article) => (
+                <Card key={article.id} className="hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <CardTitle className="text-xl">{article.title}</CardTitle>
+                          {!article.is_published && (
+                            <Badge variant="secondary" className="gap-1">
+                              <EyeOff className="h-3 w-3" />
+                              Rascunho
+                            </Badge>
+                          )}
+                          {article.is_published && (
+                            <Badge variant="default" className="gap-1">
+                              <Eye className="h-3 w-3" />
+                              Publicado
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {article.category && (
+                            <Badge variant="outline">{article.category}</Badge>
+                          )}
+                          {article.tags?.map((tag: string) => (
+                            <Badge key={tag} variant="secondary" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      {canManageArticles && (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(article)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteClick(article.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription className="line-clamp-3 whitespace-pre-wrap">
+                      {article.content}
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {canManageArticles && (
+          <TabsContent value="auditoria">
+            <KnowledgeAuditTab />
+          </TabsContent>
+        )}
+      </Tabs>
 
       {/* Dialogs */}
       <KnowledgeArticleDialog
@@ -313,7 +335,6 @@ export default function Knowledge() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </div>
   );
 }
