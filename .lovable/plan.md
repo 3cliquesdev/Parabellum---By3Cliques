@@ -72,3 +72,26 @@
 - Migration RLS ✅
 - `useInboxView.tsx` ✅ (3 blocos corrigidos)
 - `get-inbox-counts` ✅ re-deployed
+
+## Fixes V15 (Deploy realizado)
+
+### Bug 27 ✅ — Telemetria skipInitialMessage no webhook Meta
+- **Fix:** Logs estruturados com conversationId, contactId, nodeId, flowId, timestamp e originalMessage
+- Permite diagnosticar se `skipInitialMessage` é propagado na primeira transição menu → AI node
+
+### Bug 28+30 ✅ — Nó financeiro sem edges de intenção cruzada
+- **Fix:** Atualizado `flow_definition` do fluxo `cafe2831` (V5 Enterprise):
+  - Adicionado edge `cancelamento`: `node_ia_financeiro` → `node_ia_cancelamento`
+  - Adicionado edge `saque`: `node_ia_financeiro` → `node_escape_financeiro`
+  - Setado `forbid_cancellation: true` e `forbid_commercial: true` no `node_ia_financeiro`
+
+### Bug 29 ✅ — OTP alucinado pela LLM dentro de fluxos ativos
+- **Fix 1:** Removido guard `!flow_context` em L6421 do `ai-autopilot-chat`
+  - OTP agora funciona como camada transversal de segurança, independente do fluxo ativo
+- **Fix 2:** Adicionada regra anti-alucinação OTP no `generateRestrictedPrompt`
+  - LLM proibida de prometer envio de códigos, OTP ou verificação por email
+
+## Deploy V15
+- `ai-autopilot-chat` ✅ re-deployed
+- `meta-whatsapp-webhook` ✅ re-deployed
+- Flow `cafe2831` ✅ atualizado (edges + flags)
