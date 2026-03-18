@@ -114,3 +114,19 @@
 - `process-chat-flow` ✅ re-deployed
 - `ai-autopilot-chat` ✅ re-deployed
 - Flow `cafe2831` ✅ atualizado (objective + smart_collection)
+
+## Fixes V16.1 (Deploy realizado)
+
+### Bug 33 ✅ — Trava financeira ENTRADA bloqueia coleta pós-OTP
+- **Fix:** Adicionado `!otpAlreadyVerified` (derivado de `flow_context?.otpVerified`) na condição L1639
+- Quando OTP já verificado, mensagem financeira bypassa o guard e chega à LLM para coleta de dados
+
+### Bug 34 ✅ — `financialGuardInstruction` contradiz `otpVerifiedInstruction` no prompt
+- **Fix:** Condicionado `financialGuardInstruction` a `!flow_context?.otpVerified` (L6721)
+- Quando OTP verificado, apenas `otpVerifiedInstruction` é injetado (coleta de dados), sem contradição
+
+### Bug 35 (MENOR) — Flags `smart_collection_*` sem código consumidor
+- Sem impacto funcional — instrução via prompt é suficiente
+
+## Deploy V16.1
+- `ai-autopilot-chat` ✅ re-deployed
