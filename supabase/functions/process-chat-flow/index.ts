@@ -5808,6 +5808,7 @@ serve(async (req) => {
           forbidCancellation: startNode.data?.forbid_cancellation ?? false,
           forbidSupport: startNode.data?.forbid_support ?? false,
           forbidConsultant: startNode.data?.forbid_consultant ?? false,
+          ticketConfig: startNode.data?.ticket_config || null,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
