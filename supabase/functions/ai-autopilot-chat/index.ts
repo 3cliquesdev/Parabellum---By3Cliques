@@ -7270,9 +7270,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           console.warn('[ai-autopilot-chat] Falha ao enviar saudação proativa:', e);
         }
       }
-      return new Response(JSON.stringify({ success: true, proactiveGreeting: true, message: assistantMessageGreeting }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      // cache-bust: 2026-03-18T01:40Z — NÃO retornar aqui; deixar o fluxo continuar para a LLM processar a mensagem do cliente
+      console.log('[ai-autopilot-chat] ✅ Saudação proativa concluída, continuando para processar mensagem do cliente pela LLM');
     }
 
 
