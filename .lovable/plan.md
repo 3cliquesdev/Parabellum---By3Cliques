@@ -1,14 +1,10 @@
 
 
-# Deploy de 2 Edge Functions — Cache-bust + Fallback + Anti-loop
+# Redeploy `ai-autopilot-chat` com correção de encoding
 
-## Plano
+## Ação
+Redeploy da Edge Function `ai-autopilot-chat` que contém a correção de 2000+ ocorrências de mojibake, conforme o último commit do GitHub.
 
-Deploy das funções corrigidas no último commit:
-
-1. `ai-autopilot-chat` — cache-bust timestamp, novas entradas no FALLBACK_PHRASES
-2. `dispatch-conversations` — anti-loop para conversas órfãs fora do horário
-
-## Critério de Sucesso
-- Ambas deployadas sem erros
+## Passo único
+- Deploy da função `ai-autopilot-chat` via ferramenta de deploy de Edge Functions.
 
