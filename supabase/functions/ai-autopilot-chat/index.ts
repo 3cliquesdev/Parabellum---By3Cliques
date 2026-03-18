@@ -2172,11 +2172,19 @@ serve(async (req) => {
                 : `**Código inválido**\n\n${errorMessage}\n\nDigite **"reenviar"** se precisar de um novo código.`;
 
               if (otpData?.success) {
+                // 🆕 V5-A: Refetch metadata fresco para não sobrescrever flags incrementais
+                const { data: freshOtpPriorityConv } = await supabaseClient
+                  .from('conversations')
+                  .select('customer_metadata')
+                  .eq('id', conversationId)
+                  .maybeSingle();
+                const freshOtpPriorityMeta = (freshOtpPriorityConv?.customer_metadata || {}) as Record<string, any>;
+
                 await supabaseClient
                   .from('conversations')
                   .update({
                     customer_metadata: {
-                      ...conversationMetadata,
+                      ...freshOtpPriorityMeta,
                       awaiting_otp: false,
                       otp_expires_at: null,
                       last_otp_verified_at: new Date().toISOString()
@@ -2237,7 +2245,13 @@ serve(async (req) => {
       // Se IA pediu confirmação de encerramento, processar resposta
       // ============================================================
       {
-        const closeMeta = conversation.customer_metadata || {};
+        // 🆕 V5-B: Refetch metadata fresco para não sobrescrever flags incrementais no close confirmation
+        const { data: freshCloseConv } = await supabaseClient
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const closeMeta = (freshCloseConv?.customer_metadata || {}) as Record<string, any>;
         if (closeMeta.awaiting_close_confirmation === true) {
           const msgLower = (customerMessage || '').toLowerCase().trim();
           
@@ -2549,8 +2563,16 @@ serve(async (req) => {
             customer: verifyResult?.customer?.email
           });
           
+          // 🆕 V5-C: Refetch metadata fresco para não sobrescrever flags incrementais
+          const { data: freshEmailHandoffConv } = await supabaseClient
+            .from('conversations')
+            .select('customer_metadata')
+            .eq('id', conversationId)
+            .maybeSingle();
+          const freshEmailHandoffMeta = (freshEmailHandoffConv?.customer_metadata || {}) as Record<string, any>;
+
           // Limpar estado awaiting_email_for_handoff SEMPRE (evita loop)
-          const updatedMetadata = { ...customerMetadata };
+          const updatedMetadata = { ...freshEmailHandoffMeta };
           delete updatedMetadata.awaiting_email_for_handoff;
           delete updatedMetadata.handoff_blocked_at;
           delete updatedMetadata.handoff_blocked_reason;
@@ -2793,7 +2815,14 @@ serve(async (req) => {
           console.error('[ai-autopilot-chat] ❌ Erro ao verificar email:', verifyErr);
           
           // Em caso de erro, limpar estado e continuar processamento normal
-          const updatedMetadata = { ...customerMetadata };
+          // 🆕 V5-C2: Refetch metadata fresco no catch block também
+          const { data: freshErrConv } = await supabaseClient
+            .from('conversations')
+            .select('customer_metadata')
+            .eq('id', conversationId)
+            .maybeSingle();
+          const freshErrMeta = (freshErrConv?.customer_metadata || {}) as Record<string, any>;
+          const updatedMetadata = { ...freshErrMeta };
           delete updatedMetadata.awaiting_email_for_handoff;
           
           await supabaseClient.from('conversations')
@@ -5569,11 +5598,19 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           originalIntentCategory
         });
         
+        // 🆕 V5-E: Refetch metadata fresco para não sobrescrever flags incrementais
+        const { data: freshHandoffLeadConv } = await supabaseClient
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const freshHandoffLeadMeta = (freshHandoffLeadConv?.customer_metadata || {}) as Record<string, any>;
+
         // Atualizar metadata para rastrear que estamos aguardando email + CONTEXTO ORIGINAL
         await supabaseClient.from('conversations')
           .update({
             customer_metadata: {
-              ...(conversation.customer_metadata || {}),
+              ...freshHandoffLeadMeta,
               awaiting_email_for_handoff: true,
               handoff_blocked_at: new Date().toISOString(),
               handoff_blocked_reason: 'low_confidence_lead_without_email',
@@ -7321,9 +7358,15 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         status: 'sending',
         channel: responseChannel,
       });
-      // 🆕 FIX Resíduo 2: Salvar flag de saudação no metadata para impedir loops
+      // 🆕 V5-D: Refetch metadata fresco antes de salvar greeting flag
       try {
-        const updatedMeta = { ...(customerMetadata as any || {}), [greetingFlagKey]: true };
+        const { data: freshGreetConv } = await supabaseClient
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const freshGreetMeta = (freshGreetConv?.customer_metadata || {}) as Record<string, any>;
+        const updatedMeta = { ...freshGreetMeta, [greetingFlagKey]: true };
         await supabaseClient.from('conversations').update({ customer_metadata: updatedMeta }).eq('id', conversationId);
         console.log(`[ai-autopilot-chat] 🏷️ Flag ${greetingFlagKey} salva no metadata`);
       } catch (flagErr: any) {

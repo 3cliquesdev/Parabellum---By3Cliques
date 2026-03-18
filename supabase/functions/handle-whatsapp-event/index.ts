@@ -897,11 +897,19 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         }
 
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        // 🆕 V5-F1: Refetch metadata fresco antes de update OTP
+        const { data: freshOtpStartConv } = await supabase
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const freshOtpStartMeta = (freshOtpStartConv?.customer_metadata || {}) as Record<string, any>;
+
         await supabase
           .from('conversations')
           .update({
             customer_metadata: {
-              ...metadata,
+              ...freshOtpStartMeta,
               awaiting_otp: true,
               claimant_email: claimedEmail,
               claimed_contact_id: existingEmailContact.id,
@@ -1715,11 +1723,19 @@ async function handleOTPValidation(
       // 🚨 BLOQUEIO POR EXCESSO DE TENTATIVAS (MÁXIMO 3)
       console.log('[handle-whatsapp-event] 🚨 Max OTP attempts reached (3) - triggering fraud alert');
 
+      // 🆕 V5-F2: Refetch metadata fresco antes de bloquear OTP
+      const { data: freshOtpBlockConv } = await supabase
+        .from('conversations')
+        .select('customer_metadata')
+        .eq('id', conversationId)
+        .maybeSingle();
+      const freshOtpBlockMeta = (freshOtpBlockConv?.customer_metadata || {}) as Record<string, any>;
+
       await supabase
         .from('conversations')
         .update({
           customer_metadata: {
-            ...metadata,
+            ...freshOtpBlockMeta,
             otp_blocked: true,
             otp_blocked_at: new Date().toISOString(),
             otp_attempts: newAttempts,
@@ -1756,12 +1772,20 @@ async function handleOTPValidation(
         sender_id: null,
       });
     } else {
+      // 🆕 V5-F3: Refetch metadata fresco antes de incrementar tentativas OTP
+      const { data: freshOtpAttemptConv } = await supabase
+        .from('conversations')
+        .select('customer_metadata')
+        .eq('id', conversationId)
+        .maybeSingle();
+      const freshOtpAttemptMeta = (freshOtpAttemptConv?.customer_metadata || {}) as Record<string, any>;
+
       // Incrementar tentativas
       await supabase
         .from('conversations')
         .update({
           customer_metadata: {
-            ...metadata,
+            ...freshOtpAttemptMeta,
             otp_attempts: newAttempts,
           },
         })
