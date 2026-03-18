@@ -9430,11 +9430,27 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             input_summary: customerMessage?.substring(0, 200) || '',
           })).catch((err: any) => console.error('[ai-autopilot-chat] âš ï¸ Failed to log escape event:', err));
           
-          // 🆕 FIX: Substituir mensagem e FICAR no nó (não retornar flowExit)
-          console.log('[ai-autopilot-chat] 🔄 Contract violation + flow_context â†’ substituindo mensagem e permanecendo no nó');
+          // FIX Residuo 1: Substituir msg + UPDATE DIRETO counter (race condition fix)
+          console.log('[ai-autopilot-chat] Contract violation - substituindo msg e permanecendo no no');
           assistantMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
-          isFallbackResponse = true; // FIX BUG 2: incrementar fallback count para anti-loop
-          // Continua execução normal â€” mensagem será persistida abaixo
+          isFallbackResponse = true;
+          try {
+            const { data: freshMetaCV } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .single();
+            const metaCV = (freshMetaCV?.customer_metadata as Record<string, any>) || {};
+            const cvNodeId = flow_context.node_id;
+            const cvPrevNode = metaCV.ai_node_current_id || null;
+            const cvCount = (cvPrevNode === cvNodeId) ? ((metaCV.ai_node_fallback_count || 0) + 1) : 1;
+            await supabaseClient.from('conversations').update({
+              customer_metadata: { ...metaCV, ai_node_current_id: cvNodeId, ai_node_fallback_count: cvCount }
+            }).eq('id', conversationId);
+            console.log('[ai-autopilot-chat] Contract violation counter: ' + cvCount);
+          } catch (counterErr: any) {
+            console.error('[ai-autopilot-chat] Falha counter direto:', counterErr);
+          }
         }
       }
       
