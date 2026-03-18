@@ -1479,16 +1479,22 @@ serve(async (req) => {
 
     let { conversationId, customerMessage, maxHistory = 20, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
 
-    // 🔒 FIX 1: Hard validation â€” customerMessage obrigatório (exceto warmup)
+    // 🔒 Proactive greeting: allow empty customerMessage when flow_context is present
+    const isProactiveGreeting = (!customerMessage || (typeof customerMessage === 'string' && customerMessage.trim() === '')) && !!flow_context;
     if (!customerMessage || typeof customerMessage !== 'string' || customerMessage.trim() === '') {
-      console.error('[ai-autopilot-chat] ❌ BAD_REQUEST: customerMessage ausente ou vazio');
-      return new Response(JSON.stringify({ 
-        error: 'BAD_REQUEST', 
-        detail: 'customerMessage is required and must be a non-empty string' 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      if (isProactiveGreeting) {
+        customerMessage = '[SYSTEM: O cliente acabou de chegar neste atendimento pelo menu. Apresente-se brevemente e pergunte como pode ajudar.]';
+        console.log('[ai-autopilot-chat] 🎯 Saudacao proativa ativada via flow_context (skipInitialMessage)');
+      } else {
+        console.error('[ai-autopilot-chat] ❌ BAD_REQUEST: customerMessage ausente ou vazio');
+        return new Response(JSON.stringify({ 
+          error: 'BAD_REQUEST', 
+          detail: 'customerMessage is required and must be a non-empty string' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
     
     // 🆕 Carregar RAGConfig uma única vez para todo o handler
