@@ -2624,6 +2624,7 @@ serve(async (req) => {
       let consultorIntentMatch = false;
       let consultorHasConsultant = false;
       let aiExitForced = false;
+      let pendingFallbackMsg = ''; // 🆕 V16 Bug 31: Fallback acumulado para combinar com próximo nó
       let saqueIntentMatch = false;
       let devolucaoIntentMatch = false;
       let pedidosIntentMatch = false;
