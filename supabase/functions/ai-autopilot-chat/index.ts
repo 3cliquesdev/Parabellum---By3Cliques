@@ -6468,7 +6468,7 @@ Este cliente NÃO tem email cadastrado no sistema.
 5. **SE EMAIL ENCONTRADO NA BASE:**
    - Cumprimente o cliente pelo nome e pergunte como pode ajudar
    - NÃO precisa de OTP para atendimento normal (rastreio, dúvidas, etc.)
-   - OTP só será pedido se cliente solicitar SAQUE DE SALDO
+   - OTP só será pedido se cliente solicitar AÇÃO FINANCEIRA (saque, reembolso, estorno)
 
 **IMPORTANTE:** NÃO atenda dúvidas técnicas até o email ser verificado na base.`;
     } else if (isPhoneVerified && !contactHasEmail && !isKiwifyValidated) {
