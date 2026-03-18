@@ -8,6 +8,7 @@ import { AIDebugTooltip } from "@/components/AIDebugTooltip";
 import { ChannelIcon } from "@/components/ChannelIcon";
 import { MediaPreview } from "./MediaPreview";
 import { Button } from "@/components/ui/button";
+import { useTemplateContent } from "@/hooks/useTemplateContent";
 
 interface MessageSender {
   id: string;
@@ -48,6 +49,90 @@ interface MessageBubbleProps {
   onRetryMessage?: () => void;
   isRetrying?: boolean;
   metadata?: Record<string, any> | null;
+}
+
+// Extracted component to allow hook usage for template DB fallback
+function TemplateOrTextContent({ content, metadata, isCustomer, isAI }: {
+  content: string;
+  metadata?: Record<string, any> | null;
+  isCustomer: boolean;
+  isAI: boolean;
+}) {
+  const isTemplate = content?.startsWith("📋 *Template:") || content?.startsWith("[Template:");
+  
+  // Extract template name for DB fallback
+  let templateNameForQuery: string | null = null;
+  if (isTemplate) {
+    const lines = content.split("\n");
+    const headerLine = lines[0]
+      .replace("📋 *Template:", "")
+      .replace("[Template:", "")
+      .replace("*", "")
+      .replace("]", "")
+      .trim();
+    const bodyLines = lines.slice(1).filter(l => l.trim()).join("\n");
+    if (!bodyLines && !metadata?.template_body) {
+      templateNameForQuery = headerLine;
+    }
+  }
+
+  const { data: dbTemplateBody } = useTemplateContent(templateNameForQuery);
+
+  if (!content) return null;
+
+  if (isTemplate) {
+    const lines = content.split("\n");
+    const headerLine = lines[0]
+      .replace("📋 *Template:", "")
+      .replace("[Template:", "")
+      .replace("*", "")
+      .replace("]", "")
+      .trim();
+    let bodyLines = lines.slice(1).filter(l => l.trim()).join("\n");
+    
+    if (!bodyLines && metadata?.template_body) {
+      bodyLines = metadata.template_body;
+    }
+    if (!bodyLines && dbTemplateBody) {
+      bodyLines = dbTemplateBody;
+    }
+    
+    const isOutgoing = !isCustomer && !isAI;
+    
+    return (
+      <div className="space-y-2 min-w-[200px]">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <FileText className={cn("h-3.5 w-3.5 shrink-0", isOutgoing ? "text-white/70" : "text-muted-foreground")} />
+          <span className={cn(
+            "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded",
+            isOutgoing 
+              ? "bg-white/20 text-white/90" 
+              : "bg-muted text-muted-foreground"
+          )}>
+            Template
+          </span>
+          <span className={cn("text-xs font-medium", isOutgoing ? "text-white/80" : "text-foreground/70")}>
+            {headerLine}
+          </span>
+        </div>
+        {bodyLines && (
+          <div className={cn(
+            "text-sm whitespace-pre-wrap [word-break:break-word] pt-2 mt-1",
+            isOutgoing ? "border-t border-white/15" : "border-t border-border/50"
+          )}>
+            <SafeHTML html={bodyLines} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <SafeHTML
+      html={content}
+      className="text-sm whitespace-pre-wrap [word-break:break-word]"
+    />
+  );
 }
 
 // Pure function — no per-bubble interval. Parent passes _tick to force re-render.
@@ -243,59 +328,12 @@ export function MessageBubble({
           )}
 
           {/* Text Content */}
-          {content && (() => {
-            const isTemplate = content.startsWith("📋 *Template:") || content.startsWith("[Template:");
-            if (isTemplate) {
-              const lines = content.split("\n");
-              const headerLine = lines[0]
-                .replace("📋 *Template:", "")
-                .replace("[Template:", "")
-                .replace("*", "")
-                .replace("]", "")
-                .trim();
-              let bodyLines = lines.slice(1).filter(l => l.trim()).join("\n");
-              
-              // Fallback: se não tem body no content, buscar do metadata
-              if (!bodyLines && metadata?.template_body) {
-                bodyLines = metadata.template_body;
-              }
-              
-              const isOutgoing = !isCustomer && !isAI;
-              
-              return (
-                <div className="space-y-2 min-w-[200px]">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <FileText className={cn("h-3.5 w-3.5 shrink-0", isOutgoing ? "text-white/70" : "text-muted-foreground")} />
-                    <span className={cn(
-                      "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded",
-                      isOutgoing 
-                        ? "bg-white/20 text-white/90" 
-                        : "bg-muted text-muted-foreground"
-                    )}>
-                      Template
-                    </span>
-                    <span className={cn("text-xs font-medium truncate max-w-[180px]", isOutgoing ? "text-white/80" : "text-foreground/70")}>
-                      {headerLine}
-                    </span>
-                  </div>
-                  {bodyLines && (
-                    <div className={cn(
-                      "text-sm whitespace-pre-wrap [word-break:break-word] pt-2 mt-1",
-                      isOutgoing ? "border-t border-white/15" : "border-t border-border/50"
-                    )}>
-                      <SafeHTML html={bodyLines} />
-                    </div>
-                  )}
-                </div>
-              );
-            }
-            return (
-              <SafeHTML
-                html={content}
-                className="text-sm whitespace-pre-wrap [word-break:break-word]"
-              />
-            );
-          })()}
+          <TemplateOrTextContent
+            content={content}
+            metadata={metadata}
+            isCustomer={isCustomer}
+            isAI={isAI}
+          />
 
           {/* Metadata Row */}
           <div className={cn(
