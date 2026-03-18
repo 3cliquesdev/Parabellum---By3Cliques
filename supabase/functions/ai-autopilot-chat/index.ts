@@ -8106,7 +8106,13 @@ Via: Atendimento Automatizado (IA)`;
                 .replace(/\{\{description\}\}/g, args.description || '')
                 .replace(/\{\{issue_type\}\}/g, args.issue_type || '')
                 .replace(/\{\{customer_name\}\}/g, contactName || '')
-                .replace(/\{\{order_id\}\}/g, args.order_id || '');
+                .replace(/\{\{order_id\}\}/g, args.order_id || '')
+                .replace(/\{\{customer_email\}\}/g, contact?.email || '')
+                .replace(/\{\{customer_phone\}\}/g, contact?.phone || '')
+                .replace(/\{\{pix_key\}\}/g, args.pix_key || '')
+                .replace(/\{\{amount\}\}/g, args.withdrawal_amount ? `R$ ${args.withdrawal_amount.toFixed(2)}` : '')
+                .replace(/\{\{reason\}\}/g, args.description || '')
+                .replace(/\{\{bank\}\}/g, args.bank || '');
               if (templatedDesc.trim()) ticketDescription = templatedDesc;
             }
 
