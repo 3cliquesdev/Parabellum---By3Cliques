@@ -7626,7 +7626,57 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }
     }
 
-    const aiData = await callAIWithFallback(aiPayload);
+    // 🆕 FIX Bug 42: Detecção pré-LLM de intenção de cancelamento
+    // Quando o nó tem forbidCancellation=true (rota de escape existe), detectar cancelamento antes da LLM
+    if (hasCancelIntent && flow_context?.forbidCancellation) {
+      console.log(`[ai-autopilot-chat] 🎯 Bug 42: Intenção de CANCELAMENTO detectada PRÉ-LLM: "${customerMsgTrimmed}" — disparando [[FLOW_EXIT:cancelamento]]`);
+      // Telemetria
+      Promise.resolve(supabaseClient.from('ai_events').insert({
+        entity_type: 'conversation',
+        entity_id: conversationId,
+        event_type: 'cancel_intent_pre_llm',
+        model: 'system',
+        score: 0,
+        output_json: { message: customerMsgTrimmed, hasCancelIntent: true, forbidCancellation: true },
+      })).catch(() => {});
+
+      const cancelMsg = 'Entendido! Vou direcionar você para o setor responsável pelo cancelamento. Um momento, por favor! 🙏';
+      // Salvar mensagem
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: cancelMsg,
+        sender_type: 'user',
+        message_type: 'ai_response',
+        is_ai_generated: true,
+        sender_id: null,
+        status: 'sending',
+        channel: responseChannel,
+      });
+      if (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta') {
+        try {
+          const whatsappResult = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, conversation.whatsapp_instance_id, conversation);
+          if (whatsappResult && whatsappResult.provider === 'meta') {
+            const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+            await supabaseClient.functions.invoke('send-meta-whatsapp', {
+              body: { instance_id: whatsappResult.instance.id, phone_number: targetNumber, message: cancelMsg, conversation_id: conversationId, skip_db_save: true, is_bot_message: true }
+            });
+          }
+        } catch (e: any) {
+          console.warn('[ai-autopilot-chat] Falha ao enviar msg cancel intent:', e);
+        }
+      }
+      return new Response(JSON.stringify({
+        flowExit: true,
+        reason: 'cancel_intent_pre_llm',
+        ai_exit_intent: 'cancelamento',
+        hasFlowContext: !!flow_context,
+        response: cancelMsg,
+        message: cancelMsg,
+        flow_context: flow_context ? { flow_id: flow_context.flow_id, node_id: flow_context.node_id } : undefined,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+
     // âœ… FIX 2: Fallback não usa 'Desculpe' que está na lista de frases proibidas (auto-loop).
     let rawAIContent = aiData.choices?.[0]?.message?.content;
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
