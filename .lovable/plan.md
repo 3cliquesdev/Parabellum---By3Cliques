@@ -130,3 +130,13 @@
 
 ## Deploy V16.1
 - `ai-autopilot-chat` ✅ re-deployed
+
+## Fixes V16.2 (Deploy realizado)
+
+### Bug 36 ✅ — `financialIntentMatch` no `process-chat-flow` ignora OTP verificado
+- **Fix:** Adicionado `!otpVerifiedInFlow` (derivado de `collectedData.__ai_otp_verified`) na condição L3336
+- Quando OTP verificado, `financialIntentMatch` é suprimido → mensagem permanece no nó AI para coleta de dados
+- Log de telemetria adicionado para diagnóstico
+
+## Deploy V16.2
+- `process-chat-flow` ✅ re-deployed

@@ -3333,9 +3333,15 @@ serve(async (req) => {
           console.log(`[process-chat-flow] 🔍 DESAMBIGUAÇÃO FINANCEIRA: Termo ambíguo detectado, deixando IA perguntar | msg="${(userMessage || '').substring(0, 80)}"`);
         }
         
+        // 🆕 V16.2 Bug 36: Suprimir financialIntentMatch quando OTP já verificado (coleta pós-OTP)
+        const otpVerifiedInFlow = !!(collectedData?.__ai_otp_verified);
         financialIntentMatch =
-          (forceFinancialExit && forbidFinancial) ||
-          (forbidFinancial && msgLower.length > 0 && isFinancialAction && !isFinancialInfo);
+          !otpVerifiedInFlow &&
+          ((forceFinancialExit && forbidFinancial) ||
+           (forbidFinancial && msgLower.length > 0 && isFinancialAction && !isFinancialInfo));
+        if (otpVerifiedInFlow && (isFinancialAction || forceFinancialExit)) {
+          console.log('[process-chat-flow] 🔓 V16.2 Bug36: OTP verificado — financialIntentMatch SUPRIMIDO, mantendo no nó AI para coleta');
+        }
         if (forceFinancialExit) {
           console.log('[process-chat-flow] 🔒 forceFinancialExit=true recebido do webhook, forçando exit do nó AI');
         }
