@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RAGSourcesSection } from "./panels/RAGSourcesSection";
+import { ClickableVariableBadge } from "./ClickableVariableBadge";
 import { SmartCollectionSection } from "./panels/SmartCollectionSection";
 import { BehaviorControlsSection } from "./panels/BehaviorControlsSection";
 import { Switch } from "@/components/ui/switch";
