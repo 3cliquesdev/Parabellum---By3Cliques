@@ -9016,15 +9016,21 @@ Conversa: ${conversationId}`;
     }
 
     // 🆕 FIX LOOP: Atualizar contador de fallbacks no customer_metadata
+    // 🆕 FIX Resíduo 3: Refetch metadata fresco para não sobrescrever greeting flags
     if (flow_context) {
-      const existingMetadata = conversation.customer_metadata || {};
+      const { data: freshConv } = await supabaseClient
+        .from('conversations')
+        .select('customer_metadata')
+        .eq('id', conversationId)
+        .single();
+      const existingMetadata = (freshConv?.customer_metadata as Record<string, any>) || {};
       const aiNodeId = existingMetadata.ai_node_current_id || null;
       let newCount = 0;
       
       if (isFallbackResponse) {
         newCount = (aiNodeId === flow_context.node_id) ? ((existingMetadata.ai_node_fallback_count || 0) + 1) : 1;
       }
-      // Sempre atualizar o nó atual e o contador
+      // Sempre atualizar o nó atual e o contador (merge incremental preserva greeting flags)
       await supabaseClient
         .from('conversations')
         .update({
