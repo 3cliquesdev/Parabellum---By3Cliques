@@ -8,6 +8,7 @@ import { AIDebugTooltip } from "@/components/AIDebugTooltip";
 import { ChannelIcon } from "@/components/ChannelIcon";
 import { MediaPreview } from "./MediaPreview";
 import { Button } from "@/components/ui/button";
+import { useTemplateContent } from "@/hooks/useTemplateContent";
 
 interface MessageSender {
   id: string;
