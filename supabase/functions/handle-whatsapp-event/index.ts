@@ -1316,6 +1316,13 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         flowHandled = true;
 
         try {
+          // 🆕 V16.3 Bug 38: Determinar mensagem efetiva (skipInitialMessage → mensagem vazia para saudação proativa)
+          let effectiveMessage = messageText;
+          if (flowResult.skipInitialMessage === true) {
+            console.log(`[handle-whatsapp-event] 🆕 V16.3 Bug 38: skipInitialMessage=true — substituindo "${messageText}" por "" para saudação proativa`);
+            effectiveMessage = '';
+          }
+
           // Construir flow_context idêntico ao meta-whatsapp-webhook
           const flowContext = flowResult.flow_context || {
             flow_id: flowResult.flowId || flowResult.masterFlowId,
@@ -1325,11 +1332,12 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             response_format: 'text_only',
             personaId: flowResult.personaId || null,
             kbCategories: flowResult.kbCategories || null,
+            kbProductFilter: flowResult.kbProductFilter || null,
             contextPrompt: flowResult.contextPrompt || null,
             fallbackMessage: flowResult.fallbackMessage || null,
             objective: flowResult.objective || null,
             maxSentences: flowResult.maxSentences ?? 3,
-            forbidQuestions: flowResult.forbidQuestions ?? false, // FIX 1: triagem precisa perguntar — default false, não true
+            forbidQuestions: flowResult.forbidQuestions ?? false,
             forbidOptions: flowResult.forbidOptions ?? true,
             forbidFinancial: flowResult.forbidFinancial ?? false,
             forbidCommercial: flowResult.forbidCommercial ?? false,
@@ -1349,12 +1357,14 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
             forbidCommercial: flowContext.forbidCommercial,
             forbidCancellation: flowContext.forbidCancellation,
             forbidConsultant: flowContext.forbidConsultant,
+            kbProductFilter: flowContext.kbProductFilter,
+            skipInitialMessage: flowResult.skipInitialMessage,
           }));
 
           const { data: aiResponse, error: aiError } = await supabase.functions.invoke('ai-autopilot-chat', {
             body: {
               conversationId: conversationId,
-              customerMessage: messageText,
+              customerMessage: effectiveMessage,
               customer_context: isKnownCustomer ? {
                 name: contactName,
                 email: existingContact?.email,
