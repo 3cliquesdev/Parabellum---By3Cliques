@@ -6158,10 +6158,11 @@ Posso ajudar em mais alguma coisa?`;
         .single();
 
       if (responseChannel === 'whatsapp' && contact?.phone) {
-        // 🆕 FIX Resíduo 3: Unificar assinatura para 3 parâmetros (igual à saudação proativa)
+        // 🆕 FIX Resíduo 1: Restaurar assinatura correta de 4 parâmetros
         const whatsappResult = await getWhatsAppInstanceForConversation(
           supabaseClient,
           conversationId,
+          conversation.whatsapp_instance_id,
           conversation
         );
         if (whatsappResult) {
@@ -7317,12 +7318,13 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       } catch (flagErr: any) {
         console.warn('[ai-autopilot-chat] Falha ao salvar flag de saudação:', flagErr);
       }
-      // Bug fix 3+4: usar getWhatsAppInstanceForConversation com parâmetros corretos
+      // 🆕 FIX Resíduo 1: Restaurar assinatura correta de 4 parâmetros
       if (!greetSaveErr && (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta')) {
         try {
           const whatsappResult = await getWhatsAppInstanceForConversation(
             supabaseClient,
             conversationId,
+            conversation.whatsapp_instance_id,
             conversation
           );
           if (whatsappResult && whatsappResult.provider === 'meta') {
@@ -9209,15 +9211,25 @@ Conversa: ${conversationId}`;
           handoff_executed_at: handoffTimestamp, // 🆕 Anti-race-condition flag
           needs_human_review: true,
           department: handoffDepartment, // 🆕 Definir departamento correto (Comercial para leads)
-          customer_metadata: {
-            ...(conversation.customer_metadata || {}),
-            ...(isLeadWithoutEmail && {
-              lead_routed_to_comercial_reason: 'fallback_handoff',
-              lead_routed_at: handoffTimestamp
-            })
-          }
         })
         .eq('id', conversationId);
+      
+      // 🆕 FIX Resíduo 4: Refetch metadata fresco para não sobrescrever greeting flags
+      if (isLeadWithoutEmail) {
+        try {
+          const { data: freshHandoff } = await supabaseClient.from('conversations').select('customer_metadata').eq('id', conversationId).single();
+          const freshHandoffMeta = (freshHandoff?.customer_metadata as any) || {};
+          await supabaseClient.from('conversations').update({
+            customer_metadata: {
+              ...freshHandoffMeta,
+              lead_routed_to_comercial_reason: 'fallback_handoff',
+              lead_routed_at: handoffTimestamp
+            }
+          }).eq('id', conversationId);
+        } catch (hErr: any) {
+          console.warn('[ai-autopilot-chat] ⚠️ Falha ao atualizar metadata no handoff:', hErr);
+        }
+      }
       
       console.log('[ai-autopilot-chat] âœ… ai_mode mudado para waiting_human, handoff_executed_at:', handoffTimestamp);
       
@@ -9277,18 +9289,18 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       );
 
       // Só é request financeiro se tiver padrão de ação E não for dúvida informativa
-      let isFinancialRequest = FINANCIAL_ACTION_PATTERNS.some(pattern => 
+      let isFinancialHandoffRequest = FINANCIAL_ACTION_PATTERNS.some(pattern => 
         pattern.test(customerMessage)
       );
 
       if (isInformationalQuestion) {
-        isFinancialRequest = false; // Anular se for dúvida
-        console.log('[ai-autopilot-chat] â„¹ï¸ Pergunta informativa detectada - NÃO criar ticket');
+        isFinancialHandoffRequest = false;
+        console.log('[ai-autopilot-chat] ℹ️ Pergunta informativa detectada - NÃO criar ticket');
       }
       
       // 🔒 Só criar ticket automático se não foi criado COM SUCESSO pelo tool call
       // Se o tool call falhou, permitir que o fallback detector crie como backup
-      if (isFinancialRequest && !ticketCreatedSuccessfully) {
+      if (isFinancialHandoffRequest && !ticketCreatedSuccessfully) {
         console.log('[ai-autopilot-chat] 💰 Solicitação financeira detectada - Criando ticket de segurança');
         
         const { data: ticket, error: ticketError } = await supabaseClient
@@ -9499,6 +9511,22 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         // 🆕 FIX: Substituir mensagem pelo fallback e FICAR no nó (não retornar flow_advance_needed)
         console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇNÃO + flow_context â†’ substituindo mensagem e permanecendo no nó');
         assistantMessage = fallbackMessage;
+        isFallbackResponse = true; // 🆕 FIX Resíduo 2: Sinalizar como fallback para anti-loop
+        
+        // 🆕 FIX Resíduo 2: Incrementar counter anti-loop diretamente
+        try {
+          const { data: rvConv } = await supabaseClient.from('conversations').select('customer_metadata').eq('id', conversationId).single();
+          const rvMeta = (rvConv?.customer_metadata as any) || {};
+          const rvNodeId = flow_context.node_id || 'unknown';
+          const rvPrevNode = rvMeta.ai_node_current_id || '';
+          const rvCount = (rvPrevNode === rvNodeId) ? ((rvMeta.ai_node_fallback_count || 0) + 1) : 1;
+          await supabaseClient.from('conversations').update({
+            customer_metadata: { ...rvMeta, ai_node_current_id: rvNodeId, ai_node_fallback_count: rvCount }
+          }).eq('id', conversationId);
+          console.log(`[ai-autopilot-chat] 🔄 Restriction violation counter: ${rvCount} para nó ${rvNodeId}`);
+        } catch (rvErr: any) {
+          console.warn('[ai-autopilot-chat] ⚠️ Falha ao incrementar counter de restriction:', rvErr);
+        }
         
         Promise.resolve(supabaseClient.from('ai_quality_logs').insert({
           conversation_id: conversationId,
@@ -9862,12 +9890,12 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
     // FASE 2: Salvar resposta no cache para futuras consultas (TTL 1h)
     // (Escape detection já foi movido para ANTES do save/send â€” linhas ~7842)
 
-    const shouldSkipCache = FALLBACK_PHRASES.some(phrase => 
+    const shouldSkipCache = isFallbackResponse || FALLBACK_PHRASES.some(phrase => 
       assistantMessage.toLowerCase().includes(phrase)
     );
     
     if (shouldSkipCache) {
-      console.log('âš ï¸ [CACHE SKIP] Resposta de fallback detectada - NÃO cacheando');
+      console.log('⚠️ [CACHE SKIP] Resposta de fallback detectada - NÃO cacheando (isFallbackResponse:', isFallbackResponse, ')');
     } else {
       try {
         await supabaseClient.from('ai_response_cache').insert({
