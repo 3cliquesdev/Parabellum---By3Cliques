@@ -215,7 +215,7 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
           chunkQuery = chunkQuery.in('conversation_id', chunk);
 
           if (role && userId && !hasFullInboxAccess(role)) {
-          if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
+          if (role === "sales_rep" || role === "support_agent" || role === "financial_agent" || role === "consultant") {
               if (departmentIds && departmentIds.length > 0) {
                 chunkQuery = chunkQuery.or(
                   `assigned_to.eq.${userId},department.in.(${departmentIds.join(",")}),and(assigned_to.is.null,department.is.null),and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed),and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
