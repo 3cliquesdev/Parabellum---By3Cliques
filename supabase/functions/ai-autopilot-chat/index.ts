@@ -9849,20 +9849,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         assistantMessage = fallbackMessage;
         isFallbackResponse = true; // 🆕 FIX Resíduo 2: Sinalizar como fallback para anti-loop
         
-        // 🆕 FIX Resíduo 2: Incrementar counter anti-loop diretamente
-        try {
-          const { data: rvConv } = await supabaseClient.from('conversations').select('customer_metadata').eq('id', conversationId).single();
-          const rvMeta = (rvConv?.customer_metadata as any) || {};
-          const rvNodeId = flow_context.node_id || 'unknown';
-          const rvPrevNode = rvMeta.ai_node_current_id || '';
-          const rvCount = (rvPrevNode === rvNodeId) ? ((rvMeta.ai_node_fallback_count || 0) + 1) : 1;
-          await supabaseClient.from('conversations').update({
-            customer_metadata: { ...rvMeta, ai_node_current_id: rvNodeId, ai_node_fallback_count: rvCount }
-          }).eq('id', conversationId);
-          console.log(`[ai-autopilot-chat] 🔄 Restriction violation counter: ${rvCount} para nó ${rvNodeId}`);
-        } catch (rvErr: any) {
-          console.warn('[ai-autopilot-chat] ⚠️ Falha ao incrementar counter de restriction:', rvErr);
-        }
+        // 🆕 FIX V14: Counter parcial REMOVIDO — update unificado no final do pipeline
+        console.log('[ai-autopilot-chat] Restriction violation detectada — counter será atualizado no final do pipeline');
         
         Promise.resolve(supabaseClient.from('ai_quality_logs').insert({
           conversation_id: conversationId,
