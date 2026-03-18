@@ -7244,11 +7244,30 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         status: 'sending',
         channel: responseChannel,
       });
-      // Bug fix 3: incluir whatsapp_meta (canal real das conversas Meta)
+      // Bug fix 3+4: usar getWhatsAppInstanceForConversation com parâmetros corretos
       if (!greetSaveErr && (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta')) {
-        await supabaseClient.functions.invoke('send-meta-whatsapp', {
-          body: { conversationId, message: assistantMessageGreeting, contactPhone: contact.phone }
-        }).catch((e: any) => console.warn('[ai-autopilot-chat] Falha ao enviar saudação proativa:', e));
+        try {
+          const whatsappResult = await getWhatsAppInstanceForConversation(
+            supabaseClient,
+            conversationId,
+            conversation
+          );
+          if (whatsappResult && whatsappResult.provider === 'meta') {
+            const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+            await supabaseClient.functions.invoke('send-meta-whatsapp', {
+              body: {
+                instance_id: whatsappResult.instance.id,
+                phone_number: targetNumber,
+                message: assistantMessageGreeting,
+                conversation_id: conversationId,
+                skip_db_save: true,
+              }
+            });
+            console.log('[ai-autopilot-chat] ✅ Saudação proativa enviada via WhatsApp Meta');
+          }
+        } catch (e: any) {
+          console.warn('[ai-autopilot-chat] Falha ao enviar saudação proativa:', e);
+        }
       }
       return new Response(JSON.stringify({ success: true, proactiveGreeting: true, message: assistantMessageGreeting }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
