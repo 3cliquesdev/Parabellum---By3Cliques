@@ -1,4 +1,4 @@
-import { Send, Check, CheckCheck, AlertCircle } from "lucide-react";
+import { Send, Check, CheckCheck, AlertCircle, RefreshCw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -11,9 +11,11 @@ interface MessageStatusIndicatorProps {
   status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   className?: string;
   errorDetail?: string;
+  onRetry?: () => void;
+  isRetrying?: boolean;
 }
 
-export function MessageStatusIndicator({ status, className, errorDetail }: MessageStatusIndicatorProps) {
+export function MessageStatusIndicator({ status, className, errorDetail, onRetry, isRetrying }: MessageStatusIndicatorProps) {
   const iconClass = cn("w-3 h-3", className);
 
   switch (status) {
@@ -29,16 +31,33 @@ export function MessageStatusIndicator({ status, className, errorDetail }: Messa
       const icon = <AlertCircle className={cn(iconClass, "text-destructive")} aria-label="Falha no envio" />;
       const detail = errorDetail || "Falha no envio";
       return (
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex cursor-help">{icon}</span>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[250px] text-xs">
-              {detail}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <span className="inline-flex items-center gap-1.5">
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex cursor-help">{icon}</span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[250px] text-xs">
+                {detail}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          {onRetry && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRetry(); }}
+              disabled={isRetrying}
+              className="inline-flex items-center gap-0.5 text-[10px] font-medium text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
+              aria-label="Reenviar mensagem"
+            >
+              {isRetrying ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+              Reenviar
+            </button>
+          )}
+        </span>
       );
     }
     default:

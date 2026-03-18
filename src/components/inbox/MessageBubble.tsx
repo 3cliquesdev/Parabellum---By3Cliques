@@ -45,6 +45,8 @@ interface MessageBubbleProps {
   isManager?: boolean;
   attachments?: MediaAttachment[];
   className?: string;
+  onRetryMessage?: () => void;
+  isRetrying?: boolean;
 }
 
 // Pure function — no per-bubble interval. Parent passes _tick to force re-render.
@@ -75,6 +77,8 @@ export function MessageBubble({
   isManager = false,
   attachments = [],
   className,
+  onRetryMessage,
+  isRetrying,
 }: MessageBubbleProps) {
   const relativeTime = formatRelativeTime(createdAt);
   return (
@@ -267,6 +271,8 @@ export function MessageBubble({
               <MessageStatusIndicator
                 status={status || 'sent'}
                 errorDetail={errorDetail}
+                onRetry={status === 'failed' ? onRetryMessage : undefined}
+                isRetrying={isRetrying}
                 className={
                   isAI ? "text-violet-600 dark:text-violet-400" : "text-white"
                 }

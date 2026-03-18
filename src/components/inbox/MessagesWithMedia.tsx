@@ -4,6 +4,7 @@ import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { InternalNoteMessage } from "@/components/InternalNoteMessage";
 import { StreamingMessage } from "@/components/inbox/StreamingMessage";
 import { useMediaUrls } from "@/hooks/useMediaUrls";
+import { useRetryMessage } from "@/hooks/useRetryMessage";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -163,6 +164,7 @@ export function MessagesWithMedia({
   messagesEndRef,
   _tick,
 }: MessagesWithMediaProps) {
+  const retryMutation = useRetryMessage();
   // Extrair todos os attachments prontos de todas as mensagens
   const allAttachments = useMemo(() => {
     const attachments: Array<{
@@ -394,6 +396,12 @@ export function MessagesWithMedia({
               isAdmin={isAdmin}
               isManager={isManager}
               attachments={attachments}
+              onRetryMessage={
+                message.status === 'failed' && !isCustomer
+                  ? () => retryMutation.mutate({ messageId: message.id, conversationId: conversation.id })
+                  : undefined
+              }
+              isRetrying={retryMutation.isPending && retryMutation.variables?.messageId === message.id}
             />
             {flowName && (
               <p className="text-[10px] text-muted-foreground mt-0.5 ml-10 opacity-70">
