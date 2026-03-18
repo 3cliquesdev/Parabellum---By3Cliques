@@ -18,7 +18,7 @@ export function MessageStatusIndicator({ status, className, errorDetail }: Messa
 
   switch (status) {
     case 'sending':
-      return <Clock className={cn(iconClass, "text-muted-foreground animate-pulse")} aria-label="Enviando..." />;
+      return <Send className={cn(iconClass, "text-muted-foreground animate-pulse")} aria-label="Enviando..." />;
     case 'sent':
       return <Check className={cn(iconClass, "text-muted-foreground")} aria-label="Enviado" />;
     case 'delivered':
