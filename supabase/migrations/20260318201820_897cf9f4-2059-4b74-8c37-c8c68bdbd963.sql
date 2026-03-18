@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN default_pipeline_id UUID REFERENCES public.pipelines(id) ON DELETE SET NULL;

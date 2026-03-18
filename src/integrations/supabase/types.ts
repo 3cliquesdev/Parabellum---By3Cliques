@@ -6845,6 +6845,7 @@ export type Database = {
           blocked_by: string | null
           created_at: string | null
           default_persona_id: string | null
+          default_pipeline_id: string | null
           department: string | null
           full_name: string
           id: string
@@ -6871,6 +6872,7 @@ export type Database = {
           blocked_by?: string | null
           created_at?: string | null
           default_persona_id?: string | null
+          default_pipeline_id?: string | null
           department?: string | null
           full_name: string
           id: string
@@ -6897,6 +6899,7 @@ export type Database = {
           blocked_by?: string | null
           created_at?: string | null
           default_persona_id?: string | null
+          default_pipeline_id?: string | null
           department?: string | null
           full_name?: string
           id?: string
@@ -6919,6 +6922,13 @@ export type Database = {
             columns: ["default_persona_id"]
             isOneToOne: false
             referencedRelation: "ai_personas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_default_pipeline_id_fkey"
+            columns: ["default_pipeline_id"]
+            isOneToOne: false
+            referencedRelation: "pipelines"
             referencedColumns: ["id"]
           },
           {
