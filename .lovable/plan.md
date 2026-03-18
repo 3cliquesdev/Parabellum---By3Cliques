@@ -1,5 +1,5 @@
 
-# Auditoria V10 — Correções Aplicadas ✅
+# Auditoria V11 — Correções Aplicadas ✅
 
 ## Fixes V8 (Produção Confirmada)
 | Fix | Status |
@@ -14,20 +14,27 @@
 ## Fixes V10 (Deploy realizado)
 
 ### Bug 7 ✅ — isProactiveGreeting não pulava LLM
-- **Fix:** `|| isProactiveGreeting` adicionado à condição skipLLMForGreeting (L7443)
-
 ### Bug 8 ✅ — Dígitos de menu pós-greeting causavam loop fallback
-- **Fix:** Guard independente para `alreadySentGreeting && isMenuNoise` responde contextualizadamente sem LLM
-
 ### Bug 9 ✅ — Race condition: mensagens IA duplicadas
-- **Fix:** Dedup check 5s antes de inserir greeting — verifica `is_ai_generated=true` nos últimos 5s
-
 ### Bug 10 ✅ — Persona "Helper Sistema" com role "elper Sistema"
-- **Fix:** UPDATE direto no banco corrigindo role para "Helper Sistema"
+### Bug 11 (MENOR) — KB sem cobertura (recomendação manual)
 
-### Bug 11 (MENOR) — KB sem cobertura
-- Sem correção de código — recomendação de enriquecer base de conhecimento
+## Fixes V11 (Deploy realizado)
+
+### Bug 12 ✅ — Cliente aceita transferência e IA ignora
+- **Fix:** Detecção PRÉ-LLM de intenção de transferência via regex (CUSTOMER_TRANSFER_INTENT + CUSTOMER_AFFIRM_TRANSFER)
+- Quando detectado + contexto de fallback recente → flowExit com handoff imediato sem chamar LLM
+
+### Bug 13 ✅ — Contador anti-loop reseta entre nós
+- **Fix:** `ai_total_fallback_count` global no customer_metadata, nunca reseta entre nós
+- Threshold: >= 4 fallbacks totais → handoff obrigatório independente do nó
+
+### Bug 14 ✅ — Greeting enviado DEPOIS de fallback
+- **Fix:** Verificação de 2+ msgs IA nos últimos 60s antes de enviar greeting
+- Se contexto já está ativo, suprime greeting pós-fallback
+
+### Bug 15 ✅ — Build timestamp para rastreabilidade
+- **Fix:** `// BUILD: V11 — timestamp` no topo do arquivo
 
 ## Deploy
-- `ai-autopilot-chat` ✅ re-deployed
-- Persona role ✅ corrigido via UPDATE
+- `ai-autopilot-chat` ✅ re-deployed V11
