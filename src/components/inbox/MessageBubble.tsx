@@ -244,7 +244,6 @@ export function MessageBubble({
           {content && (() => {
             const isTemplate = content.startsWith("📋 *Template:") || content.startsWith("[Template:");
             if (isTemplate) {
-              // Parse template content
               const lines = content.split("\n");
               const headerLine = lines[0]
                 .replace("📋 *Template:", "")
@@ -253,23 +252,31 @@ export function MessageBubble({
                 .replace("]", "")
                 .trim();
               const bodyLines = lines.slice(1).filter(l => l.trim()).join("\n");
+              const isOutgoing = !isCustomer && !isAI;
               
               return (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
-                    <FileText className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    <FileText className={cn("h-3.5 w-3.5 shrink-0", isOutgoing ? "text-white/70" : "text-muted-foreground")} />
+                    <span className={cn(
+                      "text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded",
+                      isOutgoing 
+                        ? "bg-white/20 text-white/90" 
+                        : "bg-muted text-muted-foreground"
+                    )}>
                       Template
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className={cn("text-xs font-medium", isOutgoing ? "text-white/80" : "text-foreground/70")}>
                       {headerLine}
                     </span>
                   </div>
                   {bodyLines && (
-                    <SafeHTML
-                      html={bodyLines}
-                      className="text-sm whitespace-pre-wrap [word-break:break-word] border-l-2 border-emerald-500/30 pl-2"
-                    />
+                    <div className={cn(
+                      "text-sm whitespace-pre-wrap [word-break:break-word] pt-1",
+                      isOutgoing ? "border-t border-white/15" : "border-t border-border/50"
+                    )}>
+                      <SafeHTML html={bodyLines} />
+                    </div>
                   )}
                 </div>
               );
