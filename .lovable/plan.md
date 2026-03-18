@@ -1,7 +1,6 @@
+# Auditoria V14 — Correções Aplicadas ✅
 
-# Auditoria V13 — Correções Aplicadas ✅
-
-## Fixes V8 (Produção Confirmada)
+## Fixes V13 (anteriores)
 | Fix | Status |
 |---|---|
 | Bug 1: Self-blocking loop | ✅ |
@@ -51,3 +50,25 @@
 - `ai-autopilot-chat` ✅ re-deployed V13
 - `meta-whatsapp-webhook` ✅ re-deployed V13
 - `handle-whatsapp-event` ✅ re-deployed V13
+
+## Fixes V14 (Deploy realizado)
+
+### Bug 24 ✅ — RLS do `inbox_view` sem cláusula AI queue global
+- **Fix:** Migration recriou policy `optimized_inbox_select` com cláusula adicional:
+  - `ai_mode IN ('autopilot','waiting_human') AND status<>'closed' AND assigned_to IS NULL`
+  - Permite todos os roles internos verem fila IA independente de departamento
+
+### Bug 25 ✅ — Client-side filter `useInboxView` restringia por departamento
+- **Fix:** Expandido `.or()` nos 2 blocos de query (main + chunked) para incluir:
+  - `and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed)`
+  - `and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
+- Realtime `shouldShow` atualizado com `isAIQueueGlobal`
+
+### Bug 26 ✅ — `get-inbox-counts` `applyVisibility` restringia fila IA
+- **Fix:** Expandido `.or()` no `applyVisibility` com mesmas cláusulas AI queue
+- Edge function redeployada
+
+## Deploy V14
+- Migration RLS ✅
+- `useInboxView.tsx` ✅ (3 blocos corrigidos)
+- `get-inbox-counts` ✅ re-deployed
