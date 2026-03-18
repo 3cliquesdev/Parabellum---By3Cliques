@@ -77,6 +77,8 @@ export function MessageBubble({
   isManager = false,
   attachments = [],
   className,
+  onRetryMessage,
+  isRetrying,
 }: MessageBubbleProps) {
   const relativeTime = formatRelativeTime(createdAt);
   return (
