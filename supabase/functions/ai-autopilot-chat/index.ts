@@ -8832,7 +8832,13 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             const args = safeParseToolArgs(toolCall.function.arguments);
             console.log('[ai-autopilot-chat] 🔒 close_conversation chamado:', args);
             
-            const currentMeta = conversation.customer_metadata || {};
+            // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+            const { data: freshConvClose } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const currentMeta = (freshConvClose?.customer_metadata || {}) as Record<string, any>;
             
             if (args.customer_confirmed === false || !currentMeta.awaiting_close_confirmation) {
               // ETAPA 1: Perguntar confirmação (anti-pulo: sempre pedir se flag não existe)
