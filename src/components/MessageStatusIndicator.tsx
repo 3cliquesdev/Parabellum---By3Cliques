@@ -1,4 +1,4 @@
-import { Clock, Check, CheckCheck, AlertCircle } from "lucide-react";
+import { Send, Check, CheckCheck, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
