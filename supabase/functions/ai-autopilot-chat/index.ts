@@ -2172,11 +2172,19 @@ serve(async (req) => {
                 : `**Código inválido**\n\n${errorMessage}\n\nDigite **"reenviar"** se precisar de um novo código.`;
 
               if (otpData?.success) {
+                // 🆕 V5-A: Refetch metadata fresco para não sobrescrever flags incrementais
+                const { data: freshOtpPriorityConv } = await supabaseClient
+                  .from('conversations')
+                  .select('customer_metadata')
+                  .eq('id', conversationId)
+                  .maybeSingle();
+                const freshOtpPriorityMeta = (freshOtpPriorityConv?.customer_metadata || {}) as Record<string, any>;
+
                 await supabaseClient
                   .from('conversations')
                   .update({
                     customer_metadata: {
-                      ...conversationMetadata,
+                      ...freshOtpPriorityMeta,
                       awaiting_otp: false,
                       otp_expires_at: null,
                       last_otp_verified_at: new Date().toISOString()
