@@ -9389,63 +9389,8 @@ Conversa: ${conversationId}`;
       }
     }
 
-    // 🆕 FIX LOOP: Atualizar contador de fallbacks no customer_metadata
-    // 🆕 FIX Resíduo 3: Refetch metadata fresco para não sobrescrever greeting flags
-    if (flow_context) {
-      const { data: freshConv } = await supabaseClient
-        .from('conversations')
-        .select('customer_metadata')
-        .eq('id', conversationId)
-        .single();
-      const existingMetadata = (freshConv?.customer_metadata as Record<string, any>) || {};
-      const aiNodeId = existingMetadata.ai_node_current_id || null;
-      let newCount = 0;
-      
-      if (isFallbackResponse) {
-        newCount = (aiNodeId === flow_context.node_id) ? ((existingMetadata.ai_node_fallback_count || 0) + 1) : 1;
-      }
-
-       // 🆕 V11 FIX Bug 13: Contador GLOBAL de fallbacks — nunca reseta entre nós
-       const currentGlobalCount = existingMetadata.ai_total_fallback_count || 0;
-       const newGlobalCount = isFallbackResponse ? currentGlobalCount + 1 : currentGlobalCount;
-       console.log(`[ai-autopilot-chat] 🔢 V13 Bug 22: Global counter — isFallback=${isFallbackResponse}, current=${currentGlobalCount}, new=${newGlobalCount}, nodeId=${flow_context.node_id}`);
-
-      // Sempre atualizar o nó atual e o contador (merge incremental preserva greeting flags)
-      await supabaseClient
-        .from('conversations')
-        .update({
-          customer_metadata: {
-            ...existingMetadata,
-            ai_node_current_id: flow_context.node_id,
-            ai_node_fallback_count: isFallbackResponse ? newCount : 0,
-            ai_total_fallback_count: newGlobalCount,
-          }
-        })
-        .eq('id', conversationId);
-
-      // 🆕 V11 FIX Bug 13: Se total >= 4, handoff obrigatório independente do nó
-      if (isFallbackResponse && newGlobalCount >= 4) {
-        console.log(`[ai-autopilot-chat] 🚨 V11 Bug 13: GLOBAL ANTI-LOOP — ${newGlobalCount} fallbacks totais → handoff obrigatório`);
-        Promise.resolve(supabaseClient.from('ai_events').insert({
-          entity_type: 'conversation',
-          entity_id: conversationId,
-          event_type: 'ai_decision_global_anti_loop',
-          model: 'system',
-          score: 0,
-          output_json: { reason: 'global_anti_loop', total_fallbacks: newGlobalCount, node_id: flow_context.node_id },
-        })).catch(() => {});
-
-        const globalHandoffMsg = 'Percebi que não estou conseguindo te ajudar da melhor forma. Vou te transferir para um atendente agora! 🙏';
-        return new Response(JSON.stringify({
-          flowExit: true,
-          reason: 'global_anti_loop_handoff',
-          hasFlowContext: true,
-          response: globalHandoffMsg,
-          message: globalHandoffMsg,
-          flow_context: { flow_id: flow_context.flow_id, node_id: flow_context.node_id },
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-    }
+    // 🆕 FIX V14: Counter update MOVIDO para APÓS todo o pipeline de strip/contract/restriction
+    // Aqui NÃO atualiza mais — será feito depois da linha 9993 onde isFallbackResponse é final
 
     if (isFallbackResponse) {
       console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO');
