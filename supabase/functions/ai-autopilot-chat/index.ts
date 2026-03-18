@@ -5825,27 +5825,24 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     const withdrawalBlockReason = !hasCompleteCadastro 
       ? 'CPF não cadastrado - não é cliente verificado'
       : !contact.email
-        ? 'Email não cadastrado - precisa se identificar primeiro'
-        : null;
-    
-    // 🚨 DETECÇNÃO DE TIPO DE SOLICITAÇÃO FINANCEIRA
-    // Separamos em 3 categorias com tratamentos diferentes:
-    // 1. SAQUE DE SALDO â†’ Exige OTP (segurança máxima)
-    // 2. REEMBOLSO DE PEDIDO â†’ Sem OTP (explica processo)
-    // 3. CANCELAMENTO DE ASSINATURA â†’ Sem OTP (processo Kiwify)
+    // DETECCAO DE TIPO DE SOLICITACAO FINANCEIRA
+    // 1. SAQUE DE SALDO - Exige OTP
+    // 2. REEMBOLSO DE PEDIDO - Exige OTP (acao que gera ticket)
+    // 3. CANCELAMENTO DE ASSINATURA - Sem OTP (processo Kiwify)
+    // Duvidas informativas - SEM OTP, IA responde normalmente
     
     const isFinancialRequest = FINANCIAL_BARRIER_KEYWORDS.some(keyword =>
       customerMessage.toLowerCase().includes(keyword)
     );
     
-    // 🔒 SAQUE DE SALDO - ÁšNICA operação que EXIGE OTP
+    // 🔒 SAQUE DE SALDO - operação que EXIGE OTP
     const isWithdrawalRequest = WITHDRAWAL_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     ) || OTP_REQUIRED_KEYWORDS.some(keyword =>
       customerMessage.toLowerCase().includes(keyword.toLowerCase())
     );
     
-    // 📦 REEMBOLSO DE PEDIDO - Sem OTP, explica processo
+    // 📦 REEMBOLSO DE PEDIDO - Exige OTP (ação que gera ticket financeiro)
     const isRefundRequest = REFUND_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     );
@@ -6294,27 +6291,26 @@ Digite **"reenviar"** se precisar de um novo código.`;
       });
       
       // NÃO faz nada aqui - deixa o código continuar para atendimento normal pela IA
-      // Apenas loga e segue para o próximo bloco
     }
     
     // ============================================================
-    // 🔒 OTP APENAS PARA SAQUE DE SALDO/CARTEIRA
+    // OTP PARA ACOES FINANCEIRAS (SAQUE, REEMBOLSO, ESTORNO)
     // ============================================================
-    // Regra simplificada:
-    // - Cliente pede SAQUE de saldo â†’ OTP para segurança
-    // - Cancelamento de assinatura Kiwify â†’ Sem OTP
-    // - Reembolso de pedido â†’ Sem OTP (explica processo)
-    // - Qualquer outra coisa â†’ Conversa normal (sem OTP)
+    // - Cliente pede SAQUE/REEMBOLSO/ESTORNO -> OTP para seguranca
+    // - Cancelamento Kiwify -> Sem OTP
+    // - Duvida informativa -> Sem OTP
     // ============================================================
-    if (contactHasEmail && isWithdrawalRequest && !hasRecentOTPVerification && !flow_context) {
+    if (contactHasEmail && isFinancialActionRequest && !hasRecentOTPVerification && !flow_context) {
       // 🆕 GUARD: Se existe flow_context (qualquer), PULAR o bloco OTP inteiro.
       // O fluxo visual é soberano e tem seu próprio ramo financeiro com OTP nativo.
       // Ref: flow-sovereignty-principle
       
       const maskedEmail = maskEmail(contactEmail);
       
-      console.log('[ai-autopilot-chat] 🔒 OTP SAQUE - Solicitação de saque detectada:', {
-        is_withdrawal_request: isWithdrawalRequest,
+      console.log('[ai-autopilot-chat] 🔒 OTP FINANCEIRO - Ação financeira detectada:', {
+        is_financial_action: isFinancialActionRequest,
+        is_withdrawal: isWithdrawalRequest,
+        is_refund: isRefundRequest,
         has_recent_otp: hasRecentOTPVerification,
         contact_email: maskedEmail,
         message_preview: customerMessage.substring(0, 50)
@@ -6322,8 +6318,10 @@ Digite **"reenviar"** se precisar de um novo código.`;
       
       // Enviar OTP para verificação de saque
       try {
-        console.log('[ai-autopilot-chat] 🔒 DECISION POINT: WITHDRAWAL_OTP_BARRIER', {
-          is_withdrawal_context: true,
+        console.log('[ai-autopilot-chat] 🔒 DECISION POINT: FINANCIAL_ACTION_OTP_BARRIER', {
+          is_financial_action: true,
+          is_withdrawal: isWithdrawalRequest,
+          is_refund: isRefundRequest,
           has_ever_verified: hasEverVerifiedOTP,
           has_recent_otp: false,
           will_send_otp: true,
@@ -6345,21 +6343,22 @@ Digite **"reenviar"** se precisar de um novo código.`;
               awaiting_otp: true,
               otp_expires_at: otpExpiresAt,
               claimant_email: contactEmail,
-              otp_reason: 'withdrawal' // 🆕 Marcar motivo do OTP
+              otp_reason: isWithdrawalRequest ? 'withdrawal' : 'financial_action' // 🆕 Motivo dinâmico
             }
           })
           .eq('id', conversationId);
         
-        console.log('[ai-autopilot-chat] 🔒 OTP pendente marcado na metadata (withdrawal barrier)');
+        console.log('[ai-autopilot-chat] 🔒 OTP pendente marcado na metadata (financial action barrier)');
         
         // BYPASS DIRETO - NÃO CHAMAR A IA
-        const directOTPResponse = `**Verificação de Segurança para Saque**
+        const actionLabel = isWithdrawalRequest ? 'saque' : 'solicitação financeira';
+        const directOTPResponse = `**Verificação de Segurança**
 
-Olá ${contactName}! Para saques da carteira, preciso confirmar sua identidade.
+Olá ${contactName}! Para prosseguir com sua ${actionLabel}, preciso confirmar sua identidade.
 
 Enviei um código de **6 dígitos** para **${maskedEmail}**.
 
-Por favor, **digite o código** que você recebeu para continuar com o saque.`;
+Por favor, **digite o código** que você recebeu para continuar.`;
 
         // Salvar mensagem no banco
         const { data: savedMsg } = await supabaseClient
@@ -6518,7 +6517,7 @@ Qual é o seu **email de compra**?"
     
     
     // 🆕 HANDLER PARA CANCELAMENTO (SEM OTP)
-    if (isCancellationRequest && !isWithdrawalRequest) {
+    if (isCancellationRequest && !isFinancialActionRequest) {
       console.log('[ai-autopilot-chat] ❌ Detectado pedido de CANCELAMENTO - sem OTP necessário');
       
       identityWallNote += `\n\n**=== CANCELAMENTO DE ASSINATURA (SEM OTP) ===**
@@ -7398,9 +7397,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       assistantMessage = rawAIContentNormalized;
     } else if (isFinancialActionRequest) {
       assistantMessage = 'Para prosseguir com sua solicitação financeira, preciso confirmar sua identidade. Qual é o seu e-mail de compra?';
-    } else if (isFinancialRequest && !isInformationalQuestion) {
-      assistantMessage = 'Entendi sua solicitação financeira. Para prosseguir com segurança, qual é o seu e-mail de compra?';
-    } else if (isFinancialRequest && isInformationalQuestion) {
+    } else if (isFinancialRequest) {
+      // Dúvida financeira informativa OU qualquer outro caso financeiro não-ação
       assistantMessage = 'Posso ajudar com sua dúvida financeira! Como posso te ajudar?';
     } else {
       // 🆕 FIX: Fallback Inteligente — se LLM retornou vazio mas KB encontrou artigos,
