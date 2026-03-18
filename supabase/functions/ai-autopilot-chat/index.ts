@@ -9364,7 +9364,6 @@ Conversa: ${conversationId}`;
         })).catch(() => {});
         
         // 🆕 FIX BUG 3: Forçar flowExit com handoff OBRIGATÓRIO — não ficar em loop
-        // Resetar contador para evitar loop infinito caso o webhook não processe
         // V7 FIX: Refetch metadata fresco antes do reset para não sobrescrever flags atualizadas mid-pipeline
         const { data: freshConvAntiLoop } = await supabaseClient
           .from('conversations')
@@ -9375,6 +9374,36 @@ Conversa: ${conversationId}`;
         await supabaseClient.from('conversations').update({
           customer_metadata: { ...freshMetaAntiLoop, ai_node_fallback_count: 0 }
         }).eq('id', conversationId);
+
+        // 🆕 FIX V14: Auto-ticket para conversas financeiras em anti-loop
+        const collectedData = flow_context.collectedData || {};
+        const isFinancialNode = (flow_context.node_id || '').toLowerCase().includes('financ') ||
+          (collectedData.assunto || '').toLowerCase().includes('financ');
+        if (isFinancialNode) {
+          console.log('[ai-autopilot-chat] 🎫 V14: Auto-ticket financeiro no anti-loop');
+          try {
+            const ticketSubject = `[Auto] Solicitação financeira - ${contact.first_name} ${contact.last_name}`.trim();
+            const ticketDescription = [
+              `Cliente: ${contact.first_name} ${contact.last_name}`,
+              `Produto: ${collectedData.produto || 'N/A'}`,
+              `Assunto: ${collectedData.assunto || 'financeiro'}`,
+              `Última mensagem: ${customerMessage || 'N/A'}`,
+              `Motivo: Anti-loop - IA não conseguiu resolver após ${aiNodeFallbackCount} tentativas`,
+            ].join('\n');
+            await supabaseClient.from('tickets').insert({
+              subject: ticketSubject,
+              description: ticketDescription,
+              priority: 'high',
+              category: 'financeiro',
+              customer_id: contact.id,
+              conversation_id: conversationId,
+              status: 'open',
+            });
+            console.log('[ai-autopilot-chat] ✅ Ticket financeiro criado automaticamente no anti-loop');
+          } catch (ticketErr: any) {
+            console.error('[ai-autopilot-chat] ❌ Falha ao criar ticket no anti-loop:', ticketErr);
+          }
+        }
         
         return new Response(JSON.stringify({
           flowExit: true,
