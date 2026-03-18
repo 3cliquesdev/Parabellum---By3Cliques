@@ -9112,7 +9112,10 @@ Conversa: ${conversationId}`;
               suporte: 'Suporte tecnico', internacional: 'Atendimento internacional',
               pedidos: 'Consulta de pedidos', devolucao: 'Devolucao/reembolso', saque: 'Saque de saldo',
             };
-            const currentMeta = (conversation?.customer_metadata || {});
+            // FIX: Refetch metadata fresco para não sobrescrever greeting flags e counters
+            const { data: freshConvTransfer } = await supabaseClient.from('conversations')
+              .select('customer_metadata').eq('id', conversationId).maybeSingle();
+            const currentMeta = ((freshConvTransfer?.customer_metadata || {}) as Record<string, any>);
             const transferContext = {
               from_persona_name: persona?.name || 'IA',
               to_intent: exitDestination,
