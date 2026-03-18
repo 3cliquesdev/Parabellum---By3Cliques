@@ -7526,8 +7526,9 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     }
 
     // 🆕 V11 FIX Bug 12: Detecção PRÉ-LLM de intenção de transferência do cliente
-    const CUSTOMER_TRANSFER_INTENT = /\b(me\s+transfere|transfere\s+pra|me\s+conecte|falar\s+com\s+(atendente|humano|pessoa|algu[eé]m)|quero\s+(um\s+)?(atendente|humano)|passa\s+pra\s+(um\s+)?(atendente|humano)|chama\s+(um\s+)?(atendente|humano))\b/i;
-    const CUSTOMER_AFFIRM_TRANSFER = /^(sim|quero|pode|por\s+favor|pode\s+ser|claro|ok|quero\s+sim|sim\s+quero|sim\s+por\s+favor)[\s!.,]*$/i;
+    // 🆕 V12 FIX Bugs 16/17: Regex expandida para conjugações reais + equipe de suporte + pontuação
+    const CUSTOMER_TRANSFER_INTENT = /\b(me\s+transfer[ea]|transfer[ea]\s+pra|me\s+conect[ae]|falar\s+com\s+(atendente|humano|pessoa|algu[eé]m|suporte|equipe)|quero\s+(um\s+)?(atendente|humano)|passa\s+pra\s+(um\s+)?(atendente|humano)|chama\s+(um\s+)?(atendente|humano)|equipe\s+de\s+suporte|atendimento\s+humano)\b/i;
+    const CUSTOMER_AFFIRM_TRANSFER = /^(sim|quero|pode|por\s+favor|pode\s+ser|claro|ok|quero\s+sim|sim\s+quero|sim[,.]?\s*quero|sim[,.]?\s*por\s+favor|sim[,.]?\s*pode|sim[,.]?\s*pode\s+ser)[\s!.,]*$/i;
     const customerMsgTrimmed = customerMessage.trim();
     const hasTransferIntent = CUSTOMER_TRANSFER_INTENT.test(customerMsgTrimmed);
     const hasAffirmTransfer = CUSTOMER_AFFIRM_TRANSFER.test(customerMsgTrimmed);
