@@ -6141,7 +6141,8 @@ Posso ajudar em mais alguma coisa?`;
     // responder determinístico e NÃO seguir para IA/handoff.
     // 🆕 FIX BUG 1: OTP pending context depende APENAS de flags reais
     const hasOTPPendingContext = contactHasEmail && (hasAwaitingOTP || hasRecentOTPPending);
-    if (!shouldValidateOTP && hasOTPPendingContext && otpDigitsOnly.length > 0 && otpDigitsOnly.length !== 6) {
+    // 🆕 FIX Resíduo 1: Só tratar como tentativa de OTP se >= 4 dígitos (1-3 dígitos são contexto, ex: "dia 3 de março")
+    if (!shouldValidateOTP && hasOTPPendingContext && otpDigitsOnly.length >= 4 && otpDigitsOnly.length !== 6) {
       const otpFormatResponse = `**Código inválido**\n\nO código deve ter **6 dígitos**.\n\nPor favor, envie apenas os 6 números (pode ser com ou sem espaços).\n\nDigite **"reenviar"** se precisar de um novo código.`;
 
       const { data: savedMsg } = await supabaseClient
