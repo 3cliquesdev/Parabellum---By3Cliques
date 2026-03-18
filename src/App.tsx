@@ -56,7 +56,7 @@ const TicketDetail = lazy(() => import("./pages/TicketDetail"));
 const Knowledge = lazy(() => import("./pages/Knowledge"));
 const KnowledgeCuration = lazy(() => import("./pages/KnowledgeCuration"));
 const KBGapsDashboard = lazy(() => import("./pages/KBGapsDashboard"));
-const KnowledgeAudit = lazy(() => import("./pages/KnowledgeAudit"));
+
 const PublicTicketForm = lazy(() => import("./pages/PublicTicketForm"));
 const MyTickets = lazy(() => import("./pages/MyTickets"));
 const AIStudio = lazy(() => import("./pages/AIStudio"));
