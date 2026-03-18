@@ -7229,8 +7229,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         }
       }
       greetingMsg += ' Como posso te ajudar? 😊';
-      skipLLMForGreeting = true;
-      console.log('[ai-autopilot-chat] Saudação proativa enviada, pulando LLM');
+      // skipLLMForGreeting removido — Modo Jarvis: a LLM processa a mensagem do cliente mesmo após saudação
+      console.log('[ai-autopilot-chat] Saudação proativa será enviada, LLM continuará processando a mensagem do cliente');
       // Montar assistantMessage diretamente sem chamar a LLM
       const assistantMessageGreeting = greetingMsg;
       // Persistir e enviar pelo pipeline normal
