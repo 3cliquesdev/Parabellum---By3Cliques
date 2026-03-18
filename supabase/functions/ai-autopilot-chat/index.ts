@@ -9969,7 +9969,16 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       .single();
 
     if (saveError) {
-      console.error('[ai-autopilot-chat] Erro ao salvar mensagem:', saveError);
+      console.error('[ai-autopilot-chat] ❌ CRITICAL: Erro ao salvar mensagem no banco — NÃO enviará ao WhatsApp:', saveError);
+      // 🆕 FIX V14: Se falhou salvar no banco, retornar erro e NÃO enviar pelo WhatsApp (consistência)
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Falha ao persistir mensagem',
+        details: saveError.message
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     const messageId = savedMessage?.id;
