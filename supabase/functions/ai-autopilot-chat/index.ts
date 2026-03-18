@@ -7439,12 +7439,45 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       // 🆕 FIX: Se a mensagem do cliente é uma saudação pura, a saudação proativa já cobre a resposta.
       // NÃO chamar a LLM para evitar retorno vazio + fallback desnecessário.
       const isGreetingOnly = /^(oi|olá|ola|bom dia|boa tarde|boa noite|ei|eae|e aí|hey|hi|hello|tudo bem|tudo bom|blz|beleza|fala|salve|obrigad[oa]|valeu|ok)[\s!.,?]*$/i.test(customerMessage.trim());
-      if (isGreetingOnly || isMenuNoise) {
+      // 🆕 V10 FIX Bug 7: isProactiveGreeting SEMPRE deve pular LLM — a mensagem [SYSTEM:...] não casa com greeting/menu regex
+      if (isGreetingOnly || isMenuNoise || isProactiveGreeting) {
         skipLLMForGreeting = true;
-        console.log('[ai-autopilot-chat] ✅ Saudação proativa cobre a resposta — skip LLM para greeting/menu noise:', customerMessage);
+        console.log('[ai-autopilot-chat] ✅ Saudação proativa cobre a resposta — skip LLM para greeting/menu noise/proactive:', customerMessage);
       } else {
         console.log('[ai-autopilot-chat] ✅ Saudação proativa concluída, continuando para processar mensagem do cliente pela LLM');
       }
+    }
+
+    // 🆕 V10 FIX Bug 8: Dígitos de menu PÓS-greeting — se greeting já foi enviado e cliente mandou dígito,
+    // responder contextualizadamente sem chamar LLM (evita zero_confidence → fallback → loop)
+    if (alreadySentGreeting && isMenuNoise && !skipLLMForGreeting) {
+      console.log('[ai-autopilot-chat] 🔢 V10 Bug 8: Dígito de menu pós-greeting detectado, skip LLM:', customerMessage);
+      const menuNoiseResponse = 'Pode me contar com mais detalhes o que você precisa? Estou aqui para ajudar! 😊';
+      // Salvar e enviar resposta contextual
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: menuNoiseResponse,
+        sender_type: 'user',
+        message_type: 'ai_response',
+        is_ai_generated: true,
+        sender_id: null,
+        status: 'sending',
+        channel: responseChannel,
+      });
+      if (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta') {
+        try {
+          const whatsappResult = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, conversation.whatsapp_instance_id, conversation);
+          if (whatsappResult && whatsappResult.provider === 'meta') {
+            const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+            await supabaseClient.functions.invoke('send-meta-whatsapp', {
+              body: { instance_id: whatsappResult.instance.id, phone_number: targetNumber, message: menuNoiseResponse, conversation_id: conversationId, skip_db_save: true, is_bot_message: true }
+            });
+          }
+        } catch (e: any) {
+          console.warn('[ai-autopilot-chat] Falha ao enviar resposta menu noise:', e);
+        }
+      }
+      return new Response(JSON.stringify({ status: 'success', message: menuNoiseResponse, type: 'menu_noise_contextual', skipped: false }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // 🆕 FIX: Se skipLLMForGreeting, retornar sucesso sem chamar a LLM
