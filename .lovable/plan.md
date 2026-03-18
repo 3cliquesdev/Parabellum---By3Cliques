@@ -95,3 +95,22 @@
 - `ai-autopilot-chat` ✅ re-deployed
 - `meta-whatsapp-webhook` ✅ re-deployed
 - Flow `cafe2831` ✅ atualizado (edges + flags)
+
+## Fixes V16 (Deploy realizado)
+
+### Bug 31 ✅ — Escape Node enviado SEM opções (fallback separado)
+- **Fix:** Removido DB insert direto do fallback_message no `process-chat-flow` (L3697)
+- Fallback agora acumulado como `pendingFallbackMsg` e injetado no `extraMessages` (L4598)
+- Resultado: Caller recebe UMA resposta combinada: "Não consegui resolver...\n\nO que prefere fazer?\n\n1️⃣ Voltar\n2️⃣ Atendente"
+
+### Bug 32 ✅ — Pós-OTP não coletou dados financeiros (FLOW_EXIT prematuro)
+- **Fix 1:** Expandido `otpVerifiedInstruction` no `ai-autopilot-chat` com regras de coleta pós-OTP
+  - IA instruída a COLETAR campos (pix_key, bank, reason, amount) ao invés de buscar KB
+  - Proibida de emitir `[[FLOW_EXIT]]` até coletar todos os campos
+- **Fix 2:** Atualizado `objective` do `node_ia_financeiro` no fluxo `cafe2831` com FASE 1 (pré-OTP) e FASE 2 (pós-OTP coleta)
+- **Fix 3:** Habilitado `smart_collection_enabled: true` e `smart_collection_fields: [pix_key, bank, reason, amount]`
+
+## Deploy V16
+- `process-chat-flow` ✅ re-deployed
+- `ai-autopilot-chat` ✅ re-deployed
+- Flow `cafe2831` ✅ atualizado (objective + smart_collection)
