@@ -3117,6 +3117,165 @@ serve(async (req) => {
         const aiCount = Number(collectedData.__ai.interaction_count || 0);
         // ==================================================================
 
+        // ── OTP DETERMINÍSTICO ─────────────────────────────────────────────
+        // Ativado pelo toggle require_otp_for_financial no nó ai_response
+        {
+          const requireOtp = currentNode.data?.require_otp_for_financial === true;
+          const otpAlreadyVerified = collectedData.__ai_otp_verified === true;
+
+          if (requireOtp && !otpAlreadyVerified) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const _deno = (globalThis as any).Deno;
+            const otpSupabaseUrl: string = _deno.env.get('SUPABASE_URL');
+            const otpSupabaseKey: string = _deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+            const aiOtpStep = collectedData.__ai_otp_step as string | undefined;
+            const contactEmail = (activeContactData as any)?.email || collectedData.email || '';
+
+            // INICIALIZAÇÃO: checar se contato tem email
+            if (!aiOtpStep) {
+              if (contactEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(contactEmail))) {
+                // Validar se email existe no banco antes de enviar OTP
+                const checkRes = await fetch(`${otpSupabaseUrl}/functions/v1/verify-customer-email`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${otpSupabaseKey}` },
+                  body: JSON.stringify({ email: contactEmail }),
+                });
+                const checkData = await checkRes.json();
+
+                if (checkData.found) {
+                  collectedData.__ai_otp_email = contactEmail;
+                  await fetch(`${otpSupabaseUrl}/functions/v1/send-verification-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${otpSupabaseKey}` },
+                    body: JSON.stringify({ email: contactEmail, type: 'customer' }),
+                  });
+                  collectedData.__ai_otp_step = 'wait_code';
+                  collectedData.__ai_otp_attempts = 0;
+                  await supabaseClient.from('chat_flow_states')
+                    .update({ collected_data: collectedData, updated_at: new Date().toISOString() }).eq('id', activeState.id);
+                  return new Response(JSON.stringify({
+                    useAI: false,
+                    response: `Para sua segurança, enviamos um código de verificação para ${contactEmail}. Por favor, informe o código recebido:`,
+                    flowId: activeState.flow_id,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+                // Email do contato não está no banco — pedir e-mail de compra
+              }
+              collectedData.__ai_otp_step = 'ask_email';
+              await supabaseClient.from('chat_flow_states')
+                .update({ collected_data: collectedData, updated_at: new Date().toISOString() }).eq('id', activeState.id);
+              return new Response(JSON.stringify({
+                useAI: false,
+                response: 'Para verificar sua identidade, preciso do seu e-mail usado na compra:',
+                flowId: activeState.flow_id,
+              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+
+            // AGUARDANDO EMAIL DO USUÁRIO
+            if (aiOtpStep === 'ask_email') {
+              const emailInput = (userMessage || '').trim();
+              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput)) {
+                return new Response(JSON.stringify({
+                  useAI: false,
+                  response: 'Por favor, informe um e-mail válido (exemplo@email.com):',
+                  flowId: activeState.flow_id,
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+              }
+              // Validar se email existe no banco antes de enviar OTP
+              const checkRes = await fetch(`${otpSupabaseUrl}/functions/v1/verify-customer-email`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${otpSupabaseKey}` },
+                body: JSON.stringify({ email: emailInput }),
+              });
+              const checkData = await checkRes.json();
+
+              if (!checkData.found) {
+                const emailAttempts = ((collectedData.__ai_otp_email_attempts as number) || 0) + 1;
+                collectedData.__ai_otp_email_attempts = emailAttempts;
+                await supabaseClient.from('chat_flow_states')
+                  .update({ collected_data: collectedData, updated_at: new Date().toISOString() }).eq('id', activeState.id);
+                if (emailAttempts >= 2) {
+                  collectedData.__ai_otp_step = undefined;
+                  await supabaseClient.from('chat_flow_states')
+                    .update({ collected_data: collectedData, updated_at: new Date().toISOString() }).eq('id', activeState.id);
+                  return new Response(JSON.stringify({
+                    useAI: false,
+                    response: 'Não encontrei esse e-mail em nosso sistema. Vou te transferir para um atendente.',
+                    flowId: activeState.flow_id,
+                  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+                return new Response(JSON.stringify({
+                  useAI: false,
+                  response: 'Não encontrei esse e-mail em nosso sistema. Por favor, informe o e-mail usado na compra:',
+                  flowId: activeState.flow_id,
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+              }
+
+              // Email encontrado → enviar OTP
+              collectedData.__ai_otp_email = emailInput;
+              await fetch(`${otpSupabaseUrl}/functions/v1/send-verification-code`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${otpSupabaseKey}` },
+                body: JSON.stringify({ email: emailInput, type: 'customer' }),
+              });
+              collectedData.__ai_otp_step = 'wait_code';
+              collectedData.__ai_otp_attempts = 0;
+              await supabaseClient.from('chat_flow_states')
+                .update({ collected_data: collectedData, updated_at: new Date().toISOString() }).eq('id', activeState.id);
+              return new Response(JSON.stringify({
+                useAI: false,
+                response: `Código enviado para ${emailInput}. Informe o código de verificação:`,
+                flowId: activeState.flow_id,
+              }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+
+            // AGUARDANDO CÓDIGO OTP
+            if (aiOtpStep === 'wait_code') {
+              const codeInput = (userMessage || '').trim();
+              const otpEmail = collectedData.__ai_otp_email as string;
+              const attempts = ((collectedData.__ai_otp_attempts as number) || 0) + 1;
+              collectedData.__ai_otp_attempts = attempts;
+              const maxAttempts = 3;
+
+              const verifyRes = await fetch(`${otpSupabaseUrl}/functions/v1/verify-code`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${otpSupabaseKey}` },
+                body: JSON.stringify({ email: otpEmail, code: codeInput }),
+              });
+              const verifyData = await verifyRes.json();
+
+              if (verifyData.success) {
+                collectedData.__ai_otp_verified = true;
+                collectedData.__ai_otp_step = undefined;
+                collectedData.customer_verified = true;
+                collectedData.customer_verified_email = otpEmail;
+                await supabaseClient.from('chat_flow_states')
+                  .update({ collected_data: collectedData, updated_at: new Date().toISOString() }).eq('id', activeState.id);
+                console.log(`[process-chat-flow] ✅ OTP verificado para ${otpEmail} — liberando para IA`);
+                // Cai para o fluxo normal com otpVerified=true
+              } else if (attempts >= maxAttempts) {
+                collectedData.__ai_otp_step = undefined;
+                await supabaseClient.from('chat_flow_states')
+                  .update({ collected_data: collectedData, updated_at: new Date().toISOString() }).eq('id', activeState.id);
+                return new Response(JSON.stringify({
+                  useAI: false,
+                  response: 'Número máximo de tentativas atingido. Vou te transferir para um atendente.',
+                  flowId: activeState.flow_id,
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+              } else {
+                await supabaseClient.from('chat_flow_states')
+                  .update({ collected_data: collectedData, updated_at: new Date().toISOString() }).eq('id', activeState.id);
+                return new Response(JSON.stringify({
+                  useAI: false,
+                  response: `Código incorreto. Tentativa ${attempts}/${maxAttempts}. Tente novamente:`,
+                  flowId: activeState.flow_id,
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+              }
+            }
+          }
+        }
+        // ── FIM OTP DETERMINÍSTICO ──────────────────────────────────────────
+
         const exitKeywords: string[] = currentNode.data?.exit_keywords || [];
         const maxInteractions: number = currentNode.data?.max_ai_interactions ?? currentNode.data?.max_interactions ?? 0; // 🔧 FIX 1: fallback para campo legado max_interactions
         let forbidFinancial: boolean = currentNode.data?.forbid_financial ?? false;
@@ -3633,6 +3792,7 @@ serve(async (req) => {
               forbidCancellation: currentNode.data?.forbid_cancellation ?? false,
               forbidSupport: currentNode.data?.forbid_support ?? false,
               forbidConsultant: currentNode.data?.forbid_consultant ?? false,
+              otpVerified: collectedData.__ai_otp_verified === true,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
