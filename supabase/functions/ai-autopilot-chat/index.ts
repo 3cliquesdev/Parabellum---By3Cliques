@@ -2563,8 +2563,16 @@ serve(async (req) => {
             customer: verifyResult?.customer?.email
           });
           
+          // 🆕 V5-C: Refetch metadata fresco para não sobrescrever flags incrementais
+          const { data: freshEmailHandoffConv } = await supabaseClient
+            .from('conversations')
+            .select('customer_metadata')
+            .eq('id', conversationId)
+            .maybeSingle();
+          const freshEmailHandoffMeta = (freshEmailHandoffConv?.customer_metadata || {}) as Record<string, any>;
+
           // Limpar estado awaiting_email_for_handoff SEMPRE (evita loop)
-          const updatedMetadata = { ...customerMetadata };
+          const updatedMetadata = { ...freshEmailHandoffMeta };
           delete updatedMetadata.awaiting_email_for_handoff;
           delete updatedMetadata.handoff_blocked_at;
           delete updatedMetadata.handoff_blocked_reason;
