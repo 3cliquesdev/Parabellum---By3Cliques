@@ -10101,6 +10101,10 @@ export type Database = {
       }
     }
     Functions: {
+      assign_ticket_secure: {
+        Args: { p_assigned_to?: string; p_ticket_id: string }
+        Returns: Json
+      }
       audit_rls_health: {
         Args: never
         Returns: {
