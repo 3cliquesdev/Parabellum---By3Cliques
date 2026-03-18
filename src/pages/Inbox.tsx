@@ -277,13 +277,16 @@ export default function Inbox() {
   const filteredConversations = useMemo(() => {
     let result = activeItems.map(inboxItemToConversation);
 
-    // Department filter
-    if (departmentFilter) {
+    // ✅ Fila IA é GLOBAL — não aplicar filtros de departamento/agente
+    const isAiQueue = filter === "ai_queue";
+
+    // Department filter (pular para ai_queue — fila global)
+    if (departmentFilter && !isAiQueue) {
       result = result.filter(c => c.department === departmentFilter);
     }
 
-    // Agent filter
-    if (agentFilter) {
+    // Agent filter (pular para ai_queue — fila global)
+    if (agentFilter && !isAiQueue) {
       result = result.filter(c => c.assigned_to === agentFilter);
     }
 
