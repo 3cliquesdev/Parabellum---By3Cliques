@@ -9138,7 +9138,9 @@ Conversa: ${conversationId}`;
         }
         
         // Se a mensagem ficou vazia após limpeza, usar fallback genérico
-        if (!cleanedMessage || cleanedMessage.length < 5) {
+        // 🆕 FIX Resíduo 2: Se ficou vazia, MANTER isFallbackResponse=true (IA não conseguiu responder)
+        const messageWasEmptied = !cleanedMessage || cleanedMessage.length < 5;
+        if (messageWasEmptied) {
           cleanedMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
         }
         
@@ -9146,7 +9148,7 @@ Conversa: ${conversationId}`;
           console.log('[ai-autopilot-chat] 🧹 Mensagem limpa de fallback phrases:', { original: assistantMessage.substring(0, 100), cleaned: cleanedMessage.substring(0, 100) });
         }
         
-        // Atualizar assistantMessage com versão limpa â€” será persistida e enviada pelo pipeline normal abaixo
+        // Atualizar assistantMessage com versão limpa — será persistida e enviada pelo pipeline normal abaixo
         assistantMessage = cleanedMessage;
         
         // Log de qualidade (sem sair do nó)
@@ -9159,10 +9161,14 @@ Conversa: ${conversationId}`;
           handoff_reason: 'fallback_stripped_flow_context',
           confidence_score: 0,
           articles_count: knowledgeArticles.length
-        })).catch((e: any) => console.error('[ai-autopilot-chat] âš ï¸ Falha ao logar fallback_cleaned:', e));
+        })).catch((e: any) => console.error('[ai-autopilot-chat] ⚠️ Falha ao logar fallback_cleaned:', e));
         
-        // Resetar flag â€” NÃO é mais fallback após limpeza
-        isFallbackResponse = false;
+        // 🆕 FIX Resíduo 2: Só resetar flag se a mensagem NÃO ficou vazia (IA conseguiu responder algo útil)
+        if (!messageWasEmptied) {
+          isFallbackResponse = false;
+        } else {
+          console.log('[ai-autopilot-chat] ⚠️ Mensagem ficou vazia após limpeza — mantendo isFallbackResponse=true para anti-loop');
+        }
         
         // 🆕 FIX: NÃO return â€” deixa cair no pipeline normal de persistência + envio WhatsApp
       } else {
