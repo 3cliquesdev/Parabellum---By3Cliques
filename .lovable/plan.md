@@ -2,10 +2,10 @@
 
 # Deploy Edge Functions
 
-Deploy das duas edge functions atualizadas com as correções recentes (OTP, saudação proativa, create_lead, métricas de latência):
+Deploy das duas edge functions com todos os fixes desta sessão:
 
-1. **`ai-autopilot-chat`** — Correções: `is_bot_message: true`, remoção do `return` prematuro, métricas de latência
-2. **`process-chat-flow`** — Correções: `create_lead` no EndNode
+1. **`process-chat-flow`** — OTP determinístico, trava financeira pós-OTP
+2. **`ai-autopilot-chat`** — Fix saudação (nome, especialidade, canal), saudação pós-OTP, `otpVerified` no FlowContext
 
-Ação: Executar deploy de ambas via ferramenta de deploy.
+**Ação:** Executar deploy de ambas via ferramenta de deploy.
 
