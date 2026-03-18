@@ -158,13 +158,13 @@ Deno.serve(async (req: Request) => {
       // ✅ MUDANÇA: sales_rep, support_agent, financial_agent veem TODAS as conversas do departamento
       if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
         if (userDepartmentId) {
-          // Agente vê: suas conversas OU todas do seu departamento OU pool geral (sem dept e sem assigned)
           return query.or(
-            `assigned_to.eq.${userId},department.eq.${userDepartmentId},and(assigned_to.is.null,department.is.null)`
+            `assigned_to.eq.${userId},department.eq.${userDepartmentId},and(assigned_to.is.null,department.is.null),and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed),and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
           );
         }
-        // Sem departamento configurado: apenas atribuídas ao usuário OU pool geral
-        return query.or(`assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null)`);
+        return query.or(
+          `assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null),and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed),and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
+        );
       }
 
       // Outros roles operacionais: assigned only
