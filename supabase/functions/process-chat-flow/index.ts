@@ -2510,6 +2510,7 @@ serve(async (req) => {
                       forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
                       ticketConfig: resolvedNode.data?.ticket_config || null,
                     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                  }
 
                   const nextStatus = resolvedNode.type.startsWith('ask_') || resolvedNode.type === 'condition' || resolvedNode.type === 'condition_v2' || resolvedNode.type === 'verify_customer_otp'
                     ? 'waiting_input' : 'active';
