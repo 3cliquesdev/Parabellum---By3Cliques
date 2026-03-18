@@ -6354,16 +6354,17 @@ Digite **"reenviar"** se precisar de um novo código.`;
           })
           .eq('id', conversationId);
         
-        console.log('[ai-autopilot-chat] 🔒 OTP pendente marcado na metadata (withdrawal barrier)');
+        console.log('[ai-autopilot-chat] 🔒 OTP pendente marcado na metadata (financial action barrier)');
         
         // BYPASS DIRETO - NÃO CHAMAR A IA
-        const directOTPResponse = `**Verificação de Segurança para Saque**
+        const actionLabel = isWithdrawalRequest ? 'saque' : 'solicitação financeira';
+        const directOTPResponse = `**Verificação de Segurança**
 
-Olá ${contactName}! Para saques da carteira, preciso confirmar sua identidade.
+Olá ${contactName}! Para prosseguir com sua ${actionLabel}, preciso confirmar sua identidade.
 
 Enviei um código de **6 dígitos** para **${maskedEmail}**.
 
-Por favor, **digite o código** que você recebeu para continuar com o saque.`;
+Por favor, **digite o código** que você recebeu para continuar.`;
 
         // Salvar mensagem no banco
         const { data: savedMsg } = await supabaseClient
