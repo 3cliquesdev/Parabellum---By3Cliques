@@ -537,6 +537,8 @@ function replaceVariables(text: string, variablesContext: Record<string, any>): 
   for (const [key, value] of Object.entries(variablesContext)) {
     result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value));
   }
+  // 🆕 V8 FIX Bug 3: Remover variáveis não resolvidas para evitar {{var}} vazando pro cliente
+  result = result.replace(/\{\{[a-zA-Z_]+\}\}/g, '').replace(/\s{2,}/g, ' ').trim();
   return result;
 }
 

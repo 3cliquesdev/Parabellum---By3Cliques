@@ -1,0 +1,1 @@
+UPDATE public.ai_personas SET name = 'Laís - Assistente IA' WHERE id = '78e1efa3-3b63-465e-a26b-9fe1f8078ffd' AND name = 'Laís - Assisntente IA';

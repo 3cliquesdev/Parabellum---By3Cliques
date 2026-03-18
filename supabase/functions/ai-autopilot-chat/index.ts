@@ -33,7 +33,7 @@ interface RAGConfig {
 
 const DEFAULT_RAG_CONFIG: RAGConfig = {
   model: 'gpt-5-mini',
-  minThreshold: 0.40,
+  minThreshold: 0.55, // 🆕 V8 FIX Bug 5: Aumentado de 0.40 para 0.55 para filtrar artigos irrelevantes
   directThreshold: 0.75,
   sources: { kb: true, crm: true, tracking: true, sandbox: true },
   strictMode: false,
@@ -748,20 +748,18 @@ const FALLBACK_PHRASES = [
 
 // 🔒 BARREIRA FINANCEIRA - Palavras que identificam contexto FINANCEIRO (sem OTP obrigatório)
 // Estas palavras detectam intenção financeira mas NÃO exigem OTP
+// 🆕 V8 FIX Bug 4: Removidos termos genéricos ('pagamento', 'cancelar', 'cancelamento')
+// que causavam falsos positivos em contextos de suporte/acesso e cancelamento de assinatura.
+// Mantidos apenas termos que indicam AÇÃO FINANCEIRA real.
 const FINANCIAL_BARRIER_KEYWORDS = [
   'saque',
   'sacar',
   'saldo',
   'pix',
-  'dinheiro',
-  'pagamento',
   'reembolso',
   'comissão',
   'carteira',
-  'transferência',
   'estorno',
-  'cancelar',
-  'cancelamento',
   'devolução',
   'devolver',
   'meu dinheiro'
@@ -4583,7 +4581,7 @@ Responda APENAS: skip ou search`
                     'match_knowledge_articles',
                     {
                       query_embedding: queryEmbedding,
-                      match_threshold: 0.50,
+                      match_threshold: 0.55, // 🆕 V8 FIX Bug 5: Aumentado de 0.50 para 0.55
                       match_count: 5,
                       product_filter: hasProductFilter ? activeProductFilter : [],
                     }
@@ -4610,8 +4608,12 @@ Responda APENAS: skip ou search`
           }
 
           // Step 3: Converter mapa para array e aplicar filtros
-          let allArticles = Array.from(articleMap.values());
-          console.log(`[ai-autopilot-chat] 📊 Total de artigos únicos encontrados: ${allArticles.length}`);
+          // 🆕 V8 FIX Bug 5: Excluir artigos sandbox_training da busca semântica principal
+          // Esses artigos são injetados separadamente como few-shot no prompt
+          let allArticles = Array.from(articleMap.values()).filter(
+            (a: any) => a.source !== 'sandbox_training'
+          );
+          console.log(`[ai-autopilot-chat] 📊 Total de artigos únicos encontrados (excl. sandbox): ${allArticles.length}`);
           
           // 🛡� FASE A: FALLBACK ROBUSTO - Executar busca por palavras-chave se:
           // 1. Embeddings não foram tentados (sem OPENAI_API_KEY)
@@ -7548,7 +7550,9 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 
       if (hasKBArticles && hasFlowCtx) {
         console.log('[ai-autopilot-chat] 🧠 Fallback inteligente: LLM vazio + KB artigos encontrados mas irrelevantes → resposta contextual');
-        assistantMessage = 'Não encontrei informações específicas sobre isso na base de conhecimento. Posso transferir você para um atendente especializado, ou deseja tentar descrever a situação de outra forma?';
+        // 🆕 V8 FIX Bug 1: Frase reescrita para NÃO acertar ESCAPE_PATTERNS
+        // Removido "Posso transferir" que acionava o pattern e causava loop auto-infligido
+        assistantMessage = 'Não encontrei informações específicas sobre isso na nossa base. Quer que eu te conecte com a equipe de suporte, ou pode descrever a situação de outra forma?';
       } else {
         const ctxFallbackMsg = flow_context?.fallbackMessage;
         if (ctxFallbackMsg) {
@@ -9531,7 +9535,11 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       console.log(`[ai-autopilot-chat] 🎯 [INTENT:${detectedIntentTag}] detectado e removido da mensagem`);
     }
 
-    if (flow_context && flow_context.response_format === 'text_only') {
+    // 🆕 V8 FIX Bug 1+2: Skip escape check para mensagens geradas pelo sistema (fallback/greeting)
+    // rawAIContentNormalized vazio = LLM não retornou nada, msg foi gerada internamente
+    // isProactiveGreeting = saudação controlada, não precisa de escape check
+    const isSystemGeneratedMessage = !rawAIContentNormalized || isProactiveGreeting;
+    if (flow_context && flow_context.response_format === 'text_only' && !isSystemGeneratedMessage) {
       const escapeAttempt = ESCAPE_PATTERNS.some(pattern => pattern.test(assistantMessage));
       
       if (escapeAttempt) {
