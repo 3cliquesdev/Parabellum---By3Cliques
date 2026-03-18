@@ -10,6 +10,8 @@ interface UpdateArticleParams {
   tags?: string[];
   product_tags?: string[];
   is_published?: boolean;
+  problem?: string;
+  solution?: string;
 }
 
 export function useUpdateKnowledgeArticle() {
