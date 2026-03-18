@@ -6733,10 +6733,26 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
-    // ✅ OTP VERIFICADO: Liberar ações financeiras quando cliente verificou identidade
+    // ✅ OTP VERIFICADO: Liberar ações financeiras + FORÇAR COLETA de dados (V16 Bug 32)
     const otpVerifiedInstruction = flow_context?.otpVerified ? `
 
-✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação. Você está AUTORIZADO a criar tickets financeiros, processar solicitações de reembolso, saque ou devolução normalmente. NÃO peça nenhuma verificação adicional. Atenda a solicitação diretamente.
+✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
+
+🎯 APÓS VERIFICAÇÃO OTP — SUA TAREFA PRINCIPAL É COLETAR DADOS:
+Você está AUTORIZADO a processar solicitações financeiras. Sua tarefa agora é COLETAR os dados necessários para criar o ticket:
+1. Tipo da solicitação (saque, reembolso, estorno ou devolução)
+2. Chave PIX do cliente ({{pix_key}})
+3. Banco ({{bank}})
+4. Motivo ({{reason}})
+5. Valor solicitado ({{amount}})
+
+REGRAS PÓS-OTP:
+- NÃO busque na base de conhecimento para pedidos de saque/reembolso — sua ação é COLETAR dados.
+- NÃO emita [[FLOW_EXIT]]. Permaneça no nó até coletar TODOS os campos necessários.
+- Pergunte UM campo por vez de forma natural e empática.
+- Após coletar TODOS os dados, confirme com o cliente e crie o ticket com create_ticket.
+- NÃO peça verificação adicional — o OTP já foi validado.
+- Se o cliente já informou algum dado na conversa anterior, NÃO peça novamente.
 ` : '';
 
     // 🚫 TRAVA CANCELAMENTO: Injetar instruções diretamente no prompt da LLM
