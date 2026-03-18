@@ -5443,7 +5443,8 @@ serve(async (req) => {
           return new Response(
             JSON.stringify({ 
               useAI: true, 
-              aiNodeActive: true, 
+              aiNodeActive: true,
+              skipInitialMessage: true, // 🆕 FIX: Master Flow start → ai_response — não enviar msg inicial ao autopilot
               nodeId: node.id, 
               flowId: masterFlow.id, 
               flowStarted: true,
