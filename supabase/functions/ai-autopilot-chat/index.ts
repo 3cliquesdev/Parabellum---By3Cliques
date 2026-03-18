@@ -6515,8 +6515,7 @@ Qual é o seu **email de compra**?"
 → PARE AQUI até identificação completa`;
       }
     }
-        const emailToUse = contactEmail || verifiedEmail;
-        const maskedEmailForPrompt = emailToUse ? maskEmail(emailToUse) : 'seu email cadastrado';
+    
         
         // Cenário: Cliente identificado por email â†’ Precisa OTP para SAQUE
         identityWallNote += `\n\n**=== PORTEIRO DE SAQUE - VERIFICAÇÃO OTP OBRIGATÓRIA ===**
