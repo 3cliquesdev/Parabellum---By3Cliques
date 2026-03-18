@@ -1103,8 +1103,8 @@ const WITHDRAWAL_ACTION_PATTERNS = [
   /pedir\s+saque/i,                                   // "pedir saque"
 ];
 
-// 🆕 Padrões de REEMBOLSO DE PEDIDO (SEM OTP) - Devolução de pedido Kiwify
-// A IA explica o processo e só transfere se cliente insistir
+// 🆕 Padrões de REEMBOLSO DE PEDIDO (COM OTP) - Devolução de pedido Kiwify
+// Reembolso agora exige OTP como ação financeira — mesma segurança do saque
 const REFUND_ACTION_PATTERNS = [
   /quero\s+reembolso/i,                               // "quero reembolso"
   /preciso\s+(de\s+)?reembolso/i,                     // "preciso de reembolso"
