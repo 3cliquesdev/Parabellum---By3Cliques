@@ -4608,8 +4608,12 @@ Responda APENAS: skip ou search`
           }
 
           // Step 3: Converter mapa para array e aplicar filtros
-          let allArticles = Array.from(articleMap.values());
-          console.log(`[ai-autopilot-chat] 📊 Total de artigos únicos encontrados: ${allArticles.length}`);
+          // 🆕 V8 FIX Bug 5: Excluir artigos sandbox_training da busca semântica principal
+          // Esses artigos são injetados separadamente como few-shot no prompt
+          let allArticles = Array.from(articleMap.values()).filter(
+            (a: any) => a.source !== 'sandbox_training'
+          );
+          console.log(`[ai-autopilot-chat] 📊 Total de artigos únicos encontrados (excl. sandbox): ${allArticles.length}`);
           
           // 🛡� FASE A: FALLBACK ROBUSTO - Executar busca por palavras-chave se:
           // 1. Embeddings não foram tentados (sem OPENAI_API_KEY)
