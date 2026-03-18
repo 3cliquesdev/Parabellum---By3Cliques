@@ -2926,7 +2926,7 @@ serve(async (req) => {
             await supabaseClient.from('chat_flow_states').update({ collected_data: collectedData, current_node_id: nextNode.id, status: 'active', updated_at: new Date().toISOString() }).eq('id', activeState.id);
             // 🆕 FIX: skipInitialMessage=true quando transição vem de ask_options → ai_response
             // Evita que o dígito de seleção do menu (ex: "2") seja enviado como mensagem real ao autopilot
-            return new Response(JSON.stringify({ useAI: true, aiNodeActive: true, skipInitialMessage: true, nodeId: nextNode.id, flowId: activeState.flow_id, contextPrompt: nextNode.data?.context_prompt, useKnowledgeBase: nextNode.data?.use_knowledge_base !== false, collectedData, ticketConfig: nextNode.data?.ticket_config || null }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            return new Response(JSON.stringify({ useAI: true, aiNodeActive: true, skipInitialMessage: true, nodeId: nextNode.id, flowId: activeState.flow_id, contextPrompt: nextNode.data?.context_prompt, useKnowledgeBase: nextNode.data?.use_knowledge_base !== false, collectedData, ticketConfig: nextNode.data?.ticket_config || null, otpVerified: collectedData?.__ai_otp_verified === true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
           // 🆕 BUG 4 FIX (2nd check): verify_customer_otp after auto-advance
           if (nextNode.type === 'verify_customer_otp') {
