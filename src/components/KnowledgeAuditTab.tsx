@@ -59,6 +59,7 @@ export function KnowledgeAuditTab() {
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<Set<string>>(new Set());
+  const [bulkApproving, setBulkApproving] = useState(false);
   const [editArticleId, setEditArticleId] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
