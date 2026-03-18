@@ -1,5 +1,5 @@
 ﻿import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-// BUILD: 2026-03-17T03:00:00Z — cache-bust redeploy
+// BUILD: V11 — 2026-03-18T14:00:00Z — Bugs 12-15 fix
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/business-hours.ts";
 
