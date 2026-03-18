@@ -470,7 +470,8 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   // 1. IA está controlando (autopilot) - mas avisar se global está off
   // 2. Conversa está aguardando humano (waiting_human)
   // 3. Conversa não está atribuída a ninguém (pool geral)
-  const canShowTakeControl = isAutopilot || isWaitingHuman || !conversation?.assigned_to;
+  const isAssignedToMe = conversation?.assigned_to === user?.id;
+  const canShowTakeControl = !isAssignedToMe && (isAutopilot || isWaitingHuman || !conversation?.assigned_to);
 
   const isSending = sendMessage.isPending || sendEmail.isPending;
 
