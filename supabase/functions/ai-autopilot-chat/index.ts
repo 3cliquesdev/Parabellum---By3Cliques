@@ -162,7 +162,7 @@ async function getConfiguredAIModel(supabaseClient: any): Promise<string> {
 }
 
 // ============================================================
-// ðŸ”§ HELPER: Extrair número limpo do whatsapp_id
+// 🔧 HELPER: Extrair número limpo do whatsapp_id
 // Prioriza whatsapp_id sobre phone para envio Meta API
 // Formatos suportados:
 //   - 5511999999999@s.whatsapp.net
@@ -311,7 +311,7 @@ function logSourceViolationIfAny(
 }
 
 // ============================================================
-// ðŸ›¡ï¸ HELPER: Safe JSON parse para argumentos de tool calls do LLM
+// 🛡� HELPER: Safe JSON parse para argumentos de tool calls do LLM
 // Limpa markdown fences, trailing commas, control chars
 // ============================================================
 function safeParseToolArgs(rawArgs: string): any {
@@ -337,7 +337,7 @@ function safeParseToolArgs(rawArgs: string): any {
   try {
     return JSON.parse(cleaned);
   } catch (finalErr) {
-    console.error('[safeParseToolArgs] âŒ Parse falhou mesmo após limpeza:', {
+    console.error('[safeParseToolArgs] ❌ Parse falhou mesmo após limpeza:', {
       original: rawArgs.substring(0, 200),
       cleaned: cleaned.substring(0, 200),
       error: finalErr instanceof Error ? finalErr.message : String(finalErr)
@@ -347,7 +347,7 @@ function safeParseToolArgs(rawArgs: string): any {
 }
 
 // ============================================================
-// ðŸ”¢ HELPER: Formatar opções de múltipla escolha como texto
+// 🔢 HELPER: Formatar opções de múltipla escolha como texto
 // Transforma array de opções em lista numerada com emojis
 // ============================================================
 function formatOptionsAsText(options: Array<{label: string; value: string}> | null | undefined): string {
@@ -364,7 +364,7 @@ function formatOptionsAsText(options: Array<{label: string; value: string}> | nu
 }
 
 // ============================================================
-// ðŸ†• DETECTOR DE INTENÇNÃO PARA PRESERVAÇÃO DE CONTEXTO
+// 🆕 DETECTOR DE INTENÇNÃO PARA PRESERVAÇÃO DE CONTEXTO
 // Identifica a categoria da intenção original do cliente
 // para recuperar contexto após verificação de email
 // ============================================================
@@ -411,7 +411,7 @@ function getIntentCategoryLabel(category: string | null): string {
 }
 
 // ============================================================
-// ðŸ†• EXTRATOR DE EMAIL TOLERANTE (WhatsApp-safe)
+// 🆕 EXTRATOR DE EMAIL TOLERANTE (WhatsApp-safe)
 // Reconhece emails mesmo quando quebrados por newline/espaços
 // ============================================================
 interface EmailExtractionResult {
@@ -453,7 +453,7 @@ function extractEmailTolerant(text: string): EmailExtractionResult {
   
   if (compactMatch && compactMatch[0]) {
     console.log('[extractEmailTolerant] âœ… Email encontrado no texto COMPACTADO:', compactMatch[0]);
-    console.log('[extractEmailTolerant] ðŸ“ Texto original tinha quebras:', text.substring(0, 100));
+    console.log('[extractEmailTolerant] 🔒 Texto original tinha quebras:', text.substring(0, 100));
     return {
       found: true,
       email: compactMatch[0].toLowerCase(),
@@ -468,7 +468,7 @@ function extractEmailTolerant(text: string): EmailExtractionResult {
   }
   
   // 3. Nenhum email encontrado
-  console.log('[extractEmailTolerant] âŒ Nenhum email encontrado no texto:', text.substring(0, 100));
+  console.log('[extractEmailTolerant] ❌ Nenhum email encontrado no texto:', text.substring(0, 100));
   return {
     found: false,
     email: null,
@@ -483,7 +483,7 @@ function extractEmailTolerant(text: string): EmailExtractionResult {
 }
 
 // ============================================================
-// ðŸ”’ HELPER: Seleção de Instância WhatsApp (Multi-Provider)
+// 🔒 HELPER: Seleção de Instância WhatsApp (Multi-Provider)
 // Suporta tanto Meta WhatsApp Cloud API quanto Evolution API
 // SEMPRE prioriza a instância vinculada à conversa
 // ============================================================
@@ -532,7 +532,7 @@ async function getWhatsAppInstanceWithProvider(
       .maybeSingle();
     
     if (fallbackMeta) {
-      console.log('[getWhatsAppInstance] ðŸ”„ Usando instância META FALLBACK:', {
+      console.log('[getWhatsAppInstance] 🔄 Usando instância META FALLBACK:', {
         instanceId: fallbackMeta.id,
         phoneNumberId: fallbackMeta.phone_number_id,
         name: fallbackMeta.name
@@ -540,7 +540,7 @@ async function getWhatsAppInstanceWithProvider(
       return { instance: fallbackMeta, provider: 'meta' };
     }
     
-    console.error('[getWhatsAppInstance] âŒ Nenhuma instância Meta WhatsApp disponível');
+    console.error('[getWhatsAppInstance] ❌ Nenhuma instância Meta WhatsApp disponível');
     return null;
   }
   
@@ -577,7 +577,7 @@ async function getWhatsAppInstanceWithProvider(
     .maybeSingle();
   
   if (fallbackInstance) {
-    console.log('[getWhatsAppInstance] ðŸ”„ Usando instância Evolution FALLBACK:', {
+    console.log('[getWhatsAppInstance] 🔄 Usando instância Evolution FALLBACK:', {
       instanceId: fallbackInstance.id,
       instanceName: fallbackInstance.instance_name,
       phoneNumber: fallbackInstance.phone_number
@@ -585,11 +585,11 @@ async function getWhatsAppInstanceWithProvider(
     return { instance: fallbackInstance, provider: 'evolution' };
   }
   
-  console.error('[getWhatsAppInstance] âŒ Nenhuma instância WhatsApp disponível');
+  console.error('[getWhatsAppInstance] ❌ Nenhuma instância WhatsApp disponível');
   return null;
 }
 
-// ðŸ”„ WRAPPER MULTI-PROVIDER: Busca dinamicamente o provider da conversa
+// 🔄 WRAPPER MULTI-PROVIDER: Busca dinamicamente o provider da conversa
 // Retorna { instance, provider } para suportar tanto Meta quanto Evolution
 async function getWhatsAppInstanceForConversation(
   supabaseClient: any,
@@ -616,7 +616,7 @@ async function getWhatsAppInstanceForConversation(
     metaInstanceId = data?.whatsapp_meta_instance_id;
   }
   
-  console.log('[getWhatsAppInstanceForConversation] ðŸ” Provider detectado:', {
+  console.log('[getWhatsAppInstanceForConversation] 🔒 Provider detectado:', {
     provider: provider || 'evolution (default)',
     metaInstanceId: metaInstanceId || 'N/A',
     conversationId
@@ -631,7 +631,7 @@ async function getWhatsAppInstanceForConversation(
   );
 }
 
-// ðŸ“¤ HELPER: Enviar mensagem via WhatsApp (Meta ou Evolution)
+// 📤 HELPER: Enviar mensagem via WhatsApp (Meta ou Evolution)
 async function sendWhatsAppMessage(
   supabaseClient: any,
   whatsappResult: WhatsAppInstanceResult,
@@ -640,14 +640,14 @@ async function sendWhatsAppMessage(
   conversationId: string,
   whatsappId?: string | null,
   useQueue: boolean = false,
-  senderName?: string | null // ðŸ†• Nome do remetente para prefixar mensagem
+  senderName?: string | null // 🆕 Nome do remetente para prefixar mensagem
 ): Promise<{ success: boolean; error?: any }> {
   try {
     if (whatsappResult.provider === 'meta') {
-      // ðŸ†• CORREÇNÃO: Priorizar whatsapp_id sobre phone
+      // 🆕 CORREÇNÃO: Priorizar whatsapp_id sobre phone
       const targetNumber = extractWhatsAppNumber(whatsappId) || phoneNumber?.replace(/\D/g, '');
       
-      console.log('[sendWhatsAppMessage] ðŸ“¤ Enviando via Meta WhatsApp API:', {
+      console.log('[sendWhatsAppMessage] 📤 Enviando via Meta WhatsApp API:', {
         instanceId: whatsappResult.instance.id,
         phoneNumberId: whatsappResult.instance.phone_number_id,
         targetNumber: targetNumber?.slice(-4),
@@ -659,17 +659,17 @@ async function sendWhatsAppMessage(
       const { data, error } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
         body: {
           instance_id: whatsappResult.instance.id,
-          phone_number: targetNumber, // ðŸ†• Usa whatsapp_id se disponível
+          phone_number: targetNumber, // 🆕 Usa whatsapp_id se disponível
           message,
           conversation_id: conversationId,
-          skip_db_save: true, // ðŸ†• CRÁTICO: Quem chama já salvou a mensagem
-          sender_name: senderName || undefined, // ðŸ†• Nome da persona/agente
-          is_bot_message: true // ðŸ†• Mensagem de IA = bot message (não muda ai_mode)
+          skip_db_save: true, // 🆕 CRÁTICO: Quem chama já salvou a mensagem
+          sender_name: senderName || undefined, // 🆕 Nome da persona/agente
+          is_bot_message: true // 🆕 Mensagem de IA = bot message (não muda ai_mode)
         }
       });
       
       if (error) {
-        console.error('[sendWhatsAppMessage] âŒ Erro Meta WhatsApp:', error);
+        console.error('[sendWhatsAppMessage] ❌ Erro Meta WhatsApp:', error);
         return { success: false, error };
       }
       
@@ -677,13 +677,13 @@ async function sendWhatsAppMessage(
       return { success: true };
       
     } else {
-      console.log('[sendWhatsAppMessage] ðŸ“¤ Enviando via Evolution API:', {
+      console.log('[sendWhatsAppMessage] 📤 Enviando via Evolution API:', {
         instanceId: whatsappResult.instance.id,
         instanceName: whatsappResult.instance.instance_name,
         phoneNumber: phoneNumber?.replace(/\D/g, '').slice(-4)
       });
       
-      // ðŸ†• Para Evolution, prefixar manualmente a mensagem com nome em negrito
+      // 🆕 Para Evolution, prefixar manualmente a mensagem com nome em negrito
       const formattedMessage = senderName ? `*${senderName}*\n${message}` : message;
       
       const { data, error } = await supabaseClient.functions.invoke('send-whatsapp-message', {
@@ -698,7 +698,7 @@ async function sendWhatsAppMessage(
       });
       
       if (error) {
-        console.error('[sendWhatsAppMessage] âŒ Erro Evolution API:', error);
+        console.error('[sendWhatsAppMessage] ❌ Erro Evolution API:', error);
         return { success: false, error };
       }
       
@@ -706,15 +706,15 @@ async function sendWhatsAppMessage(
       return { success: true };
     }
   } catch (err) {
-    console.error('[sendWhatsAppMessage] âŒ Exceção ao enviar:', err);
+    console.error('[sendWhatsAppMessage] ❌ Exce��o ao enviar:', err);
     return { success: false, error: err };
   }
 }
 
 // ============================================================
-// ðŸ”’ CONSTANTES GLOBAIS - Unificadas para prevenir inconsistências
+// 🔒 CONSTANTES GLOBAIS - Unificadas para prevenir inconsistências
 // ============================================================
-// âœ… FIX 1: FALLBACK_PHRASES reconstruída para NNÃO conflitar com system prompt da persona.
+// âœ… FIX 1: FALLBACK_PHRASES reconstruída para NÃO conflitar com system prompt da persona.
 // Removidas frases legítimas que a IA é instruída a dizer (ex: 'preciso verificar', 'não tenho certeza').
 // Mantidas APENAS frases que indicam transferência real ou incapacidade total de ajudar.
 const FALLBACK_PHRASES = [
@@ -746,8 +746,8 @@ const FALLBACK_PHRASES = [
   'não consegui processar',
 ];
 
-// ðŸ” BARREIRA FINANCEIRA - Palavras que identificam contexto FINANCEIRO (sem OTP obrigatório)
-// Estas palavras detectam intenção financeira mas NNÃO exigem OTP
+// 🔒 BARREIRA FINANCEIRA - Palavras que identificam contexto FINANCEIRO (sem OTP obrigatório)
+// Estas palavras detectam intenção financeira mas NÃO exigem OTP
 const FINANCIAL_BARRIER_KEYWORDS = [
   'saque',
   'sacar',
@@ -767,11 +767,11 @@ const FINANCIAL_BARRIER_KEYWORDS = [
   'meu dinheiro'
 ];
 
-// ðŸ” OPERAÇÁ•ES QUE EXIGEM OTP OBRIGATÓRIO (APENAS SAQUE DE SALDO/CARTEIRA)
+// 🔒 OPERAÇÁ•ES QUE EXIGEM OTP OBRIGATÓRIO (APENAS SAQUE DE SALDO/CARTEIRA)
 // OTP é necessário APENAS quando cliente quer SACAR dinheiro da carteira
-// Cancelamentos, reembolsos de pedidos Kiwify NNÃO precisam de OTP
+// Cancelamentos, reembolsos de pedidos Kiwify NÃO precisam de OTP
 const OTP_REQUIRED_KEYWORDS = [
-  // ðŸ†• Removidos 'saque' e 'sacar' isolados â€” termos ambíguos devem ser desambiguados pela IA
+  // 🆕 Removidos 'saque' e 'sacar' isolados â€” termos ambíguos devem ser desambiguados pela IA
   // A detecção de saque composto já é coberta por WITHDRAWAL_ACTION_PATTERNS
   'retirar saldo',
   'retirar dinheiro',
@@ -788,7 +788,7 @@ const OTP_REQUIRED_KEYWORDS = [
 ];
 
 // ============================================================
-// ðŸŽ¯ SISTEMA ANTI-ALUCINAÇÃO - SCORE DE CONFIANÇA (Sprint 2)
+// 🎯 SISTEMA ANTI-ALUCINAÇÃO - SCORE DE CONFIANÇA (Sprint 2)
 // ============================================================
 
 interface RetrievedDocument {
@@ -818,11 +818,11 @@ const SCORE_DIRECT = 0.75;   // Fallback: Alta confiança - responde direto
 const SCORE_CAUTIOUS = 0.40; // Fallback: Média confiança - responde com cautela 
 const SCORE_MINIMUM = 0.25;  // Fallback: Mínimo raised - evita respostas com < 25% de confiança
 
-// ðŸ†• Thresholds do MODO RAG ESTRITO (Anti-Alucinação) - mais conservador
+// 🆕 Thresholds do MODO RAG ESTRITO (Anti-Alucinação) - mais conservador
 const STRICT_SCORE_MINIMUM = 0.50;   // Modo estrito mais tolerante
 const STRICT_SIMILARITY_THRESHOLD = 0.45; // Artigos com menos de 45% são ignorados
 
-// ðŸ†• PADRÁ•ES DE PEDIDO EXPLÁCITO DE ATENDENTE HUMANO
+// 🆕 PADRÁ•ES DE PEDIDO EXPLÁCITO DE ATENDENTE HUMANO
 // SÁ“ fazer handoff automático se cliente usar essas frases
 const EXPLICIT_HUMAN_REQUEST_PATTERNS = [
   /quero\s*(falar\s*(com)?)?\s*(um\s*)?(atendente|humano|pessoa|agente|suporte)/i,
@@ -837,7 +837,7 @@ const EXPLICIT_HUMAN_REQUEST_PATTERNS = [
   /suporte\s*humano/i,
 ];
 
-// ðŸ†• Indicadores de incerteza/alucinação para validação pós-resposta
+// 🆕 Indicadores de incerteza/alucinação para validação pós-resposta
 const HALLUCINATION_INDICATORS = [
   'não tenho certeza',
   'acredito que',
@@ -854,7 +854,7 @@ const HALLUCINATION_INDICATORS = [
 // Indicadores de conflito
 const CONFLICT_INDICATORS = ['porém', 'entretanto', 'no entanto', 'diferente', 'contrário', 'atualizado', 'novo', 'antigo'];
 
-// ðŸ†• GATILHOS REMOVIDOS: IA não faz mais handoff automático por keywords
+// 🆕 GATILHOS REMOVIDOS: IA não faz mais handoff automático por keywords
 // A IA agora SEMPRE tenta responder e só transfere se cliente PEDIR EXPLICITAMENTE
 // const IMMEDIATE_HANDOFF_TRIGGERS foi REMOVIDO
 
@@ -902,8 +902,8 @@ function detectConflicts(documents: RetrievedDocument[]): boolean {
   );
 }
 
-// ðŸ†• Helper: Verificar handoff imediato - DESABILITADO
-// IA NNÃO faz mais handoff automático por keywords
+// 🆕 Helper: Verificar handoff imediato - DESABILITADO
+// IA NÃO faz mais handoff automático por keywords
 function checkImmediateHandoff(query: string): { triggered: boolean; dept?: string; reason?: string } {
   // REMOVIDO: Handoff automático por keywords
   // Agora retorna sempre false - handoff só acontece se cliente PEDIR EXPLICITAMENTE
@@ -911,7 +911,7 @@ function checkImmediateHandoff(query: string): { triggered: boolean; dept?: stri
 }
 
 // Helper: Determinar departamento por keywords (OTIMIZADO com regex e prioridade)
-// ðŸ†• ATUALIZADO: Retorna slugs que mapeiam para sub-departamentos específicos
+// 🆕 ATUALIZADO: Retorna slugs que mapeiam para sub-departamentos específicos
 function pickDepartment(question: string): string {
   // Normalizar: lowercase + remover acentos para matching consistente
   const q = question.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -939,7 +939,7 @@ function pickDepartment(question: string): string {
   return 'suporte_n1';
 }
 
-// ðŸŽ¯ FUNÇNÃO PRINCIPAL: Calcular Score de Confiança (ATUALIZADA para thresholds dinâmicos)
+// 🎯 FUNÇNÃO PRINCIPAL: Calcular Score de Confiança (ATUALIZADA para thresholds dinâmicos)
 function calculateConfidenceScore(
   query: string, 
   documents: RetrievedDocument[],
@@ -989,13 +989,13 @@ function calculateConfidenceScore(
   let score = (0.6 * confRetrieval) + (0.4 * coverage);
   if (conflicts) score -= 0.25;
   
-  // ðŸ†• FASE 4: Boost para matches semânticos fortes
+  // 🆕 FASE 4: Boost para matches semânticos fortes
   const hasSemanticMatch = documents.some(d => d.similarity && d.similarity > 0.8);
   if (hasSemanticMatch) {
     score += 0.1; // Boost de 10% para matches semânticos fortes
   }
   
-  // ðŸ†• FASE 4: Penalidade para documentos muito antigos (> 6 meses)
+  // 🆕 FASE 4: Penalidade para documentos muito antigos (> 6 meses)
   const now = Date.now();
   const hasVeryOldDoc = documents.some(d => {
     if (!d.updated_at) return false;
@@ -1008,7 +1008,7 @@ function calculateConfidenceScore(
   
   score = Math.max(0, Math.min(1, score)); // Clamp 0-1
   
-  // ðŸ†• Modo Estrito: usar thresholds mais conservadores
+  // 🆕 Modo Estrito: usar thresholds mais conservadores
   const effectiveMinThreshold = ragConfig?.strictMode ? STRICT_SCORE_MINIMUM : scoreMinThreshold;
   
   // 5. Determinar ação - NOVA LÁ“GICA: IA SEMPRE tenta responder
@@ -1027,7 +1027,7 @@ function calculateConfidenceScore(
     action = 'cautious';
     reason = `Baixa confiança (${(score * 100).toFixed(0)}%) mas encontrou ${documents.length} artigo(s) - tentando responder`;
   } else if (ragConfig?.strictMode && score < effectiveMinThreshold) {
-    // ðŸ†• Modo Estrito: handoff se abaixo do threshold mínimo
+    // 🆕 Modo Estrito: handoff se abaixo do threshold mínimo
     action = 'handoff';
     reason = `Modo Estrito: confiança (${(score * 100).toFixed(0)}%) abaixo do mínimo (${(effectiveMinThreshold * 100).toFixed(0)}%)`;
   } else {
@@ -1195,7 +1195,7 @@ IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu
 }
 
 // ============================================================
-// ðŸ†• CONTRATO ANTI-ALUCINAÇÃO: flow_context obrigatório
+// 🆕 CONTRATO ANTI-ALUCINAÇÃO: flow_context obrigatório
 // ============================================================
 interface FlowContext {
   flow_id: string;
@@ -1208,7 +1208,7 @@ interface FlowContext {
   kbProductFilter?: string[];
   contextPrompt?: string;
   fallbackMessage?: string;
-  // ðŸ†• FASE 1: Campos de Controle de Comportamento Anti-Alucinação
+  // 🆕 FASE 1: Campos de Controle de Comportamento Anti-Alucinação
   objective?: string;
   maxSentences?: number;
   forbidQuestions?: boolean;
@@ -1221,7 +1221,7 @@ interface FlowContext {
   collectedData?: any;
 }
 
-// ðŸ†• FASE 1: Função para gerar prompt RESTRITIVO baseado no flow_context
+// 🆕 FASE 1: Função para gerar prompt RESTRITIVO baseado no flow_context
 // Substitui o prompt extenso quando flow_context tem controles ativos
 function generateRestrictedPrompt(flowContext: FlowContext, contactName: string, contactStatus: string, enrichment?: { orgName?: string | null; consultantName?: string | null; sellerName?: string | null; tags?: string[] }): string {
   const maxSentences = flowContext.maxSentences ?? 5;
@@ -1403,7 +1403,7 @@ function validateResponseRestrictions(
   return { valid: true };
 }
 
-// ðŸ†• ESCAPE PATTERNS: Detectar quando IA tenta sair do contrato (semântico, agrupado por intenção)
+// 🆕 ESCAPE PATTERNS: Detectar quando IA tenta sair do contrato (semântico, agrupado por intenção)
 const ESCAPE_PATTERNS = [
   // Token explícito de saída (IA pediu exit limpo)
   /\[\[FLOW_EXIT(:[a-zA-Z_]+)?\]\]/i,
@@ -1435,7 +1435,7 @@ interface AutopilotChatRequest {
     email: string;
     isVerified: boolean;
   } | null;
-  // ðŸ†• CONTRATO: Contexto do fluxo (obrigatório quando chamado via flow)
+  // 🆕 CONTRATO: Contexto do fluxo (obrigatório quando chamado via flow)
   flow_context?: FlowContext;
 }
 
@@ -1453,7 +1453,7 @@ serve(async (req) => {
     const parsedBody = bodyText ? JSON.parse(bodyText) : {};
     
     if (parsedBody.warmup) {
-      console.log('[ai-autopilot-chat] ðŸ”¥ Warmup ping received');
+      console.log('[ai-autopilot-chat] 🔥 Warmup ping received');
       return new Response(
         JSON.stringify({ status: 'warm', timestamp: new Date().toISOString() }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -1467,9 +1467,9 @@ serve(async (req) => {
 
     let { conversationId, customerMessage, maxHistory = 20, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
 
-    // ðŸ”’ FIX 1: Hard validation â€” customerMessage obrigatório (exceto warmup)
+    // 🔒 FIX 1: Hard validation â€” customerMessage obrigatório (exceto warmup)
     if (!customerMessage || typeof customerMessage !== 'string' || customerMessage.trim() === '') {
-      console.error('[ai-autopilot-chat] âŒ BAD_REQUEST: customerMessage ausente ou vazio');
+      console.error('[ai-autopilot-chat] ❌ BAD_REQUEST: customerMessage ausente ou vazio');
       return new Response(JSON.stringify({ 
         error: 'BAD_REQUEST', 
         detail: 'customerMessage is required and must be a non-empty string' 
@@ -1479,13 +1479,13 @@ serve(async (req) => {
       });
     }
     
-    // ðŸ†• Carregar RAGConfig uma única vez para todo o handler
+    // 🆕 Carregar RAGConfig uma única vez para todo o handler
     const ragConfig = await getRAGConfig(supabaseClient);
-    console.log('[ai-autopilot-chat] ðŸ“Š RAGConfig carregado:', { model: ragConfig.model, strictMode: ragConfig.strictMode, blockFinancial: ragConfig.blockFinancial });
+    console.log('[ai-autopilot-chat] 📊 RAGConfig carregado:', { model: ragConfig.model, strictMode: ragConfig.strictMode, blockFinancial: ragConfig.blockFinancial });
 
     // Validação defensiva
     if (!conversationId || conversationId === 'undefined') {
-      console.error('[ai-autopilot-chat] âŒ conversationId inválido:', conversationId);
+      console.error('[ai-autopilot-chat] ❌ conversationId inválido:', conversationId);
       return new Response(JSON.stringify({ 
         error: 'conversationId é obrigatório' 
       }), {
@@ -1515,20 +1515,20 @@ serve(async (req) => {
       });
     }
 
-    // ðŸš¨ FASE 3: Declarar variáveis fora do try para acesso no catch
+    // 🚨 FASE 3: Declarar variáveis fora do try para acesso no catch
     let conversation: any = null;
     let responseChannel = 'web_chat';
     let contact: any = null;
     let department: string | null = null;
     
-    // ðŸ†• Chat Flow: variáveis para persona/KB específicas do fluxo
+    // 🆕 Chat Flow: variáveis para persona/KB específicas do fluxo
     let flowPersonaId: string | null = flow_context?.personaId || null;
     let flowKbCategories: string[] | null = flow_context?.kbCategories || null;
     let flowKbProductFilter: string[] | null = flow_context?.kbProductFilter || null;
     let flowContextPrompt: string | null = flow_context?.contextPrompt || null;
     let flowFallbackMessage: string | null = flow_context?.fallbackMessage || null;
     
-    // ðŸ†• FASE 1: Variáveis de Controle de Comportamento Anti-Alucinação
+    // 🆕 FASE 1: Variáveis de Controle de Comportamento Anti-Alucinação
     const flowObjective: string | null = flow_context?.objective || null;
     const flowMaxSentences: number = flow_context?.maxSentences ?? 5;
     const flowForbidQuestions: boolean = flow_context?.forbidQuestions ?? false;
@@ -1538,11 +1538,11 @@ serve(async (req) => {
     const flowForbidCommercialPrompt: boolean = flow_context?.forbidCommercial ?? false;
     const flowForbidConsultantPrompt: boolean = flow_context?.forbidConsultant ?? false;
     
-    // ðŸ†• FASE 1: Flag para usar prompt restritivo
+    // 🆕 FASE 1: Flag para usar prompt restritivo
     const useRestrictedPrompt = !!(flow_context && (flowObjective || flowForbidQuestions || flowForbidOptions || flowForbidFinancial));
     
     if (useRestrictedPrompt) {
-      console.log('[ai-autopilot-chat] ðŸŽ¯ FASE 1: Modo restritivo ATIVO:', {
+      console.log('[ai-autopilot-chat] 🎯 FASE 1: Modo restritivo ATIVO:', {
         objective: flowObjective?.substring(0, 50),
         maxSentences: flowMaxSentences,
         forbidQuestions: flowForbidQuestions,
@@ -1551,12 +1551,12 @@ serve(async (req) => {
       });
     }
 
-    // ðŸ”’ TRAVA FINANCEIRA â€” Interceptação na ENTRADA (antes de chamar LLM)
-    // ðŸ†• SEPARAÇÃO: Apenas AÇÁ•ES financeiras bloqueiam. Perguntas informativas passam para a LLM.
-    // ðŸ†• CORREÇNÃO: Termos de cancelamento REMOVIDOS â€” tratados separadamente abaixo
+    // 🔒 TRAVA FINANCEIRA â€” Interceptação na ENTRADA (antes de chamar LLM)
+    // 🆕 SEPARAÇÃO: Apenas AÇÁ•ES financeiras bloqueiam. Perguntas informativas passam para a LLM.
+    // 🆕 CORREÇNÃO: Termos de cancelamento REMOVIDOS â€” tratados separadamente abaixo
     const financialActionPattern = /quero\s*(sacar|retirar|meu\s*(reembolso|dinheiro|estorno|saldo))|fa(z|ça)\s*(meu\s*)?(reembolso|estorno|saque|devolu[çc][ãa]o)|(sacar|retirar|tirar)\s*(meu\s*)?(saldo|dinheiro|valor)|(solicitar|pedir|fazer|realizar|efetuar|estornar)\s*(saque|reembolso|estorno|devolu[çc][ãa]o|pagamento)|(quero|preciso|necessito)\s*(meu\s+dinheiro|devolu[çc][ãa]o|reembolso|estorno|ressarcimento)|transferir\s*(meu\s*)?saldo|devolver\s*(meu\s*)?dinheiro|cobran[çc]a\s*indevida|contestar\s*(cobran[çc]a|pagamento)|cad[êe]\s*(meu\s*)?(dinheiro|saldo|reembolso)|n[ãa]o\s+recebi\s*(meu\s*)?(reembolso|estorno|saque|pagamento|dinheiro)|me\s+(devolvam|reembolsem|paguem)|preciso\s+do\s+meu\s+(saque|reembolso|saldo)|quero\s+receber\s*(meu\s*)?(pagamento|dinheiro|saldo)/i;
     const financialInfoPattern = /qual\s*(o\s*)?(prazo|tempo|data)|como\s*(funciona|fa[çc]o|solicito|pe[çc]o)|onde\s*(vejo|consulto|acompanho)|quando\s*(posso|vou|ser[áa])|pol[ií]tica\s*de\s*(reembolso|devolu[çc][ãa]o|estorno|saque|cancelamento)|regras?\s*(de|para|do)\s*(saque|reembolso|estorno|devolu[çc][ãa]o)|d[úu]vida\s+(sobre|com|de|do|da)\s+(saque|reembolso|estorno|devolu|financ|saldo|cobran)|saber\s+sobre|informar\s+sobre|informa[çc][ãa]o\s+(sobre|de|do|da)|perguntar\s+sobre|entender\s+(como|sobre|o\s+que)|explicar?\s+(como|sobre|o\s+que)|gostaria\s+de\s+(saber|entender|me\s+informar)|o\s+que\s+[ée]\s*(saque|reembolso|estorno|devolu[çc][ãa]o)|confirma[çc][ãa]o\s+de/i;
-    // ðŸ†• Regex para termos financeiros AMBÁGUOS (palavra isolada, sem verbo de ação nem contexto informativo)
+    // 🆕 Regex para termos financeiros AMBÁGUOS (palavra isolada, sem verbo de ação nem contexto informativo)
     const financialAmbiguousPattern = /\b(saque|sacar|saldo|reembolso|estorno|devolu[çc][ãa]o|ressarcimento|cobran[çc]a)\b/i;
     
     const isFinancialAction = financialActionPattern.test(customerMessage || '');
@@ -1566,45 +1566,45 @@ serve(async (req) => {
     // Flag para injetar instrução de desambiguação no prompt quando termo é ambíguo
     const ambiguousFinancialDetected = flowForbidFinancial && isFinancialAmbiguous;
     if (ambiguousFinancialDetected) {
-      console.log('[ai-autopilot-chat] ðŸ” DESAMBIGUAÇÃO FINANCEIRA: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
+      console.log('[ai-autopilot-chat] 🔒 DESAMBIGUAÇÃO FINANCEIRA: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
     }
 
-    // ðŸ†• TRAVA CANCELAMENTO â€” Separada do financeiro para roteamento independente
+    // 🆕 TRAVA CANCELAMENTO â€” Separada do financeiro para roteamento independente
     const cancellationActionPattern = /cancelar\s*(minha\s*)?(assinatura|cobran[çc]a|pagamento|plano|conta|servi[çc]o)|quero\s+cancelar|desistir\s*(do|da|de)\s*(plano|assinatura|servi[çc]o|conta)|n[ãa]o\s+quero\s+mais\s*(o\s*)?(plano|assinatura|servi[çc]o)|encerrar\s*(minha\s*)?(conta|assinatura|plano)/i;
     const isCancellationAction = cancellationActionPattern.test(customerMessage || '');
-    // ðŸ†• Regex para termos de cancelamento AMBÁGUOS (palavra isolada, sem verbo de ação nem contexto informativo)
+    // 🆕 Regex para termos de cancelamento AMBÁGUOS (palavra isolada, sem verbo de ação nem contexto informativo)
     const cancellationAmbiguousPattern = /\b(cancelar|cancelamento|desistir|encerrar|rescindir|rescis[ãa]o)\b/i;
     const isCancellationAmbiguous = !isCancellationAction && !isFinancialInfo && cancellationAmbiguousPattern.test(customerMessage || '');
     
     // Flag para injetar instrução de desambiguação de cancelamento no prompt quando termo é ambíguo
     const ambiguousCancellationDetected = flowForbidCancellation && isCancellationAmbiguous;
     if (ambiguousCancellationDetected) {
-      console.log('[ai-autopilot-chat] ðŸ” DESAMBIGUAÇÃO CANCELAMENTO: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
+      console.log('[ai-autopilot-chat] 🔒 DESAMBIGUAÇÃO CANCELAMENTO: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
     }
     
-    // ðŸ›’ DESAMBIGUAÇÃO COMERCIAL â€” Detectar termos comerciais ambíguos
+    // 🛒 DESAMBIGUAÇÃO COMERCIAL â€” Detectar termos comerciais ambíguos
     const commercialAmbiguousPattern = /\b(comprar|pre[çc]o|or[çc]amento|plano|assinatura|upgrade|downgrade|cat[aá]logo|proposta|demonstra[çc][ãa]o)\b/i;
     const commercialActionPattern = /comprar|quero comprar|quanto custa|pre[çc]o|proposta|or[çc]amento|cat[aá]logo|assinar|plano|tabela de pre[çc]o|conhecer.*produto|demonstra[çc][aã]o|demo|trial|teste gr[aá]tis|upgrade|downgrade|mudar.*plano/i;
     const isCommercialAction = commercialActionPattern.test(customerMessage || '');
     const isCommercialAmbiguous = !isCommercialAction && commercialAmbiguousPattern.test(customerMessage || '');
     const ambiguousCommercialDetected = flowForbidCommercialPrompt && isCommercialAmbiguous;
     if (ambiguousCommercialDetected) {
-      console.log('[ai-autopilot-chat] ðŸ” DESAMBIGUAÇÃO COMERCIAL: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
+      console.log('[ai-autopilot-chat] 🔒 DESAMBIGUAÇÃO COMERCIAL: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
     }
 
-    // ðŸ’¼ DESAMBIGUAÇÃO CONSULTOR â€” Detectar termos de consultor ambíguos
+    // 💼 DESAMBIGUAÇÃO CONSULTOR â€” Detectar termos de consultor ambíguos
     const consultorAmbiguousPattern = /\b(consultor|assessor|meu\s+gerente|meu\s+consultor|falar\s+com\s+meu)\b/i;
     const consultorActionPattern = /falar\s+com\s*(meu\s*)?(consultor|assessor|gerente)|quero\s*(meu\s*)?(consultor|assessor)|chamar\s*(meu\s*)?(consultor|assessor)|transferir\s+para\s*(meu\s*)?(consultor|assessor)/i;
     const isConsultorAction = consultorActionPattern.test(customerMessage || '');
     const isConsultorAmbiguous = !isConsultorAction && consultorAmbiguousPattern.test(customerMessage || '');
     const ambiguousConsultorDetected = flowForbidConsultantPrompt && isConsultorAmbiguous;
     if (ambiguousConsultorDetected) {
-      console.log('[ai-autopilot-chat] ðŸ” DESAMBIGUAÇÃO CONSULTOR: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
+      console.log('[ai-autopilot-chat] 🔒 DESAMBIGUAÇÃO CONSULTOR: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
     }
     
     // Só bloquear AÇÁ•ES financeiras. Info passa para LLM responder via KB. Ambíguo â†’ IA pergunta.
     if (ragConfig.blockFinancial && flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && isFinancialAction && !isFinancialInfo) {
-      console.warn('[ai-autopilot-chat] ðŸ”’ TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
+      console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
       const fixedMessage = 'Entendi sua solicitação. Vou te encaminhar para o setor financeiro que poderá te ajudar com isso.';
       
@@ -1633,12 +1633,12 @@ serve(async (req) => {
             .from('conversations')
             .update(convUpdate)
             .eq('id', conversationId);
-          console.log('[ai-autopilot-chat] ðŸ”’ Conversa transferida para humano (trava financeira - entrada, sem fluxo), dept:', financialDeptId || 'genérico');
+          console.log('[ai-autopilot-chat] 🔒 Conversa transferida para humano (trava financeira - entrada, sem fluxo), dept:', financialDeptId || 'genérico');
         } catch (transferErr) {
           console.error('[ai-autopilot-chat] Erro ao transferir (trava financeira - entrada):', transferErr);
         }
       } else {
-        console.log('[ai-autopilot-chat] ðŸ”’ Flow context presente â€” delegando avanço ao process-chat-flow via forceFinancialExit');
+        console.log('[ai-autopilot-chat] 🔒 Flow context presente â€” delegando avanço ao process-chat-flow via forceFinancialExit');
       }
 
       try {
@@ -1662,7 +1662,7 @@ serve(async (req) => {
         console.error('[ai-autopilot-chat] âš ï¸ Failed to log financial block event:', logErr);
       }
 
-      // Correção 2: Quando fluxo ativo, NNÃO enviar mensagem fixa â€” delegar 100% ao process-chat-flow
+      // Correção 2: Quando fluxo ativo, NÃO enviar mensagem fixa â€” delegar 100% ao process-chat-flow
       if (hasFlowContext) {
         return new Response(JSON.stringify({
           ok: true,
@@ -1689,9 +1689,9 @@ serve(async (req) => {
       });
     }
 
-    // ðŸ†• TRAVA CANCELAMENTO â€” Interceptação na ENTRADA (antes de chamar LLM)
+    // 🆕 TRAVA CANCELAMENTO â€” Interceptação na ENTRADA (antes de chamar LLM)
     if (flowForbidCancellation && customerMessage && customerMessage.trim().length > 0 && isCancellationAction && !isFinancialInfo) {
-      console.warn('[ai-autopilot-chat] ðŸš« TRAVA CANCELAMENTO (ENTRADA): Intenção de cancelamento detectada, bloqueando IA:', customerMessage.substring(0, 80));
+      console.warn('[ai-autopilot-chat] 🚫 TRAVA CANCELAMENTO (ENTRADA): Intenção de cancelamento detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
       const cancelMsg = 'Entendi que você deseja cancelar. Vou te direcionar para o processo de cancelamento.';
       const hasFlowContext = !!(flow_context);
@@ -1742,12 +1742,12 @@ serve(async (req) => {
       });
     }
 
-    // ðŸ”’ TRAVA COMERCIAL â€” Interceptação na ENTRADA (antes de chamar LLM)
+    // 🔒 TRAVA COMERCIAL â€” Interceptação na ENTRADA (antes de chamar LLM)
     const flowForbidCommercial: boolean = flow_context?.forbidCommercial ?? false;
     const commercialIntentPattern = /comprar|quero comprar|quanto custa|pre[çc]o|proposta|or[çc]amento|cat[aá]logo|assinar|plano|tabela de pre[çc]o|conhecer.*produto|demonstra[çc][aã]o|demo|trial|teste gr[aá]tis|upgrade|downgrade|mudar.*plano/i;
     
     if (flowForbidCommercial && customerMessage && customerMessage.trim().length > 0 && commercialIntentPattern.test(customerMessage)) {
-      console.warn('[ai-autopilot-chat] ðŸ›’ TRAVA COMERCIAL (ENTRADA): Intenção comercial detectada, bloqueando IA:', customerMessage.substring(0, 80));
+      console.warn('[ai-autopilot-chat] 🛒 TRAVA COMERCIAL (ENTRADA): Intenção comercial detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
       const commercialMsg = 'Á“timo! Vou te conectar com nosso time comercial para te ajudar com isso.';
       const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
@@ -1760,12 +1760,12 @@ serve(async (req) => {
             .from('conversations')
             .update({ ai_mode: 'waiting_human', assigned_to: null, department: DEPT_COMERCIAL_ID })
             .eq('id', conversationId);
-          console.log('[ai-autopilot-chat] ðŸ›’ Conversa transferida para Comercial - Nacional (trava comercial, sem fluxo)');
+          console.log('[ai-autopilot-chat] 🛒 Conversa transferida para Comercial - Nacional (trava comercial, sem fluxo)');
         } catch (transferErr) {
           console.error('[ai-autopilot-chat] Erro ao transferir (trava comercial):', transferErr);
         }
       } else {
-        console.log('[ai-autopilot-chat] ðŸ›’ Flow context presente â€” delegando avanço ao process-chat-flow via forceCommercialExit');
+        console.log('[ai-autopilot-chat] 🛒 Flow context presente â€” delegando avanço ao process-chat-flow via forceCommercialExit');
       }
 
       try {
@@ -1803,7 +1803,7 @@ serve(async (req) => {
       });
     }
 
-    // ðŸš¨ FASE 3: Fallback Gracioso - Try-catch interno para capturar falhas da IA
+    // 🚨 FASE 3: Fallback Gracioso - Try-catch interno para capturar falhas da IA
     try {
       // 1. Buscar conversa e informações do contato (ANTES do cache)
       const { data: conversationData, error: convError } = await supabaseClient
@@ -1829,7 +1829,7 @@ serve(async (req) => {
       contact = conversation.contacts as any;
       department = conversation.department || null;
 
-      // ðŸ†• ENRIQUECIMENTO DE CONTEXTO: Buscar organização, consultor, vendedor e tags do contato
+      // 🆕 ENRIQUECIMENTO DE CONTEXTO: Buscar organização, consultor, vendedor e tags do contato
       let contactOrgName: string | null = null;
       let contactConsultantName: string | null = null;
       let contactSellerName: string | null = null;
@@ -1894,7 +1894,7 @@ serve(async (req) => {
           }
         }
 
-        console.log('[ai-autopilot-chat] ðŸ·ï¸ Contexto enriquecido:', {
+        console.log('[ai-autopilot-chat] 🏷️ Contexto enriquecido:', {
           org: contactOrgName,
           consultant: contactConsultantName,
           seller: contactSellerName,
@@ -1904,11 +1904,11 @@ serve(async (req) => {
         console.error('[ai-autopilot-chat] âš ï¸ Erro ao enriquecer contexto do contato:', enrichErr);
       }
 
-      // ðŸ†• BUSINESS HOURS: Buscar info de horário comercial para contexto da IA
+      // 🆕 BUSINESS HOURS: Buscar info de horário comercial para contexto da IA
       let businessHoursInfo: BusinessHoursResult | null = null;
       try {
         businessHoursInfo = await getBusinessHoursInfo(supabaseClient);
-        console.log('[ai-autopilot-chat] ðŸ• Business hours:', {
+        console.log('[ai-autopilot-chat] 🕐 Business hours:', {
           within_hours: businessHoursInfo.within_hours,
           is_holiday: businessHoursInfo.is_holiday,
           next_open: businessHoursInfo.next_open_text,
@@ -1918,7 +1918,7 @@ serve(async (req) => {
         console.error('[ai-autopilot-chat] âš ï¸ Erro ao buscar horário comercial:', bhErr);
       }
 
-      // ðŸ›¡ï¸ VERIFICAÇÃO GLOBAL: Checar se a IA está habilitada globalmente
+      // 🛡� VERIFICAÇÃO GLOBAL: Checar se a IA está habilitada globalmente
       const { data: globalConfig } = await supabaseClient
         .from('system_configurations')
         .select('value')
@@ -1927,16 +1927,16 @@ serve(async (req) => {
       
       const isAIGloballyEnabled = globalConfig?.value === 'true' || globalConfig?.value === true;
       
-      // ðŸ†• MODO DE TESTE: Verificar se a conversa está em modo de teste individual
+      // 🆕 MODO DE TESTE: Verificar se a conversa está em modo de teste individual
       // Se is_test_mode = true, ignora ai_global_enabled e processa normalmente
       const isTestMode = conversation.is_test_mode === true;
       
       if (isTestMode) {
-        console.log('[ai-autopilot-chat] ðŸ§ª MODO TESTE ATIVO - Ignorando ai_global_enabled');
+        console.log('[ai-autopilot-chat] 🧪 MODO TESTE ATIVO - Ignorando ai_global_enabled');
       }
       
       if (!isAIGloballyEnabled && !isTestMode) {
-        console.log('[ai-autopilot-chat] ðŸš« IA DESLIGADA GLOBALMENTE (e não é test mode) - IGNORANDO');
+        console.log('[ai-autopilot-chat] 🚫 IA DESLIGADA GLOBALMENTE (e não é test mode) - IGNORANDO');
         return new Response(
           JSON.stringify({ 
             skipped: true, 
@@ -1948,7 +1948,7 @@ serve(async (req) => {
         );
       }
 
-      // ðŸ›¡ï¸ VERIFICAÇÃO DEFENSIVA: Não processar se não está em autopilot
+      // 🛡� VERIFICAÇÃO DEFENSIVA: Não processar se não está em autopilot
       if (conversation.ai_mode !== 'autopilot') {
         console.log('[ai-autopilot-chat] âš ï¸ Conversa não está em autopilot. ai_mode:', conversation.ai_mode, '- IGNORANDO');
         return new Response(
@@ -1961,7 +1961,7 @@ serve(async (req) => {
         );
       }
 
-      // ðŸ›¡ï¸ ANTI-RACE-CONDITION: Verificar se handoff foi executado recentemente
+      // 🛡� ANTI-RACE-CONDITION: Verificar se handoff foi executado recentemente
       // Isso previne que múltiplas chamadas reprocessem a mesma conversa
       const handoffExecutedAt = conversation.handoff_executed_at;
       if (handoffExecutedAt) {
@@ -1969,7 +1969,7 @@ serve(async (req) => {
         const HANDOFF_PROTECTION_WINDOW_MS = 60000; // 60 segundos de proteção
         
         if (handoffAgeMs < HANDOFF_PROTECTION_WINDOW_MS) {
-          console.log('[ai-autopilot-chat] â¸ï¸ Handoff recente detectado (' + Math.round(handoffAgeMs/1000) + 's atrás) - IGNORANDO para prevenir race condition');
+          console.log('[ai-autopilot-chat] ⚡ Handoff recente detectado (' + Math.round(handoffAgeMs/1000) + 's atrás) - IGNORANDO para prevenir race condition');
           return new Response(
             JSON.stringify({ 
               skipped: true, 
@@ -1982,12 +1982,12 @@ serve(async (req) => {
       }
 
       // ============================================================
-      // ðŸ” PRIORIDADE ABSOLUTA: ESTADO awaiting_otp
+      // 🔒 PRIORIDADE ABSOLUTA: ESTADO awaiting_otp
       // Se há OTP pendente, validar de forma determinística (com/sem espaços)
       // e NUNCA fazer handoff por código incorreto.
       // 
-      // ðŸ›¡ï¸ MELHORIA: Verificar CONTEXTO da conversa para evitar confusão
-      // Se a IA pediu número de pedido/rastreio, NNÃO deve tratar como OTP
+      // 🛡� MELHORIA: Verificar CONTEXTO da conversa para evitar confusão
+      // Se a IA pediu número de pedido/rastreio, NÃO deve tratar como OTP
       // ============================================================
       {
         const conversationMetadata = conversation.customer_metadata || {};
@@ -1996,7 +1996,7 @@ serve(async (req) => {
         const otpExpiresAt = conversationMetadata.otp_expires_at;
         const hasRecentOTPPending = otpExpiresAt && new Date(otpExpiresAt) > new Date();
         
-        // ðŸ†• VERIFICAÇÃO DE CONTEXTO: Buscar última mensagem da IA para entender o contexto
+        // 🆕 VERIFICAÇÃO DE CONTEXTO: Buscar última mensagem da IA para entender o contexto
         let lastAIAskedForOTP = false;
         let lastAIAskedForOrder = false;
         
@@ -2044,7 +2044,7 @@ serve(async (req) => {
             lastAIAskedForOTP = otpContextPatterns.some(p => p.test(lastAIContent) || p.test(last3AIContent));
             lastAIAskedForOrder = orderContextPatterns.some(p => p.test(lastAIContent));
             
-            console.log('[ai-autopilot-chat] ðŸ“‹ Contexto da conversa:', {
+            console.log('[ai-autopilot-chat] 📋 Contexto da conversa:', {
               lastAIMessage: lastAIContent.substring(0, 100),
               lastAIAskedForOTP,
               lastAIAskedForOrder,
@@ -2056,16 +2056,16 @@ serve(async (req) => {
           console.error('[ai-autopilot-chat] Erro ao verificar contexto:', contextErr);
         }
         
-        // ðŸ›¡ï¸ SÁ“ INTERCEPTAR COMO OTP SE:
+        // 🛡� SÁ“ INTERCEPTAR COMO OTP SE:
         // 1. Há estado awaiting_otp E
-        // 2. A última mensagem da IA NNÃO foi pedindo número de pedido/rastreio
+        // 2. A última mensagem da IA NÃO foi pedindo número de pedido/rastreio
         // 3. A última mensagem da IA FOI sobre OTP/verificação
         const shouldTreatAsOTP = (hasAwaitingOTP || hasRecentOTPPending) && 
                                   !!contact?.email && 
                                   !lastAIAskedForOrder &&
                                   (lastAIAskedForOTP || hasAwaitingOTP);
         
-        console.log('[ai-autopilot-chat] ðŸ” Decisão OTP:', {
+        console.log('[ai-autopilot-chat] 🔒 Decisão OTP:', {
           shouldTreatAsOTP,
           otpDigitsLength: otpDigitsOnly.length,
           hasAwaitingOTP,
@@ -2124,9 +2124,9 @@ serve(async (req) => {
           }
 
           // Formato ok (6 dígitos): validar SOMENTE se contexto é realmente OTP
-          // Se a IA pediu número de pedido, NNÃO validar como OTP - deixar fluir para busca de rastreio
+          // Se a IA pediu número de pedido, NÃO validar como OTP - deixar fluir para busca de rastreio
           if (lastAIAskedForOrder && !lastAIAskedForOTP) {
-            console.log('[ai-autopilot-chat] ðŸ”„ 6 dígitos recebidos, mas contexto é PEDIDO - não tratando como OTP');
+            console.log('[ai-autopilot-chat] 🔄 6 dígitos recebidos, mas contexto é PEDIDO - não tratando como OTP');
             // Não fazer nada, deixar o fluxo continuar para buscar rastreio
           } else if (otpDigitsOnly.length === 6) {
             // Contexto é realmente OTP E tem 6 dígitos - validar
@@ -2197,7 +2197,7 @@ serve(async (req) => {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' }
               });
             } catch (err) {
-              console.error('[ai-autopilot-chat] âŒ Erro ao validar OTP (prioridade):', err);
+              console.error('[ai-autopilot-chat] ❌ Erro ao validar OTP (prioridade):', err);
               // Se falhar, segue o fluxo normal (mas não é esperado)
             }
           }
@@ -2205,7 +2205,7 @@ serve(async (req) => {
       }
 
       // ============================================================
-      // ðŸ”’ PRIORIDADE: ESTADO awaiting_close_confirmation
+      // 🔒 PRIORIDADE: ESTADO awaiting_close_confirmation
       // Se IA pediu confirmação de encerramento, processar resposta
       // ============================================================
       {
@@ -2215,7 +2215,7 @@ serve(async (req) => {
           
           // Padrões flexíveis de SIM (keyword matching, não exige match exato)
           const yesKeywords = /\b(sim|s|yes|pode|pode fechar|pode encerrar|encerra|encerrar|fechou|claro|com certeza|isso|tá bom|ta bom|foi sim)\b/i;
-          // Padrões flexíveis de NNÃO
+          // Padrões flexíveis de NÃO
           const noKeywords = /\b(n[aã]o|nao|n|não|nope|ainda n[aã]o|tenho sim|outra|mais uma|espera|perai|pera|n[aã]o foi|problema|d[uú]vida|continua|preciso)\b/i;
           // Padrões de ambiguidade (presença anula confirmação)
           const ambiguityKeywords = /\b(mas|porém|porem|entretanto|só que|so que|menos|exceto)\b/i;
@@ -2225,7 +2225,7 @@ serve(async (req) => {
           const hasAmbiguity = ambiguityKeywords.test(msgLower);
           const hasQuestion = msgLower.includes('?');
           
-          console.log(`[ai-autopilot-chat] ðŸ” Close confirmation check: msg="${msgLower}" hasYes=${hasYes} hasNo=${hasNo} hasAmbiguity=${hasAmbiguity} hasQuestion=${hasQuestion}`);
+          console.log(`[ai-autopilot-chat] 🔒 Close confirmation check: msg="${msgLower}" hasYes=${hasYes} hasNo=${hasNo} hasAmbiguity=${hasAmbiguity} hasQuestion=${hasQuestion}`);
           
           if (hasYes && !hasNo && !hasAmbiguity && !hasQuestion) {
             console.log('[ai-autopilot-chat] âœ… Cliente CONFIRMOU encerramento');
@@ -2267,12 +2267,12 @@ serve(async (req) => {
               await supabaseClient.from('conversations')
                 .update({ customer_metadata: cleanMeta })
                 .eq('id', conversationId);
-              const shadowMsg = 'Obrigado pelo contato! Se precisar de mais alguma coisa, estou por aqui. ðŸ˜Š';
+              const shadowMsg = 'Obrigado pelo contato! Se precisar de mais alguma coisa, estou por aqui. 😊';
               await supabaseClient.from('messages').insert({
                 conversation_id: conversationId, content: shadowMsg,
                 sender_type: 'user', is_ai_generated: true, is_bot_message: true
               });
-              // Shadow mode: NNÃO enviar via WhatsApp, apenas sugestão interna
+              // Shadow mode: NÃO enviar via WhatsApp, apenas sugestão interna
               await supabaseClient.from('ai_suggestions').insert({
                 conversation_id: conversationId,
                 suggested_reply: '(Sugestão) Conversa pode ser encerrada pelo agente - cliente confirmou encerramento.',
@@ -2293,7 +2293,7 @@ serve(async (req) => {
                 await supabaseClient.from('conversations')
                   .update({ ai_mode: 'waiting_human', customer_metadata: cleanMeta })
                   .eq('id', conversationId);
-                const tagMsg = 'Obrigado pelo contato! Um atendente vai finalizar seu atendimento em instantes. ðŸ˜Š';
+                const tagMsg = 'Obrigado pelo contato! Um atendente vai finalizar seu atendimento em instantes. 😊';
                 await supabaseClient.from('messages').insert({
                   conversation_id: conversationId, content: tagMsg,
                   sender_type: 'user', is_ai_generated: true, is_bot_message: true
@@ -2314,7 +2314,7 @@ serve(async (req) => {
             }
             
             // TUDO OK â†’ Chamar close-conversation
-            const closeMsg = 'Foi um prazer ajudar! Seu atendimento será encerrado agora. Até a próxima! ðŸ˜Š';
+            const closeMsg = 'Foi um prazer ajudar! Seu atendimento será encerrado agora. Até a próxima! 😊';
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId, content: closeMsg,
               sender_type: 'user', is_ai_generated: true, is_bot_message: true
@@ -2335,7 +2335,7 @@ serve(async (req) => {
             });
             
             if (closeError) {
-              console.error('[ai-autopilot-chat] âŒ Erro ao encerrar conversa:', closeError);
+              console.error('[ai-autopilot-chat] ❌ Erro ao encerrar conversa:', closeError);
             } else {
               console.log('[ai-autopilot-chat] âœ… Conversa encerrada com sucesso via close-conversation');
             }
@@ -2352,7 +2352,7 @@ serve(async (req) => {
             return new Response(JSON.stringify({ status: 'applied', action: 'conversation_closed' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             
           } else if (hasNo && !hasYes) {
-            console.log('[ai-autopilot-chat] âŒ Cliente NNÃO quer encerrar');
+            console.log('[ai-autopilot-chat] ❌ Cliente NÃO quer encerrar');
             const cleanMeta = { ...closeMeta };
             delete cleanMeta.awaiting_close_confirmation;
             delete cleanMeta.close_reason;
@@ -2378,7 +2378,7 @@ serve(async (req) => {
       }
 
       // ============================================================
-      // ðŸ†• PRIORIDADE ABSOLUTA: ESTADO awaiting_email_for_handoff
+      // 🆕 PRIORIDADE ABSOLUTA: ESTADO awaiting_email_for_handoff
       // Se está aguardando email, processar ANTES de qualquer outro fluxo
       // ============================================================
       const customerMetadata = conversation.customer_metadata || {};
@@ -2386,12 +2386,12 @@ serve(async (req) => {
       const handoffBlockedAt = customerMetadata.handoff_blocked_at ? new Date(customerMetadata.handoff_blocked_at).getTime() : 0;
       
       if (isAwaitingEmailForHandoff) {
-        console.log('[ai-autopilot-chat] ðŸ“§ ESTADO: awaiting_email_for_handoff ATIVO - processando email prioritariamente');
+        console.log('[ai-autopilot-chat] 📧 ESTADO: awaiting_email_for_handoff ATIVO - processando email prioritariamente');
         
         // Tentar extrair email com extrator tolerante
         const emailExtraction = extractEmailTolerant(customerMessage);
         
-        console.log('[ai-autopilot-chat] ðŸ“§ Resultado da extração tolerante:', {
+        console.log('[ai-autopilot-chat] 📧 Resultado da extração tolerante:', {
           found: emailExtraction.found,
           email: emailExtraction.email,
           source: emailExtraction.source,
@@ -2399,15 +2399,15 @@ serve(async (req) => {
         });
         
         if (!emailExtraction.found) {
-          // âŒ Email NNÃO encontrado - verificar anti-spam (não repetir mensagem muito rápido)
+          // ❌ Email NÃO encontrado - verificar anti-spam (não repetir mensagem muito rápido)
           const timeSinceHandoffBlocked = Date.now() - handoffBlockedAt;
           const ANTI_SPAM_WINDOW_MS = 30000; // 30 segundos
           
           if (timeSinceHandoffBlocked < ANTI_SPAM_WINDOW_MS) {
-            console.log('[ai-autopilot-chat] ðŸ›¡ï¸ Anti-spam: mensagem de email enviada há', Math.round(timeSinceHandoffBlocked/1000), 's - não repetindo');
+            console.log('[ai-autopilot-chat] 🛡� Anti-spam: mensagem de email enviada há', Math.round(timeSinceHandoffBlocked/1000), 's - não repetindo');
             
             // Enviar mensagem mais curta de correção de formato
-            const formatHintMessage = 'ðŸ“§ Por favor, envie seu email em uma única linha (sem espaços ou quebras). Exemplo: seuemail@dominio.com';
+            const formatHintMessage = '📧 Por favor, envie seu email em uma única linha (sem espaços ou quebras). Exemplo: seuemail@dominio.com';
             
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId,
@@ -2449,9 +2449,9 @@ serve(async (req) => {
           }
           
           // Fora da janela anti-spam, mas ainda sem email válido
-          console.log('[ai-autopilot-chat] âŒ Email não encontrado e fora da janela anti-spam');
+          console.log('[ai-autopilot-chat] ❌ Email não encontrado e fora da janela anti-spam');
           
-          const askEmailAgainMessage = 'ðŸ“§ Não consegui identificar seu email. Por favor, envie apenas o email em uma linha (ex: seunome@email.com)';
+          const askEmailAgainMessage = '📧 Não consegui identificar seu email. Por favor, envie apenas o email em uma linha (ex: seunome@email.com)';
           
           // Atualizar timestamp para anti-spam
           await supabaseClient.from('conversations')
@@ -2512,7 +2512,7 @@ serve(async (req) => {
             { body: { email: detectedEmail, contact_id: contact.id } }
           );
           
-          console.log('[ai-autopilot-chat] ðŸ“§ Resultado verify-customer-email:', {
+          console.log('[ai-autopilot-chat] 📧 Resultado verify-customer-email:', {
             error: verifyError,
             found: verifyResult?.found,
             customer: verifyResult?.customer?.email
@@ -2538,23 +2538,23 @@ serve(async (req) => {
             // CLIENTE EXISTENTE - Ir para Suporte
             console.log('[ai-autopilot-chat] âœ… Cliente ENCONTRADO no banco - direcionando para Suporte');
             
-            // ðŸ†• CORREÇNÃO: Verificar se o email pertence a OUTRO contato existente
+            // 🆕 CORREÇNÃO: Verificar se o email pertence a OUTRO contato existente
             const existingCustomerId = verifyResult.customer?.id;
             const existingCustomerEmail = verifyResult.customer?.email;
             const isExistingCustomerDifferent = existingCustomerId && existingCustomerId !== contact.id;
             
-            console.log('[ai-autopilot-chat] ðŸ” Verificação de rebind:', {
+            console.log('[ai-autopilot-chat] 🔒 Verificação de rebind:', {
               currentContactId: contact.id,
               existingCustomerId,
               existingCustomerEmail,
               isExistingCustomerDifferent
             });
             
-            // ðŸ†• RECUPERAR CONTEXTO ORIGINAL (se existir)
+            // 🆕 RECUPERAR CONTEXTO ORIGINAL (se existir)
             const originalIntent = customerMetadata.original_intent;
             const originalIntentCategory = customerMetadata.original_intent_category;
             
-            console.log('[ai-autopilot-chat] ðŸ“‹ Contexto original recuperado:', {
+            console.log('[ai-autopilot-chat] 📋 Contexto original recuperado:', {
               hasOriginalIntent: !!originalIntent,
               originalIntentCategory,
               intentPreview: originalIntent?.substring(0, 50)
@@ -2566,9 +2566,9 @@ serve(async (req) => {
             delete updatedMetadata.original_intent_timestamp;
             
             if (isExistingCustomerDifferent) {
-              // ðŸ†• Email pertence a OUTRO contato existente (customer)
+              // 🆕 Email pertence a OUTRO contato existente (customer)
               // Revincula a conversa ao contato correto
-              console.log('[ai-autopilot-chat] ðŸ”„ Revinculando conversa ao cliente existente:', existingCustomerId);
+              console.log('[ai-autopilot-chat] 🔄 Revinculando conversa ao cliente existente:', existingCustomerId);
               
               await supabaseClient.from('conversations')
                 .update({
@@ -2597,7 +2597,7 @@ serve(async (req) => {
             
             const customerName = verifyResult.customer?.name?.split(' ')[0] || contact.first_name || '';
             
-            // ðŸ†• MENSAGEM COM CONTEXTO PRESERVADO
+            // 🆕 MENSAGEM COM CONTEXTO PRESERVADO
             let successMessage: string;
             
             if (originalIntent && originalIntentCategory) {
@@ -2605,7 +2605,7 @@ serve(async (req) => {
               const intentLabel = getIntentCategoryLabel(originalIntentCategory);
               successMessage = `Á“timo, ${customerName}! âœ…\n\nIdentifiquei você em nosso sistema. Você mencionou sobre **${intentLabel}** - vou te ajudar com isso agora!\n\n_Processando sua solicitação..._`;
               
-              console.log('[ai-autopilot-chat] ðŸŽ¯ Preservando contexto:', intentLabel);
+              console.log('[ai-autopilot-chat] 🎯 Preservando contexto:', intentLabel);
             } else {
               // SEM CONTEXTO: Mensagem genérica (comportamento antigo)
               successMessage = `Á“timo, ${customerName}! âœ…\n\nIdentifiquei você em nosso sistema. Como posso ajudar hoje?`;
@@ -2640,9 +2640,9 @@ serve(async (req) => {
               }
             }
             
-            // ðŸ”§ CORREÇNÃO: SEMPRE chamar route-conversation para clientes verificados
+            // 🔧 CORREÇNÃO: SEMPRE chamar route-conversation para clientes verificados
             // Isso distribui a conversa para agentes de suporte disponíveis
-            console.log('[ai-autopilot-chat] ðŸ”„ Chamando route-conversation para cliente verificado...');
+            console.log('[ai-autopilot-chat] 🔄 Chamando route-conversation para cliente verificado...');
             try {
               const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
                 body: { 
@@ -2652,23 +2652,23 @@ serve(async (req) => {
               });
               
               if (routeError) {
-                console.error('[ai-autopilot-chat] âŒ Erro ao rotear cliente verificado:', routeError);
+                console.error('[ai-autopilot-chat] ❌ Erro ao rotear cliente verificado:', routeError);
               } else {
                 console.log('[ai-autopilot-chat] âœ… Cliente verificado roteado para Suporte:', routeResult);
               }
             } catch (routeErr) {
-              console.error('[ai-autopilot-chat] âŒ Exceção ao rotear cliente verificado:', routeErr);
+              console.error('[ai-autopilot-chat] ❌ Exce��o ao rotear cliente verificado:', routeErr);
             }
             
-            // ðŸ†• SE TEM CONTEXTO ORIGINAL: Não retornar, deixar IA processar a intenção original
+            // 🆕 SE TEM CONTEXTO ORIGINAL: Não retornar, deixar IA processar a intenção original
             if (originalIntent && originalIntentCategory) {
-              console.log('[ai-autopilot-chat] ðŸ”„ Contexto preservado - deixando IA processar intenção original');
+              console.log('[ai-autopilot-chat] 🔄 Contexto preservado - deixando IA processar intenção original');
               
               // Atualizar objeto local para refletir email
               contact.email = detectedEmail;
               contact.status = 'customer';
               
-              // NNÃO RETORNAR - Deixar fluxo continuar para IA processar
+              // NÃO RETORNAR - Deixar fluxo continuar para IA processar
               // A mensagem de confirmação já foi enviada, agora a IA vai responder sobre o assunto original
             } else {
               // SEM CONTEXTO: Retornar com indicação que está tudo ok
@@ -2687,7 +2687,7 @@ serve(async (req) => {
             
           } else {
             // LEAD NOVO - Encaminhar para Comercial com handoff
-            console.log('[ai-autopilot-chat] ðŸ†• Email NNÃO encontrado no banco - Lead novo, encaminhando para Comercial');
+            console.log('[ai-autopilot-chat] 🆕 Email NÃO encontrado no banco - Lead novo, encaminhando para Comercial');
             
             const handoffTimestamp = new Date().toISOString();
             
@@ -2707,7 +2707,7 @@ serve(async (req) => {
               body: { conversationId, department_id: DEPT_COMERCIAL_ID }
             });
             
-            const leadHandoffMessage = `Obrigado! ðŸ“\n\nRegistramos seu contato (${detectedEmail}). Um de nossos consultores vai entrar em contato em breve para te ajudar.\n\nAguarde um momento, por favor.`;
+            const leadHandoffMessage = `Obrigado! 🔒\n\nRegistramos seu contato (${detectedEmail}). Um de nossos consultores vai entrar em contato em breve para te ajudar.\n\nAguarde um momento, por favor.`;
             
             await supabaseClient.from('messages').insert({
               conversation_id: conversationId,
@@ -2742,7 +2742,7 @@ serve(async (req) => {
             await supabaseClient.from('interactions').insert({
               customer_id: contact.id,
               type: 'internal_note',
-              content: `ðŸ“§ **Lead Identificado via Email**\n\n**Email:** ${detectedEmail}\n**Extração:** ${emailExtraction.source}\n**Ação:** Encaminhado para Comercial`,
+              content: `📧 **Lead Identificado via Email**\n\n**Email:** ${detectedEmail}\n**Extração:** ${emailExtraction.source}\n**Ação:** Encaminhado para Comercial`,
               channel: responseChannel
             });
             
@@ -2759,7 +2759,7 @@ serve(async (req) => {
           }
           
         } catch (verifyErr) {
-          console.error('[ai-autopilot-chat] âŒ Erro ao verificar email:', verifyErr);
+          console.error('[ai-autopilot-chat] ❌ Erro ao verificar email:', verifyErr);
           
           // Em caso de erro, limpar estado e continuar processamento normal
           const updatedMetadata = { ...customerMetadata };
@@ -2778,7 +2778,7 @@ serve(async (req) => {
           contact.email = detectedEmail;
           
           console.log('[ai-autopilot-chat] âš ï¸ Erro na verificação mas email salvo - continuando fluxo normal');
-          // NNÃO retornar, deixar continuar para processamento normal
+          // NÃO retornar, deixar continuar para processamento normal
         }
       }
       // ============================================================
@@ -2799,10 +2799,10 @@ serve(async (req) => {
     
       console.log(`[ai-autopilot-chat] Canal da última mensagem: ${responseChannel}, Departamento: ${department}`);
 
-    // ðŸ†• TRIAGEM SILENCIOSA UNIFICADA â€” Sempre validar pela base Kiwify
+    // 🆕 TRIAGEM SILENCIOSA UNIFICADA â€” Sempre validar pela base Kiwify
     // Só pula se já está validado (kiwify_validated = true)
     if (!contact.kiwify_validated) {
-      console.log('[ai-autopilot-chat] ðŸ” Triagem silenciosa: validando phone+email+CPF contra base Kiwify...');
+      console.log('[ai-autopilot-chat] 🔒 Triagem silenciosa: validando phone+email+CPF contra base Kiwify...');
       
       try {
         const validationPromises: PromiseLike<any>[] = [];
@@ -2918,7 +2918,7 @@ serve(async (req) => {
       console.log('[ai-autopilot-chat] âœ… Contato já validado (kiwify_validated=true), pulando triagem');
     }
 
-    // ðŸ†• BUSCAR PRODUTOS KIWIFY DO CONTATO (para injetar no contexto da IA)
+    // 🆕 BUSCAR PRODUTOS KIWIFY DO CONTATO (para injetar no contexto da IA)
     let customerProducts: string[] = [];
     try {
       const phoneForProducts = contact.phone || contact.whatsapp_id || '';
@@ -2967,7 +2967,7 @@ serve(async (req) => {
         }
         customerProducts = [...productNames];
         if (customerProducts.length > 0) {
-          console.log(`[ai-autopilot-chat] ðŸ“¦ Produtos do contato: ${customerProducts.join(', ')}`);
+          console.log(`[ai-autopilot-chat] 📦 Produtos do contato: ${customerProducts.join(', ')}`);
         }
       }
     } catch (prodErr) {
@@ -3003,23 +3003,23 @@ serve(async (req) => {
       if (cachedResponse) {
         console.log('âœ… [CACHE HIT] Resposta instantânea recuperada do cache');
         
-        // ðŸ†• FASE 1: Verificar se resposta cacheada é fallback e executar handoff real
+        // 🆕 FASE 1: Verificar se resposta cacheada é fallback e executar handoff real
         const isCachedFallback = FALLBACK_PHRASES.some(phrase => 
           cachedResponse.answer.toLowerCase().includes(phrase)
         );
         
         if (isCachedFallback) {
-          console.log('ðŸš¨ [CACHE] Resposta cacheada é FALLBACK - IGNORANDO cache e gerando nova resposta');
+          console.log('🚨 [CACHE] Resposta cacheada é FALLBACK - IGNORANDO cache e gerando nova resposta');
           
-          // ðŸ›¡ï¸ ANTI-RACE-CONDITION: Marcar handoff com timestamp
+          // 🛡� ANTI-RACE-CONDITION: Marcar handoff com timestamp
           const handoffTimestamp = new Date().toISOString();
           
-          // 1. Mudar modo para waiting_human (NNÃO copilot!) e marcar timestamp
+          // 1. Mudar modo para waiting_human (NÃO copilot!) e marcar timestamp
           await supabaseClient
             .from('conversations')
             .update({ 
-              ai_mode: 'waiting_human', // ðŸ†• waiting_human para ficar na fila
-              handoff_executed_at: handoffTimestamp, // ðŸ†• Anti-race-condition flag
+              ai_mode: 'waiting_human', // 🆕 waiting_human para ficar na fila
+              handoff_executed_at: handoffTimestamp, // 🆕 Anti-race-condition flag
               needs_human_review: true
             })
             .eq('id', conversationId);
@@ -3037,7 +3037,7 @@ serve(async (req) => {
           
           let ticketProtocol = '';
           if (isFinancial) {
-            // ðŸ”’ ANTI-DUPLICAÇÃO: Verificar se conversa já tem ticket vinculado
+            // 🔒 ANTI-DUPLICAÇÃO: Verificar se conversa já tem ticket vinculado
             if (conversation.related_ticket_id) {
               console.log('[CACHE] âš ï¸ Conversa já possui ticket vinculado - pulando criação:', conversation.related_ticket_id);
               ticketProtocol = conversation.related_ticket_id.slice(0, 8).toUpperCase();
@@ -3059,7 +3059,7 @@ serve(async (req) => {
               
               if (ticket) {
                 ticketProtocol = ticket.id.slice(0, 8).toUpperCase();
-                console.log('ðŸŽ« [CACHE] Ticket financeiro criado:', ticket.id);
+                console.log('🎫 [CACHE] Ticket financeiro criado:', ticket.id);
                 
                 // Vincular à conversa
                 await supabaseClient
@@ -3086,7 +3086,7 @@ serve(async (req) => {
           
           console.log('âœ… [CACHE] Handoff executado, cache invalidado');
           
-          // ðŸ†• 6. RETORNAR RESPOSTA IMEDIATA DE HANDOFF (não usar cache ruim!)
+          // 🆕 6. RETORNAR RESPOSTA IMEDIATA DE HANDOFF (não usar cache ruim!)
           const handoffMessage = isFinancial && ticketProtocol
             ? `Entendi sua solicitação financeira. Estou transferindo você para um especialista humano que vai te ajudar com isso.\n\nProtocolo criado: #${ticketProtocol}`
             : `Entendi sua dúvida. Estou transferindo você para um especialista humano que poderá te ajudar melhor.`;
@@ -3138,7 +3138,7 @@ serve(async (req) => {
             }
           }
           
-          // ðŸ†• RETORNAR AQUI - Não deixar o código continuar para retornar cache ruim
+          // 🆕 RETORNAR AQUI - Não deixar o código continuar para retornar cache ruim
           return new Response(
             JSON.stringify({
               status: 'handoff_executed',
@@ -3151,7 +3151,7 @@ serve(async (req) => {
           );
         }
         
-        // âŒ REMOVIDO: Não inserir mensagem do cliente aqui - já foi inserida por useSendMessageOffline/handle-whatsapp-event/inbound-email
+        // ❌ REMOVIDO: Não inserir mensagem do cliente aqui - já foi inserida por useSendMessageOffline/handle-whatsapp-event/inbound-email
 
         // Salvar resposta da IA (do cache)
         const { data: aiMessageData } = await supabaseClient
@@ -3183,7 +3183,7 @@ serve(async (req) => {
           );
 
           if (whatsappResult && aiMessageData) {
-            console.log('[ai-autopilot-chat] ðŸ“¤ Enviando resposta cached via WhatsApp');
+            console.log('[ai-autopilot-chat] 📤 Enviando resposta cached via WhatsApp');
 
             const sendResult = await sendWhatsAppMessage(
               supabaseClient,
@@ -3245,7 +3245,7 @@ serve(async (req) => {
     // ============================================================
     // FASE 5: VERIFICAÇÃO DE DUPLICATA - ANTES do processamento da IA
     // ============================================================
-    console.log('[ai-autopilot-chat] ðŸ” Verificando duplicatas...');
+    console.log('[ai-autopilot-chat] 🔒 Verificando duplicatas...');
     
     const { data: recentMessages } = await supabaseClient
       .from('messages')
@@ -3273,7 +3273,7 @@ serve(async (req) => {
     }
     
     // ============================================================
-    // ðŸ†• PRIORIDADE 1: CHAT FLOW - Verificar ANTES da triagem
+    // 🆕 PRIORIDADE 1: CHAT FLOW - Verificar ANTES da triagem
     // ============================================================
     let flowProcessedEarly = false;
     // Só resetar variáveis de flow se NÃO veio flow_context explícito (widget/portal)
@@ -3293,7 +3293,7 @@ serve(async (req) => {
     }
     
     if (!flow_context) try {
-      console.log('[ai-autopilot-chat] ðŸ”„ [PRIORIDADE] Verificando Chat Flow ANTES da triagem...');
+      console.log('[ai-autopilot-chat] 🔄 [PRIORIDADE] Verificando Chat Flow ANTES da triagem...');
       
       const { data: flowResult, error: flowError } = await supabaseClient.functions.invoke(
         'process-chat-flow',
@@ -3302,7 +3302,7 @@ serve(async (req) => {
       );
       
       if (!flowError && flowResult) {
-        console.log('[ai-autopilot-chat] ðŸ“‹ Resultado do Chat Flow (early check):', {
+        console.log('[ai-autopilot-chat] 📋 Resultado do Chat Flow (early check):', {
           useAI: flowResult.useAI,
           hasResponse: !!flowResult.response,
           flowStarted: flowResult.flowStarted,
@@ -3314,13 +3314,13 @@ serve(async (req) => {
           console.log('[ai-autopilot-chat] âœ… Chat Flow MATCH - Ignorando triagem!');
           flowProcessedEarly = true;
           
-          // ðŸ†• TRANSFER NODE: Se é uma transferência, executar handoff real
+          // 🆕 TRANSFER NODE: Se é uma transferência, executar handoff real
           if (flowResult.transfer === true && flowResult.departmentId) {
-            console.log('[ai-autopilot-chat] ðŸ”€ TRANSFER NODE - Executando handoff real para departamento:', flowResult.departmentId);
+            console.log('[ai-autopilot-chat] 🔀 TRANSFER NODE - Executando handoff real para departamento:', flowResult.departmentId);
             
             const handoffTimestamp = new Date().toISOString();
 
-            // ðŸ†• Buscar consultant_id do contato para atribuição direta
+            // 🆕 Buscar consultant_id do contato para atribuição direta
             const { data: contactConsultantData } = await supabaseClient
               .from('contacts')
               .select('consultant_id')
@@ -3329,7 +3329,7 @@ serve(async (req) => {
 
             let consultantId = contactConsultantData?.consultant_id || null;
 
-            // ðŸ†• Se não tem consultor pelo contato, buscar pelo email coletado no fluxo
+            // 🆕 Se não tem consultor pelo contato, buscar pelo email coletado no fluxo
             if (!consultantId) {
               let emailToSearch: string | null = null;
 
@@ -3337,7 +3337,7 @@ serve(async (req) => {
               const collectedEmail = flowResult.collectedData?.email;
               if (collectedEmail && typeof collectedEmail === 'string') {
                 emailToSearch = collectedEmail.toLowerCase().trim();
-                console.log('[ai-autopilot-chat] ðŸ“§ Email encontrado no collectedData:', emailToSearch);
+                console.log('[ai-autopilot-chat] 📧 Email encontrado no collectedData:', emailToSearch);
               }
 
               // 2. Fallback: buscar email nas mensagens recentes
@@ -3355,7 +3355,7 @@ serve(async (req) => {
                   const match = msg.content?.match(emailRegex);
                   if (match) {
                     emailToSearch = match[0].toLowerCase();
-                    console.log('[ai-autopilot-chat] ðŸ“§ Email encontrado nas mensagens:', emailToSearch);
+                    console.log('[ai-autopilot-chat] 📧 Email encontrado nas mensagens:', emailToSearch);
                     break;
                   }
                 }
@@ -3372,7 +3372,7 @@ serve(async (req) => {
 
                 if (emailContact?.consultant_id) {
                   consultantId = emailContact.consultant_id;
-                  console.log('[ai-autopilot-chat] ðŸ‘¤ Consultor encontrado pelo email:', emailToSearch, 'â†’', consultantId);
+                  console.log('[ai-autopilot-chat] 👤 Consultor encontrado pelo email:', emailToSearch, 'â†’', consultantId);
                 }
               }
             }
@@ -3387,7 +3387,7 @@ serve(async (req) => {
             if (consultantId) {
               transferUpdate.assigned_to = consultantId;
               transferUpdate.ai_mode = 'copilot';
-              console.log('[ai-autopilot-chat] ðŸ‘¤ Atribuindo ao consultor:', consultantId);
+              console.log('[ai-autopilot-chat] 👤 Atribuindo ao consultor:', consultantId);
             }
             
             const { error: handoffUpdateError } = await supabaseClient
@@ -3396,14 +3396,14 @@ serve(async (req) => {
               .eq('id', conversationId);
             
             if (handoffUpdateError) {
-              console.error('[ai-autopilot-chat] âŒ Erro ao marcar handoff:', handoffUpdateError);
+              console.error('[ai-autopilot-chat] ❌ Erro ao marcar handoff:', handoffUpdateError);
             } else {
               console.log('[ai-autopilot-chat] âœ… Conversa marcada com department:', flowResult.departmentId,
                 'ai_mode:', consultantId ? 'copilot' : 'waiting_human',
                 'assigned_to:', consultantId || 'pool');
             }
             
-            // Chamar route-conversation SOMENTE se NNÃO atribuiu ao consultor
+            // Chamar route-conversation SOMENTE se NÃO atribuiu ao consultor
             if (!consultantId) {
               try {
                 const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
@@ -3414,22 +3414,22 @@ serve(async (req) => {
                 });
                 
                 if (routeError) {
-                  console.error('[ai-autopilot-chat] âŒ Erro ao rotear conversa:', routeError);
+                  console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
                 } else {
                   console.log('[ai-autopilot-chat] âœ… Conversa roteada com sucesso:', routeResult);
                 }
               } catch (routeErr) {
-                console.error('[ai-autopilot-chat] âŒ Exceção ao chamar route-conversation:', routeErr);
+                console.error('[ai-autopilot-chat] ❌ Exce��o ao chamar route-conversation:', routeErr);
               }
             } else {
-              console.log('[ai-autopilot-chat] â­ï¸ Pulando route-conversation - consultor já atribuído diretamente');
+              console.log('[ai-autopilot-chat] ⚡ Pulando route-conversation - consultor já atribuído diretamente');
             }
           }
           
-          // ðŸ†• Formatar mensagem com opções de múltipla escolha (se houver)
+          // 🆕 Formatar mensagem com opções de múltipla escolha (se houver)
           const formattedFlowResponse = flowResult.response + formatOptionsAsText(flowResult.options);
           
-          console.log('[ai-autopilot-chat] ðŸ“‹ Flow response formatted:', {
+          console.log('[ai-autopilot-chat] 📋 Flow response formatted:', {
             hasOptions: !!flowResult.options?.length,
             optionsCount: flowResult.options?.length || 0,
             responsePreview: formattedFlowResponse.substring(0, 100)
@@ -3520,23 +3520,23 @@ serve(async (req) => {
     }
     
     // ============================================================
-    // ðŸŽ¯ TRIAGEM VIA MASTER FLOW: Lógica legada REMOVIDA
+    // 🎯 TRIAGEM VIA MASTER FLOW: Lógica legada REMOVIDA
     // A triagem agora é feita 100% pelo Master Flow visual
     // que foi processado anteriormente via process-chat-flow
     // ============================================================
     console.log('[ai-autopilot-chat] âœ… Triagem legada desativada - Master Flow é a única fonte de triagem');
     
     // ============================================================
-    // ðŸ” DETECÇNÃO AUTOMÁTICA DE EMAIL NA MENSAGEM
+    // 🔒 DETECÇNÃO AUTOMÁTICA DE EMAIL NA MENSAGEM
     // Se cliente SEM email envia uma mensagem contendo email válido,
     // processamos automaticamente como identificação
     // ============================================================
-    let emailWasVerifiedInThisRequest = false; // ðŸ†• Flag para evitar re-invoke do fluxo após validação de email
+    let emailWasVerifiedInThisRequest = false; // 🆕 Flag para evitar re-invoke do fluxo após validação de email
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
     const emailInMessage = customerMessage.match(emailRegex)?.[0];
     
     if (emailInMessage && !contact.email) {
-      console.log('[ai-autopilot-chat] ðŸ“§ EMAIL DETECTADO NA MENSAGEM (Lead sem email):', emailInMessage);
+      console.log('[ai-autopilot-chat] 📧 EMAIL DETECTADO NA MENSAGEM (Lead sem email):', emailInMessage);
       
       try {
         // Chamar verify_customer_email automaticamente
@@ -3561,27 +3561,27 @@ serve(async (req) => {
           let skipEarlyReturn = false;
           
           if (verifyResult.found) {
-            // ðŸŽ¯ TRIAGEM: Email encontrado = Cliente identificado (SEM OTP)
-            console.log('[ai-autopilot-chat] ðŸŽ¯ TRIAGEM: Email encontrado');
+            // 🎯 TRIAGEM: Email encontrado = Cliente identificado (SEM OTP)
+            console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email encontrado');
             
-            // ðŸ†• Recuperar original_intent do metadata (salvo quando IA pediu email)
+            // 🆕 Recuperar original_intent do metadata (salvo quando IA pediu email)
             const custMeta = (conversation.customer_metadata || {}) as Record<string, any>;
             const originalIntent = custMeta.original_intent || null;
             const originalIntentCategory = custMeta.original_intent_category || null;
             // skipEarlyReturn já declarado no escopo externo
             
-            console.log('[ai-autopilot-chat] ðŸ” Original intent recovery:', {
+            console.log('[ai-autopilot-chat] 🔒 Original intent recovery:', {
               originalIntent: originalIntent ? originalIntent.substring(0, 60) : null,
               originalIntentCategory,
               hasOriginalIntent: !!originalIntent
             });
             
-            // ðŸ†• CORREÇNÃO: Verificar se o email pertence a OUTRO contato existente
+            // 🆕 CORREÇNÃO: Verificar se o email pertence a OUTRO contato existente
             const existingCustomerId = verifyResult.customer?.id;
             const existingCustomerEmail = verifyResult.customer?.email;
             const isExistingCustomerDifferent = existingCustomerId && existingCustomerId !== contact.id;
             
-            console.log('[ai-autopilot-chat] ðŸ” Verificação de contato:', {
+            console.log('[ai-autopilot-chat] 🔒 Verificação de contato:', {
               currentContactId: contact.id,
               existingCustomerId,
               existingCustomerEmail,
@@ -3596,13 +3596,13 @@ serve(async (req) => {
             );
             
             if (!foundMessage) {
-              foundMessage = `Encontrei seu cadastro, ${contact.first_name || verifyResult.customer?.name || 'cliente'}! ðŸŽ‰\n\nAgora me diz: precisa de ajuda com:\n**1** - Pedidos\n**2** - Sistema`;
+              foundMessage = `Encontrei seu cadastro, ${contact.first_name || verifyResult.customer?.name || 'cliente'}! 🎉\n\nAgora me diz: precisa de ajuda com:\n**1** - Pedidos\n**2** - Sistema`;
             }
             
             if (isExistingCustomerDifferent) {
-              // ðŸ†• Email pertence a OUTRO contato existente (customer)
+              // 🆕 Email pertence a OUTRO contato existente (customer)
               // Revincula a conversa ao contato correto
-              console.log('[ai-autopilot-chat] ðŸ”„ Revinculando conversa ao cliente existente:', existingCustomerId);
+              console.log('[ai-autopilot-chat] 🔄 Revinculando conversa ao cliente existente:', existingCustomerId);
               
               const updatedMeta: Record<string, any> = {
                 ...(conversation.customer_metadata || {}),
@@ -3611,7 +3611,7 @@ serve(async (req) => {
                 rebind_reason: 'email_matched_existing_customer'
               };
               
-              // ðŸ†• Limpar original_intent após recuperação
+              // 🆕 Limpar original_intent após recuperação
               if (originalIntent) {
                 delete updatedMeta.original_intent;
                 delete updatedMeta.original_intent_category;
@@ -3642,7 +3642,7 @@ serve(async (req) => {
                 email_verified_at: new Date().toISOString()
               };
               
-              // ðŸ†• Limpar original_intent após recuperação
+              // 🆕 Limpar original_intent após recuperação
               if (originalIntent) {
                 delete updatedMeta.original_intent;
                 delete updatedMeta.original_intent_category;
@@ -3657,11 +3657,11 @@ serve(async (req) => {
                 .eq('id', conversationId);
             }
             
-            // ðŸ†• CONSULTANT REDIRECT: Se cliente tem consultor, redirecionar direto
+            // 🆕 CONSULTANT REDIRECT: Se cliente tem consultor, redirecionar direto
             const consultantId = verifyResult.customer?.consultant_id;
             
             if (consultantId && !flow_context) {
-              console.log('[ai-autopilot-chat] ðŸŽ¯ CONSULTANT REDIRECT: Cliente tem consultor, redirecionando direto:', consultantId);
+              console.log('[ai-autopilot-chat] 🎯 CONSULTANT REDIRECT: Cliente tem consultor, redirecionando direto:', consultantId);
               
               // Atribuir conversa ao consultor em modo copilot
               await supabaseClient.from('conversations')
@@ -3692,25 +3692,25 @@ serve(async (req) => {
               await supabaseClient.from('interactions').insert({
                 customer_id: contact.id,
                 type: 'internal_note',
-                content: `ðŸŽ¯ **Redirecionamento Automático para Consultor**\n\nEmail verificado: ${maskedEmailResponse}\nCliente encontrado com consultor designado.\nConversa atribuída ao consultor (copilot).`,
+                content: `🎯 **Redirecionamento Automático para Consultor**\n\nEmail verificado: ${maskedEmailResponse}\nCliente encontrado com consultor designado.\nConversa atribuída ao consultor (copilot).`,
                 channel: responseChannel
               });
               
               // Mensagem personalizada (sem menu)
-              autoResponse = `Encontrei seu cadastro, ${contact.first_name || verifyResult.customer?.name || 'cliente'}! ðŸŽ‰\n\nVou te conectar com seu consultor. Aguarde um momento! ðŸ¤`;
+              autoResponse = `Encontrei seu cadastro, ${contact.first_name || verifyResult.customer?.name || 'cliente'}! 🎉\n\nVou te conectar com seu consultor. Aguarde um momento! `;
             } else if (originalIntent) {
-              // ðŸ†• FIX: Tem original_intent â†’ NNÃO enviar menu, deixar IA processar a pergunta original
-              console.log('[ai-autopilot-chat] ðŸŽ¯ ORIGINAL INTENT RECOVERY: Recuperando contexto original em vez de menu genérico');
+              // 🆕 FIX: Tem original_intent â†’ NÃO enviar menu, deixar IA processar a pergunta original
+              console.log('[ai-autopilot-chat] 🎯 ORIGINAL INTENT RECOVERY: Recuperando contexto original em vez de menu genérico');
               
               const customerName = contact.first_name || verifyResult.customer?.name || 'cliente';
               autoResponse = `Encontrei seu cadastro, ${customerName}! âœ…\n\nVoltando à sua dúvida...`;
               
-              // ðŸ†• Substituir a mensagem do cliente pelo intent original para que a IA processe
+              // 🆕 Substituir a mensagem do cliente pelo intent original para que a IA processe
               // Isso faz o fluxo continuar após o early return com o contexto correto
               skipEarlyReturn = true;
               customerMessage = originalIntent;
               
-              console.log('[ai-autopilot-chat] ðŸ”„ Mensagem substituída pelo original_intent:', originalIntent.substring(0, 80));
+              console.log('[ai-autopilot-chat] 🔄 Mensagem substituída pelo original_intent:', originalIntent.substring(0, 80));
             } else if (consultantId && flow_context) {
               // flow_context ativo: IA continua ajudando, não redireciona
               console.log('[ai-autopilot-chat] â„¹ï¸ Consultor encontrado mas flow_context ativo - IA continua ajudando');
@@ -3729,23 +3729,23 @@ serve(async (req) => {
               autoResponse = `Encontrei seu cadastro! âœ… Continuando seu atendimento...`;
               skipEarlyReturn = true; // Deixar IA continuar com flow_context
             } else {
-              // ðŸ†• FIX: Sempre continuar com contexto da conversa, nunca enviar menu genérico
+              // 🆕 FIX: Sempre continuar com contexto da conversa, nunca enviar menu genérico
               // A IA tem acesso ao histórico completo e pode responder sobre o assunto que o cliente já mencionou
-              console.log('[ai-autopilot-chat] ðŸŽ¯ Email verificado - continuando com contexto da conversa (sem menu genérico)');
+              console.log('[ai-autopilot-chat] 🎯 Email verificado - continuando com contexto da conversa (sem menu genérico)');
               const customerName = contact.first_name || verifyResult.customer?.name || 'cliente';
               autoResponse = `Encontrei seu cadastro, ${customerName}! âœ…\n\nVoltando à sua dúvida...`;
               skipEarlyReturn = true;
             }
           } else if (!verifyResult.found) {
-            // ðŸŽ¯ TRIAGEM: Email não encontrado = Lead â†’ Rotear para Comercial
-            console.log('[ai-autopilot-chat] ðŸŽ¯ TRIAGEM: Email não encontrado - roteando para Comercial');
+            // 🎯 TRIAGEM: Email não encontrado = Lead â†’ Rotear para Comercial
+            console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email não encontrado - roteando para Comercial');
             
             const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
             
             // Buscar template de lead direcionado
             let leadMessage = await getMessageTemplate(supabaseClient, 'lead_direcionado_comercial', {});
             if (!leadMessage) {
-              leadMessage = 'Obrigado! Como você ainda não é nosso cliente, vou te direcionar para nosso time Comercial que poderá te ajudar. ðŸ¤\n\nAguarde um momento que logo um de nossos consultores irá te atender!';
+              leadMessage = 'Obrigado! Como você ainda não é nosso cliente, vou te direcionar para nosso time Comercial que poderá te ajudar. ⚡Aguarde um momento que logo um de nossos consultores irá te atender!';
             }
             
             // Atualizar conversa: departamento = Comercial, ai_mode = waiting_human
@@ -3770,7 +3770,7 @@ serve(async (req) => {
             await supabaseClient.from('interactions').insert({
               customer_id: contact.id,
               type: 'internal_note',
-              content: `ðŸŽ¯ **Lead Novo - Roteado para Comercial**\n\nEmail informado: ${maskedEmailResponse}\nMotivo: Email não encontrado na base de clientes`,
+              content: `🎯 **Lead Novo - Roteado para Comercial**\n\nEmail informado: ${maskedEmailResponse}\nMotivo: Email não encontrado na base de clientes`,
               channel: responseChannel
             });
             
@@ -3814,10 +3814,10 @@ serve(async (req) => {
             }
           }
           
-          // ðŸ†• Se skipEarlyReturn = true, NNÃO retornar early â†’ deixar IA processar o original_intent
+          // 🆕 Se skipEarlyReturn = true, NÃO retornar early â†’ deixar IA processar o original_intent
           if (skipEarlyReturn) {
-            emailWasVerifiedInThisRequest = true; // ðŸ†• Marcar que email foi verificado nesta request
-            console.log('[ai-autopilot-chat] ðŸ”„ skipEarlyReturn=true - IA vai processar a mensagem original após confirmação de email');
+            emailWasVerifiedInThisRequest = true; // 🆕 Marcar que email foi verificado nesta request
+            console.log('[ai-autopilot-chat] 🔄 skipEarlyReturn=true - IA vai processar a mensagem original após confirmação de email');
             // autoResponse já foi enviada via WhatsApp acima como confirmação
             // customerMessage foi substituído pelo original_intent
             // O fluxo continua normalmente para a IA processar
@@ -3840,7 +3840,7 @@ serve(async (req) => {
           }
         }
       } catch (error) {
-        console.error('[ai-autopilot-chat] âŒ Erro ao processar email detectado:', error);
+        console.error('[ai-autopilot-chat] ❌ Erro ao processar email detectado:', error);
         // Se falhar, continua para IA tentar lidar
       }
     }
@@ -3848,17 +3848,17 @@ serve(async (req) => {
     console.log(`[ai-autopilot-chat] Processando mensagem para conversa ${conversationId}...`);
 
     // ============================================================
-    // ðŸ†• Chat Flow já foi verificado ANTES da triagem (linhas ~1203)
+    // 🆕 Chat Flow já foi verificado ANTES da triagem (linhas ~1203)
     // As variáveis flowPersonaId, flowKbCategories, etc. já estão populadas
     // ============================================================
 
     // 2. Buscar persona baseado em routing rules (canal + departamento)
-    // ðŸ†• OU usar persona específica do Chat Flow (se flowPersonaId estiver definido)
+    // 🆕 OU usar persona específica do Chat Flow (se flowPersonaId estiver definido)
     let persona: any = null;
     
     if (flowPersonaId) {
-      // ðŸ†• Chat Flow: Buscar persona específica definida no nó ai_response
-      console.log('[ai-autopilot-chat] ðŸŽ¯ Usando persona do Chat Flow:', flowPersonaId);
+      // 🆕 Chat Flow: Buscar persona específica definida no nó ai_response
+      console.log('[ai-autopilot-chat] 🎯 Usando persona do Chat Flow:', flowPersonaId);
       
       const { data: flowPersona, error: personaError } = await supabaseClient
         .from('ai_personas')
@@ -3877,7 +3877,7 @@ serve(async (req) => {
     
     // Fallback 1: Usar PERSONA GLOBAL se não tem persona do fluxo
     if (!persona) {
-      console.log('[ai-autopilot-chat] ðŸ” Buscando Persona Global...');
+      console.log('[ai-autopilot-chat] 🔒 Buscando Persona Global...');
       
       const { data: globalPersonaConfig } = await supabaseClient
         .from('system_configurations')
@@ -3942,7 +3942,7 @@ serve(async (req) => {
     }
     
     console.log(`[ai-autopilot-chat] Persona selecionada: ${persona.name} (${persona.id})`);
-    console.log('[ai-autopilot-chat] ðŸ” Data Access Config:', persona.data_access);
+    console.log('[ai-autopilot-chat] 🔒 Data Access Config:', persona.data_access);
     
     // âœ… Verificar permissões de acesso a dados da persona
     const personaDataAccess = persona.data_access || {
@@ -3958,7 +3958,7 @@ serve(async (req) => {
     let canAccessFinancialData = personaDataAccess.financial_data === true;
     let canAccessTracking = personaDataAccess.tracking_data === true || personaDataAccess.order_history === true;
     
-    // ðŸ†• FASE 2: Intersectar permissões da persona com toggles do nó de fluxo
+    // 🆕 FASE 2: Intersectar permissões da persona com toggles do nó de fluxo
     // Se flow_context.allowed_sources existe, restringir ainda mais
     if (flow_context?.allowed_sources) {
       const flowSources = flow_context.allowed_sources;
@@ -3967,7 +3967,7 @@ serve(async (req) => {
       if (!flowSources.includes('kiwify')) canAccessFinancialData = false;
       if (!flowSources.includes('tracking')) canAccessTracking = false;
       
-      console.log('[ai-autopilot-chat] ðŸ” Flow-level source gating applied:', {
+      console.log('[ai-autopilot-chat] 🔒 Flow-level source gating applied:', {
         flowSources,
         canAccessKnowledgeBase,
         canAccessCustomerData,
@@ -3976,14 +3976,14 @@ serve(async (req) => {
       });
     }
     
-    console.log('[ai-autopilot-chat] ðŸ” Permissões finais:', {
+    console.log('[ai-autopilot-chat] 🔒 Permissões finais:', {
       canAccessCustomerData,
       canAccessKnowledgeBase,
       canAccessFinancialData,
       canAccessTracking
     });
 
-    // ðŸŽ“ Buscar exemplos de treinamento (Few-Shot Learning)
+    // 🎓 Buscar exemplos de treinamento (Few-Shot Learning)
     const { data: trainingExamples } = await supabaseClient
       .from('ai_training_examples')
       .select('*')
@@ -4099,7 +4099,7 @@ serve(async (req) => {
           delete attemptPayload.temperature;
         }
         
-        console.log(`[callAIWithFallback] ðŸ¤– ${attempt} com modelo: ${model}`);
+        console.log(`[callAIWithFallback] 🤖 ${attempt} com modelo: ${model}`);
         
         const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -4112,7 +4112,7 @@ serve(async (req) => {
         
         if (!response.ok) {
           const errorBody = await response.text().catch(() => 'Unable to read error body');
-          console.error(`[callAIWithFallback] âŒ ${attempt} falhou: ${response.status}`, errorBody);
+          console.error(`[callAIWithFallback] ❌ ${attempt} falhou: ${response.status}`, errorBody);
           
           if (response.status === 429) {
             throw new Error('QUOTA_ERROR: Erro de Saldo/Cota na IA.');
@@ -4147,7 +4147,7 @@ serve(async (req) => {
             
             return await tryModel('gpt-5-nano', 'Fallback técnico', safeFallbackPayload);
           } catch (fallbackError) {
-            console.error('[callAIWithFallback] âŒ Fallback gpt-5-nano também falhou:', fallbackError);
+            console.error('[callAIWithFallback] ❌ Fallback gpt-5-nano também falhou:', fallbackError);
             throw primaryError; // Propagar erro original
           }
         }
@@ -4157,7 +4157,7 @@ serve(async (req) => {
     }
     
     // ============================================================
-    // ðŸŽ¯ MODO RAG ESTRITO - OpenAI GPT-5 Exclusivo (Anti-Alucinação)
+    // 🎯 MODO RAG ESTRITO - OpenAI GPT-5 Exclusivo (Anti-Alucinação)
     // ============================================================
     // Quando ativo: usa APENAS OpenAI GPT-5, sem fallback, com thresholds rígidos
     // Cita fontes explicitamente e recusa responder quando não tem informação
@@ -4176,14 +4176,14 @@ serve(async (req) => {
       contactName: string,
       openaiApiKey: string
     ): Promise<StrictRAGResult> {
-      console.log('[callStrictRAG] ðŸŽ¯ Iniciando RAG Estrito com GPT-5');
+      console.log('[callStrictRAG] 🎯 Iniciando RAG Estrito com GPT-5');
       
       // Filtrar apenas artigos com alta confiança (â‰¥80%)
       const highConfidenceArticles = knowledgeArticles.filter(
         (a: any) => (a.similarity || 0) >= STRICT_SIMILARITY_THRESHOLD
       );
       
-      console.log('[callStrictRAG] ðŸ“Š Artigos filtrados:', {
+      console.log('[callStrictRAG] 📊 Artigos filtrados:', {
         total: knowledgeArticles.length,
         highConfidence: highConfidenceArticles.length,
         threshold: STRICT_SIMILARITY_THRESHOLD
@@ -4231,7 +4231,7 @@ ${a.content}`).join('\n\n---\n\n')}`;
         
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('[callStrictRAG] âŒ OpenAI GPT-5 falhou:', response.status, errorText);
+          console.error('[callStrictRAG] ❌ OpenAI GPT-5 falhou:', response.status, errorText);
           throw new Error(`OpenAI strict RAG failed: ${response.status}`);
         }
         
@@ -4248,7 +4248,7 @@ ${a.content}`).join('\n\n---\n\n')}`;
           };
         }
         
-        console.log('[callStrictRAG] ðŸ“ Resposta GPT-5 recebida:', aiMessage.substring(0, 100) + '...');
+        console.log('[callStrictRAG] 🔒 Resposta GPT-5 recebida:', aiMessage.substring(0, 100) + '...');
         
         // Validação pós-geração: detectar indicadores de incerteza/alucinação
         const hasUncertainty = HALLUCINATION_INDICATORS.some(
@@ -4277,7 +4277,7 @@ ${a.content}`).join('\n\n---\n\n')}`;
         );
         
         if (notFoundInKB) {
-          console.log('[callStrictRAG] ðŸ“­ IA indicou que não encontrou informação - handoff');
+          console.log('[callStrictRAG] 📭 IA indicou que não encontrou informação - handoff');
           return {
             shouldHandoff: true,
             reason: 'Informação não encontrada na base de conhecimento (IA reconheceu)',
@@ -4294,7 +4294,7 @@ ${a.content}`).join('\n\n---\n\n')}`;
         };
         
       } catch (error) {
-        console.error('[callStrictRAG] âŒ Erro no RAG estrito:', error);
+        console.error('[callStrictRAG] ❌ Erro no RAG estrito:', error);
         // Em modo estrito, erro = handoff (não fallback para outro modelo)
         return {
           shouldHandoff: true,
@@ -4342,22 +4342,22 @@ Responda APENAS: skip ou search`
       console.log('[ai-autopilot-chat] âš¡ Skip detectado - pulando busca na base');
     } else {
       // QUALQUER outra coisa: buscar na base de conhecimento
-      console.log('[ai-autopilot-chat] ðŸ” Search - consultando base de conhecimento...');
+      console.log('[ai-autopilot-chat] 🔒 Search - consultando base de conhecimento...');
       
       // âœ… Verificar se persona tem permissão para acessar knowledge base
       if (!canAccessKnowledgeBase) {
-        console.log('[ai-autopilot-chat] ðŸš« Persona NNÃO tem acesso à base de conhecimento - pulando busca');
+        console.log('[ai-autopilot-chat] 🚫 Persona NÃO tem acesso à base de conhecimento - pulando busca');
         knowledgeArticles = [];
       } else {
         // FASE 1: Verificar categorias específicas configuradas
-        // ðŸ†• Chat Flow: priorizar categorias do fluxo sobre as da persona
+        // 🆕 Chat Flow: priorizar categorias do fluxo sobre as da persona
         let activeKbCategories: string[] = [];
         let categorySource = 'ALL (sem filtro)';
         
         const flowCats = flowKbCategories as string[] | null;
         const personaCats = persona.knowledge_base_paths as string[] | null;
         
-        // ðŸ†• UPGRADE RESILIÁŠNCIA: Se persona tem acesso global (knowledge_base_paths null)
+        // 🆕 UPGRADE RESILIÁŠNCIA: Se persona tem acesso global (knowledge_base_paths null)
         // E as categorias vêm APENAS do flow, tratar como "sem filtro" para não
         // bloquear artigos de categorias novas que ainda não foram adicionadas ao flow.
         const personaHasGlobalAccess = !personaCats || personaCats.length === 0;
@@ -4381,7 +4381,7 @@ Responda APENAS: skip ou search`
         const activeProductFilter: string[] = flowKbProductFilter || [];
         const hasProductFilter = activeProductFilter.length > 0;
       
-        console.log('[ai-autopilot-chat] ðŸ“‚ KB Categories:', {
+        console.log('[ai-autopilot-chat] 📂 KB Categories:', {
           persona_id: persona.id,
           persona_name: persona.name,
           flow_categories: flowKbCategories,
@@ -4390,13 +4390,13 @@ Responda APENAS: skip ou search`
           category_source: categorySource
         });
         
-        // ðŸ†• Alias para compatibilidade com código existente
+        // 🆕 Alias para compatibilidade com código existente
         const personaCategories = activeKbCategories;
       
       try {
         // FASE 5: Query Expansion + Semantic Search Múltiplo
         if (OPENAI_API_KEY) {
-          console.log('[ai-autopilot-chat] ðŸš€ Iniciando Query Expansion...');
+          console.log('[ai-autopilot-chat] 🚀 Iniciando Query Expansion...');
           
           // Step 1: Expandir query para múltiplas variações
           let expandedQueries: string[] = [customerMessage];
@@ -4408,7 +4408,7 @@ Responda APENAS: skip ou search`
             );
 
             if (!expansionError && expansionData?.expanded_queries) {
-              // ðŸ›¡ï¸ FASE A+B: Sanitizar queries expandidas - remover tokens sujos
+              // 🛡� FASE A+B: Sanitizar queries expandidas - remover tokens sujos
               const rawQueries = expansionData.expanded_queries as string[];
               const sanitizedQueries = rawQueries
                 .filter((q: string) => {
@@ -4438,13 +4438,13 @@ Responda APENAS: skip ou search`
           let embeddingAttempted = false;
           let embeddingSucceeded = false;
           
-          // ðŸ›¡ï¸ FASE A: Só tentar embeddings se OPENAI_API_KEY existir
+          // 🛡� FASE A: Só tentar embeddings se OPENAI_API_KEY existir
           if (OPENAI_API_KEY) {
             embeddingAttempted = true;
             
             for (const query of expandedQueries) {
               try {
-                console.log(`[ai-autopilot-chat] ðŸ” Gerando embedding para: "${query.substring(0, 50)}..."`);
+                console.log(`[ai-autopilot-chat] 🔒 Gerando embedding para: "${query.substring(0, 50)}..."`);
                 
                 const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
                   method: 'POST',
@@ -4487,7 +4487,7 @@ Responda APENAS: skip ou search`
                   console.warn(`[ai-autopilot-chat] âš ï¸ Embedding falhou com status: ${embeddingResponse.status}`);
                 }
               } catch (error) {
-                console.error(`[ai-autopilot-chat] âŒ Erro no embedding para query: "${query}"`, error);
+                console.error(`[ai-autopilot-chat] ❌ Erro no embedding para query: "${query}"`, error);
               }
             }
           } else {
@@ -4496,16 +4496,16 @@ Responda APENAS: skip ou search`
 
           // Step 3: Converter mapa para array e aplicar filtros
           let allArticles = Array.from(articleMap.values());
-          console.log(`[ai-autopilot-chat] ðŸ“Š Total de artigos únicos encontrados: ${allArticles.length}`);
+          console.log(`[ai-autopilot-chat] 📊 Total de artigos únicos encontrados: ${allArticles.length}`);
           
-          // ðŸ›¡ï¸ FASE A: FALLBACK ROBUSTO - Executar busca por palavras-chave se:
+          // 🛡� FASE A: FALLBACK ROBUSTO - Executar busca por palavras-chave se:
           // 1. Embeddings não foram tentados (sem OPENAI_API_KEY)
           // 2. Embeddings falharam completamente
           // 3. Embeddings retornaram 0 resultados
           const needsKeywordFallback = !embeddingAttempted || !embeddingSucceeded || allArticles.length === 0;
           
           if (needsKeywordFallback) {
-            console.log('[ai-autopilot-chat] ðŸ”„ FALLBACK ATIVO: Buscando por palavras-chave...', {
+            console.log('[ai-autopilot-chat] 🔄 FALLBACK ATIVO: Buscando por palavras-chave...', {
               reason: !embeddingAttempted ? 'no_openai_key' : !embeddingSucceeded ? 'embedding_failed' : 'no_results',
               original_query: customerMessage.substring(0, 50)
             });
@@ -4533,8 +4533,8 @@ Responda APENAS: skip ou search`
             const messageLower = customerMessage.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const matchedDirectTerms = directTerms.filter(term => messageLower.includes(term));
             
-            console.log('[ai-autopilot-chat] ðŸ”‘ Keywords extraídas:', keywords.slice(0, 10));
-            console.log('[ai-autopilot-chat] ðŸŽ¯ Termos diretos encontrados:', matchedDirectTerms);
+            console.log('[ai-autopilot-chat] 🔑 Keywords extraídas:', keywords.slice(0, 10));
+            console.log('[ai-autopilot-chat] 🎯 Termos diretos encontrados:', matchedDirectTerms);
             
             // Buscar por título ou conteúdo contendo as palavras-chave
             if (keywords.length > 0 || matchedDirectTerms.length > 0) {
@@ -4579,7 +4579,7 @@ Responda APENAS: skip ou search`
               
               // Atualizar allArticles com resultados do fallback
               allArticles = Array.from(articleMap.values());
-              console.log(`[ai-autopilot-chat] ðŸ“Š Artigos após fallback: ${allArticles.length}`);
+              console.log(`[ai-autopilot-chat] 📊 Artigos após fallback: ${allArticles.length}`);
             }
           }
 
@@ -4588,11 +4588,11 @@ Responda APENAS: skip ou search`
             allArticles = allArticles.filter((a: any) => 
               personaCategories.includes(a.category)
             );
-            console.log(`[ai-autopilot-chat] ðŸ”’ Filtro de categoria: ${articleMap.size} â†’ ${allArticles.length} artigos`);
+            console.log(`[ai-autopilot-chat] 🔒 Filtro de categoria: ${articleMap.size} â†’ ${allArticles.length} artigos`);
           }
 
           if (allArticles.length > 0) {
-            // ðŸ†• BOOST de similaridade para matches de título (mais relevante que só conteúdo)
+            // 🆕 BOOST de similaridade para matches de título (mais relevante que só conteúdo)
             const customerWords = customerMessage.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
             
             knowledgeArticles = allArticles
@@ -4617,8 +4617,8 @@ Responda APENAS: skip ou search`
               .sort((a: any, b: any) => b.similarity - a.similarity)
               .slice(0, 5);
             
-            // ðŸ†• Log detalhado para diagnóstico de KB search
-            console.log('[ai-autopilot-chat] ðŸ“š KB SEARCH RESULT:', {
+            // 🆕 Log detalhado para diagnóstico de KB search
+            console.log('[ai-autopilot-chat] 📚 KB SEARCH RESULT:', {
               articles_found: knowledgeArticles.length,
               persona_has_global_access: !persona.knowledge_base_paths || persona.knowledge_base_paths.length === 0,
               persona_categories: persona.knowledge_base_paths,
@@ -4646,7 +4646,7 @@ Responda APENAS: skip ou search`
           }
         }
       } catch (searchError) {
-        console.error('[ai-autopilot-chat] âŒ Erro geral na busca de conhecimento:', searchError);
+        console.error('[ai-autopilot-chat] ❌ Erro geral na busca de conhecimento:', searchError);
         // knowledgeArticles permanece vazio, mas não quebra o fluxo
       }
       } // Fechamento do else de canAccessKnowledgeBase
@@ -4659,7 +4659,7 @@ Responda APENAS: skip ou search`
     const contactCompany = contact.company ? ` da empresa ${contact.company}` : '';
     const contactStatus = contact.status || 'lead';
     
-    // ðŸ†• CROSS-SESSION MEMORY: Buscar últimas 3 conversas fechadas do mesmo contato
+    // 🆕 CROSS-SESSION MEMORY: Buscar últimas 3 conversas fechadas do mesmo contato
     let crossSessionContext = '';
     try {
       const { data: pastConvs } = await supabaseClient
@@ -4691,13 +4691,13 @@ Responda APENAS: skip ou search`
       }
       if (crossSessionContext) {
         crossSessionContext = `\n\nHistórico de atendimentos anteriores deste cliente:\n${crossSessionContext}(Use apenas como contexto, não mencione explicitamente ao cliente)`;
-        console.log(`[ai-autopilot-chat] ðŸ§  Cross-session memory encontrada para contato ${contact.id}`);
+        console.log(`[ai-autopilot-chat] 🧠oss-session memory encontrada para contato ${contact.id}`);
       }
     } catch (memErr) {
       console.warn('[ai-autopilot-chat] âš ï¸ Erro ao buscar memória cross-session:', memErr);
     }
     
-    // ðŸ†• PERSONA CONTEXTUAL: Variar tom baseado no status/contexto do contato
+    // 🆕 PERSONA CONTEXTUAL: Variar tom baseado no status/contexto do contato
     let personaToneInstruction = '';
     if (contact.status === 'vip' || contact.subscription_plan) {
       personaToneInstruction = '\n\nTom: Extremamente cordial e proativo. Este é um cliente VIP/assinante. Ofereça assistência premium e priorize a resolução rápida.';
@@ -4707,18 +4707,18 @@ Responda APENAS: skip ou search`
       personaToneInstruction = '\n\nTom: Entusiasmado e consultivo. Este é um lead quente com alta pontuação. Seja proativo em ajudar e guiar.';
     }
     
-    // ðŸ†• CORREÇNÃO: Cliente é "conhecido" se tem email OU se foi validado via Kiwify OU se está na base como customer
+    // 🆕 CORREÇNÃO: Cliente é "conhecido" se tem email OU se foi validado via Kiwify OU se está na base como customer
     const isKiwifyValidated = contact.kiwify_validated === true;
     const isCustomerInDatabase = contact.status === 'customer';
-    // ðŸ†• Cliente identificado pelo telefone (webhook já verificou que existe no banco)
+    // 🆕 Cliente identificado pelo telefone (webhook já verificou que existe no banco)
     const isPhoneVerified = customer_context?.isVerified === true;
     const isValidatedCustomer = contactHasEmail || isKiwifyValidated || isCustomerInDatabase || isPhoneVerified;
     
-    // ðŸ” LGPD: Dados mascarados para exposição à IA
+    // 🔒 LGPD: Dados mascarados para exposição à IA
     const safeEmail = maskEmail(contactEmail);
     const safePhone = maskPhone(contact.phone);
     
-    console.log('[ai-autopilot-chat] ðŸ” Identity Wall Check:', {
+    console.log('[ai-autopilot-chat] 🔒 Identity Wall Check:', {
       hasEmail: contactHasEmail,
       isKiwifyValidated: isKiwifyValidated,
       isCustomerInDatabase: isCustomerInDatabase,
@@ -4729,16 +4729,16 @@ Responda APENAS: skip ou search`
       contactStatus: contact.status
     });
     
-    // ðŸ†• CORREÇNÃO: Se é cliente validado mas status não é 'customer', atualizar
+    // 🆕 CORREÇNÃO: Se é cliente validado mas status não é 'customer', atualizar
     if (isValidatedCustomer && contact.status !== 'customer') {
-      console.log('[ai-autopilot-chat] ðŸ”„ Atualizando status para customer...');
+      console.log('[ai-autopilot-chat] 🔄 Atualizando status para customer...');
       await supabaseClient
         .from('contacts')
         .update({ status: 'customer' })
         .eq('id', contact.id);
     }
     
-    // ðŸ†• CORREÇNÃO: Cliente validado vai para SUPORTE, não Comercial
+    // 🆕 CORREÇNÃO: Cliente validado vai para SUPORTE, não Comercial
     const SUPORTE_DEPT_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
     if (isValidatedCustomer) {
       const { data: currentConv } = await supabaseClient
@@ -4748,7 +4748,7 @@ Responda APENAS: skip ou search`
         .single();
       
       if (currentConv && currentConv.department !== SUPORTE_DEPT_ID) {
-        console.log('[ai-autopilot-chat] ðŸ¢ Movendo conversa para Suporte (cliente validado)');
+        console.log('[ai-autopilot-chat] 🏢vendo conversa para Suporte (cliente validado)');
         await supabaseClient
           .from('conversations')
           .update({ department: SUPORTE_DEPT_ID })
@@ -4757,37 +4757,37 @@ Responda APENAS: skip ou search`
     }
     
     // ============================================================
-    // ðŸŽ¯ SISTEMA ANTI-ALUCINAÇÃO - VERIFICAÇÃO DE CONFIANÇA
+    // 🎯 SISTEMA ANTI-ALUCINAÇÃO - VERIFICAÇÃO DE CONFIANÇA
     // ============================================================
     
-    // ðŸ†• Usar RAGConfig já carregado (query única no início do handler)
+    // 🆕 Usar RAGConfig já carregado (query única no início do handler)
     const isStrictRAGMode = ragConfig.strictMode;
-    console.log('[ai-autopilot-chat] ðŸŽ¯ Modo RAG Estrito:', isStrictRAGMode ? 'ATIVADO' : 'desativado');
+    console.log('[ai-autopilot-chat] 🎯 Modo RAG Estrito:', isStrictRAGMode ? 'ATIVADO' : 'desativado');
     
     // ============================================================
-    // ðŸ†• MODO RAG ESTRITO - Processamento exclusivo com GPT-5
+    // 🆕 MODO RAG ESTRITO - Processamento exclusivo com GPT-5
     // Bypass: temas operacionais (pedidos/tracking) pulam o Strict RAG
     // para que a IA possa usar CRM + Tracking lookup
     // ============================================================
     const detectedDept = pickDepartment(customerMessage);
     const isOperationalTopic = ['suporte_pedidos'].includes(detectedDept);
     
-    // ðŸ†• BYPASS: Detectar saudações e contatos genéricos ANTES do Strict RAG
+    // 🆕 BYPASS: Detectar saudações e contatos genéricos ANTES do Strict RAG
     // Evita que mensagens como "Olá, vim pelo site" sejam rejeitadas por 0% confiança
     const isSimpleGreetingEarly = /^(oi|olá|ola|hey|hi|hello|boa?\s*(dia|tarde|noite)|obrigad[oa]|valeu|ok|tudo\s*(bem|bom|certo|tranquilo|joia|jóia|beleza)|como\s*(vai|está|vc\s*está|vc\s*ta|ce\s*ta)|e\s*a[ií]|eai|eae|blz|tranquilo|suave|beleza|fala|falae|salve)[\s!?.,]*$/i.test(customerMessage.trim());
     const isGenericContactEarly = /^(ol[aá]|oi|hey|boa?\s*(dia|tarde|noite))?[,!.\s]*(vim|cheguei|estou|preciso|quero|gostaria|queria|buscando|procurando|entrei|acessei).{0,80}(atendimento|ajuda|suporte|falar|contato|informação|informações|saber|conhecer|entender|site|página|pagina|indicação|indicacao)/i.test(customerMessage.trim());
     const isGreetingBypass = isSimpleGreetingEarly || isGenericContactEarly;
     
     if (isGreetingBypass) {
-      console.log('[ai-autopilot-chat] ðŸ‘‹ Greeting/contato genérico detectado â€” BYPASS Strict RAG para resposta natural');
+      console.log('[ai-autopilot-chat] 👋 Greeting/contato genérico detectado â€” BYPASS Strict RAG para resposta natural');
     }
     
     if (isOperationalTopic && isStrictRAGMode) {
-      console.log('[ai-autopilot-chat] ðŸ“¦ Tema operacional (pedidos/tracking) detectado - BYPASS do Strict RAG para usar CRM/Tracking');
+      console.log('[ai-autopilot-chat] 📦 Tema operacional (pedidos/tracking) detectado - BYPASS do Strict RAG para usar CRM/Tracking');
     }
     
     if (isStrictRAGMode && !isOperationalTopic && !isGreetingBypass && OPENAI_API_KEY && knowledgeArticles.length > 0) {
-      console.log('[ai-autopilot-chat] ðŸŽ¯ STRICT RAG MODE ATIVO - Usando GPT-5 exclusivo');
+      console.log('[ai-autopilot-chat] 🎯 STRICT RAG MODE ATIVO - Usando GPT-5 exclusivo');
       
       const strictResult = await callStrictRAG(
         supabaseClient,
@@ -4798,9 +4798,9 @@ Responda APENAS: skip ou search`
       );
       
       if (strictResult.shouldHandoff) {
-        console.log('[ai-autopilot-chat] ðŸš¨ STRICT RAG: Handoff necessário -', strictResult.reason);
+        console.log('[ai-autopilot-chat] 🚨 STRICT RAG: Handoff necessário -', strictResult.reason);
         
-        // ðŸ†• GUARD: Se flow_context existe, NNÃO executar handoff direto
+        // 🆕 GUARD: Se flow_context existe, NÃO executar handoff direto
         // Pular todo o bloco Strict RAG e cair no fluxo padrão (persona + contexto)
         if (flow_context) {
           console.log('[ai-autopilot-chat] âš ï¸ STRICT RAG + flow_context â†’ IGNORANDO handoff E resposta strict, caindo no fluxo padrão (persona)', {
@@ -4808,8 +4808,8 @@ Responda APENAS: skip ou search`
             flow_id: flow_context.flow_id,
             node_id: flow_context.node_id
           });
-          // NNÃO usa strictResult.response (pode ser null)
-          // NNÃO retorna â€” cai no fluxo padrão abaixo (linha "FLUXO PADRNÃO")
+          // NÃO usa strictResult.response (pode ser null)
+          // NÃO retorna â€” cai no fluxo padrão abaixo (linha "FLUXO PADRNÃO")
         } else {
         // Executar handoff direto (sem flow_context â€” comportamento original preservado)
         const handoffTimestamp = new Date().toISOString();
@@ -4886,7 +4886,7 @@ Responda APENAS: skip ou search`
         await supabaseClient.from('interactions').insert({
           customer_id: contact.id,
           type: 'internal_note',
-          content: `ðŸŽ¯ **Handoff via Modo RAG Estrito**\n\n**Motivo:** ${strictResult.reason}\n**Pergunta:** "${customerMessage}"\n\nModo anti-alucinação ativo - handoff executado por falta de informação confiável na KB.`,
+          content: `🎯 **Handoff via Modo RAG Estrito**\n\n**Motivo:** ${strictResult.reason}\n**Pergunta:** "${customerMessage}"\n\nModo anti-alucinação ativo - handoff executado por falta de informação confiável na KB.`,
           channel: responseChannel
         });
         
@@ -4902,7 +4902,7 @@ Responda APENAS: skip ou search`
           articles_count: knowledgeArticles.length
         });
         
-        // ðŸ“Š FIX 4: Telemetria anti-alucinação â€” Strict RAG handoff
+        // 📊 FIX 4: Telemetria anti-alucinação â€” Strict RAG handoff
         console.log(JSON.stringify({
           event: 'ai_decision',
           conversation_id: conversationId,
@@ -4935,10 +4935,10 @@ Responda APENAS: skip ou search`
         } // end else (no flow_context)
       }
       
-      // ðŸ†• GUARD: Se flow_context + shouldHandoff, pular resposta strict (response pode ser null)
+      // 🆕 GUARD: Se flow_context + shouldHandoff, pular resposta strict (response pode ser null)
       // Cair direto no fluxo padrão abaixo
       if (flow_context && strictResult.shouldHandoff) {
-        console.log('[ai-autopilot-chat] â© Pulando bloco strict response â€” flow_context ativo + shouldHandoff, usando fluxo padrão');
+        console.log('[ai-autopilot-chat] ⏩ Pulando bloco strict response — flow_context ativo + shouldHandoff, usando fluxo padrão');
       } else {
       
       // Resposta validada - enviar ao cliente
@@ -4994,7 +4994,7 @@ Responda APENAS: skip ou search`
             conversationId,
             contact.whatsapp_id,
             false, // useQueue
-            persona?.name || null // ðŸ†• Nome da persona
+            persona?.name || null // 🆕 Nome da persona
           );
           
           if (sendResult.success) {
@@ -5044,7 +5044,7 @@ Responda APENAS: skip ou search`
       }))
     );
 
-    console.log('[ai-autopilot-chat] ðŸŽ¯ CONFIDENCE SCORE:', {
+    console.log('[ai-autopilot-chat] 🎯 CONFIDENCE SCORE:', {
       score: (confidenceResult.score * 100).toFixed(0) + '%',
       action: confidenceResult.action,
       reason: confidenceResult.reason,
@@ -5053,12 +5053,12 @@ Responda APENAS: skip ou search`
       articlesCount: knowledgeArticles.length
     });
 
-    // ðŸš¨ HANDOFF AUTOMÁTICO POR BAIXA CONFIANÇA
+    // 🚨 HANDOFF AUTOMÁTICO POR BAIXA CONFIANÇA
     // FASE 5: Corrigido - Faz handoff baseado no SCORE, não na existência de artigos
     // Antes: só fazia handoff se knowledgeArticles.length === 0 (bug - ignorava artigos irrelevantes)
     const isSimpleGreeting = /^(oi|olá|ola|bom dia|boa tarde|boa noite|obrigad[oa]|valeu|ok|tá|ta|sim|não|nao|tudo\s*(bem|bom|certo|tranquilo|joia|jóia|beleza)|como\s*(vai|está|vc\s*está|vc\s*ta|ce\s*ta)|e\s*a[ií]|eai|eae|blz|tranquilo|suave|beleza|fala|falae|salve|hey|hi|hello)[\s!?.,]*$/i.test(customerMessage.trim());
     
-    // ðŸ†• BYPASS HANDOFF: Detectar se mensagem parece ser pedido/rastreio
+    // 🆕 BYPASS HANDOFF: Detectar se mensagem parece ser pedido/rastreio
     // Se contém número de pedido ou código de rastreio, FORÇAR processamento com tools
     const trackingPatterns = [
       /\b\d{7,15}\b/, // Números de 7-15 dígitos (IDs de pedido)
@@ -5067,12 +5067,12 @@ Responda APENAS: skip ou search`
     ];
     const looksLikeTrackingQuery = trackingPatterns.some(p => p.test(customerMessage));
     
-    // ðŸ†• Extrair números de pedido/rastreio da mensagem para PRÉ-CONSULTA
+    // 🆕 Extrair números de pedido/rastreio da mensagem para PRÉ-CONSULTA
     const extractedOrderIds = customerMessage.match(/\b\d{7,15}\b/g) || [];
     const extractedTrackingCodes = customerMessage.match(/\b[A-Z]{2}\d{9,13}[A-Z]{0,2}\b/gi) || [];
     const allExtractedCodes = [...new Set([...extractedOrderIds, ...extractedTrackingCodes])];
     
-    console.log('[ai-autopilot-chat] ðŸ” Tracking query detection:', {
+    console.log('[ai-autopilot-chat] 🔒 Tracking query detection:', {
       customerMessage: customerMessage.substring(0, 50),
       looksLikeTrackingQuery,
       canAccessTracking,
@@ -5080,16 +5080,16 @@ Responda APENAS: skip ou search`
       extractedCodes: allExtractedCodes
     });
     
-    // ðŸšš PRÉ-CONSULTA DIRETA: Se detectar números de pedido/rastreio, consultar MySQL ANTES da IA
+    // 🚚 PRÉ-CONSULTA DIRETA: Se detectar números de pedido/rastreio, consultar MySQL ANTES da IA
     if (allExtractedCodes.length > 0 && canAccessTracking) {
-      console.log('[ai-autopilot-chat] ðŸšš PRÉ-CONSULTA DIRETA: Consultando MySQL com códigos extraídos');
+      console.log('[ai-autopilot-chat] 🚚 PRÉ-CONSULTA DIRETA: Consultando MySQL com códigos extraídos');
       
       try {
         const { data: fetchResult, error: fetchError } = await supabaseClient.functions.invoke('fetch-tracking', {
           body: { tracking_codes: allExtractedCodes }
         });
         
-        console.log('[ai-autopilot-chat] ðŸšš PRÉ-CONSULTA resultado:', {
+        console.log('[ai-autopilot-chat] 🚚 PRÉ-CONSULTA resultado:', {
           success: fetchResult?.success,
           found: fetchResult?.found,
           total: fetchResult?.total_requested,
@@ -5098,7 +5098,7 @@ Responda APENAS: skip ou search`
         
         // Se encontrou resultados, retornar resposta direta SEM chamar IA
         if (fetchResult?.success && fetchResult?.found > 0 && fetchResult?.data) {
-          console.log('[ai-autopilot-chat] ðŸšš BYPASS IA: Retornando dados de rastreio diretamente');
+          console.log('[ai-autopilot-chat] 🚚 BYPASS IA: Retornando dados de rastreio diretamente');
           
           let directResponse = '';
           const codesFound: string[] = [];
@@ -5115,15 +5115,15 @@ Responda APENAS: skip ou search`
               
               if (info.is_packed) {
                 directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
-ðŸ“¦ Embalado em: ${packedAt}
-ðŸšš Código de rastreio: ${trackingNum}
+📦 Embalado em: ${packedAt}
+🚚 Código de rastreio: ${trackingNum}
 âœ… Status: ${status}
 
 `;
               } else {
                 directResponse += `**Pedido ${code}**${buyerName ? ` - ${buyerName}` : ''}
-â³ ${info.packing_message || 'Pedido ainda está sendo preparado.'}
-ðŸ“‹ Status: ${status}
+⏳ ${info.packing_message || 'Pedido ainda está sendo preparado.'}
+📋 Status: ${status}
 
 `;
               }
@@ -5135,10 +5135,10 @@ Responda APENAS: skip ou search`
           // Adicionar mensagem para códigos não encontrados
           if (codesNotFound.length > 0) {
             if (codesNotFound.length === 1) {
-              directResponse += `\nâ“ O código **${codesNotFound[0]}** não foi encontrado no sistema.
+              directResponse += `\n❝ O código **${codesNotFound[0]}** não foi encontrado no sistema.
 Este número está correto? Se sim, pode ser que o pedido ainda não tenha entrado em preparação.`;
             } else {
-              directResponse += `\nâ“ Os seguintes códigos não foram encontrados: ${codesNotFound.join(', ')}
+              directResponse += `\n❝ Os seguintes códigos não foram encontrados: ${codesNotFound.join(', ')}
 Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado em preparação.`;
             }
           }
@@ -5201,19 +5201,19 @@ Esses números estão corretos? Se sim, pode ser que ainda não tenham entrado e
           });
         }
         
-        // Se NNÃO encontrou nada, perguntar se o número está correto
+        // Se NÃO encontrou nada, perguntar se o número está correto
         if (fetchResult?.success && fetchResult?.found === 0) {
-          console.log('[ai-autopilot-chat] ðŸšš Nenhum código encontrado - perguntando confirmação');
+          console.log('[ai-autopilot-chat] 🚚 Nenhum código encontrado - perguntando confirmação');
           
           const notFoundMessage = allExtractedCodes.length === 1
             ? `Não encontrei o pedido **${allExtractedCodes[0]}** no sistema de rastreio.
 
-ðŸ¤” Esse número está correto?
+🤔 Esse número está correto?
 
 Se foi pago recentemente, pode ser que ainda não tenha entrado em preparação. Caso contrário, me envie o número correto para eu verificar novamente.`
             : `Não encontrei os códigos ${allExtractedCodes.join(', ')} no sistema de rastreio.
 
-ðŸ¤” Esses números estão corretos?
+🤔 Esses números estão corretos?
 
 Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparação.`;
           
@@ -5269,19 +5269,19 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         }
         
       } catch (preQueryError) {
-        console.error('[ai-autopilot-chat] âŒ Erro na pré-consulta de rastreio:', preQueryError);
+        console.error('[ai-autopilot-chat] ❌ Erro na pré-consulta de rastreio:', preQueryError);
         // Continua para o fluxo normal da IA
       }
     }
     
-    // ðŸ†• Se parece ser consulta de rastreio E temos permissão de tracking, FORÇAR resposta (não handoff)
+    // 🆕 Se parece ser consulta de rastreio E temos permissão de tracking, FORÇAR resposta (não handoff)
     if (looksLikeTrackingQuery && canAccessTracking && confidenceResult.action === 'handoff') {
-      console.log('[ai-autopilot-chat] ðŸšš BYPASS HANDOFF: Mensagem parece ser pedido/rastreio - forçando processamento com tools');
+      console.log('[ai-autopilot-chat] 🚚 BYPASS HANDOFF: Mensagem parece ser pedido/rastreio - forçando processamento com tools');
       confidenceResult.action = 'cautious'; // Usar 'cautious' que permite resposta com tools
       confidenceResult.reason = 'Detectado código de pedido/rastreio - tentando consultar via check_tracking tool';
     }
     
-    // ðŸ†• Detectar mensagens genéricas de "quero atendimento" (NNÃO fazer handoff imediato)
+    // 🆕 Detectar mensagens genéricas de "quero atendimento" (NÃO fazer handoff imediato)
     const isGenericContactRequest = /^(ol[aá]|oi|bom dia|boa tarde|boa noite)?[,!.\s]*(vim|cheguei|estou|preciso|quero|gostaria|queria|buscando|procurando).{0,50}(atendimento|ajuda|suporte|falar|contato|informação|informações|saber|conhecer|entender)/i.test(customerMessage.trim());
     
     // Buscar contagem de mensagens do cliente para determinar se é início de conversa
@@ -5293,10 +5293,10 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     
     const isEarlyConversation = (customerMessagesCount || 0) <= 2;
     
-    // ðŸ†• CONDIÇNÃO EXPANDIDA: Não fazer handoff se for saudação OU contato genérico no início da conversa
+    // 🆕 CONDIÇNÃO EXPANDIDA: Não fazer handoff se for saudação OU contato genérico no início da conversa
     const shouldSkipHandoff = isSimpleGreeting || (isGenericContactRequest && isEarlyConversation);
     
-    console.log('[ai-autopilot-chat] ðŸ” Handoff check:', {
+    console.log('[ai-autopilot-chat] 🔒 Handoff check:', {
       isSimpleGreeting,
       isGenericContactRequest,
       isEarlyConversation,
@@ -5305,9 +5305,9 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       confidenceAction: confidenceResult.action
     });
     
-    // ðŸ†• Responder com boas-vindas para mensagens de contato inicial (antes do handoff)
+    // 🆕 Responder com boas-vindas para mensagens de contato inicial (antes do handoff)
     if (isGenericContactRequest && isEarlyConversation && confidenceResult.action === 'handoff') {
-      console.log('[ai-autopilot-chat] ðŸ‘‹ Mensagem de primeiro contato genérico detectada - respondendo com boas-vindas');
+      console.log('[ai-autopilot-chat] 👋 Mensagem de primeiro contato genérico detectada - respondendo com boas-vindas');
       
       // Usar template do banco ou fallback
       let welcomeMessage = await getMessageTemplate(
@@ -5318,7 +5318,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       
       if (!welcomeMessage) {
         const firstName = contactName ? contactName.split(' ')[0] : '';
-        welcomeMessage = `Olá${firstName ? `, ${firstName}` : ''}! ðŸ‘‹\n\nFicamos felizes com seu contato! Em que posso te ajudar hoje?`;
+        welcomeMessage = `Olá${firstName ? `, ${firstName}` : ''}! 👋\n\nFicamos felizes com seu contato! Em que posso te ajudar hoje?`;
       }
       
       // Salvar mensagem
@@ -5330,7 +5330,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         channel: responseChannel
       });
       
-      // ðŸ“¤ ENVIAR PARA WHATSAPP (se for canal WhatsApp) - Meta ou Evolution
+      // 📤 ENVIAR PARA WHATSAPP (se for canal WhatsApp) - Meta ou Evolution
       if (responseChannel === 'whatsapp' && contact?.phone) {
         const whatsappResult = await getWhatsAppInstanceForConversation(
           supabaseClient, 
@@ -5340,7 +5340,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         );
         
         if (whatsappResult) {
-          console.log('[ai-autopilot-chat] ðŸ“¤ Enviando boas-vindas via WhatsApp');
+          console.log('[ai-autopilot-chat] 📤 Enviando boas-vindas via WhatsApp');
           await sendWhatsAppMessage(
             supabaseClient,
             whatsappResult,
@@ -5363,13 +5363,13 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       });
     }
     
-    // ðŸ†• NOVA VERIFICAÇÃO: Cliente pediu EXPLICITAMENTE por humano?
+    // 🆕 NOVA VERIFICAÇÃO: Cliente pediu EXPLICITAMENTE por humano?
     // Só faz handoff se cliente usou uma das frases de pedido explícito
     const customerRequestedHuman = EXPLICIT_HUMAN_REQUEST_PATTERNS.some(pattern => 
       pattern.test(customerMessage)
     );
     
-    console.log('[ai-autopilot-chat] ðŸ” Handoff check:', {
+    console.log('[ai-autopilot-chat] 🔒 Handoff check:', {
       confidenceAction: confidenceResult.action,
       customerRequestedHuman,
       shouldSkipHandoff,
@@ -5377,7 +5377,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     });
     
     // ============================================================
-    // ðŸ†• FIX: 0 artigos + 0% confiança + flow_context â†’ NNÃO SAIR, forçar modo cautious
+    // 🆕 FIX: 0 artigos + 0% confiança + flow_context â†’ NÃO SAIR, forçar modo cautious
     // A IA deve sempre tentar responder usando persona + contexto + conhecimento geral
     // ============================================================
     if (flow_context && confidenceResult.score === 0 && knowledgeArticles.length === 0 && !shouldSkipHandoff) {
@@ -5388,7 +5388,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         node_id: flow_context.node_id
       });
       
-      // ðŸ“Š FIX 4: Telemetria anti-alucinação â€” Zero confidence guard
+      // 📊 FIX 4: Telemetria anti-alucinação â€” Zero confidence guard
       console.log(JSON.stringify({
         event: 'ai_decision',
         conversation_id: conversationId,
@@ -5414,18 +5414,18 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       // Continua execução normalmente â€” a IA será chamada com persona + contexto
 }
 
-    // ðŸ†• MUDANÇA CRÁTICA: Só fazer handoff se cliente PEDIR EXPLICITAMENTE
+    // 🆕 MUDANÇA CRÁTICA: Só fazer handoff se cliente PEDIR EXPLICITAMENTE
     // OU se action é 'handoff' E cliente pediu humano
     // REMOVIDO: handoff automático por baixa confiança
     if (customerRequestedHuman) {
-      console.log('[ai-autopilot-chat] ðŸš¨ CLIENTE PEDIU HUMANO EXPLICITAMENTE');
+      console.log('[ai-autopilot-chat] 🚨 CLIENTE PEDIU HUMANO EXPLICITAMENTE');
       
-      // ðŸ†• VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente â†’ PEDIR EMAIL PRIMEIRO
+      // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente â†’ PEDIR EMAIL PRIMEIRO
       const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated && !isPhoneVerified;
       const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
       const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
       
-      console.log('[ai-autopilot-chat] ðŸŽ¯ Handoff department decision:', {
+      console.log('[ai-autopilot-chat] 🎯 Handoff department decision:', {
         isLeadWithoutEmail,
         contactHasEmail,
         isCustomerInDatabase,
@@ -5441,15 +5441,15 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         const timeSinceBlocked = Date.now() - existingHandoffBlockedAt;
         const ANTI_SPAM_WINDOW_MS = 60000; // 60 segundos
         
-        console.log('[ai-autopilot-chat] ðŸ” LEAD SEM EMAIL - Verificando estado:', {
+        console.log('[ai-autopilot-chat] 🔒 LEAD SEM EMAIL - Verificando estado:', {
           alreadyAwaitingEmail,
           timeSinceBlocked: Math.round(timeSinceBlocked / 1000) + 's',
           antiSpamActive: alreadyAwaitingEmail && timeSinceBlocked < ANTI_SPAM_WINDOW_MS
         });
         
-        // ðŸ›¡ï¸ ANTI-SPAM: Se já pediu email recentemente, NNÃO repetir a mesma mensagem
+        // 🛡� ANTI-SPAM: Se já pediu email recentemente, NÃO repetir a mesma mensagem
         if (alreadyAwaitingEmail && timeSinceBlocked < ANTI_SPAM_WINDOW_MS) {
-          console.log('[ai-autopilot-chat] ðŸ›¡ï¸ Anti-spam ativo - não repetindo pedido de email');
+          console.log('[ai-autopilot-chat] 🛡� Anti-spam ativo - não repetindo pedido de email');
           
           // Apenas retornar status sem enviar nova mensagem
           return new Response(JSON.stringify({
@@ -5463,9 +5463,9 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           });
         }
         
-        console.log('[ai-autopilot-chat] ðŸ“§ Pedindo email pela primeira vez (ou após janela anti-spam)');
+        console.log('[ai-autopilot-chat] 📧 Pedindo email pela primeira vez (ou após janela anti-spam)');
         
-        // Usar template do banco ou fallback - ðŸ†• Adicionar instrução sobre formato
+        // Usar template do banco ou fallback - 🆕 Adicionar instrução sobre formato
         let askEmailMessage = await getMessageTemplate(
           supabaseClient,
           'identity_wall_ask_email',
@@ -5474,7 +5474,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         
         if (!askEmailMessage) {
           const firstName = contactName ? contactName.split(' ')[0] : '';
-          askEmailMessage = `Olá${firstName ? `, ${firstName}` : ''}! ðŸ‘‹\n\nPara garantir um atendimento personalizado e seguro, preciso que você me informe seu email.\n\nðŸ“§ *Envie apenas o email em uma linha (ex: seunome@email.com)*`;
+          askEmailMessage = `Olá${firstName ? `, ${firstName}` : ''}! 👋\n\nPara garantir um atendimento personalizado e seguro, preciso que você me informe seu email.\n\n📧 *Envie apenas o email em uma linha (ex: seunome@email.com)*`;
         }
         
         // Salvar mensagem pedindo email
@@ -5496,7 +5496,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           );
           
           if (whatsappResult) {
-            console.log('[ai-autopilot-chat] ðŸ“¤ Enviando pedido de email via WhatsApp');
+            console.log('[ai-autopilot-chat] 📤 Enviando pedido de email via WhatsApp');
             await sendWhatsAppMessage(
               supabaseClient,
               whatsappResult,
@@ -5509,11 +5509,11 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           }
         }
         
-        // ðŸ†• PRESERVAÇÃO DE CONTEXTO: Salvar intenção original antes de pedir email
+        // 🆕 PRESERVAÇÃO DE CONTEXTO: Salvar intenção original antes de pedir email
         const originalIntent = customerMessage;
         const originalIntentCategory = detectIntentCategory(customerMessage);
         
-        console.log('[ai-autopilot-chat] ðŸ“§ Salvando contexto original:', {
+        console.log('[ai-autopilot-chat] 📧 Salvando contexto original:', {
           originalIntent: originalIntent.substring(0, 50) + '...',
           originalIntentCategory
         });
@@ -5526,7 +5526,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
               awaiting_email_for_handoff: true,
               handoff_blocked_at: new Date().toISOString(),
               handoff_blocked_reason: 'low_confidence_lead_without_email',
-              // ðŸ†• CONTEXTO: Salvar intenção original para recuperar após email
+              // 🆕 CONTEXTO: Salvar intenção original para recuperar após email
               original_intent: originalIntent,
               original_intent_category: originalIntentCategory,
               original_intent_timestamp: new Date().toISOString()
@@ -5547,10 +5547,10 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         });
       }
       
-      // ðŸ†• GUARD: Se flow_context existe, NNÃO executar handoff direto
+      // 🆕 GUARD: Se flow_context existe, NÃO executar handoff direto
       // Devolver controle ao process-chat-flow para avançar ao próximo nó
       if (flow_context) {
-        console.log('[ai-autopilot-chat] ðŸ”„ CONFIDENCE HANDOFF + flow_context â†’ retornando flow_advance_needed (soberania do fluxo)', {
+        console.log('[ai-autopilot-chat] 🔄 CONFIDENCE HANDOFF + flow_context â†’ retornando flow_advance_needed (soberania do fluxo)', {
           score: confidenceResult.score,
           reason: confidenceResult.reason,
           flow_id: flow_context.flow_id,
@@ -5568,7 +5568,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           articles_count: knowledgeArticles.length
         });
         
-        // ðŸ“Š FIX 4: Telemetria anti-alucinação â€” Confidence handoff (flow_advance_needed)
+        // 📊 FIX 4: Telemetria anti-alucinação â€” Confidence handoff (flow_advance_needed)
         console.log(JSON.stringify({
           event: 'ai_decision',
           conversation_id: conversationId,
@@ -5603,14 +5603,14 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       // âœ… Respeitar departamento definido pelo fluxo (nunca sobrescrever)
       const handoffDepartment = conversation.department || confidenceResult.department || DEPT_SUPORTE_ID;
       
-      console.log('[ai-autopilot-chat] ðŸ”„ Departamento de handoff:', {
+      console.log('[ai-autopilot-chat] 🔄 Departamento de handoff:', {
         flowDepartment: conversation.department,
         aiDetectedDepartment: confidenceResult.department || 'nenhum',
         finalDepartment: handoffDepartment,
         reason: conversation.department ? 'RESPEITANDO FLUXO' : 'USANDO IA'
       });
       
-      // ðŸ›¡ï¸ Atualizar ai_mode para waiting_human E marcar timestamp anti-race-condition
+      // 🛡� Atualizar ai_mode para waiting_human E marcar timestamp anti-race-condition
       const handoffTimestamp = new Date().toISOString();
       await supabaseClient
         .from('conversations')
@@ -5665,7 +5665,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         channel: responseChannel
       });
       
-      // ðŸ“¤ ENVIAR PARA WHATSAPP (se for canal WhatsApp) - Meta ou Evolution
+      // 📤 ENVIAR PARA WHATSAPP (se for canal WhatsApp) - Meta ou Evolution
       if (responseChannel === 'whatsapp' && contact?.phone) {
         const whatsappResult = await getWhatsAppInstanceForConversation(
           supabaseClient, 
@@ -5675,7 +5675,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         );
         
         if (whatsappResult) {
-          console.log('[ai-autopilot-chat] ðŸ“¤ Enviando mensagem de handoff via WhatsApp');
+          console.log('[ai-autopilot-chat] 📤 Enviando mensagem de handoff via WhatsApp');
           const sendResult = await sendWhatsAppMessage(
             supabaseClient,
             whatsappResult,
@@ -5687,7 +5687,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           );
           
           if (!sendResult.success) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao enviar handoff via WhatsApp:', sendResult.error);
+            console.error('[ai-autopilot-chat] ❌ Erro ao enviar handoff via WhatsApp:', sendResult.error);
           } else {
             console.log('[ai-autopilot-chat] âœ… Handoff enviado via WhatsApp');
           }
@@ -5698,11 +5698,11 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       await supabaseClient.from('interactions').insert({
         customer_id: contact.id,
         type: 'internal_note',
-        content: `ðŸŽ¯ **Handoff Automático por Baixa Confiança**
+        content: `🎯 **Handoff Automático por Baixa Confiança**
 
 **Score:** ${(confidenceResult.score * 100).toFixed(0)}%
 **Motivo:** ${confidenceResult.reason}
-**Departamento:** ðŸŽ§ Suporte (Cliente identificado)
+**Departamento:** 🎧 Suporte (Cliente identificado)
 **Pergunta do Cliente:** "${customerMessage}"
 
 **Ação:** IA não tinha informações suficientes na base de conhecimento para responder com segurança.`,
@@ -5732,12 +5732,12 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
 
     let knowledgeContext = '';
     if (knowledgeArticles.length > 0) {
-      knowledgeContext = `\n\n**ðŸ“š BASE DE CONHECIMENTO:**\n${knowledgeArticles.map(a => 
+      knowledgeContext = `\n\n**📚 BASE DE CONHECIMENTO:**\n${knowledgeArticles.map(a => 
         `**${a.title}**\n${a.content}`
       ).join('\n\n---\n\n')}`;
     }
     
-    // ðŸ†• SANDBOX TRAINING: Buscar artigos de treinamento do sandbox quando fonte habilitada
+    // 🆕 SANDBOX TRAINING: Buscar artigos de treinamento do sandbox quando fonte habilitada
     let sandboxTrainingContext = '';
     let sandboxUsedFlag = false;
     if (ragConfig.sources?.sandbox) {
@@ -5752,19 +5752,19 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         
         if (sandboxArticles && sandboxArticles.length > 0) {
           sandboxUsedFlag = true;
-          sandboxTrainingContext = `\n\n**ðŸ§ª EXEMPLOS DE TREINAMENTO (Sandbox):**\nOs exemplos abaixo são pares de pergunta-resposta validados manualmente. Use-os como referência de tom, estilo e precisão para suas respostas.\n${sandboxArticles.map((a: any) => 
+          sandboxTrainingContext = `\n\n**🧪 EXEMPLOS DE TREINAMENTO (Sandbox):**\nOs exemplos abaixo são pares de pergunta-resposta validados manualmente. Use-os como referência de tom, estilo e precisão para suas respostas.\n${sandboxArticles.map((a: any) => 
             `**${a.title}**\n${a.content}`
           ).join('\n\n---\n\n')}`;
           
-          console.log(`[ai-autopilot-chat] ðŸ§ª Sandbox training: ${sandboxArticles.length} artigos carregados`);
+          console.log(`[ai-autopilot-chat] 🧪 Sandbox training: ${sandboxArticles.length} artigos carregados`);
         } else {
-          console.log('[ai-autopilot-chat] ðŸ§ª Sandbox training: nenhum artigo encontrado');
+          console.log('[ai-autopilot-chat] 🧪 Sandbox training: nenhum artigo encontrado');
         }
       } catch (sandboxErr) {
-        console.error('[ai-autopilot-chat] âŒ Erro ao buscar sandbox training:', sandboxErr);
+        console.error('[ai-autopilot-chat] ❌ Erro ao buscar sandbox training:', sandboxErr);
       }
     } else {
-      console.log('[ai-autopilot-chat] ðŸ§ª Sandbox training: fonte desabilitada nas configurações');
+      console.log('[ai-autopilot-chat] 🧪 Sandbox training: fonte desabilitada nas configurações');
     }
     
     // FASE 2: Preparar contexto financeiro (CPF mascarado)
@@ -5772,8 +5772,8 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     const maskedCPF = contactCPF.length >= 4 ? `***.***.***-${contactCPF.slice(-2)}` : 'Não cadastrado';
     const cpfLast4 = contactCPF.length >= 4 ? contactCPF.slice(-4) : '';
     
-    // ðŸ” DEBUG: Log CPF data
-    console.log('[ai-autopilot-chat] ðŸ” CPF DEBUG:', {
+    // 🔒 DEBUG: Log CPF data
+    console.log('[ai-autopilot-chat] 🔒 CPF DEBUG:', {
       has_document: !!contact.document,
       document_length: contact.document?.length,
       maskedCPF: maskedCPF,
@@ -5782,7 +5782,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     });
     
     // ============================================================
-    // ðŸ”’ DEFINIÇÁ•ES UNIFICADAS DE CLIENTE (evita inconsistências)
+    // 🔒 DEFINIÇÁ•ES UNIFICADAS DE CLIENTE (evita inconsistências)
     // ============================================================
     // âœ… CORREÇNÃO: Cliente verificado = tem email cadastrado (independente de status)
     // Status é atualizado automaticamente pelo webhook Kiwify quando há compra
@@ -5790,7 +5790,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     const hasCompleteCadastro = !!contactCPF; // CPF cadastrado
     const canAccessFinancialFeatures = isContactVerified && hasCompleteCadastro;
     
-    console.log('[ai-autopilot-chat] ðŸ” CUSTOMER STATUS:', {
+    console.log('[ai-autopilot-chat] 🔒 CUSTOMER STATUS:', {
       contact_id: contact.id,
       contact_name: contactName,
       has_email: !!contact.email,
@@ -5810,7 +5810,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         ? 'Email não cadastrado - precisa se identificar primeiro'
         : null;
     
-    // ðŸš¨ DETECÇNÃO DE TIPO DE SOLICITAÇÃO FINANCEIRA
+    // 🚨 DETECÇNÃO DE TIPO DE SOLICITAÇÃO FINANCEIRA
     // Separamos em 3 categorias com tratamentos diferentes:
     // 1. SAQUE DE SALDO â†’ Exige OTP (segurança máxima)
     // 2. REEMBOLSO DE PEDIDO â†’ Sem OTP (explica processo)
@@ -5820,24 +5820,24 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       customerMessage.toLowerCase().includes(keyword)
     );
     
-    // ðŸ” SAQUE DE SALDO - ÁšNICA operação que EXIGE OTP
+    // 🔒 SAQUE DE SALDO - ÁšNICA operação que EXIGE OTP
     const isWithdrawalRequest = WITHDRAWAL_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     ) || OTP_REQUIRED_KEYWORDS.some(keyword =>
       customerMessage.toLowerCase().includes(keyword.toLowerCase())
     );
     
-    // ðŸ“¦ REEMBOLSO DE PEDIDO - Sem OTP, explica processo
+    // 📦 REEMBOLSO DE PEDIDO - Sem OTP, explica processo
     const isRefundRequest = REFUND_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     );
     
-    // âŒ CANCELAMENTO DE ASSINATURA - Sem OTP, processo Kiwify
+    // ❌ CANCELAMENTO DE ASSINATURA - Sem OTP, processo Kiwify
     const isCancellationRequest = CANCELLATION_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     );
     
-    console.log('[ai-autopilot-chat] ðŸŽ¯ FINANCIAL REQUEST DETECTION:', {
+    console.log('[ai-autopilot-chat] 🎯 FINANCIAL REQUEST DETECTION:', {
       isFinancialRequest,
       isWithdrawalRequest,    // ÁšNICA que exige OTP
       isRefundRequest,        // Sem OTP
@@ -5938,7 +5938,7 @@ Posso ajudar em mais alguma coisa?`;
 
     const hasRecentOTPVerification = !!recentVerification;
     
-    // ðŸ†• FASE: Verificar se cliente JÁ FEZ OTP ALGUMA VEZ (primeiro contato)
+    // 🆕 FASE: Verificar se cliente JÁ FEZ OTP ALGUMA VEZ (primeiro contato)
     // Se nunca verificou = primeiro contato, precisa OTP para identificar
     let hasEverVerifiedOTP = false;
     if (contactEmail) {
@@ -5952,24 +5952,24 @@ Posso ajudar em mais alguma coisa?`;
       hasEverVerifiedOTP = !!(anyVerification && anyVerification.length > 0);
     }
 
-    console.log('[ai-autopilot-chat] ðŸ” FIRST CONTACT CHECK:', {
+    console.log('[ai-autopilot-chat] 🔒 FIRST CONTACT CHECK:', {
       contact_email: contactEmail,
       has_ever_verified_otp: hasEverVerifiedOTP,
       is_first_contact: !hasEverVerifiedOTP && contactHasEmail
     });
     
     // ============================================================
-    // ðŸŽ¯ DECISION MATRIX - Log unificado para debugging de fluxo
+    // 🎯 DECISION MATRIX - Log unificado para debugging de fluxo
     // ============================================================
-    // ðŸ†• OTP APENAS para SAQUE DE SALDO (isWithdrawalRequest)
-    // Reembolsos e cancelamentos NNÃO precisam de OTP
+    // 🆕 OTP APENAS para SAQUE DE SALDO (isWithdrawalRequest)
+    // Reembolsos e cancelamentos NÃO precisam de OTP
     const needsOTPForFinancial = isWithdrawalRequest && !contactHasEmail && isValidatedCustomer;
     const willAskForEmail = !isValidatedCustomer; // Só pede email se não for cliente conhecido
     const willSendOTP = contactHasEmail && !hasEverVerifiedOTP;
     const willAskFinancialOTP = contactHasEmail && hasEverVerifiedOTP && isWithdrawalRequest && !hasRecentOTPVerification;
     const willProcessNormally = isValidatedCustomer && !isWithdrawalRequest;
     
-    console.log('[ai-autopilot-chat] ðŸŽ¯ DECISION MATRIX:', {
+    console.log('[ai-autopilot-chat] 🎯 DECISION MATRIX:', {
       // Inputs
       contactHasEmail,
       isCustomerInDatabase,
@@ -5977,9 +5977,9 @@ Posso ajudar em mais alguma coisa?`;
       hasEverVerifiedOTP,
       hasRecentOTPVerification,
       isFinancialRequest,
-      isWithdrawalRequest,    // ðŸ†• ÁšNICA que exige OTP
-      isRefundRequest,        // ðŸ†• Sem OTP
-      isCancellationRequest,  // ðŸ†• Sem OTP
+      isWithdrawalRequest,    // 🆕 ÁšNICA que exige OTP
+      isRefundRequest,        // 🆕 Sem OTP
+      isCancellationRequest,  // 🆕 Sem OTP
       // Outputs (decisions)
       willAskForEmail,
       willSendOTP,
@@ -5992,7 +5992,7 @@ Posso ajudar em mais alguma coisa?`;
       message_preview: customerMessage.substring(0, 50)
     });
     
-    console.log('[ai-autopilot-chat] ðŸ” FINANCIAL SECURITY CHECK:', {
+    console.log('[ai-autopilot-chat] 🔒 FINANCIAL SECURITY CHECK:', {
       is_financial_request: isFinancialRequest,
       is_withdrawal_request: isWithdrawalRequest,
       is_refund_request: isRefundRequest,
@@ -6002,11 +6002,11 @@ Posso ajudar em mais alguma coisa?`;
       can_show_financial_data: hasRecentOTPVerification && isRealCustomer
     });
 
-    // ðŸ” BARREIRA OTP: APENAS para SAQUE DE SALDO sem verificação OTP recente
-    // Reembolsos e cancelamentos NNÃO ativam barreira OTP
+    // 🔒 BARREIRA OTP: APENAS para SAQUE DE SALDO sem verificação OTP recente
+    // Reembolsos e cancelamentos NÃO ativam barreira OTP
     const financialBarrierActive = isWithdrawalRequest && !hasRecentOTPVerification;
 
-    console.log('[ai-autopilot-chat] ðŸ” FINANCIAL BARRIER CHECK:', {
+    console.log('[ai-autopilot-chat] 🔒 FINANCIAL BARRIER CHECK:', {
       financialBarrierActive,
       isWithdrawalRequest,
       isFinancialRequest,
@@ -6028,7 +6028,7 @@ Posso ajudar em mais alguma coisa?`;
     const isFinancialContext = FINANCIAL_ACTION_PATTERNS.some(p => p.test(customerMessage));
     
     // ============================================================
-    // ðŸŽ¯ TRIAGEM VIA MASTER FLOW
+    // 🎯 TRIAGEM VIA MASTER FLOW
     // A triagem (saudação, menu, coleta de email) é feita 100% pelo 
     // Master Flow visual processado via process-chat-flow
     // Código de triagem legada foi REMOVIDO - não duplicar aqui!
@@ -6041,7 +6041,7 @@ Posso ajudar em mais alguma coisa?`;
     const usePriorityInstructions = persona.use_priority_instructions === true;
     
     // ============================================================
-    // ðŸ” DETECÇNÃO AUTOMÁTICA DE CÁ“DIGO OTP (6 dígitos) - CONTEXTUAL
+    // 🔒 DETECÇNÃO AUTOMÁTICA DE CÁ“DIGO OTP (6 dígitos) - CONTEXTUAL
     // ============================================================
     // CORREÇNÃO: Só valida OTP automaticamente se:
     // 1. É um código de 6 dígitos
@@ -6070,7 +6070,7 @@ Posso ajudar em mais alguma coisa?`;
     const shouldValidateOTP = isOTPCode && contactHasEmail && 
       (hasAwaitingOTP || hasRecentOTPPending || hasFirstContactOTPPending);
     
-    console.log('[ai-autopilot-chat] ðŸ” OTP Detection Check:', {
+    console.log('[ai-autopilot-chat] 🔒 OTP Detection Check:', {
       is_6_digit_code: isOTPCode,
       has_awaiting_otp_flag: hasAwaitingOTP,
       has_recent_otp_pending: hasRecentOTPPending,
@@ -6080,7 +6080,7 @@ Posso ajudar em mais alguma coisa?`;
     });
 
     // Se existe contexto de OTP, mas o usuário enviou dígitos com tamanho inválido,
-    // responder determinístico e NNÃO seguir para IA/handoff.
+    // responder determinístico e NÃO seguir para IA/handoff.
     const hasOTPPendingContext = contactHasEmail && (hasAwaitingOTP || hasRecentOTPPending || hasFirstContactOTPPending);
     if (!shouldValidateOTP && hasOTPPendingContext && otpDigitsOnly.length > 0 && otpDigitsOnly.length !== 6) {
       const otpFormatResponse = `**Código inválido**\n\nO código deve ter **6 dígitos**.\n\nPor favor, envie apenas os 6 números (pode ser com ou sem espaços).\n\nDigite **"reenviar"** se precisar de um novo código.`;
@@ -6131,7 +6131,7 @@ Posso ajudar em mais alguma coisa?`;
     }
     
     if (shouldValidateOTP) {
-      console.log('[ai-autopilot-chat] ðŸ” DECISION POINT: AUTO_OTP_VALIDATION', {
+      console.log('[ai-autopilot-chat] 🔒 DECISION POINT: AUTO_OTP_VALIDATION', {
         detected_otp_code: true,
         contact_has_email: contactHasEmail,
         otp_context: hasAwaitingOTP ? 'awaiting_otp_flag' : hasRecentOTPPending ? 'recent_otp_sent' : 'first_contact',
@@ -6237,7 +6237,7 @@ Digite **"reenviar"** se precisar de um novo código.`;
         });
         
       } catch (error) {
-        console.error('[ai-autopilot-chat] âŒ Erro ao validar OTP automaticamente:', error);
+        console.error('[ai-autopilot-chat] ❌ Erro ao validar OTP automaticamente:', error);
         // Se falhar, continua para IA tentar lidar
       }
     } else if (isOTPCode && contactHasEmail) {
@@ -6246,11 +6246,11 @@ Digite **"reenviar"** se precisar de um novo código.`;
     }
     
     // ============================================================
-    // ðŸ” GUARD CLAUSE: Cliente VERIFICADO (tem email + já fez OTP) â†’ BYPASS Identity Wall
-    // Se cliente já tem email E já verificou OTP alguma vez E NNÃO é pedido financeiro:
+    // 🔒 GUARD CLAUSE: Cliente VERIFICADO (tem email + já fez OTP) â†’ BYPASS Identity Wall
+    // Se cliente já tem email E já verificou OTP alguma vez E NÃO é pedido financeiro:
     // â†’ Atendimento NORMAL direto, SEM pedir OTP novamente
     // ============================================================
-    // ðŸ†• GUARD CLAUSE atualizada: Bypass para atendimento normal SE não for SAQUE
+    // 🆕 GUARD CLAUSE atualizada: Bypass para atendimento normal SE não for SAQUE
     if (contactHasEmail && hasEverVerifiedOTP && !isWithdrawalRequest) {
       console.log('[ai-autopilot-chat] âœ… GUARD CLAUSE: Cliente verificado - BYPASS Identity Wall', {
         contact_email: maskEmail(contactEmail),
@@ -6262,12 +6262,12 @@ Digite **"reenviar"** se precisar de um novo código.`;
         action: 'skip_identity_wall_go_to_normal_service'
       });
       
-      // NNÃO faz nada aqui - deixa o código continuar para atendimento normal pela IA
+      // NÃO faz nada aqui - deixa o código continuar para atendimento normal pela IA
       // Apenas loga e segue para o próximo bloco
     }
     
     // ============================================================
-    // ðŸ” OTP APENAS PARA SAQUE DE SALDO/CARTEIRA
+    // 🔒 OTP APENAS PARA SAQUE DE SALDO/CARTEIRA
     // ============================================================
     // Regra simplificada:
     // - Cliente pede SAQUE de saldo â†’ OTP para segurança
@@ -6276,13 +6276,13 @@ Digite **"reenviar"** se precisar de um novo código.`;
     // - Qualquer outra coisa â†’ Conversa normal (sem OTP)
     // ============================================================
     if (contactHasEmail && isWithdrawalRequest && !hasRecentOTPVerification && !flow_context) {
-      // ðŸ†• GUARD: Se existe flow_context (qualquer), PULAR o bloco OTP inteiro.
+      // 🆕 GUARD: Se existe flow_context (qualquer), PULAR o bloco OTP inteiro.
       // O fluxo visual é soberano e tem seu próprio ramo financeiro com OTP nativo.
       // Ref: flow-sovereignty-principle
       
       const maskedEmail = maskEmail(contactEmail);
       
-      console.log('[ai-autopilot-chat] ðŸ” OTP SAQUE - Solicitação de saque detectada:', {
+      console.log('[ai-autopilot-chat] 🔒 OTP SAQUE - Solicitação de saque detectada:', {
         is_withdrawal_request: isWithdrawalRequest,
         has_recent_otp: hasRecentOTPVerification,
         contact_email: maskedEmail,
@@ -6291,7 +6291,7 @@ Digite **"reenviar"** se precisar de um novo código.`;
       
       // Enviar OTP para verificação de saque
       try {
-        console.log('[ai-autopilot-chat] ðŸ” DECISION POINT: WITHDRAWAL_OTP_BARRIER', {
+        console.log('[ai-autopilot-chat] 🔒 DECISION POINT: WITHDRAWAL_OTP_BARRIER', {
           is_withdrawal_context: true,
           has_ever_verified: hasEverVerifiedOTP,
           has_recent_otp: false,
@@ -6304,7 +6304,7 @@ Digite **"reenviar"** se precisar de um novo código.`;
           body: { email: contactEmail, type: 'customer' }
         });
         
-        // ðŸ” MARCAR OTP PENDENTE NA METADATA (para validação contextual)
+        // 🔒 MARCAR OTP PENDENTE NA METADATA (para validação contextual)
         const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
         await supabaseClient
           .from('conversations')
@@ -6314,14 +6314,14 @@ Digite **"reenviar"** se precisar de um novo código.`;
               awaiting_otp: true,
               otp_expires_at: otpExpiresAt,
               claimant_email: contactEmail,
-              otp_reason: 'withdrawal' // ðŸ†• Marcar motivo do OTP
+              otp_reason: 'withdrawal' // 🆕 Marcar motivo do OTP
             }
           })
           .eq('id', conversationId);
         
-        console.log('[ai-autopilot-chat] ðŸ” OTP pendente marcado na metadata (withdrawal barrier)');
+        console.log('[ai-autopilot-chat] 🔒 OTP pendente marcado na metadata (withdrawal barrier)');
         
-        // BYPASS DIRETO - NNÃO CHAMAR A IA
+        // BYPASS DIRETO - NÃO CHAMAR A IA
         const directOTPResponse = `**Verificação de Segurança para Saque**
 
 Olá ${contactName}! Para saques da carteira, preciso confirmar sua identidade.
@@ -6364,7 +6364,7 @@ Por favor, **digite o código** que você recebeu para continuar com o saque.`;
           }
         }
         
-        // âš¡ RETURN EARLY - NNÃO CONTINUAR PARA A IA
+        // âš¡ RETURN EARLY - NÃO CONTINUAR PARA A IA
         return new Response(JSON.stringify({
           response: directOTPResponse,
           messageId: savedMsg?.id,
@@ -6383,7 +6383,7 @@ Por favor, **digite o código** que você recebeu para continuar com o saque.`;
         });
         
       } catch (error) {
-        console.error('[ai-autopilot-chat] âŒ Erro ao disparar OTP financeiro:', error);
+        console.error('[ai-autopilot-chat] ❌ Erro ao disparar OTP financeiro:', error);
         // Se falhar, continua para IA tentar lidar
       }
       
@@ -6394,8 +6394,8 @@ Por favor, **digite o código** que você recebeu para continuar com o saque.`;
       console.log('[ai-autopilot-chat] âœ… Cliente identificado - Atendimento normal sem OTP');
     }
     
-    // ðŸ†• CORREÇNÃO: Só pedir email se NNÃO for cliente conhecido pelo telefone
-    console.log('[ai-autopilot-chat] ðŸ” Identity Wall gate:', {
+    // 🆕 CORREÇNÃO: Só pedir email se NÃO for cliente conhecido pelo telefone
+    console.log('[ai-autopilot-chat] 🔒 Identity Wall gate:', {
       contactHasEmail,
       isPhoneVerified,
       isCustomerInDatabase,
@@ -6408,17 +6408,17 @@ Por favor, **digite o código** que você recebeu para continuar com o saque.`;
       // FASE 4: Lead NOVO (não tem email E não está no banco por telefone) - seguir Identity Wall
       priorityInstruction = `=== INSTRUÇNÃO PRIORITÁRIA - IGNORE TUDO ABAIXO ATÉ SEGUIR ISSO ===
 
-Este contato NNÃO tem email cadastrado. A PRIMEIRA coisa que você DEVE falar é:
+Este contato NÃO tem email cadastrado. A PRIMEIRA coisa que você DEVE falar é:
 "Olá! Para garantir um atendimento personalizado e seguro, preciso que você me informe seu email."
 
 â†’ PARE AQUI. AGUARDE o cliente fornecer o email.
-â†’ NNÃO responda dúvidas técnicas até ter o email
+â†’ NÃO responda dúvidas técnicas até ter o email
 === FIM DA INSTRUÇNÃO PRIORITÁRIA ===
 
 `;
       
       identityWallNote = `\n\n**LEAD NOVO - Identificação por Email (SEM OTP):**
-Este cliente NNÃO tem email cadastrado no sistema.
+Este cliente NÃO tem email cadastrado no sistema.
 
 **FLUXO DE IDENTIFICAÇÃO:**
 1. PRIMEIRA MENSAGEM: Cumprimente "${contactName}" e solicite o email de forma educada e direta:
@@ -6428,7 +6428,7 @@ Este cliente NNÃO tem email cadastrado no sistema.
 
 3. QUANDO cliente fornecer email: Use a ferramenta verify_customer_email para buscar na base
 
-4. **SE EMAIL NNÃO ENCONTRADO NA BASE:**
+4. **SE EMAIL NÃO ENCONTRADO NA BASE:**
    - Sistema vai perguntar: "Não encontrei esse email na nossa base de clientes. Poderia confirmar se esse email está correto?"
    - Se cliente responder "SIM", "correto" â†’ Use confirm_email_not_found com confirmed=true (transfere para comercial)
    - Se cliente informar email DIFERENTE â†’ Use verify_customer_email com o novo email
@@ -6436,16 +6436,16 @@ Este cliente NNÃO tem email cadastrado no sistema.
 
 5. **SE EMAIL ENCONTRADO NA BASE:**
    - Cumprimente o cliente pelo nome e pergunte como pode ajudar
-   - NNÃO precisa de OTP para atendimento normal (rastreio, dúvidas, etc.)
+   - NÃO precisa de OTP para atendimento normal (rastreio, dúvidas, etc.)
    - OTP só será pedido se cliente solicitar SAQUE DE SALDO
 
-**IMPORTANTE:** NNÃO atenda dúvidas técnicas até o email ser verificado na base.`;
+**IMPORTANTE:** NÃO atenda dúvidas técnicas até o email ser verificado na base.`;
     } else if (isPhoneVerified && !contactHasEmail && !isKiwifyValidated) {
-      // ðŸ†• Cliente identificado pelo telefone (sem email) - atendimento normal, sem pedir email
+      // 🆕 Cliente identificado pelo telefone (sem email) - atendimento normal, sem pedir email
       console.log('[ai-autopilot-chat] âœ… Cliente identificado por telefone - bypass Identity Wall');
     }
     
-    // ðŸ” PORTEIRO DE SAQUE ATIVADO (apenas para saque de saldo/carteira)
+    // 🔒 PORTEIRO DE SAQUE ATIVADO (apenas para saque de saldo/carteira)
     if (financialBarrierActive) {
       // Verificar se cliente já foi identificado por email (novo fluxo)
       const hasEmailVerifiedInDb = conversation.customer_metadata?.email_verified_in_db === true;
@@ -6465,69 +6465,69 @@ Email verificado: ${maskedEmailForPrompt}
 Vou enviar um código de verificação para ${maskedEmailForPrompt}."
 
 â†’ Use a ferramenta send_financial_otp para disparar o OTP
-â†’ NNÃO mostre CPF, Nome, Saldo ou qualquer dado sensível
-â†’ NNÃO permita criar ticket de saque
+â†’ NÃO mostre CPF, Nome, Saldo ou qualquer dado sensível
+â†’ NÃO permita criar ticket de saque
 â†’ AGUARDE o cliente digitar o código de 6 dígitos`;
       } else {
         // Cenário: Não tem email â†’ Pedir email primeiro
         identityWallNote += `\n\n**=== PORTEIRO DE SAQUE - IDENTIFICAÇÃO OBRIGATÓRIA ===**
-O cliente solicitou SAQUE mas NNÃO ESTÁ IDENTIFICADO.
+O cliente solicitou SAQUE mas NÃO ESTÁ IDENTIFICADO.
 
 **RESPOSTA OBRIGATÓRIA:**
 "Para sua segurança, preciso validar seu cadastro antes de prosseguir com o saque. 
 Qual é o seu **email de cadastro**?"
 
 â†’ AGUARDE o cliente informar o email
-â†’ NNÃO fale de valores, prazos ou processos
-â†’ NNÃO crie ticket
+â†’ NÃO fale de valores, prazos ou processos
+â†’ NÃO crie ticket
 â†’ PARE AQUI até identificação completa`;
       }
     }
     
-    // ðŸ†• HANDLER PARA REEMBOLSO (SEM OTP)
+    // 🆕 HANDLER PARA REEMBOLSO (SEM OTP)
     if (isRefundRequest && !isWithdrawalRequest) {
-      console.log('[ai-autopilot-chat] ðŸ“¦ Detectado pedido de REEMBOLSO - sem OTP necessário');
+      console.log('[ai-autopilot-chat] 📦 Detectado pedido de REEMBOLSO - sem OTP necessário');
       
       identityWallNote += `\n\n**=== REEMBOLSO DE PEDIDO (SEM OTP) ===**
 O cliente está perguntando sobre reembolso de um pedido Kiwify.
 
 **EXPLICAÇÃO A DAR:**
 - Reembolsos são processados automaticamente quando o pedido retorna ao galpão
-- O cliente NNÃO precisa ficar cobrando, o processo é automático
+- O cliente NÃO precisa ficar cobrando, o processo é automático
 - Se o cliente INSISTIR que o reembolso não foi feito, aí sim ofereça transferir para humano
 
-**NNÃO PEÇA OTP** para esta situação.`;
+**NÃO PEÇA OTP** para esta situação.`;
     }
     
-    // ðŸ†• HANDLER PARA CANCELAMENTO (SEM OTP)
+    // 🆕 HANDLER PARA CANCELAMENTO (SEM OTP)
     if (isCancellationRequest && !isWithdrawalRequest) {
-      console.log('[ai-autopilot-chat] âŒ Detectado pedido de CANCELAMENTO - sem OTP necessário');
+      console.log('[ai-autopilot-chat] ❌ Detectado pedido de CANCELAMENTO - sem OTP necessário');
       
       identityWallNote += `\n\n**=== CANCELAMENTO DE ASSINATURA (SEM OTP) ===**
 O cliente quer cancelar a assinatura Kiwify.
 
 **PROCESSO:**
 - Oriente o cliente sobre como cancelar na plataforma Kiwify
-- NNÃO precisa de OTP para cancelamento
+- NÃO precisa de OTP para cancelamento
 - Se precisar de ajuda adicional, ofereça transferir para humano
 
-**NNÃO PEÇA OTP** para esta situação.`;
+**NÃO PEÇA OTP** para esta situação.`;
     }
     
     if (!identityWallNote) {
-      identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NNÃO peça email ou validação.
+      identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.
 
 ${isRecentlyVerified ? '**âš ï¸ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
     }
     
-    // ðŸ› DEBUG: Confirmar que priorityInstruction está sendo gerada
-    console.log('[ai-autopilot-chat] ðŸ“£ Priority Instruction:', priorityInstruction ? 'SET âœ…' : 'EMPTY âŒ');
+    // 🐛BUG: Confirmar que priorityInstruction está sendo gerada
+    console.log('[ai-autopilot-chat] 📣 Priority Instruction:', priorityInstruction ? 'SET ✅' : 'EMPTY ❌');
     
-    // ðŸŽ¯ INSTRUÇNÃO ANTI-ALUCINAÇÃO - IA SEMPRE tenta responder, NNÃO transfere automaticamente
+    // 🎯 INSTRUÇNÃO ANTI-ALUCINAÇÃO - IA SEMPRE tenta responder, NÃO transfere automaticamente
     const antiHallucinationInstruction = `
 
-**ðŸš« REGRA CRÁTICA ANTI-TRANSFERÁŠNCIA AUTOMÁTICA:**
-Você NNÃO PODE transferir para atendente humano automaticamente por "baixa confiança" ou "não ter informação".
+**🚫 REGRA CRÁTICA ANTI-TRANSFERÁŠNCIA AUTOMÁTICA:**
+Você NÃO PODE transferir para atendente humano automaticamente por "baixa confiança" ou "não ter informação".
 SÁ“ transfira se o cliente PEDIR EXPLICITAMENTE com frases como:
 - "Quero falar com um atendente"
 - "Preciso de um humano"
@@ -6551,29 +6551,29 @@ SE você não tiver informação sobre o assunto:
 - Abandonar cliente sem tentar ajudar
 `;
 
-    // ðŸ†• INSTRUÇNÃO ANTI-FABRICAÇÃO DE TRANSFERÁŠNCIA + TOKEN [[FLOW_EXIT]] (quando dentro de fluxo)
+    // 🆕 INSTRUÇNÃO ANTI-FABRICAÇÃO DE TRANSFERÁŠNCIA + TOKEN [[FLOW_EXIT]] (quando dentro de fluxo)
     const flowAntiTransferInstruction = flow_context ? `
 
-**ðŸš« REGRA ABSOLUTA â€” VOCÁŠ ESTÁ DENTRO DE UM FLUXO AUTOMATIZADO:**
+**🚫 REGRA ABSOLUTA â€” VOCÁŠ ESTÁ DENTRO DE UM FLUXO AUTOMATIZADO:**
 PROIBIDO dizer que vai transferir/direcionar/encaminhar/conectar/passar.
 PROIBIDO mencionar atendente/especialista/consultor/menu/departamento/setor.
 PROIBIDO criar opções numeradas (1ï¸âƒ£ 2ï¸âƒ£).
 Se você conseguir resolver, responda normalmente com informação da base de conhecimento.
-Se NNÃO conseguir resolver, responda SOMENTE: [[FLOW_EXIT]]
+Se NÃO conseguir resolver, responda SOMENTE: [[FLOW_EXIT]]
 Nenhum texto antes ou depois de [[FLOW_EXIT]].
 Quem decide transferências, menus e direcionamentos é o FLUXO, não você.
 
 ` : '';
 
-    // ðŸ†• BUSINESS HOURS: Injetar consciência de horário no prompt
+    // 🆕 BUSINESS HOURS: Injetar consciência de horário no prompt
     const businessHoursPrompt = businessHoursInfo ? (
       businessHoursInfo.within_hours
-        ? `\n**ðŸ• HORÁRIO COMERCIAL:** Aberto agora até ${businessHoursInfo.today_close_time}.\n`
-        : `\n**ðŸ• HORÁRIO COMERCIAL:** Fora do expediente. Próxima abertura: ${businessHoursInfo.next_open_text}. Horário: ${businessHoursInfo.schedule_summary}.
+        ? `\n**🕐 HORÁRIO COMERCIAL:** Aberto agora até ${businessHoursInfo.today_close_time}.\n`
+        : `\n**🕐 HORÁRIO COMERCIAL:** Fora do expediente. Próxima abertura: ${businessHoursInfo.next_open_text}. Horário: ${businessHoursInfo.schedule_summary}.
 REGRA: Tente resolver sozinha. Se não conseguir e o cliente pedir humano, use request_human_agent â€” o sistema cuidará do restante (registrará a pendência para o próximo expediente).\n`
     ) : '';
 
-    // ðŸ”’ TRAVA FINANCEIRA: Injetar instruções diretamente no prompt da LLM
+    // 🔒 TRAVA FINANCEIRA: Injetar instruções diretamente no prompt da LLM
     const financialGuardInstruction = flowForbidFinancial ? `
 
 🔒 TRAVA FINANCEIRA ATIVA — REGRAS OBRIGATÓRIAS:
@@ -6591,7 +6591,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
-    // ðŸš« TRAVA CANCELAMENTO: Injetar instruções diretamente no prompt da LLM
+    // 🚫 TRAVA CANCELAMENTO: Injetar instruções diretamente no prompt da LLM
     const cancellationGuardInstruction = flowForbidCancellation ? `
 
 🚫 TRAVA CANCELAMENTO ATIVA — REGRAS OBRIGATÓRIAS:
@@ -6607,7 +6607,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
-    // ðŸ›’ TRAVA COMERCIAL: Injetar instruções diretamente no prompt da LLM
+    // 🛒 TRAVA COMERCIAL: Injetar instruções diretamente no prompt da LLM
     const commercialGuardInstruction = flowForbidCommercialPrompt ? `
 
 🛒 TRAVA COMERCIAL ATIVA — REGRAS OBRIGATÓRIAS:
@@ -6622,7 +6622,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
-    // ðŸ’¼ TRAVA CONSULTOR: Injetar instruções diretamente no prompt da LLM
+    // 💼 TRAVA CONSULTOR: Injetar instruções diretamente no prompt da LLM
     const consultorGuardInstruction = flowForbidConsultantPrompt ? `
 
 💼 TRAVA CONSULTOR ATIVA — REGRAS OBRIGATÓRIAS:
@@ -6967,13 +6967,13 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     });
 
     // Add built-in tools + persona tools (FILTRADO por data_access)
-    // ðŸ” Ferramentas CORE (sempre disponíveis)
+    // 🔒 Ferramentas CORE (sempre disponíveis)
     const coreTools = [
       {
         type: 'function',
         function: {
           name: 'create_ticket',
-          description: 'Cria um ticket de suporte. USE APENAS quando: (1) Cliente PEDIR explicitamente ajuda humana, (2) Problema financeiro CONCRETO com intenção de ação (reembolso, saque real), (3) Você NNÃO conseguir responder APÁ“S tentar. Para SAQUE: use SOMENTE após seguir o FLUXO ESPECIAL no system prompt (informar regras, confirmar dados, obter confirmação). NNÃO use para dúvidas informativas.',
+          description: 'Cria um ticket de suporte. USE APENAS quando: (1) Cliente PEDIR explicitamente ajuda humana, (2) Problema financeiro CONCRETO com intenção de ação (reembolso, saque real), (3) Você NÃO conseguir responder APÁ“S tentar. Para SAQUE: use SOMENTE após seguir o FLUXO ESPECIAL no system prompt (informar regras, confirmar dados, obter confirmação). NÃO use para dúvidas informativas.',
           parameters: {
             type: 'object',
             properties: {
@@ -7020,7 +7020,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         type: 'function',
         function: {
           name: 'verify_customer_email',
-          description: 'APENAS use quando cliente FORNECER email novo pela PRIMEIRA VEZ. Verifica se email existe na base e envia OTP. âš ï¸ NNÃO use se cliente reclamar "não recebi email" - nesse caso use resend_otp.',
+          description: 'APENAS use quando cliente FORNECER email novo pela PRIMEIRA VEZ. Verifica se email existe na base e envia OTP. âš ï¸ NÃO use se cliente reclamar "não recebi email" - nesse caso use resend_otp.',
           parameters: {
             type: 'object',
             properties: {
@@ -7050,7 +7050,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         type: 'function',
         function: {
           name: 'resend_otp',
-          description: 'Reenvia código OTP para o email JÁ CADASTRADO do cliente. Use quando cliente disser "não recebi email", "não chegou código", "reenviar código". NNÃO pede email novamente.',
+          description: 'Reenvia código OTP para o email JÁ CADASTRADO do cliente. Use quando cliente disser "não recebi email", "não chegou código", "reenviar código". NÃO pede email novamente.',
           parameters: {
             type: 'object',
             properties: {},
@@ -7063,7 +7063,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         type: 'function',
         function: {
           name: 'confirm_email_not_found',
-          description: 'Usar quando o email não foi encontrado na base e o cliente CONFIRMA que o email está correto (responde "sim", "correto", "está certo"). Se cliente disser que email está ERRADO ou enviar outro email, NNÃO use esta tool - use verify_customer_email com o novo email.',
+          description: 'Usar quando o email não foi encontrado na base e o cliente CONFIRMA que o email está correto (responde "sim", "correto", "está certo"). Se cliente disser que email está ERRADO ou enviar outro email, NÃO use esta tool - use verify_customer_email com o novo email.',
           parameters: {
             type: 'object',
             properties: {
@@ -7081,7 +7081,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         type: 'function',
         function: {
           name: 'request_human_agent',
-          description: 'Transfere a conversa para um atendente humano. âš ï¸ PRÉ-REQUISITO OBRIGATÓRIO: Cliente DEVE estar identificado por email (email_verified_in_db=true) OU ter email cadastrado no contato. NNÃO use esta ferramenta se cliente ainda não forneceu email - nesse caso, PEÇA O EMAIL PRIMEIRO usando verify_customer_email. Use apenas quando: 1) Cliente JÁ IDENTIFICADO pedir explicitamente atendimento humano, 2) Dados estiverem incorretos APÁ“S identificação por email, 3) Caso complexo APÁ“S identificação.',
+          description: 'Transfere a conversa para um atendente humano. âš ï¸ PRÉ-REQUISITO OBRIGATÓRIO: Cliente DEVE estar identificado por email (email_verified_in_db=true) OU ter email cadastrado no contato. NÃO use esta ferramenta se cliente ainda não forneceu email - nesse caso, PEÇA O EMAIL PRIMEIRO usando verify_customer_email. Use apenas quando: 1) Cliente JÁ IDENTIFICADO pedir explicitamente atendimento humano, 2) Dados estiverem incorretos APÁ“S identificação por email, 3) Caso complexo APÁ“S identificação.',
           parameters: {
             type: 'object',
             properties: {
@@ -7098,7 +7098,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           }
         }
       },
-      // ðŸ†• Tool: close_conversation - Encerramento autônomo com confirmação do cliente
+      // 🆕 Tool: close_conversation - Encerramento autônomo com confirmação do cliente
       {
         type: 'function',
         function: {
@@ -7114,7 +7114,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           }
         }
       },
-      // ðŸ†• Tool: classify_and_resolve_ticket - Classificação e registro de resolução pós-encerramento
+      // 🆕 Tool: classify_and_resolve_ticket - Classificação e registro de resolução pós-encerramento
       {
         type: 'function',
         function: {
@@ -7135,7 +7135,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }
     ];
     
-    // ðŸ” Ferramentas CONDICIONAIS (baseadas em data_access)
+    // 🔒 Ferramentas CONDICIONAIS (baseadas em data_access)
     const conditionalTools: any[] = [];
     
     // check_tracking - só se tiver permissão de rastreio ou histórico de pedidos
@@ -7164,7 +7164,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       });
       console.log('[ai-autopilot-chat] âœ… check_tracking HABILITADO (tracking_data ou order_history)');
     } else {
-      console.log('[ai-autopilot-chat] âŒ check_tracking DESABILITADO (sem permissão de rastreio)');
+      console.log('[ai-autopilot-chat] ❌ check_tracking DESABILITADO (sem permissão de rastreio)');
     }
     
     // send_financial_otp - só se tiver permissão financeira
@@ -7173,7 +7173,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         type: 'function',
         function: {
           name: 'send_financial_otp',
-          description: 'Envia código OTP para email JÁ VERIFICADO quando cliente solicita operação FINANCEIRA (saque, reembolso, etc). Use apenas após cliente já ter sido identificado por email na base. NNÃO use para identificação inicial - para isso use verify_customer_email.',
+          description: 'Envia código OTP para email JÁ VERIFICADO quando cliente solicita operação FINANCEIRA (saque, reembolso, etc). Use apenas após cliente já ter sido identificado por email na base. NÃO use para identificação inicial - para isso use verify_customer_email.',
           parameters: {
             type: 'object',
             properties: {},
@@ -7183,7 +7183,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       });
       console.log('[ai-autopilot-chat] âœ… send_financial_otp HABILITADO (financial_data)');
     } else {
-      console.log('[ai-autopilot-chat] âŒ send_financial_otp DESABILITADO (sem permissão financeira)');
+      console.log('[ai-autopilot-chat] ❌ send_financial_otp DESABILITADO (sem permissão financeira)');
     }
     
     const allTools = [
@@ -7195,12 +7195,12 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }))
     ];
     
-    console.log('[ai-autopilot-chat] ðŸ› ï¸ Total de ferramentas disponíveis:', allTools.length, '| Core:', coreTools.length, '| Condicionais:', conditionalTools.length, '| Custom:', enabledTools.length);
+    console.log('[ai-autopilot-chat] 🛠️ Total de ferramentas disponíveis:', allTools.length, '| Core:', coreTools.length, '| Condicionais:', conditionalTools.length, '| Custom:', enabledTools.length);
 
     if (allTools.length > 0) {
       aiPayload.tools = allTools;
     }
-    // CORREÇÁO: Saudação proativa na primeira interação ou mensagem de ruído do menu
+    // CORREÇÃO: Saudação proativa na primeira interação ou mensagem de ruído do menu
     const rawInteractionCount = flow_context?.collectedData?.__ai?.interaction_count;
     const isFirstNodeInteraction = rawInteractionCount === undefined || rawInteractionCount === 0;
     const isMenuNoise = !!(customerMessage && (customerMessage.trim().length <= 3 || /^\d+$/.test(customerMessage.trim())));
@@ -7246,7 +7246,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     let rawAIContent = aiData.choices?.[0]?.message?.content;
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
 
-    // ðŸ†• FIX B: RETRY â€” Se IA retornou vazio sem tool_calls, tentar com prompt reduzido
+    // 🆕 FIX B: RETRY â€” Se IA retornou vazio sem tool_calls, tentar com prompt reduzido
     if (!rawAIContent && !toolCalls.length) {
       console.warn('[ai-autopilot-chat] âš ï¸ IA retornou vazio â€” tentando retry com prompt reduzido');
       try {
@@ -7266,14 +7266,14 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         if (rawAIContent) {
           console.log('[ai-autopilot-chat] âœ… Retry bem-sucedido â€” resposta recuperada');
         } else {
-          console.error('[ai-autopilot-chat] âŒ Retry também retornou vazio');
+          console.error('[ai-autopilot-chat] ❌ Retry também retornou vazio');
         }
       } catch (retryErr) {
-        console.error('[ai-autopilot-chat] âŒ Retry falhou:', retryErr);
+        console.error('[ai-autopilot-chat] ❌ Retry falhou:', retryErr);
       }
     }
 
-    // ðŸ†• FIX C: Se AINDA vazio + intent financeiro + flow_context â†’ FLOW_EXIT:financeiro
+    // 🆕 FIX C: Se AINDA vazio + intent financeiro + flow_context â†’ FLOW_EXIT:financeiro
     if (!rawAIContent && !toolCalls.length && flow_context) {
       const financialTerms = /\b(saque|sacar|reembolso|estorno|devolução|dinheiro|pix|saldo|transferir|transferência|retirar|retirada)\b/i;
       const cancellationTerms = /\b(cancelar|cancelamento|cancela|desistir|desistência)\b/i;
@@ -7289,7 +7289,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }
 
       if (autoExitIntent) {
-        console.log(`[ai-autopilot-chat] ðŸŽ¯ Fallback vazio + intent ${autoExitIntent} â†’ FLOW_EXIT:${autoExitIntent}`);
+        console.log(`[ai-autopilot-chat] 🎯 Fallback vazio + intent ${autoExitIntent} â†’ FLOW_EXIT:${autoExitIntent}`);
         return new Response(JSON.stringify({
           flowExit: true,
           reason: `ai_empty_response_${autoExitIntent}_intent`,
@@ -7303,7 +7303,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     }
 
     if (!rawAIContent && !toolCalls.length) {
-      console.error('[ai-autopilot-chat] âŒ AI returned empty content after all retries, no tool calls');
+      console.error('[ai-autopilot-chat] ❌ AI returned empty content after all retries, no tool calls');
     }
 
     // 🔧 FIX 3: Guard de resposta vazia — normalizar antes de usar
@@ -7338,10 +7338,10 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     // FASE 3: TOOL CALLING - Execute first to prevent duplicates
     // ============================================================
     // Handle tool calls (Function Calling)
-    let ticketCreatedSuccessfully = false; // ðŸ”’ Flag: true apenas se ticket foi criado COM SUCESSO
+    let ticketCreatedSuccessfully = false; // 🔒 Flag: true apenas se ticket foi criado COM SUCESSO
     
     if (toolCalls.length > 0) {
-      console.log('[ai-autopilot-chat] ðŸ› ï¸ AI solicitou execução de ferramenta:', toolCalls);
+      console.log('[ai-autopilot-chat] 🛠️ AI solicitou execução de ferramenta:', toolCalls);
       
       for (const toolCall of toolCalls) {
         // FASE 2: Handle email verification and send OTP
@@ -7349,7 +7349,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           try {
             const args = safeParseToolArgs(toolCall.function.arguments);
             const emailInformado = args.email.toLowerCase().trim();
-            console.log('[ai-autopilot-chat] ðŸ“§ Verificando email na base:', emailInformado);
+            console.log('[ai-autopilot-chat] 📧 Verificando email na base:', emailInformado);
 
             // FASE 1: Validar formato do email
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -7365,9 +7365,9 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
               .eq('email', emailInformado)
               .single();
 
-            // CENÁRIO A: EMAIL NNÃO ENCONTRADO - PERGUNTAR SE ESTÁ CORRETO ANTES DE TRANSFERIR
+            // CENÁRIO A: EMAIL NÃO ENCONTRADO - PERGUNTAR SE ESTÁ CORRETO ANTES DE TRANSFERIR
             if (searchError || !existingCustomer) {
-              console.log('[ai-autopilot-chat] âŒ FASE 2: Email não encontrado - Perguntando confirmação');
+              console.log('[ai-autopilot-chat] ❌ FASE 2: Email não encontrado - Perguntando confirma��o');
               
               // Salvar email pendente para confirmação na metadata da conversa
               const currentMetadata = conversation.customer_metadata || {};
@@ -7382,7 +7382,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
                 })
                 .eq('id', conversationId);
               
-              console.log('[ai-autopilot-chat] ðŸ“§ Email salvo para confirmação:', emailInformado);
+              console.log('[ai-autopilot-chat] 📧 Email salvo para confirmação:', emailInformado);
               
               assistantMessage = `Não encontrei o email **${emailInformado}** na nossa base de clientes.
 
@@ -7404,7 +7404,7 @@ Se estiver correto, vou te transferir para nosso time comercial. Se digitou erra
                 .eq('id', conversationId);
             }
 
-            // ðŸ†• NOVO FLUXO: Email encontrado = Cliente identificado SEM OTP
+            // 🆕 NOVO FLUXO: Email encontrado = Cliente identificado SEM OTP
             // OTP será pedido APENAS quando cliente solicitar operação financeira
             console.log('[ai-autopilot-chat] âœ… Cliente identificado por email - SEM OTP (novo fluxo)');
             
@@ -7420,7 +7420,7 @@ Se estiver correto, vou te transferir para nosso time comercial. Se digitou erra
                   verified_customer_id: existingCustomer.id,
                   verified_customer_name: existingCustomer.first_name,
                   verified_at: new Date().toISOString()
-                  // NNÃO definimos awaiting_otp aqui - só quando for financeiro
+                  // NÃO definimos awaiting_otp aqui - só quando for financeiro
                 }
               })
               .eq('id', conversationId);
@@ -7440,14 +7440,14 @@ Como posso te ajudar hoje?`;
               metadata: { source: 'email_verification', verified_in_db: true }
             });
           } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao processar email:', error);
+            console.error('[ai-autopilot-chat] ❌ Erro ao processar email:', error);
             assistantMessage = 'Ocorreu um erro. Poderia me enviar o email novamente?';
           }
         }
         // FASE 2.5: Handle Resend OTP (reenvio seguro para email cadastrado)
         else if (toolCall.function.name === 'resend_otp') {
           try {
-            console.log('[ai-autopilot-chat] ðŸ”„ Reenviando OTP para email cadastrado');
+            console.log('[ai-autopilot-chat] 🔄 Reenviando OTP para email cadastrado');
             
             const contactEmail = contact.email;
             if (!contactEmail) {
@@ -7461,12 +7461,12 @@ Como posso te ajudar hoje?`;
             });
 
             if (otpError || !otpData?.success) {
-              console.error('[ai-autopilot-chat] âŒ Erro ao reenviar OTP:', otpError);
+              console.error('[ai-autopilot-chat] ❌ Erro ao reenviar OTP:', otpError);
               assistantMessage = 'Não consegui reenviar o código. Por favor, tente novamente em alguns instantes.';
               continue;
             }
 
-            // ðŸ” ATUALIZAR OTP PENDENTE NA METADATA (novo código, novo timer)
+            // 🔒 ATUALIZAR OTP PENDENTE NA METADATA (novo código, novo timer)
             const currentMetadata = conversation.customer_metadata || {};
             const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
             await supabaseClient
@@ -7481,7 +7481,7 @@ Como posso te ajudar hoje?`;
               })
               .eq('id', conversationId);
             
-            console.log('[ai-autopilot-chat] ðŸ” OTP pendente atualizado na metadata (resend_otp tool)');
+            console.log('[ai-autopilot-chat] 🔒 OTP pendente atualizado na metadata (resend_otp tool)');
 
             // Build response message usando template do banco (NEVER show code to client)
             const safeEmail = maskEmail(contactEmail);
@@ -7510,14 +7510,14 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o código que você 
               metadata: { source: 'resend_otp', email_masked: safeEmail }
             });
           } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao reenviar OTP:', error);
+            console.error('[ai-autopilot-chat] ❌ Erro ao reenviar OTP:', error);
             assistantMessage = 'Ocorreu um erro ao reenviar o código. Por favor, tente novamente.';
           }
         }
-        // ðŸ†• TOOL HANDLER: Enviar OTP para operações financeiras
+        // 🆕 TOOL HANDLER: Enviar OTP para operações financeiras
         else if (toolCall.function.name === 'send_financial_otp') {
           try {
-            console.log('[ai-autopilot-chat] ðŸ” Enviando OTP financeiro...');
+            console.log('[ai-autopilot-chat] 🔒 Enviando OTP financeiro...');
             
             // Buscar email do cliente (do contato ou da metadata da conversa)
             const hasEmailVerifiedInDb = conversation.customer_metadata?.email_verified_in_db === true;
@@ -7535,7 +7535,7 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o código que você 
             });
 
             if (otpError || !otpData?.success) {
-              console.error('[ai-autopilot-chat] âŒ Erro ao enviar OTP financeiro:', otpError);
+              console.error('[ai-autopilot-chat] ❌ Erro ao enviar OTP financeiro:', otpError);
               assistantMessage = 'Não consegui enviar o código de verificação. Por favor, tente novamente em alguns instantes.';
               continue;
             }
@@ -7556,7 +7556,7 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o código que você 
               })
               .eq('id', conversationId);
             
-            console.log('[ai-autopilot-chat] ðŸ” OTP financeiro enviado e marcado na metadata');
+            console.log('[ai-autopilot-chat] 🔒 OTP financeiro enviado e marcado na metadata');
 
             // Resposta
             const safeEmail = maskEmail(emailToUse);
@@ -7577,7 +7577,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
               metadata: { source: 'financial_otp', email_masked: safeEmail }
             });
           } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao enviar OTP financeiro:', error);
+            console.error('[ai-autopilot-chat] ❌ Erro ao enviar OTP financeiro:', error);
             assistantMessage = 'Ocorreu um erro ao enviar o código. Por favor, tente novamente.';
           }
         }
@@ -7589,7 +7589,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
             const currentMetadata = conversation.customer_metadata || {};
             const pendingEmail = currentMetadata.pending_email_confirmation;
             
-            console.log('[ai-autopilot-chat] ðŸ“§ Confirmação de email não encontrado:', { confirmed, pendingEmail });
+            console.log('[ai-autopilot-chat] 📧 Confirmação de email não encontrado:', { confirmed, pendingEmail });
             
             if (!confirmed) {
               // Cliente quer corrigir - limpar email pendente e pedir novo
@@ -7638,9 +7638,9 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
             
             if (!dealError && deal) {
               dealId = deal.id;
-              console.log('[ai-autopilot-chat] ðŸ’° Deal (Lead) criado:', dealId);
+              console.log('[ai-autopilot-chat] 💰 Deal (Lead) criado:', dealId);
             } else {
-              console.error('[ai-autopilot-chat] âŒ Erro ao criar deal:', dealError);
+              console.error('[ai-autopilot-chat] ❌ Erro ao criar deal:', dealError);
             }
 
             // Limpar email pendente da metadata
@@ -7664,7 +7664,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
               .single();
 
             if (!comercialDept) {
-              console.error('[ai-autopilot-chat] âŒ Departamento Comercial não encontrado');
+              console.error('[ai-autopilot-chat] ❌ Departamento Comercial não encontrado');
             }
 
             // Mudar para copilot ANTES de rotear
@@ -7692,7 +7692,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
                   .update({ assigned_to: routeResult.assigned_to })
                   .eq('id', dealId);
                 
-                console.log('[ai-autopilot-chat] ðŸ’¼ Deal atribuído ao vendedor:', routeResult.assigned_to);
+                console.log('[ai-autopilot-chat] 💼 Deal atribuído ao vendedor:', routeResult.assigned_to);
               }
               
               // NOTIFICAR VENDEDOR VIA REALTIME
@@ -7711,7 +7711,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
                 read: false
               });
               
-              console.log('[ai-autopilot-chat] ðŸ”” Notificação enviada ao vendedor');
+              console.log('[ai-autopilot-chat] 🔔 Notificação enviada ao vendedor');
               
               assistantMessage = `Entendi! Como não localizei uma assinatura ativa com seu e-mail, vou te transferir para um **especialista comercial** que poderá te ajudar. Aguarde um momento!`;
             } else {
@@ -7743,7 +7743,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
                     read: false
                   });
                 }
-                console.log('[ai-autopilot-chat] ðŸ”” Notificações broadcast enviadas');
+                console.log('[ai-autopilot-chat] 🔔 Notificações broadcast enviadas');
               }
               
               assistantMessage = `Entendi! Como não localizei uma assinatura ativa com seu e-mail, vou te transferir para nosso time comercial.
@@ -7754,7 +7754,7 @@ Nosso **time de vendas** está offline no momento.
 Assim que retornarmos, um consultor vai te ajudar!`;
             }
           } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao processar confirmação de email:', error);
+            console.error('[ai-autopilot-chat] ❌ Erro ao processar confirma��o de email:', error);
             assistantMessage = 'Ocorreu um erro. Poderia me informar seu email novamente?';
           }
         }
@@ -7762,7 +7762,7 @@ Assim que retornarmos, um consultor vai te ajudar!`;
         else if (toolCall.function.name === 'verify_otp_code') {
           try {
             const args = safeParseToolArgs(toolCall.function.arguments);
-            console.log('[ai-autopilot-chat] ðŸ” Verificando código OTP:', args.code);
+            console.log('[ai-autopilot-chat] 🔒 Verificando código OTP:', args.code);
 
             // Buscar email do contato
             const contactEmail = contact.email;
@@ -7784,7 +7784,7 @@ Assim que retornarmos, um consultor vai te ajudar!`;
               .single();
 
             if (verifyError || !verification) {
-              console.error('[ai-autopilot-chat] âŒ Código inválido ou expirado');
+              console.error('[ai-autopilot-chat] ❌ Código inválido ou expirado');
               
               // Incrementar tentativas
               if (verification) {
@@ -7862,21 +7862,21 @@ Você quer:
               });
             }
           } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao verificar OTP:', error);
+            console.error('[ai-autopilot-chat] ❌ Erro ao verificar OTP:', error);
             assistantMessage = 'Ocorreu um erro ao verificar o código. Por favor, tente novamente.';
           }
         }
         else if (toolCall.function.name === 'create_ticket') {
           try {
             const args = safeParseToolArgs(toolCall.function.arguments);
-            console.log('[ai-autopilot-chat] ðŸŽ« Criando ticket automaticamente:', args);
+            console.log('[ai-autopilot-chat] 🎫 Criando ticket automaticamente:', args);
 
-            // ðŸ”’ HARD GUARD: Bloquear criação de ticket financeiro quando forbidFinancial ativo
+            // 🔒 HARD GUARD: Bloquear criação de ticket financeiro quando forbidFinancial ativo
             const financialIssueTypes = ['saque', 'reembolso', 'estorno', 'devolucao', 'devolução', 'financeiro', 'cobrança', 'cobranca', 'cancelamento'];
             const isFinancialTicket = financialIssueTypes.includes((args.issue_type || '').toLowerCase());
             
             if (flow_context?.forbidFinancial && isFinancialTicket) {
-              console.warn('[ai-autopilot-chat] ðŸ”’ HARD GUARD: Bloqueando create_ticket financeiro com forbidFinancial=true. issue_type:', args.issue_type);
+              console.warn('[ai-autopilot-chat] 🔒 HARD GUARD: Bloqueando create_ticket financeiro com forbidFinancial=true. issue_type:', args.issue_type);
               
               // Registrar bloqueio em ai_events
               try {
@@ -7930,7 +7930,7 @@ Você quer:
               throw { __financialGuardSkip: true, message: assistantMessage };
             }
 
-            // ðŸ” SECURITY NOTE: Rate limiting is handled at conversation level (AI autopilot only runs for authenticated conversations)
+            // 🔒 SECURITY NOTE: Rate limiting is handled at conversation level (AI autopilot only runs for authenticated conversations)
             // Public ticket creation via forms should implement rate limiting separately
 
             // Create ticket in database
@@ -8005,18 +8005,18 @@ Via: Atendimento Automatizado (IA)`;
               .single();
 
             if (ticketError) {
-              console.error('[ai-autopilot-chat] âŒ Erro ao criar ticket (ignorando):', ticketError);
-              // âš ï¸ NNÃO sobrescrever assistantMessage aqui
+              console.error('[ai-autopilot-chat] ❌ Erro ao criar ticket (ignorando):', ticketError);
+              // âš ï¸ NÃO sobrescrever assistantMessage aqui
               // Deixar que o detector de fallback (linhas 886-979) lide com o handoff
               // se a resposta da IA for uma frase de fallback
             } else {
               console.log('[ai-autopilot-chat] âœ… Ticket criado com sucesso:', ticket.id);
               
-              ticketCreatedSuccessfully = true; // ðŸ”’ Marcar sucesso (previne duplicação no fallback)
+              ticketCreatedSuccessfully = true; // 🔒 Marcar sucesso (previne duplicação no fallback)
               
               // âœ… ENVIAR EMAIL DE CONFIRMAÇÃO
               try {
-                console.log('[ai-autopilot-chat] ðŸ“§ Enviando email de confirmação do ticket...');
+                console.log('[ai-autopilot-chat] 📧 Enviando email de confirmação do ticket...');
                 
                 const notificationResponse = await fetch(
                   `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-ticket-notification`,
@@ -8061,7 +8061,7 @@ Via: Atendimento Automatizado (IA)`;
                 cpf_last4: args.confirmed_cpf_last4
               } : undefined;
 
-              // ðŸŽ¯ SUBSTITUIR COMPLETAMENTE - Ticket criado = Problema resolvido = Não precisa desculpa
+              // 🎯 SUBSTITUIR COMPLETAMENTE - Ticket criado = Problema resolvido = Não precisa desculpa
               assistantMessage = await createTicketSuccessMessage(
                 supabaseClient,
                 ticket.id,
@@ -8072,13 +8072,13 @@ Via: Atendimento Automatizado (IA)`;
               );
             }
           } catch (error: any) {
-            // ðŸ”’ Financial guard skip - not a real error
+            // 🔒 Financial guard skip - not a real error
             if (error?.__financialGuardSkip) {
               assistantMessage = error.message;
-              console.log('[ai-autopilot-chat] ðŸ”’ create_ticket blocked by financial guard');
+              console.log('[ai-autopilot-chat] 🔒 create_ticket blocked by financial guard');
             } else {
-              console.error('[ai-autopilot-chat] âŒ Erro ao processar tool call (ignorando):', error);
-              // âš ï¸ NNÃO sobrescrever assistantMessage aqui
+              console.error('[ai-autopilot-chat] ❌ Erro ao processar tool call (ignorando):', error);
+              // âš ï¸ NÃO sobrescrever assistantMessage aqui
               // Deixar que o detector de fallback lide com o handoff se necessário
             }
           }
@@ -8088,7 +8088,7 @@ Via: Atendimento Automatizado (IA)`;
           try {
             const args = safeParseToolArgs(toolCall.function.arguments);
             const customerEmail = args.customer_email?.toLowerCase().trim();
-            console.log('[ai-autopilot-chat] ðŸ“¦ Consultando pedidos para:', customerEmail);
+            console.log('[ai-autopilot-chat] 📦 Consultando pedidos para:', customerEmail);
 
             // Buscar contato pelo email
             const { data: customerContact, error: contactError } = await supabaseClient
@@ -8147,18 +8147,18 @@ ${dealsFormatted}
 Sobre qual pedido você gostaria de saber mais?`;
 
           } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao consultar pedidos:', error);
+            console.error('[ai-autopilot-chat] ❌ Erro ao consultar pedidos:', error);
             assistantMessage = 'Ocorreu um erro ao consultar seus pedidos. Poderia tentar novamente?';
           }
         }
         // TOOL: check_tracking - Consultar rastreio via MySQL externo (suporta múltiplos códigos)
         else if (toolCall.function.name === 'check_tracking') {
-          console.log('[ai-autopilot-chat] ðŸšš CHECK_TRACKING INVOCADO');
-          console.log('[ai-autopilot-chat] ðŸšš Argumentos brutos:', toolCall.function.arguments);
+          console.log('[ai-autopilot-chat] 🚚 CHECK_TRACKING INVOCADO');
+          console.log('[ai-autopilot-chat] 🚚 Argumentos brutos:', toolCall.function.arguments);
           
           try {
             const args = safeParseToolArgs(toolCall.function.arguments);
-            console.log('[ai-autopilot-chat] ðŸšš Argumentos parseados:', args);
+            console.log('[ai-autopilot-chat] 🚚 Argumentos parseados:', args);
             
             // Suporta tanto tracking_codes (array) quanto tracking_code (string legado)
             let trackingCodes: string[] = [];
@@ -8169,7 +8169,7 @@ Sobre qual pedido você gostaria de saber mais?`;
             }
             const customerEmail = args.customer_email?.toLowerCase().trim();
             
-            console.log('[ai-autopilot-chat] ðŸ“¦ Consultando rastreio:', { trackingCodes, customerEmail, numCodes: trackingCodes.length });
+            console.log('[ai-autopilot-chat] 📦 Consultando rastreio:', { trackingCodes, customerEmail, numCodes: trackingCodes.length });
 
             let codesToQuery: string[] = [];
 
@@ -8227,7 +8227,7 @@ Sobre qual pedido você gostaria de saber mais?`;
 
             // Buscar códigos não cacheados no MySQL externo
             if (uncachedCodes.length > 0) {
-              console.log('[ai-autopilot-chat] ðŸ” Buscando no MySQL:', { 
+              console.log('[ai-autopilot-chat] 🔒 Buscando no MySQL:', { 
                 codes: uncachedCodes,
                 totalCodesToQuery: codesToQuery.length,
                 cachedCount: cachedCodes.length,
@@ -8235,12 +8235,12 @@ Sobre qual pedido você gostaria de saber mais?`;
               });
               
               try {
-                console.log('[ai-autopilot-chat] ðŸ” Chamando fetch-tracking edge function...');
+                console.log('[ai-autopilot-chat] 🔒 Chamando fetch-tracking edge function...');
                 const { data: fetchResult, error: fetchError } = await supabaseClient.functions.invoke('fetch-tracking', {
                   body: { tracking_codes: uncachedCodes }
                 });
 
-                console.log('[ai-autopilot-chat] ðŸ” fetch-tracking resultado:', {
+                console.log('[ai-autopilot-chat] 🔒 fetch-tracking resultado:', {
                   success: fetchResult?.success,
                   found: fetchResult?.found,
                   total_requested: fetchResult?.total_requested,
@@ -8249,14 +8249,14 @@ Sobre qual pedido você gostaria de saber mais?`;
                 });
 
                 if (fetchError) {
-                  console.error('[ai-autopilot-chat] âŒ Erro fetch-tracking:', fetchError);
+                  console.error('[ai-autopilot-chat] ❌ Erro fetch-tracking:', fetchError);
                 } else if (fetchResult?.success && fetchResult?.data) {
                   console.log('[ai-autopilot-chat] âœ… fetch-tracking sucesso, processando resultados...');
                   // Atualizar cache e agregar resultados
                   for (const [code, info] of Object.entries(fetchResult.data)) {
                     if (info) {
                       const trackingInfo = info as any;
-                      console.log('[ai-autopilot-chat] ðŸ“¦ Código encontrado:', code, trackingInfo);
+                      console.log('[ai-autopilot-chat] 📦 Código encontrado:', code, trackingInfo);
                       
                       // Upsert no cache
                       await supabaseClient
@@ -8289,7 +8289,7 @@ Sobre qual pedido você gostaria de saber mais?`;
                   console.log('[ai-autopilot-chat] âš ï¸ fetch-tracking sem sucesso ou sem dados:', fetchResult);
                 }
               } catch (fetchErr) {
-                console.error('[ai-autopilot-chat] âŒ Erro ao chamar fetch-tracking:', fetchErr);
+                console.error('[ai-autopilot-chat] ❌ Erro ao chamar fetch-tracking:', fetchErr);
               }
             }
 
@@ -8313,8 +8313,8 @@ Sobre qual pedido você gostaria de saber mais?`;
                       : 'Recentemente');
 
                 return `**${t.tracking_code}**
-ðŸ“¦ Embalado em: ${packedAt}
-ðŸšš Transportadora: ${platform}
+📦 Embalado em: ${packedAt}
+🚚 Transportadora: ${platform}
 âœ… Status: Pedido pronto e em transporte!`;
               }).join('\n\n');
 
@@ -8325,7 +8325,7 @@ Sobre qual pedido você gostaria de saber mais?`;
               }
             }
 
-            // Códigos NNÃO ENCONTRADOS = Ainda em preparação
+            // Códigos NÃO ENCONTRADOS = Ainda em preparação
             if (codesNotFound.length > 0) {
               if (responseText) responseText += '\n\n---\n\n';
               
@@ -8353,7 +8353,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             assistantMessage = responseText + '\n\nPosso ajudar com mais alguma coisa?';
 
           } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao consultar rastreio:', error);
+            console.error('[ai-autopilot-chat] ❌ Erro ao consultar rastreio:', error);
             assistantMessage = 'Ocorreu um erro ao consultar o rastreio. Poderia tentar novamente?';
           }
         }
@@ -8361,17 +8361,17 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
         else if (toolCall.function.name === 'request_human_agent') {
           try {
             const args = safeParseToolArgs(toolCall.function.arguments);
-            console.log('[ai-autopilot-chat] ðŸ‘¤ Executando handoff manual:', args);
+            console.log('[ai-autopilot-chat] 👤 Executando handoff manual:', args);
 
-            // ðŸ†• VALIDAÇÃO: Bloquear handoff se cliente não está identificado por email
+            // 🆕 VALIDAÇÃO: Bloquear handoff se cliente não está identificado por email
             const hasEmailInContact = contact.email && contact.email.length > 0;
             const hasEmailVerifiedInDb = conversation.customer_metadata?.email_verified_in_db === true;
             const isIdentified = hasEmailInContact || hasEmailVerifiedInDb;
 
             if (!isIdentified) {
               console.log('[ai-autopilot-chat] â›” Handoff BLOQUEADO - Cliente não identificado por email');
-              console.log('[ai-autopilot-chat] ðŸ“§ contact.email:', contact.email);
-              console.log('[ai-autopilot-chat] ðŸ“§ email_verified_in_db:', conversation.customer_metadata?.email_verified_in_db);
+              console.log('[ai-autopilot-chat] 📧 contact.email:', contact.email);
+              console.log('[ai-autopilot-chat] 📧 email_verified_in_db:', conversation.customer_metadata?.email_verified_in_db);
               
               // Retornar mensagem instruindo a pedir email primeiro
               assistantMessage = 'Para poder te conectar com um atendente, preciso primeiro confirmar sua identidade. Qual é o seu email de cadastro?';
@@ -8383,14 +8383,14 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             const handoffReason = args.reason || 'solicitacao_cliente';
             const handoffNote = args.internal_note || 'Transferência solicitada pela IA';
 
-            // ðŸ†• BUSINESS HOURS CHECK: Comportamento diferente dentro/fora do horário
+            // 🆕 BUSINESS HOURS CHECK: Comportamento diferente dentro/fora do horário
             const isWithinHours = businessHoursInfo?.within_hours ?? true; // Default: dentro do horário (seguro)
 
             if (isWithinHours) {
               // âœ… DENTRO DO HORÁRIO: Comportamento padrão (intacto)
               console.log('[ai-autopilot-chat] â˜€ï¸ Dentro do horário - handoff padrão');
 
-              // 1. MUDAR O MODO (Desligar IA) â€” apenas se NNÃO estiver dentro de um fluxo ativo
+              // 1. MUDAR O MODO (Desligar IA) â€” apenas se NÃO estiver dentro de um fluxo ativo
               if (!flow_context) {
                 await supabaseClient
                   .from('conversations')
@@ -8398,7 +8398,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
                   .eq('id', conversationId);
                 console.log('[ai-autopilot-chat] âœ… ai_mode mudado para copilot');
               } else {
-                console.log('[ai-autopilot-chat] âš ï¸ flow_context ativo â€” NNÃO mudando ai_mode para copilot (soberania do fluxo)');
+                console.log('[ai-autopilot-chat] âš ï¸ flow_context ativo â€” NÃO mudando ai_mode para copilot (soberania do fluxo)');
               }
 
               // 2. CHAMAR O ROTEADOR (Buscar agente disponível)
@@ -8407,7 +8407,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
               });
               
               if (routeError) {
-                console.error('[ai-autopilot-chat] âŒ Erro ao rotear conversa:', routeError);
+                console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
               } else {
                 console.log('[ai-autopilot-chat] âœ… Conversa roteada:', routeResult);
               }
@@ -8452,17 +8452,17 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
                 'Estou transferindo você para um atendente humano. Aguarde um momento, por favor.';
 
             } else {
-              // ðŸŒ™ FORA DO HORÁRIO: Fallback inteligente (sem falso SLA)
-              console.log('[ai-autopilot-chat] ðŸŒ™ Fora do horário - registrando pendência sem route-conversation');
+              // 🌙 FORA DO HORÁRIO: Fallback inteligente (sem falso SLA)
+              console.log('[ai-autopilot-chat] 🌙 Fora do horário - registrando pendência sem route-conversation');
 
               const scheduleSummary = businessHoursInfo?.schedule_summary || 'horário comercial';
               const nextOpenText = businessHoursInfo?.next_open_text || 'no próximo dia útil';
 
-              // 1. NNÃO chamar route-conversation
-              // 2. NNÃO mudar ai_mode (mantém autopilot)
+              // 1. NÃO chamar route-conversation
+              // 2. NÃO mudar ai_mode (mantém autopilot)
 
               // 3. Mensagem ao cliente (template configurável com fallback)
-              const defaultAfterHoursMsg = `Nosso atendimento humano funciona ${scheduleSummary}. ${nextOpenText} um atendente poderá te ajudar. Enquanto isso, posso continuar tentando por aqui! ðŸ˜Š`;
+              const defaultAfterHoursMsg = `Nosso atendimento humano funciona ${scheduleSummary}. ${nextOpenText} um atendente poderá te ajudar. Enquanto isso, posso continuar tentando por aqui! 😊`;
               try {
                 const { data: msgRow } = await supabaseClient
                   .from('business_messages_config')
@@ -8496,7 +8496,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
                       conversation_id: conversationId,
                       tag_id: tagRow.id,
                     }, { onConflict: 'conversation_id,tag_id' });
-                  console.log('[ai-autopilot-chat] ðŸ·ï¸ Tag pendente_retorno aplicada');
+                  console.log('[ai-autopilot-chat] 🏷️ Tag pendente_retorno aplicada');
                 } else {
                   console.warn('[ai-autopilot-chat] âš ï¸ Tag pendente_retorno não encontrada no banco');
                 }
@@ -8545,7 +8545,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             }
 
           } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao executar handoff manual:', error);
+            console.error('[ai-autopilot-chat] ❌ Erro ao executar handoff manual:', error);
             assistantMessage = 'Vou transferir você para um atendente humano. Por favor, aguarde um momento.';
           }
         }
@@ -8553,7 +8553,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
         else if (toolCall.function.name === 'close_conversation') {
           try {
             const args = safeParseToolArgs(toolCall.function.arguments);
-            console.log('[ai-autopilot-chat] ðŸ”’ close_conversation chamado:', args);
+            console.log('[ai-autopilot-chat] 🔒 close_conversation chamado:', args);
             
             const currentMeta = conversation.customer_metadata || {};
             
@@ -8570,12 +8570,12 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
                 .eq('id', conversationId);
               
               assistantMessage = 'Fico feliz em ter ajudado! 😊 Posso encerrar seu atendimento?';
-              console.log('[ai-autopilot-chat] â³ Aguardando confirmação do cliente para encerrar');
+              console.log('[ai-autopilot-chat] ⏳ Aguardando confirma��o do cliente para encerrar');
             }
             // Se customer_confirmed=true, o detector de confirmação cuida na próxima mensagem
             
           } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro em close_conversation:', error);
+            console.error('[ai-autopilot-chat] ❌ Erro em close_conversation:', error);
             assistantMessage = 'Ocorreu um erro. Posso ajudar com mais alguma coisa?';
           }
         }
@@ -8583,7 +8583,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
         else if (toolCall.function.name === 'classify_and_resolve_ticket') {
           try {
             const args = safeParseToolArgs(toolCall.function.arguments);
-            console.log('[ai-autopilot-chat] ðŸ“‹ classify_and_resolve_ticket chamado:', args);
+            console.log('[ai-autopilot-chat] 📋 classify_and_resolve_ticket chamado:', args);
 
             // 1. Buscar configs globais
             const { data: configs } = await supabaseClient
@@ -8599,7 +8599,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
 
             // 2. Kill switch guard
             if (!aiEnabled) {
-              console.log('[ai-autopilot-chat] ðŸš« classify_and_resolve_ticket BLOQUEADO (kill switch)');
+              console.log('[ai-autopilot-chat] 🚫 classify_and_resolve_ticket BLOQUEADO (kill switch)');
               await supabaseClient.from('ai_events').insert({
                 entity_id: conversationId,
                 entity_type: 'conversation',
@@ -8621,7 +8621,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
               .maybeSingle();
 
             if (activeFlowState) {
-              console.log('[ai-autopilot-chat] ðŸš« classify_and_resolve_ticket BLOQUEADO (flow ativo):', activeFlowState.id);
+              console.log('[ai-autopilot-chat] 🚫 classify_and_resolve_ticket BLOQUEADO (flow ativo):', activeFlowState.id);
               await supabaseClient.from('ai_events').insert({
                 entity_id: conversationId,
                 entity_type: 'conversation',
@@ -8658,7 +8658,7 @@ Conversa: ${conversationId}`;
 
             // 5. Shadow mode â†’ só loga, não altera DB
             if (shadowMode) {
-              console.log('[ai-autopilot-chat] ðŸ‘ï¸ classify_and_resolve_ticket em SHADOW MODE');
+              console.log('[ai-autopilot-chat] 👁️ classify_and_resolve_ticket em SHADOW MODE');
               await supabaseClient.from('ai_events').insert({
                 entity_id: conversationId,
                 entity_type: 'conversation',
@@ -8703,7 +8703,7 @@ Conversa: ${conversationId}`;
                   resolved_at: new Date().toISOString()
                 })
                 .eq('id', ticketId);
-              if (updateErr) console.error('[ai-autopilot-chat] âŒ Erro ao atualizar ticket:', updateErr);
+              if (updateErr) console.error('[ai-autopilot-chat] ❌ Erro ao atualizar ticket:', updateErr);
               else console.log('[ai-autopilot-chat] âœ… Ticket atualizado:', ticketId);
             } else {
               // INSERT novo ticket resolvido
@@ -8724,7 +8724,7 @@ Conversa: ${conversationId}`;
                 .single();
               
               if (insertErr) {
-                console.error('[ai-autopilot-chat] âŒ Erro ao criar ticket:', insertErr);
+                console.error('[ai-autopilot-chat] ❌ Erro ao criar ticket:', insertErr);
               } else {
                 ticketId = newTicket?.id;
                 console.log('[ai-autopilot-chat] âœ… Ticket criado:', ticketId);
@@ -8758,7 +8758,7 @@ Conversa: ${conversationId}`;
             console.log('[ai-autopilot-chat] âœ… classify_and_resolve_ticket concluído:', { ticketId, action: ticketAction, category: args.category });
 
           } catch (error) {
-            console.error('[ai-autopilot-chat] âŒ Erro em classify_and_resolve_ticket:', error);
+            console.error('[ai-autopilot-chat] ❌ Erro em classify_and_resolve_ticket:', error);
             assistantMessage = 'Ocorreu um erro ao classificar o ticket. O atendimento já foi encerrado normalmente.';
           }
         }
@@ -8772,16 +8772,16 @@ Conversa: ${conversationId}`;
       assistantMessage.toLowerCase().includes(phrase)
     );
 
-    // ðŸ†• FIX LOOP: Detectar fallback configurado no nó comparando com fallbackMessage
+    // 🆕 FIX LOOP: Detectar fallback configurado no nó comparando com fallbackMessage
     if (!isFallbackResponse && flow_context?.fallbackMessage) {
       const fallbackPrefix = flow_context.fallbackMessage.substring(0, 30).toLowerCase();
       if (fallbackPrefix.length > 5 && assistantMessage.toLowerCase().includes(fallbackPrefix)) {
-        console.log('[ai-autopilot-chat] ðŸš¨ FALLBACK DETECTADO via fallbackMessage do nó:', fallbackPrefix);
+        console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO via fallbackMessage do nó:', fallbackPrefix);
         isFallbackResponse = true;
       }
     }
 
-    // ðŸ†• FIX LOOP: Anti-loop counter - máximo 5 fallbacks consecutivos no mesmo nó AI
+    // 🆕 FIX LOOP: Anti-loop counter - máximo 5 fallbacks consecutivos no mesmo nó AI
     if (!isFallbackResponse && flow_context) {
       const existingMetadata = conversation.customer_metadata || {};
       const aiNodeFallbackCount = existingMetadata.ai_node_fallback_count || 0;
@@ -8791,11 +8791,11 @@ Conversa: ${conversationId}`;
       if (aiNodeId !== flow_context.node_id) {
         // Novo nó, resetar
       } else if (aiNodeFallbackCount >= 5) {
-        console.log('[ai-autopilot-chat] ðŸš¨ ANTI-LOOP: Máximo de 5 fallbacks atingido no nó AI â†’ forçando flow_advance_needed', {
+        console.log('[ai-autopilot-chat] 🚨 ANTI-LOOP: Máximo de 5 fallbacks atingido no nó AI â†’ forçando flow_advance_needed', {
           node_id: flow_context.node_id,
           fallback_count: aiNodeFallbackCount
         });
-        // ðŸ“Š FIX 4: Telemetria anti-alucinação â€” Anti-loop
+        // 📊 FIX 4: Telemetria anti-alucinação â€” Anti-loop
         console.log(JSON.stringify({
           event: 'ai_decision',
           conversation_id: conversationId,
@@ -8819,7 +8819,7 @@ Conversa: ${conversationId}`;
       }
     }
 
-    // ðŸ†• FIX LOOP: Atualizar contador de fallbacks no customer_metadata
+    // 🆕 FIX LOOP: Atualizar contador de fallbacks no customer_metadata
     if (flow_context) {
       const existingMetadata = conversation.customer_metadata || {};
       const aiNodeId = existingMetadata.ai_node_current_id || null;
@@ -8842,8 +8842,8 @@ Conversa: ${conversationId}`;
     }
 
     if (isFallbackResponse) {
-      console.log('[ai-autopilot-chat] ðŸš¨ FALLBACK DETECTADO');
-      // ðŸ“Š FIX 4: Telemetria anti-alucinação â€” Fallback phrase detection
+      console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO');
+      // 📊 FIX 4: Telemetria anti-alucinação â€” Fallback phrase detection
       console.log(JSON.stringify({
         event: 'ai_decision',
         conversation_id: conversationId,
@@ -8864,7 +8864,7 @@ Conversa: ${conversationId}`;
         output_json: { reason: 'fallback_phrase_detected', exitType: flow_context ? 'stay_in_node' : 'handoff', fallback_used: true, articles_found: 0, hasFlowContext: !!flow_context },
       })).catch(() => {});
 
-      // ðŸ†• FIX: Se flow_context existe, NNÃO sair do nó â€” limpar fallback phrases e continuar
+      // 🆕 FIX: Se flow_context existe, NÃO sair do nó â€” limpar fallback phrases e continuar
       if (flow_context) {
         console.log('[ai-autopilot-chat] âš ï¸ FALLBACK + flow_context â†’ limpando fallback phrases e permanecendo no nó');
 
@@ -8872,7 +8872,7 @@ Conversa: ${conversationId}`;
         // âœ… FIX 5: Detectar [[FLOW_EXIT]] ANTES de stripar â€” é sinal INTENCIONAL da persona
         const hasIntentionalExit = /\[\[FLOW_EXIT(:[a-zA-Z_]+)?\]\]/.test(assistantMessage);
         if (hasIntentionalExit) {
-          console.log('[ai-autopilot-chat] ðŸŽ¯ [[FLOW_EXIT]] detectado na resposta da IA â€” tratando como transferência intencional');
+          console.log('[ai-autopilot-chat] 🎯 [[FLOW_EXIT]] detectado na resposta da IA â€” tratando como transferência intencional');
           const exitMatch = assistantMessage.match(/\[\[FLOW_EXIT:?([a-zA-Z_]*)\]\]/);
                     const exitDestination = exitMatch?.[1] || '';
           console.log('[ai-autopilot-chat] Destino do exit:', exitDestination || 'padrao');
@@ -8941,7 +8941,7 @@ Conversa: ${conversationId}`;
         }
         
         if (cleanedMessage !== assistantMessage) {
-          console.log('[ai-autopilot-chat] ðŸ§¹ Mensagem limpa de fallback phrases:', { original: assistantMessage.substring(0, 100), cleaned: cleanedMessage.substring(0, 100) });
+          console.log('[ai-autopilot-chat] 🧹 Mensagem limpa de fallback phrases:', { original: assistantMessage.substring(0, 100), cleaned: cleanedMessage.substring(0, 100) });
         }
         
         // Atualizar assistantMessage com versão limpa â€” será persistida e enviada pelo pipeline normal abaixo
@@ -8959,17 +8959,17 @@ Conversa: ${conversationId}`;
           articles_count: knowledgeArticles.length
         })).catch((e: any) => console.error('[ai-autopilot-chat] âš ï¸ Falha ao logar fallback_cleaned:', e));
         
-        // Resetar flag â€” NNÃO é mais fallback após limpeza
+        // Resetar flag â€” NÃO é mais fallback após limpeza
         isFallbackResponse = false;
         
-        // ðŸ†• FIX: NNÃO return â€” deixa cair no pipeline normal de persistência + envio WhatsApp
+        // 🆕 FIX: NÃO return â€” deixa cair no pipeline normal de persistência + envio WhatsApp
       } else {
-      console.log('[ai-autopilot-chat] ðŸš¨ Sem flow_context - Executando handoff REAL');
+      console.log('[ai-autopilot-chat] 🚨 Sem flow_context - Executando handoff REAL');
       
-      // ðŸ›¡ï¸ ANTI-RACE-CONDITION: Marcar handoff executado PRIMEIRO
+      // 🛡� ANTI-RACE-CONDITION: Marcar handoff executado PRIMEIRO
       const handoffTimestamp = new Date().toISOString();
       
-      // ðŸ†• VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente â†’ Comercial
+      // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente â†’ Comercial
       const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated;
       const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
       const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
@@ -8978,7 +8978,7 @@ Conversa: ${conversationId}`;
       const handoffDepartment = conversation.department || 
                                (isLeadWithoutEmail ? DEPT_COMERCIAL_ID : DEPT_SUPORTE_ID);
       
-      console.log('[ai-autopilot-chat] ðŸ”„ Departamento de handoff (fallback):', {
+      console.log('[ai-autopilot-chat] 🔄 Departamento de handoff (fallback):', {
         flowDepartment: conversation.department,
         isLeadWithoutEmail,
         contactHasEmail,
@@ -8988,14 +8988,14 @@ Conversa: ${conversationId}`;
         reason: conversation.department ? 'RESPEITANDO FLUXO' : (isLeadWithoutEmail ? 'LEADâ†’COMERCIAL' : 'SUPORTE')
       });
       
-      // 1. MUDAR O MODO para waiting_human (NNÃO copilot!) e marcar timestamp + departamento
+      // 1. MUDAR O MODO para waiting_human (NÃO copilot!) e marcar timestamp + departamento
       await supabaseClient
         .from('conversations')
         .update({ 
-          ai_mode: 'waiting_human', // ðŸ†• waiting_human para ficar na fila até agente responder
-          handoff_executed_at: handoffTimestamp, // ðŸ†• Anti-race-condition flag
+          ai_mode: 'waiting_human', // 🆕 waiting_human para ficar na fila até agente responder
+          handoff_executed_at: handoffTimestamp, // 🆕 Anti-race-condition flag
           needs_human_review: true,
-          department: handoffDepartment, // ðŸ†• Definir departamento correto (Comercial para leads)
+          department: handoffDepartment, // 🆕 Definir departamento correto (Comercial para leads)
           customer_metadata: {
             ...(conversation.customer_metadata || {}),
             ...(isLeadWithoutEmail && {
@@ -9012,44 +9012,44 @@ Conversa: ${conversationId}`;
       const { data: routeResult, error: routeError } = await supabaseClient.functions.invoke('route-conversation', {
         body: { 
           conversationId,
-          department_id: handoffDepartment // ðŸ†• Passar departamento explícito
+          department_id: handoffDepartment // 🆕 Passar departamento explícito
         }
       });
       
       if (routeError) {
-        console.error('[ai-autopilot-chat] âŒ Erro ao rotear conversa:', routeError);
+        console.error('[ai-autopilot-chat] ❌ Erro ao rotear conversa:', routeError);
       } else {
         console.log('[ai-autopilot-chat] âœ… Conversa roteada:', routeResult);
         
-        // ðŸ†• Mensagem diferenciada para leads
+        // 🆕 Mensagem diferenciada para leads
         if (isLeadWithoutEmail && routeResult?.assigned) {
-          assistantMessage = 'Obrigado pelo seu interesse! Vou te direcionar para nosso time Comercial que poderá te apresentar nossas soluções. ðŸ¤\n\nAguarde um momento que logo um de nossos consultores irá te atender!';
+          assistantMessage = 'Obrigado pelo seu interesse! Vou te direcionar para nosso time Comercial que poderá te apresentar nossas soluções. ⚡Aguarde um momento que logo um de nossos consultores irá te atender!';
         }
         
-        // ðŸ†• Se ninguém online, MANTER waiting_human - cliente fica na fila aguardando
+        // 🆕 Se ninguém online, MANTER waiting_human - cliente fica na fila aguardando
         if (routeResult?.no_agents_available) {
           console.log('[ai-autopilot-chat] âš ï¸ Sem agentes online - Cliente ficará na FILA aguardando');
           
-          // ðŸ›¡ï¸ NNÃO REVERTER para autopilot! Manter em waiting_human na fila
+          // 🛡� NÃO REVERTER para autopilot! Manter em waiting_human na fila
           await supabaseClient
             .from('conversations')
             .update({ 
               needs_human_review: true,  // Flag para quando agente ficar online
-              // NNÃO mudar ai_mode - MANTÉM waiting_human
+              // NÃO mudar ai_mode - MANTÉM waiting_human
             })
             .eq('id', conversationId);
           
           // Mensagem diferenciada para leads vs clientes
           if (isLeadWithoutEmail) {
-            assistantMessage = `Obrigado pelo contato! Nosso time Comercial está ocupado no momento, mas você está na fila e será atendido em breve. ðŸ¤
+            assistantMessage = `Obrigado pelo contato! Nosso time Comercial está ocupado no momento, mas você está na fila e será atendido em breve. 
 
-â° Horário de atendimento: Segunda a Sexta, das 09h às 18h.`;
+⏰ Horário de atendimento: Segunda a Sexta, das 09h às 18h.`;
           } else {
             assistantMessage = `Vou te conectar com um de nossos especialistas! 
 
 Nossa equipe está ocupada no momento, mas você está na fila e será atendido assim que um atendente ficar disponível. 
 
-â° Horário de atendimento: Segunda a Sexta, das 09h às 18h.`;
+⏰ Horário de atendimento: Segunda a Sexta, das 09h às 18h.`;
           }
           
           console.log('[ai-autopilot-chat] âœ… Cliente mantido em waiting_human - na fila para atendimento');
@@ -9058,7 +9058,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       
       // 3. CRIAR TICKET AUTOMÁTICO PARA CASOS FINANCEIROS (apenas se não criado por tool call)
       
-      // ðŸš¨ Detectar se é pedido financeiro COM INTENÇNÃO DE AÇÃO (usa constante global)
+      // 🚨 Detectar se é pedido financeiro COM INTENÇNÃO DE AÇÃO (usa constante global)
       const isInformationalQuestion = INFORMATIONAL_PATTERNS.some(pattern => 
         pattern.test(customerMessage)
       );
@@ -9070,31 +9070,31 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
 
       if (isInformationalQuestion) {
         isFinancialRequest = false; // Anular se for dúvida
-        console.log('[ai-autopilot-chat] â„¹ï¸ Pergunta informativa detectada - NNÃO criar ticket');
+        console.log('[ai-autopilot-chat] â„¹ï¸ Pergunta informativa detectada - NÃO criar ticket');
       }
       
-      // ðŸ”’ Só criar ticket automático se não foi criado COM SUCESSO pelo tool call
+      // 🔒 Só criar ticket automático se não foi criado COM SUCESSO pelo tool call
       // Se o tool call falhou, permitir que o fallback detector crie como backup
       if (isFinancialRequest && !ticketCreatedSuccessfully) {
-        console.log('[ai-autopilot-chat] ðŸ’° Solicitação financeira detectada - Criando ticket de segurança');
+        console.log('[ai-autopilot-chat] 💰 Solicitação financeira detectada - Criando ticket de segurança');
         
         const { data: ticket, error: ticketError } = await supabaseClient
           .from('tickets')
           .insert({
             customer_id: contact.id,
-            subject: `ðŸ’° Solicitação Financeira - ${customerMessage.substring(0, 50)}...`,
+            subject: `💰 Solicitação Financeira - ${customerMessage.substring(0, 50)}...`,
             description: `**Mensagem Original:**\n${customerMessage}\n\n**Motivo do Ticket:**\nCriado automaticamente por handoff de IA - solicitação financeira detectada.`,
             priority: 'high',
             status: 'open',
             category: 'financeiro',
             source_conversation_id: conversationId,
-            internal_note: 'ðŸ¤– Ticket criado automaticamente pela IA - Assunto financeiro requer atenção humana'
+            internal_note: '🤖 Ticket criado automaticamente pela IA - Assunto financeiro requer atenção humana'
           })
           .select()
           .single();
         
         if (ticketError) {
-          console.error('[ai-autopilot-chat] âŒ Erro ao criar ticket financeiro:', ticketError);
+          console.error('[ai-autopilot-chat] ❌ Erro ao criar ticket financeiro:', ticketError);
         } else {
           console.log('[ai-autopilot-chat] âœ… Ticket financeiro criado:', ticket?.id);
           
@@ -9104,7 +9104,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             .update({ related_ticket_id: ticket?.id })
             .eq('id', conversationId);
           
-          // ðŸŽ¯ SUBSTITUIR COMPLETAMENTE - Ticket criado = Mensagem limpa e profissional
+          // 🎯 SUBSTITUIR COMPLETAMENTE - Ticket criado = Mensagem limpa e profissional
           assistantMessage = await createTicketSuccessMessage(
             supabaseClient,
             ticket?.id || '',
@@ -9114,7 +9114,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             ticket?.ticket_number
           );
           
-          ticketCreatedSuccessfully = true; // ðŸ”’ Atualizar flag DEPOIS de enriquecer
+          ticketCreatedSuccessfully = true; // 🔒 Atualizar flag DEPOIS de enriquecer
         }
       }
       
@@ -9122,7 +9122,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       await supabaseClient.from('interactions').insert({
         customer_id: contact.id,
         type: 'internal_note',
-        content: `ðŸ¤–â†’ðŸ‘¤ **Handoff Automático Executado**\n\n**Pergunta do Cliente:** "${customerMessage}"\n**Motivo:** IA não encontrou resposta adequada na base de conhecimento.\n**Departamento:** ${isLeadWithoutEmail ? 'ðŸ›’ Comercial (Lead sem identificação)' : 'ðŸŽ§ Suporte'}\n**Ação:** ${isLeadWithoutEmail ? 'Lead novo roteado para equipe Comercial.' : 'Conversa transferida para atendimento humano.'}${isFinancialRequest ? '\n**Ticket Financeiro:** Criado automaticamente' : ''}`,
+        content: `🤖→👤 **Handoff Automático Executado**\n\n**Pergunta do Cliente:** "${customerMessage}"\n**Motivo:** IA não encontrou resposta adequada na base de conhecimento.\n**Departamento:** ${isLeadWithoutEmail ? '🛒 Comercial (Lead sem identificação)' : '🎧 Suporte'}\n**Ação:** ${isLeadWithoutEmail ? 'Lead novo roteado para equipe Comercial.' : 'Conversa transferida para atendimento humano.'}${isFinancialRequest ? '\n**Ticket Financeiro:** Criado automaticamente' : ''}`,
         channel: responseChannel,
         metadata: {
           source: 'ai_autopilot_handoff',
@@ -9144,18 +9144,18 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
     // ============================================================
 
     // ============================================================
-    // ðŸ†• VALIDAÇÃO ANTI-ESCAPE: ANTES de salvar/enviar
+    // 🆕 VALIDAÇÃO ANTI-ESCAPE: ANTES de salvar/enviar
     // Se flow_context existe, IA só pode retornar texto puro
     // Detectar escape ANTES do banco + WhatsApp = zero vazamento
     // ============================================================
 
-    // ðŸ†• [INTENT:X] TAG DETECTION: Detectar e remover intent tags ANTES do escape check
+    // 🆕 [INTENT:X] TAG DETECTION: Detectar e remover intent tags ANTES do escape check
     const intentTagMatch = assistantMessage.match(/\[INTENT:([a-zA-Z_]+)\]/i);
     let detectedIntentTag: string | null = null;
     if (intentTagMatch) {
       detectedIntentTag = intentTagMatch[1].toLowerCase();
       assistantMessage = assistantMessage.replace(/\s*\[INTENT:[a-zA-Z_]+\]\s*/gi, '').trim();
-      console.log(`[ai-autopilot-chat] ðŸŽ¯ [INTENT:${detectedIntentTag}] detectado e removido da mensagem`);
+      console.log(`[ai-autopilot-chat] 🎯 [INTENT:${detectedIntentTag}] detectado e removido da mensagem`);
     }
 
     if (flow_context && flow_context.response_format === 'text_only') {
@@ -9165,7 +9165,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         const isCleanExit = /^\s*\[\[FLOW_EXIT(:[a-zA-Z_]+)?\]\]\s*$/.test(assistantMessage);
         
         if (isCleanExit) {
-          // ðŸ†• Extrair intent do token [[FLOW_EXIT:financeiro]] â†’ "financeiro"
+          // 🆕 Extrair intent do token [[FLOW_EXIT:financeiro]] â†’ "financeiro"
           const exitIntentMatch = assistantMessage.match(/\[\[FLOW_EXIT:([a-zA-Z_]+)\]\]/i);
           const aiExitIntent = exitIntentMatch ? exitIntentMatch[1].toLowerCase() : undefined;
           
@@ -9217,8 +9217,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             input_summary: customerMessage?.substring(0, 200) || '',
           })).catch((err: any) => console.error('[ai-autopilot-chat] âš ï¸ Failed to log escape event:', err));
           
-          // ðŸ†• FIX: Substituir mensagem e FICAR no nó (não retornar flowExit)
-          console.log('[ai-autopilot-chat] ðŸ”„ Contract violation + flow_context â†’ substituindo mensagem e permanecendo no nó');
+          // 🆕 FIX: Substituir mensagem e FICAR no nó (não retornar flowExit)
+          console.log('[ai-autopilot-chat] 🔄 Contract violation + flow_context â†’ substituindo mensagem e permanecendo no nó');
           assistantMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
           // Continua execução normal â€” mensagem será persistida abaixo
         }
@@ -9245,7 +9245,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
 
         const fallbackMessage = flow_context.fallbackMessage || 'No momento não tenho essa informação.';
         
-        // ðŸ“Š FIX 4: Telemetria anti-alucinação â€” Restriction violation
+        // 📊 FIX 4: Telemetria anti-alucinação â€” Restriction violation
         console.log(JSON.stringify({
           event: 'ai_decision',
           conversation_id: conversationId,
@@ -9266,8 +9266,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           output_json: { reason: 'restriction_violation_' + restrictionCheck.violation, exitType: 'stay_in_node', fallback_used: true, articles_found: 0, hasFlowContext: true },
         })).catch(() => {});
         
-        // ðŸ†• FIX: Substituir mensagem pelo fallback e FICAR no nó (não retornar flow_advance_needed)
-        console.log('[ai-autopilot-chat] ðŸ”„ VIOLAÇÃO DE RESTRIÇNÃO + flow_context â†’ substituindo mensagem e permanecendo no nó');
+        // 🆕 FIX: Substituir mensagem pelo fallback e FICAR no nó (não retornar flow_advance_needed)
+        console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇNÃO + flow_context â†’ substituindo mensagem e permanecendo no nó');
         assistantMessage = fallbackMessage;
         
         Promise.resolve(supabaseClient.from('ai_quality_logs').insert({
@@ -9284,10 +9284,10 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         // Continua execução â€” mensagem será persistida abaixo
         }
       } else if (forbidFinancial) {
-        // ðŸ†• Apenas bloquear se a IA tentou EXECUTAR uma ação financeira (não informações)
+        // 🆕 Apenas bloquear se a IA tentou EXECUTAR uma ação financeira (não informações)
         const financialResolutionPattern = /(j[áa] processei|foi estornado|solicitei reembolso|vou reembolsar|pode sacar|liberei o saque|reembolso aprovado|estorno realizado|cancelamento confirmado|pagamento devolvido|já estornei|processando.*reembolso|aprovei.*devolu[çc][ãa]o|sacar.*saldo|saque.*(realizado|solicitado)|para\s+prosseguir\s+com\s+o\s+(saque|reembolso|estorno)|confirmar.*dados.*(saque|reembolso|estorno)|devolver.*dinheiro)/i;
         if (financialResolutionPattern.test(assistantMessage)) {
-          console.warn('[ai-autopilot-chat] ðŸ”’ TRAVA FINANCEIRA (pré-save): IA tentou EXECUTAR ação financeira');
+          console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (pré-save): IA tentou EXECUTAR ação financeira');
           assistantMessage = 'Entendi sua solicitação. Vou te encaminhar para o setor responsável que poderá te ajudar com isso.';
           
           // Sinalizar flow_advance_needed para que o webhook avance no fluxo financeiro
@@ -9377,7 +9377,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
 
     // FASE 3: Se Email, enviar resposta via send-email
     if (responseChannel === 'email' && contact.email && messageId) {
-      console.log('[ai-autopilot-chat] ðŸ“§ Enviando resposta por email:', {
+      console.log('[ai-autopilot-chat] 📧 Enviando resposta por email:', {
         contactEmail: contact.email,
         messageId
       });
@@ -9406,7 +9406,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         });
 
         if (emailError) {
-          console.error('[ai-autopilot-chat] âŒ Erro ao enviar email:', emailError);
+          console.error('[ai-autopilot-chat] ❌ Erro ao enviar email:', emailError);
           // Atualizar status para failed
           await supabaseClient
             .from('messages')
@@ -9424,7 +9424,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             .eq('id', messageId);
         }
       } catch (emailError) {
-        console.error('[ai-autopilot-chat] âŒ Exception ao enviar email:', emailError);
+        console.error('[ai-autopilot-chat] ❌ Exception ao enviar email:', emailError);
         await supabaseClient
           .from('messages')
           .update({ 
@@ -9437,7 +9437,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
     
     // 8. Se WhatsApp, enviar via Meta ou Evolution API e atualizar status
     else if (responseChannel === 'whatsapp' && contact.phone && messageId) {
-      console.log('[ai-autopilot-chat] ðŸ“± Tentando enviar WhatsApp:', {
+      console.log('[ai-autopilot-chat] 📱 Tentando enviar WhatsApp:', {
         contactPhone: contact.phone,
         contactWhatsappId: contact.whatsapp_id,
         messageId,
@@ -9447,7 +9447,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       });
 
       try {
-        // ðŸ”’ USAR HELPER MULTI-PROVIDER
+        // 🔒 USAR HELPER MULTI-PROVIDER
         const whatsappResult = await getWhatsAppInstanceWithProvider(
           supabaseClient, 
           conversationId, 
@@ -9476,10 +9476,10 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         
         // ========== META WHATSAPP CLOUD API ==========
         if (provider === 'meta') {
-          // ðŸ†• CORREÇNÃO: Priorizar whatsapp_id sobre phone
+          // 🆕 CORREÇNÃO: Priorizar whatsapp_id sobre phone
           const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
           
-          console.log('[ai-autopilot-chat] ðŸ“¤ Invocando send-meta-whatsapp:', {
+          console.log('[ai-autopilot-chat] 📤 Invocando send-meta-whatsapp:', {
             instanceId: whatsappInstance.id,
             phoneNumberId: whatsappInstance.phone_number_id,
             targetNumber: targetNumber?.slice(-4),
@@ -9491,12 +9491,12 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           const { data: metaResponse, error: metaError } = await supabaseClient.functions.invoke('send-meta-whatsapp', {
             body: {
               instance_id: whatsappInstance.id,
-              phone_number: targetNumber, // ðŸ†• Usa whatsapp_id se disponível
+              phone_number: targetNumber, // 🆕 Usa whatsapp_id se disponível
               message: assistantMessage,
               conversation_id: conversationId,
-              skip_db_save: true, // ðŸ†• CRÁTICO: Já salvamos na linha 7193
-              sender_name: persona?.name || undefined, // ðŸ†• Nome da persona para prefixar mensagem
-              is_bot_message: true // ðŸ†• Mensagem de IA = bot message
+              skip_db_save: true, // 🆕 CRÁTICO: Já salvamos na linha 7193
+              sender_name: persona?.name || undefined, // 🆕 Nome da persona para prefixar mensagem
+              is_bot_message: true // 🆕 Mensagem de IA = bot message
             },
           });
 
@@ -9519,14 +9519,14 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             console.warn('[ai-autopilot-chat] âš ï¸ Tentando enviar com instância Evolution não-conectada:', whatsappInstance.status);
           }
 
-          console.log('[ai-autopilot-chat] ðŸ“¤ Invocando send-whatsapp-message (Evolution):', {
+          console.log('[ai-autopilot-chat] 📤 Invocando send-whatsapp-message (Evolution):', {
             instanceId: whatsappInstance.id,
             instanceStatus: whatsappInstance.status,
             phoneNumber: contact.phone,
             whatsappId: contact.whatsapp_id
           });
 
-          // ðŸ†• Para Evolution, prefixar manualmente a mensagem com nome da persona
+          // 🆕 Para Evolution, prefixar manualmente a mensagem com nome da persona
           const formattedMessageEvolution = persona?.name ? `*${persona.name}*\n${assistantMessage}` : assistantMessage;
           
           const { data: whatsappResponse, error: whatsappError } = await supabaseClient.functions.invoke('send-whatsapp-message', {
@@ -9551,7 +9551,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           console.log('[ai-autopilot-chat] âœ… Resposta enviada via Evolution API');
         }
       } catch (whatsappError) {
-        console.error('[ai-autopilot-chat] âŒ WhatsApp send failed:', whatsappError);
+        console.error('[ai-autopilot-chat] ❌ WhatsApp send failed:', whatsappError);
         
         // FAILURE: Update message status to 'failed'
         await supabaseClient
@@ -9585,12 +9585,12 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             tool_calls: toolCalls
           }
         });
-      console.log('ðŸ“Š [USAGE LOG] Uso da IA registrado com sucesso');
+      console.log('📊 [USAGE LOG] Uso da IA registrado com sucesso');
     } catch (logError) {
       console.error('âš ï¸ [USAGE LOG ERROR] Erro ao registrar uso (não bloqueante):', logError);
     }
 
-    // ðŸ†• UPGRADE 1: Telemetria real em ai_events (confiança, artigos, latência)
+    // 🆕 UPGRADE 1: Telemetria real em ai_events (confiança, artigos, latência)
     try {
       const telemetryEndTime = Date.now();
       const interactionCount = flow_context?.collectedData?.__ai?.interaction_count || 1;
@@ -9622,7 +9622,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           department_id: conversation?.department || null,
           input_summary: customerMessage.substring(0, 200),
         });
-      console.log('ðŸ“Š [AI_EVENTS] Telemetria registrada em ai_events');
+      console.log('📊 [AI_EVENTS] Telemetria registrada em ai_events');
     } catch (telemetryError) {
       console.error('âš ï¸ [AI_EVENTS ERROR] Erro ao registrar telemetria (não bloqueante):', telemetryError);
     }
@@ -9637,7 +9637,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
     );
     
     if (shouldSkipCache) {
-      console.log('âš ï¸ [CACHE SKIP] Resposta de fallback detectada - NNÃO cacheando');
+      console.log('âš ï¸ [CACHE SKIP] Resposta de fallback detectada - NÃO cacheando');
     } else {
       try {
         await supabaseClient.from('ai_response_cache').insert({
@@ -9649,7 +9649,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             category: a.category
           })),
         });
-        console.log('ðŸ’¾ [CACHE SAVED] Resposta salva no cache para reutilização');
+        console.log('💾 [CACHE SAVED] Resposta salva no cache para reutilização');
       } catch (cacheError) {
         console.error('âš ï¸ [CACHE ERROR] Erro ao salvar no cache (não bloqueante):', cacheError);
         // Não bloqueia a resposta se falhar o cache
@@ -9660,7 +9660,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       status: 'success',
       message: assistantMessage,
       from_cache: false,
-      // ðŸ†• INTENT EXIT: Sinalizar intent detectado para o webhook
+      // 🆕 INTENT EXIT: Sinalizar intent detectado para o webhook
       ...(detectedIntentTag ? { intentExit: true, intentType: detectedIntentTag, hasFlowContext: !!flow_context, flow_context: flow_context ? { flow_id: flow_context.flow_id, node_id: flow_context.node_id } : undefined } : {}),
       persona_used: {
         id: persona.id,
@@ -9684,20 +9684,20 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
     });
 
     } catch (aiError) {
-      // ðŸš¨ FASE 3: IA FALHOU - Executar protocolo de emergência
-      console.error('[ai-autopilot-chat] ðŸ”¥ FALHA CRÁTICA DA IA:', aiError);
+      // 🚨 FASE 3: IA FALHOU - Executar protocolo de emergência
+      console.error('[ai-autopilot-chat] 🔥 FALHA CRÁTICA DA IA:', aiError);
       
       const errorMessage = aiError instanceof Error ? aiError.message : 'Unknown error';
       const errorStack = aiError instanceof Error ? aiError.stack : undefined;
       
-      // ðŸ†• Detectar erro de quota vs erro técnico real
+      // 🆕 Detectar erro de quota vs erro técnico real
       const isQuotaError = errorMessage.includes('QUOTA_ERROR') || errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('rate_limit');
       
       if (isQuotaError) {
-        // QUOTA ERROR: NNÃO transferir, apenas avisar o cliente e manter na IA
-        console.warn('[ai-autopilot-chat] âš ï¸ QUOTA_ERROR detectado â€” NNÃO transferir, apenas avisar cliente');
+        // QUOTA ERROR: NÃO transferir, apenas avisar o cliente e manter na IA
+        console.warn('[ai-autopilot-chat] âš ï¸ QUOTA_ERROR detectado â€” NÃO transferir, apenas avisar cliente');
         
-        const quotaMessage = "Estou com alta demanda no momento. Por favor, tente novamente em alguns instantes. ðŸ™";
+        const quotaMessage = "Estou com alta demanda no momento. Por favor, tente novamente em alguns instantes. ";
         
         // Salvar mensagem de aviso
         await supabaseClient.from('messages').insert({
@@ -9735,7 +9735,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
               console.log('[ai-autopilot-chat] âœ… Quota warning sent via Meta WhatsApp');
             }
           } catch (waErr) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao enviar aviso de quota via WhatsApp:', waErr);
+            console.error('[ai-autopilot-chat] ❌ Erro ao enviar aviso de quota via WhatsApp:', waErr);
           }
         }
         
@@ -9770,7 +9770,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       }
       
       // ERRO TÉCNICO REAL: protocolo de emergência
-      // ðŸ›¡ï¸ FLOW SOVEREIGNTY: se há fluxo ativo, NNÃO forçar copilot
+      // 🛡� FLOW SOVEREIGNTY: se há fluxo ativo, NÃO forçar copilot
       const hasActiveFlow = !!flow_context;
       
       try {
@@ -9788,7 +9788,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           .select()
           .single();
         
-        console.log('[ai-autopilot-chat] ðŸ“ Falha registrada no log:', failureLog?.id);
+        console.log('[ai-autopilot-chat] 🔒 Falha registrada no log:', failureLog?.id);
         
         // 2. Escolher mensagem de fallback baseada no contexto
         const fallbackMessage = hasActiveFlow
@@ -9796,7 +9796,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           // âœ… FIX 2b: Removido 'Desculpe' que acionava o próprio detector de fallback
           : "Estou com instabilidade no momento. Pode tentar novamente em alguns instantes?";
         
-        console.log(`[ai-autopilot-chat] ðŸ›¡ï¸ Flow sovereignty check: hasActiveFlow=${hasActiveFlow}, message=${hasActiveFlow ? 'retry' : 'handoff'}`);
+        console.log(`[ai-autopilot-chat] 🛡� Flow sovereignty check: hasActiveFlow=${hasActiveFlow}, message=${hasActiveFlow ? 'retry' : 'handoff'}`);
         
         const { data: fallbackMsgData, error: fallbackSaveError } = await supabaseClient
           .from('messages')
@@ -9814,9 +9814,9 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           .single();
         
         if (fallbackSaveError) {
-          console.error('[ai-autopilot-chat] âŒ Falha ao salvar fallback no banco:', fallbackSaveError);
+          console.error('[ai-autopilot-chat] ❌ Falha ao salvar fallback no banco:', fallbackSaveError);
         } else {
-          console.log('[ai-autopilot-chat] ðŸ’¬ Mensagem de fallback salva no banco:', fallbackMsgData?.id);
+          console.log('[ai-autopilot-chat] 💬 Mensagem de fallback salva no banco:', fallbackMsgData?.id);
         }
 
         // 2b. Se WhatsApp, enviar via send-meta-whatsapp
@@ -9856,13 +9856,13 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
               console.warn('[ai-autopilot-chat] âš ï¸ Sem instância Meta para enviar fallback');
             }
           } catch (waFallbackErr) {
-            console.error('[ai-autopilot-chat] âŒ Erro ao enviar fallback via WhatsApp:', waFallbackErr);
+            console.error('[ai-autopilot-chat] ❌ Erro ao enviar fallback via WhatsApp:', waFallbackErr);
           }
         }
         
-        // 3. Handoff: SOMENTE se NNÃO há fluxo ativo
+        // 3. Handoff: SOMENTE se NÃO há fluxo ativo
         if (hasActiveFlow) {
-          // ðŸ›¡ï¸ FLOW SOVEREIGNTY: manter autopilot, apenas atualizar last_message_at
+          // 🛡� FLOW SOVEREIGNTY: manter autopilot, apenas atualizar last_message_at
           await supabaseClient
             .from('conversations')
             .update({ 
@@ -9870,7 +9870,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             })
             .eq('id', conversationId);
           
-          console.log('[ai-autopilot-chat] ðŸ›¡ï¸ Flow ativo preservado â€” ai_mode mantido como autopilot, sem handoff');
+          console.log('[ai-autopilot-chat] 🛡� Flow ativo preservado â€” ai_mode mantido como autopilot, sem handoff');
         } else {
           // Comportamento original: copilot + handoff para fila humana
           await supabaseClient
@@ -9882,14 +9882,14 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             })
             .eq('id', conversationId);
           
-          console.log('[ai-autopilot-chat] ðŸ¤ Handoff automático executado (ai_mode â†’ copilot)');
+          console.log('[ai-autopilot-chat] 🤝ndoff automático executado (ai_mode â†’ copilot)');
           
           // 4. Rotear conversa para departamento apropriado
           await supabaseClient.functions.invoke('route-conversation', {
             body: { conversationId }
           });
           
-          console.log('[ai-autopilot-chat] ðŸ“® Conversa roteada para fila humana');
+          console.log('[ai-autopilot-chat] 📮 Conversa roteada para fila humana');
         }
         
         // 5. Notificar admin sobre a falha crítica
@@ -9907,7 +9907,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           }
         });
         
-        console.log('[ai-autopilot-chat] ðŸ“§ Admin notificado sobre falha crítica');
+        console.log('[ai-autopilot-chat] 📧 Admin notificado sobre falha crítica');
         
         // 6. Atualizar log marcando que admin foi notificado
         if (failureLog?.id) {
@@ -9921,7 +9921,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         }
         
       } catch (recoveryError) {
-        console.error('[ai-autopilot-chat] âŒ Erro no protocolo de recuperação:', recoveryError);
+        console.error('[ai-autopilot-chat] ❌ Erro no protocolo de recupera��o:', recoveryError);
       }
       
       // Retornar resposta indicando que houve fallback
