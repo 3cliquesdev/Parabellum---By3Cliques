@@ -555,6 +555,12 @@ export function KnowledgeAuditTab() {
           </Table>
         </div>
       )}
+      <AuditArticleEditDialog
+        articleId={editArticleId}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        validCategories={validCategories}
+      />
     </div>
   );
 }
