@@ -3767,8 +3767,27 @@ serve(async (req) => {
           } else if (!verifyResult.found) {
             // 🎯 TRIAGEM: Email não encontrado = Lead â†’ Rotear para Comercial
             console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email não encontrado - roteando para Comercial');
+            // FIX BUG 5: Verificar contexto financeiro antes de redirecionar
+            const isFinancialCtx = isFinancialRequest || isFinancialActionRequest || isWithdrawalRequest;
+            const alreadyAskedAltEmail = (conversation.customer_metadata || {}).asked_alternative_email === true;
             
-            const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+            if (isFinancialCtx && !alreadyAskedAltEmail) {
+              console.log('[ai-autopilot-chat] Email nao encontrado em contexto FINANCEIRO - perguntando email alternativo');
+              
+              await supabaseClient.from('conversations')
+                .update({
+                  customer_metadata: {
+                    ...(conversation.customer_metadata || {}),
+                    asked_alternative_email: true,
+                    first_email_checked: emailInMessage.toLowerCase().trim()
+                  }
+                })
+                .eq('id', conversationId);
+              
+              autoResponse = 'Nao encontrei esse email na nossa base de clientes.\n\nVoce possui outro email que possa ter usado na compra? Se sim, por favor envie aqui.\n\nSe esse e o unico email, me avise que vou te encaminhar para um atendente.';
+              skipEarlyReturn = true;
+            } else {
+
             
             // Buscar template de lead direcionado
             let leadMessage = await getMessageTemplate(supabaseClient, 'lead_direcionado_comercial', {});
