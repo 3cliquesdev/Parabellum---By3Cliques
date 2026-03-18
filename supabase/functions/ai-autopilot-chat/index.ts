@@ -9531,7 +9531,11 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       console.log(`[ai-autopilot-chat] 🎯 [INTENT:${detectedIntentTag}] detectado e removido da mensagem`);
     }
 
-    if (flow_context && flow_context.response_format === 'text_only') {
+    // 🆕 V8 FIX Bug 1+2: Skip escape check para mensagens geradas pelo sistema (fallback/greeting)
+    // rawAIContentNormalized vazio = LLM não retornou nada, msg foi gerada internamente
+    // isProactiveGreeting = saudação controlada, não precisa de escape check
+    const isSystemGeneratedMessage = !rawAIContentNormalized || isProactiveGreeting;
+    if (flow_context && flow_context.response_format === 'text_only' && !isSystemGeneratedMessage) {
       const escapeAttempt = ESCAPE_PATTERNS.some(pattern => pattern.test(assistantMessage));
       
       if (escapeAttempt) {
