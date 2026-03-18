@@ -3856,12 +3856,19 @@ serve(async (req) => {
             }
             
             // Atualizar conversa: departamento = Comercial, ai_mode = waiting_human
+            // V6 FIX: Refetch metadata fresco
+            const { data: freshConvLeadRoute } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshMetaLeadRoute = (freshConvLeadRoute?.customer_metadata || {}) as Record<string, any>;
             await supabaseClient.from('conversations')
               .update({ 
                 department: DEPT_COMERCIAL_ID,
                 ai_mode: 'waiting_human',
                 customer_metadata: {
-                  ...(conversation.customer_metadata || {}),
+                  ...freshMetaLeadRoute,
                   lead_email_checked: emailInMessage.toLowerCase().trim(),
                   lead_routed_to_comercial_at: new Date().toISOString()
                 }
