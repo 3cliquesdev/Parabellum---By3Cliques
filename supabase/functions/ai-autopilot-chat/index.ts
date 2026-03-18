@@ -7207,13 +7207,14 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     let skipLLMForGreeting = false;
     if (flow_context && (isFirstNodeInteraction || isMenuNoise)) {
       const personaGreetName = persona?.name || 'nossa equipe';
-      const greetObjective = flow_context.objective || '';
+      // NÃO usar flow_context.objective — contém instruções internas do sistema
       const greetProduto = (flow_context.collectedData?.produto || flow_context.collectedData?.Produto || '') as string;
+      const greetDepartment = (flow_context.collectedData?.assunto || flow_context.collectedData?.Assunto || '') as string;
       let greetingMsg = 'Olá! Sou ' + personaGreetName;
       if (greetProduto) greetingMsg += ' do time de atendimento do ' + greetProduto;
       greetingMsg += '.';
-      if (greetObjective) greetingMsg += ' ' + greetObjective + '.';
-      greetingMsg += ' Como posso te ajudar?';
+      if (greetDepartment) greetingMsg += ' Vou te ajudar com ' + greetDepartment + '.';
+      greetingMsg += ' Como posso te ajudar? 😊';
       skipLLMForGreeting = true;
       console.log('[ai-autopilot-chat] Saudação proativa enviada, pulando LLM');
       // Montar assistantMessage diretamente sem chamar a LLM
