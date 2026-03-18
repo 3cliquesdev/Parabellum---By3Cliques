@@ -93,6 +93,7 @@ export function ReengageTemplateDialog({
             name: selectedTemplate.name,
             language_code: selectedTemplate.language_code,
             components: components.length > 0 ? components : undefined,
+            body_text: selectedTemplate.body_text || selectedTemplate.description || null,
           },
         },
       });

@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bot, AlertCircle, RefreshCw, Loader2 } from "lucide-react";
+import { Bot, AlertCircle, RefreshCw, Loader2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SafeHTML } from "@/components/SafeHTML";
 import { MessageStatusIndicator } from "@/components/MessageStatusIndicator";
@@ -241,12 +241,46 @@ export function MessageBubble({
           )}
 
           {/* Text Content */}
-          {content && (
-            <SafeHTML
-              html={content}
-              className="text-sm whitespace-pre-wrap [word-break:break-word]"
-            />
-          )}
+          {content && (() => {
+            const isTemplate = content.startsWith("📋 *Template:") || content.startsWith("[Template:");
+            if (isTemplate) {
+              // Parse template content
+              const lines = content.split("\n");
+              const headerLine = lines[0]
+                .replace("📋 *Template:", "")
+                .replace("[Template:", "")
+                .replace("*", "")
+                .replace("]", "")
+                .trim();
+              const bodyLines = lines.slice(1).filter(l => l.trim()).join("\n");
+              
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                      Template
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {headerLine}
+                    </span>
+                  </div>
+                  {bodyLines && (
+                    <SafeHTML
+                      html={bodyLines}
+                      className="text-sm whitespace-pre-wrap [word-break:break-word] border-l-2 border-emerald-500/30 pl-2"
+                    />
+                  )}
+                </div>
+              );
+            }
+            return (
+              <SafeHTML
+                html={content}
+                className="text-sm whitespace-pre-wrap [word-break:break-word]"
+              />
+            );
+          })()}
 
           {/* Metadata Row */}
           <div
