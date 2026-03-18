@@ -1,108 +1,82 @@
 
-# Corrigir de vez o caso do Luiz na atribuição de tickets
 
-## O que eu confirmei
-Do I know what the issue is? Sim.
+# Liberar consultores para atribuir tickets via RPC segura
 
-O problema real não é só “a policy antiga”. São 2 causas juntas:
+## Problema
+O `consultant` não consegue atribuir tickets porque `useUpdateTicket` faz `UPDATE` direto na tabela `tickets`, e a RLS só libera consultores para tickets da própria carteira. Tickets fora da carteira (como o da Vanessa com `consultant_id = null`) são bloqueados.
 
-1. **A tela de ticket usa update direto na tabela**
-   - Em `src/components/TicketDetails.tsx`, o campo **Atribuído** chama `handleAssignChange()`.
-   - Esse handler usa `useUpdateTicket()`.
-   - Em `src/hooks/useUpdateTicket.tsx`, a atribuição faz:
-     ```ts
-     supabase.from("tickets").update(...).eq("id", id)
-     ```
-   - Ou seja: a ação depende totalmente da RLS da tabela `tickets`.
+## Solução
+Criar uma RPC `assign_ticket_secure` (SECURITY DEFINER) que permite consultores atribuírem tickets, e usar essa RPC no frontend em vez do update direto.
 
-2. **A correção anterior só liberou consultor para tickets da própria carteira**
-   - A policy atual `canonical_update_tickets` só deixa `consultant` atualizar quando:
-     ```sql
-     customer_id IN (SELECT get_consultant_contact_ids(auth.uid()))
-     ```
-   - No ticket do print (`TK-2026-01004`), o contato `Vanessa Gonçalves` está com:
-     - `consultant_id = null`
-   - Então esse ticket **não entra** na carteira do Luiz.
-   - Resultado: o update continua falhando com:
-     `new row violates row-level security policy for table "tickets"`
+### 1. Migration SQL — criar `assign_ticket_secure`
 
-## Diagnóstico final
-A correção anterior atacou o caso errado.
+```sql
+CREATE OR REPLACE FUNCTION public.assign_ticket_secure(
+  p_ticket_id uuid,
+  p_assigned_to uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+  v_is_authorized BOOLEAN := false;
+BEGIN
+  -- Managers/admins: acesso total
+  IF has_any_role(v_caller_id, ARRAY[
+    'admin','manager','general_manager',
+    'cs_manager','support_manager','financial_manager'
+  ]::app_role[]) THEN
+    v_is_authorized := true;
+  -- Agentes operacionais e consultores podem atribuir
+  ELSIF has_any_role(v_caller_id, ARRAY[
+    'support_agent','financial_agent','consultant',
+    'ecommerce_analyst','sales_rep'
+  ]::app_role[]) THEN
+    v_is_authorized := true;
+  END IF;
 
-- `luiz.silva@3cliques.net` tem só o role **`consultant`**
-- O ticket mostrado não pertence à carteira dele
-- A UI usa **update direto** em `tickets`
-- Portanto, para esse ticket, o banco bloqueia a alteração corretamente
+  IF NOT v_is_authorized THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Sem permissão');
+  END IF;
 
-## Plano de implementação
+  UPDATE tickets
+  SET assigned_to = p_assigned_to,
+      status = CASE 
+        WHEN p_assigned_to IS NOT NULL AND status = 'open' THEN 'in_progress'
+        ELSE status
+      END,
+      updated_at = now()
+  WHERE id = p_ticket_id;
 
-### 1. Corrigir a regra de negócio, não só a RLS
-Vou alinhar o sistema com o comportamento esperado para o Luiz.
+  RETURN jsonb_build_object('success', true, 'ticket_id', p_ticket_id);
+END;
+$$;
 
-**Se o Luiz precisa atuar na fila de suporte/equipe**, o ajuste correto é:
-- manter `consultant`
-- adicionar também um role operacional, como **`support_agent`** (ou outro papel operacional adequado)
-
-Isso é consistente com o padrão já usado no projeto: consultor puro não é papel operacional de fila.
-
-### 2. Parar de usar update direto para atribuição na tela do ticket
-Hoje a atribuição simples passa por `useUpdateTicket`, que depende de RLS pura.
-
-Vou planejar trocar a atribuição para um fluxo seguro:
-- criar ou reutilizar uma **RPC SECURITY DEFINER** específica para atribuição de ticket
-- validar no backend quem pode atribuir
-- só depois atualizar `assigned_to` / `status`
-
-Assim a lógica de permissão fica centralizada, igual já acontece em transferências com `transfer_ticket_secure`.
-
-### 3. Ajustar a tela para usar o fluxo seguro
-Em vez de:
-- `handleAssignChange()` → `useUpdateTicket()`
-
-ficará:
-- `handleAssignChange()` → hook de atribuição segura (`assign_ticket_secure` ou equivalente)
-
-Isso evita que a UI continue batendo na RLS bruta da tabela para uma ação operacional.
-
-### 4. Manter rastreabilidade
-Depois da atribuição segura:
-- continuar registrando evento em `ticket_events`
-- continuar invalidando queries
-- manter toast de sucesso/erro
-
-## Arquivos/recursos que vou ajustar
-- `src/components/TicketDetails.tsx`
-- `src/hooks/useUpdateTicket.tsx` ou novo hook dedicado para atribuição
-- nova migration SQL para:
-  - criar/atualizar RPC segura de atribuição
-  - opcionalmente aplicar o role operacional ao Luiz, se essa for a regra desejada
-
-## Resultado esperado
-Depois disso:
-- o Luiz conseguirá atribuir tickets **de acordo com a permissão operacional correta**
-- a atribuição deixará de falhar por depender de update direto na tabela
-- a permissão ficará consistente entre tela, backend e regras de negócio
-
-## Detalhe técnico importante
-O print mostra erro na ação de **atribuir** dentro de `TicketDetails`, não na transferência entre departamentos.
-
-Então o ponto principal a corrigir é este:
-
-```text
-TicketDetails
-  -> handleAssignChange
-    -> useUpdateTicket
-      -> update direto em public.tickets
-        -> RLS bloqueia
+REVOKE ALL ON FUNCTION public.assign_ticket_secure(uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.assign_ticket_secure(uuid, uuid) TO authenticated;
 ```
 
-E não apenas a policy de consultor.
+### 2. `src/components/TicketDetails.tsx` — usar RPC na atribuição
 
-## Implementação recomendada
-Minha recomendação é seguir com este pacote:
+Mudar `handleAssignChange` de:
+```ts
+updateTicket.mutate({ id: ticket.id, updates: { assigned_to: ... } });
+```
+Para:
+```ts
+const { data } = await supabase.rpc('assign_ticket_secure', {
+  p_ticket_id: ticket.id,
+  p_assigned_to: userId === 'unassigned' ? null : userId,
+});
+```
 
-1. adicionar um role operacional ao Luiz
-2. mover a atribuição do dropdown para uma RPC segura
-3. manter consultor puro limitado à carteira, sem abrir UPDATE geral para todos os consultores
+Manter toast, invalidação de queries e evento de atribuição após sucesso.
 
-Isso resolve o caso dele sem afrouxar a segurança da tabela `tickets`.
+### Resultado
+- Consultores podem atribuir qualquer ticket visível sem precisar de outro role
+- Segurança mantida via validação de role dentro da RPC
+- Padrão consistente com `transfer_ticket_secure` já existente
+
