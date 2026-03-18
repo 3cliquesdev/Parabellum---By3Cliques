@@ -4587,6 +4587,12 @@ serve(async (req) => {
       // Se o próximo nó é 'message', entregar a mensagem e continuar avançando
       // até encontrar um nó que colete input (ask_*, ai_response, transfer, end)
       const extraMessages: string[] = [];
+      // 🆕 V16 Bug 31: Injetar fallback acumulado do nó AI como primeira extraMessage
+      if (pendingFallbackMsg) {
+        extraMessages.push(pendingFallbackMsg);
+        console.log('[process-chat-flow] ✅ V16: pendingFallbackMsg injetado em extraMessages:', pendingFallbackMsg.substring(0, 80));
+        pendingFallbackMsg = '';
+      }
       
       while (nextNode && (nextNode.type === 'message' || nextNode.type === 'create_ticket' || nextNode.type === 'validate_customer' || nextNode.type === 'fetch_order')) {
         if (nextNode.type === 'create_ticket') {
