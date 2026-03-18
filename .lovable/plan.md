@@ -1,30 +1,33 @@
 
-# Auditoria V8 Comportamental — Correções Aplicadas ✅
+# Auditoria V10 — Correções Aplicadas ✅
 
-## Bugs Corrigidos
+## Fixes V8 (Produção Confirmada)
+| Fix | Status |
+|---|---|
+| Bug 1: Self-blocking loop | ✅ |
+| Bug 2: Greeting double-send | ✅ (causa raiz real corrigida no Bug 7) |
+| Bug 3: {{vars}} vazando | ✅ |
+| Bug 4: Detecção financeira | ✅ |
+| Bug 5: KB sandbox | ✅ |
+| Bug 6: Typo persona | ✅ |
 
-### Bug 1 (CRÍTICO) ✅ — Fallback self-blocking loop
-- **Fix:** Guard `!isSystemGeneratedMessage` no escape check (L9534)
-- **Fix:** Frase do fallback reescrita sem "Posso transferir" (L7551)
+## Fixes V10 (Deploy realizado)
 
-### Bug 2 (CRÍTICO) ✅ — Greeting double-send
-- **Fix:** `isProactiveGreeting` incluído no guard `isSystemGeneratedMessage`
+### Bug 7 ✅ — isProactiveGreeting não pulava LLM
+- **Fix:** `|| isProactiveGreeting` adicionado à condição skipLLMForGreeting (L7443)
 
-### Bug 3 (MODERADO) ✅ — {{conversation_queue}} vazando
-- **Fix:** `replaceVariables()` agora remove variáveis não resolvidas
+### Bug 8 ✅ — Dígitos de menu pós-greeting causavam loop fallback
+- **Fix:** Guard independente para `alreadySentGreeting && isMenuNoise` responde contextualizadamente sem LLM
 
-### Bug 4 (MODERADO) ✅ — Detecção financeira ampla
-- **Fix:** Removidos 'pagamento', 'dinheiro', 'transferência', 'cancelar', 'cancelamento' do `FINANCIAL_BARRIER_KEYWORDS`
+### Bug 9 ✅ — Race condition: mensagens IA duplicadas
+- **Fix:** Dedup check 5s antes de inserir greeting — verifica `is_ai_generated=true` nos últimos 5s
 
-### Bug 5 (MODERADO) ✅ — KB retornando artigos irrelevantes
-- **Fix:** Threshold aumentado de 0.40→0.55 (default) e 0.50→0.55 (RPC)
-- **Fix:** Artigos `sandbox_training` excluídos da busca semântica principal
+### Bug 10 ✅ — Persona "Helper Sistema" com role "elper Sistema"
+- **Fix:** UPDATE direto no banco corrigindo role para "Helper Sistema"
 
-### Bug 6 (MENOR) ✅ — Typo persona
-- **Fix:** Migration corrigiu "Assisntente" → "Assistente"
+### Bug 11 (MENOR) — KB sem cobertura
+- Sem correção de código — recomendação de enriquecer base de conhecimento
 
-## Deploy V9 — Re-deploy Forçado ✅
-- `ai-autopilot-chat` ✅ re-deployed 13:17 UTC
-- `process-chat-flow` ✅ re-deployed 13:17 UTC
-- 0 `contract_violation_blocked` nos 10 min pós-deploy ✅
-- Fixes V8 agora ativos em produção ✅
+## Deploy
+- `ai-autopilot-chat` ✅ re-deployed
+- Persona role ✅ corrigido via UPDATE
