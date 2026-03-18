@@ -152,12 +152,12 @@ Deno.serve(async (req: Request) => {
       if (isManager) return query;
 
       // Operational roles: mimic the existing behavior.
-      if (role === "consultant" || role === "user") {
+      if (role === "user") {
         return query.eq("assigned_to", userId);
       }
 
-      // ✅ MUDANÇA: sales_rep, support_agent, financial_agent veem TODAS as conversas do departamento
-      if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
+      // ✅ MUDANÇA: sales_rep, support_agent, financial_agent, consultant veem TODAS as conversas do departamento
+      if (role === "sales_rep" || role === "support_agent" || role === "financial_agent" || role === "consultant") {
         if (userDepartmentId) {
           return query.or(
             `assigned_to.eq.${userId},department.eq.${userDepartmentId},and(assigned_to.is.null,department.is.null),and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed),and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
@@ -197,14 +197,15 @@ Deno.serve(async (req: Request) => {
         .eq("assigned_to", userId),
       applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
         .neq("status", "closed")
-        .eq("ai_mode", "autopilot"),
+        .in("ai_mode", ["autopilot", "waiting_human"])
+        .is("assigned_to", null),
       applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
         .neq("status", "closed")
-        .neq("ai_mode", "autopilot"),
+        .not("ai_mode", "in", '("autopilot","waiting_human")'),
       applyVisibility(supabaseAdmin.from("conversations").select("id", { count: "exact", head: true }))
         .neq("status", "closed")
         .is("assigned_to", null)
-        .neq("ai_mode", "autopilot"),
+        .not("ai_mode", "in", '("autopilot","waiting_human")'),
     ]);
 
     const totalActive = totalActiveRes.count ?? 0;
