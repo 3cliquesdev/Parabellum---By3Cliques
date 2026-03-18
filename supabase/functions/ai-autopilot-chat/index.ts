@@ -3827,10 +3827,17 @@ serve(async (req) => {
             if (isFinancialCtx && !alreadyAskedAltEmail) {
               console.log('[ai-autopilot-chat] Email nao encontrado em contexto FINANCEIRO - perguntando email alternativo');
               
+              // V6 FIX: Refetch metadata fresco
+              const { data: freshConvAltEmail } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshMetaAltEmail = (freshConvAltEmail?.customer_metadata || {}) as Record<string, any>;
               await supabaseClient.from('conversations')
                 .update({
                   customer_metadata: {
-                    ...(conversation.customer_metadata || {}),
+                    ...freshMetaAltEmail,
                     asked_alternative_email: true,
                     first_email_checked: emailInMessage.toLowerCase().trim()
                   }
