@@ -138,11 +138,25 @@ export function TicketDetails({ ticket }: TicketDetailsProps) {
     });
   };
 
-  const handleAssignChange = (userId: string) => {
-    updateTicket.mutate({
-      id: ticket.id,
-      updates: { assigned_to: userId === 'unassigned' ? null : userId },
-    });
+  const handleAssignChange = async (userId: string) => {
+    const assignTo = userId === 'unassigned' ? null : userId;
+    try {
+      const { data, error } = await supabase.rpc('assign_ticket_secure', {
+        p_ticket_id: ticket.id,
+        p_assigned_to: assignTo,
+      });
+      if (error) throw error;
+      const result = data as { success: boolean; error?: string } | null;
+      if (!result?.success) {
+        throw new Error(result?.error || 'Erro ao atribuir ticket');
+      }
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      queryClient.invalidateQueries({ queryKey: ["ticket", ticket.id] });
+      queryClient.invalidateQueries({ queryKey: ["ticket-counts"] });
+      toast({ title: "Ticket atribuído com sucesso" });
+    } catch (err: any) {
+      toast({ title: "Erro ao atribuir ticket", description: err.message, variant: "destructive" });
+    }
   };
 
   const handleAttachmentsChange = (newAttachments: any[]) => {
