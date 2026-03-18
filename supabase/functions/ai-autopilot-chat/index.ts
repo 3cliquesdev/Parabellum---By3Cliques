@@ -6033,9 +6033,9 @@ Posso ajudar em mais alguma coisa?`;
       can_show_financial_data: hasRecentOTPVerification && isRealCustomer
     });
 
-    // 🔒 BARREIRA OTP: APENAS para SAQUE DE SALDO sem verificação OTP recente
-    // Reembolsos e cancelamentos NÃO ativam barreira OTP
-    const financialBarrierActive = isWithdrawalRequest && !hasRecentOTPVerification;
+    // 🔒 BARREIRA OTP: Para AÇÕES FINANCEIRAS que geram ticket (saque + reembolso/estorno)
+    // Dúvidas informativas NÃO ativam barreira OTP
+    const financialBarrierActive = isFinancialActionRequest && !hasRecentOTPVerification;
 
     console.log('[ai-autopilot-chat] 🔒 FINANCIAL BARRIER CHECK:', {
       financialBarrierActive,
