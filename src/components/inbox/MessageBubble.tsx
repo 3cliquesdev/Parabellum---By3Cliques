@@ -47,6 +47,7 @@ interface MessageBubbleProps {
   className?: string;
   onRetryMessage?: () => void;
   isRetrying?: boolean;
+  metadata?: Record<string, any> | null;
 }
 
 // Pure function — no per-bubble interval. Parent passes _tick to force re-render.
