@@ -164,6 +164,7 @@ export function MessagesWithMedia({
   messagesEndRef,
   _tick,
 }: MessagesWithMediaProps) {
+  const retryMutation = useRetryMessage();
   // Extrair todos os attachments prontos de todas as mensagens
   const allAttachments = useMemo(() => {
     const attachments: Array<{
