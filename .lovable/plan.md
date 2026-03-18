@@ -1,9 +1,9 @@
 
 
-# Redeploy `ai-autopilot-chat` — Saudação com Role da Persona
+# Redeploy `ai-autopilot-chat` — Fix Saudação Proativa
 
 ## Ação
-Deploy da Edge Function `ai-autopilot-chat` com o commit `feat(ai): incluir role da persona na saudação proativa`, que adiciona o campo `persona.role` na mensagem de saudação para informar o cliente sobre as capacidades da IA.
+Deploy da Edge Function `ai-autopilot-chat` com os 3 bug fixes: duplicidade de nome/role, extração de especialidade quando `assunto` está vazio, e envio ao WhatsApp Meta.
 
 ## Passo único
 - Deploy da função `ai-autopilot-chat` via ferramenta de deploy de Edge Functions.
