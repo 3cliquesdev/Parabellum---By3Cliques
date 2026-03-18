@@ -3738,12 +3738,19 @@ serve(async (req) => {
               console.log('[ai-autopilot-chat] 🎯 CONSULTANT REDIRECT: Cliente tem consultor, redirecionando direto:', consultantId);
               
               // Atribuir conversa ao consultor em modo copilot
+              // V6 FIX: Refetch metadata fresco para consultant redirect
+              const { data: freshConvConsult } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshMetaConsult = (freshConvConsult?.customer_metadata || {}) as Record<string, any>;
               await supabaseClient.from('conversations')
                 .update({
                   assigned_to: consultantId,
                   ai_mode: 'copilot',
                   customer_metadata: {
-                    ...(conversation.customer_metadata || {}),
+                    ...freshMetaConsult,
                     email_verified_at: new Date().toISOString(),
                     consultant_redirect: true,
                     consultant_redirect_at: new Date().toISOString()
