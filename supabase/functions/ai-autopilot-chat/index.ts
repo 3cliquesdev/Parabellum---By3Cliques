@@ -7351,9 +7351,15 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         status: 'sending',
         channel: responseChannel,
       });
-      // 🆕 FIX Resíduo 2: Salvar flag de saudação no metadata para impedir loops
+      // 🆕 V5-D: Refetch metadata fresco antes de salvar greeting flag
       try {
-        const updatedMeta = { ...(customerMetadata as any || {}), [greetingFlagKey]: true };
+        const { data: freshGreetConv } = await supabaseClient
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const freshGreetMeta = (freshGreetConv?.customer_metadata || {}) as Record<string, any>;
+        const updatedMeta = { ...freshGreetMeta, [greetingFlagKey]: true };
         await supabaseClient.from('conversations').update({ customer_metadata: updatedMeta }).eq('id', conversationId);
         console.log(`[ai-autopilot-chat] 🏷️ Flag ${greetingFlagKey} salva no metadata`);
       } catch (flagErr: any) {
