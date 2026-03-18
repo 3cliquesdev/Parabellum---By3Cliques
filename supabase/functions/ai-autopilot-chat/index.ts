@@ -6103,7 +6103,6 @@ Posso ajudar em mais alguma coisa?`;
       is_6_digit_code: isOTPCode,
       has_awaiting_otp_flag: hasAwaitingOTP,
       has_recent_otp_pending: hasRecentOTPPending,
-      has_first_contact_otp: hasFirstContactOTPPending,
       will_validate: shouldValidateOTP,
       code_preview: otpDigitsOnly.substring(0, 3) + '***'
     });
