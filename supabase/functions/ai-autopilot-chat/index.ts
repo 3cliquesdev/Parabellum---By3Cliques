@@ -1635,8 +1635,10 @@ serve(async (req) => {
       console.log('[ai-autopilot-chat] 🔒 DESAMBIGUAÇÃO CONSULTOR: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
     }
     
-    // Só bloquear AÇÁ•ES financeiras. Info passa para LLM responder via KB. Ambíguo â†’ IA pergunta.
-    if (ragConfig.blockFinancial && flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && isFinancialAction && !isFinancialInfo) {
+    // Só bloquear AÇÕES financeiras. Info passa para LLM responder via KB. Ambíguo → IA pergunta.
+    // ✅ V16.1 Bug 33: Bypass quando OTP já verificado — permitir coleta de dados pós-OTP
+    const otpAlreadyVerified = !!(flow_context?.otpVerified);
+    if (ragConfig.blockFinancial && flowForbidFinancial && !otpAlreadyVerified && customerMessage && customerMessage.trim().length > 0 && isFinancialAction && !isFinancialInfo) {
       console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
       const fixedMessage = 'Entendi sua solicitação. Vou te encaminhar para o setor financeiro que poderá te ajudar com isso.';
@@ -6716,7 +6718,8 @@ REGRA: Tente resolver sozinha. Se não conseguir e o cliente pedir humano, use r
     ) : '';
 
     // 🔒 TRAVA FINANCEIRA: Injetar instruções diretamente no prompt da LLM
-    const financialGuardInstruction = flowForbidFinancial ? `
+    // ✅ V16.1 Bug 34: Desativar guard financeiro no prompt quando OTP já verificado (evita contradição com otpVerifiedInstruction)
+    const financialGuardInstruction = (flowForbidFinancial && !flow_context?.otpVerified) ? `
 
 🔒 TRAVA FINANCEIRA ATIVA — REGRAS OBRIGATÓRIAS:
 - Responda perguntas INFORMATIVAS sobre finanças usando APENAS dados da base de conhecimento.

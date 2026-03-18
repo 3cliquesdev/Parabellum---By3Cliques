@@ -1,79 +1,132 @@
+# Auditoria V14 — Correções Aplicadas ✅
 
+## Fixes V13 (anteriores)
+| Fix | Status |
+|---|---|
+| Bug 1: Self-blocking loop | ✅ |
+| Bug 2: Greeting double-send | ✅ (causa raiz real corrigida no Bug 7) |
+| Bug 3: {{vars}} vazando | ✅ |
+| Bug 4: Detecção financeira | ✅ |
+| Bug 5: KB sandbox | ✅ |
+| Bug 6: Typo persona | ✅ |
 
-# Auditoria V16 — Conflitos Lógicos Detectados
+## Fixes V10 (Deploy realizado)
 
-## Bug 33 (CRÍTICO): Trava Financeira ENTRADA bloqueia coleta pós-OTP
+### Bug 7 ✅ — isProactiveGreeting não pulava LLM
+### Bug 8 ✅ — Dígitos de menu pós-greeting causavam loop fallback
+### Bug 9 ✅ — Race condition: mensagens IA duplicadas
+### Bug 10 ✅ — Persona "Helper Sistema" com role "elper Sistema"
+### Bug 11 (MENOR) — KB sem cobertura (recomendação manual)
 
-**Localização:** `ai-autopilot-chat/index.ts` L1639-1723
+## Fixes V11 (Deploy realizado)
 
-**Conflito:** Após OTP verificado, quando o cliente diz "quero sacar meu dinheiro", a sequência de execução é:
+### Bug 12 ✅ — Cliente aceita transferência e IA ignora
+### Bug 13 ✅ — Contador anti-loop reseta entre nós
+### Bug 14 ✅ — Greeting enviado DEPOIS de fallback
+### Bug 15 ✅ — Build timestamp para rastreabilidade
 
-1. L1569: `flowForbidFinancial = true` (flag do nó financeiro)
-2. L1639: `if (flowForbidFinancial && isFinancialAction && !isFinancialInfo)` → **TRUE**
-3. L1700: Return imediato com `financialBlocked: true, exitKeywordDetected: true`
-4. **A LLM NUNCA É CHAMADA** → a instrução `otpVerifiedInstruction` (L6737) nunca executa
+## Fixes V12 (Deploy realizado)
 
-O bloco de interceptação na ENTRADA (L1639) **NÃO verifica** se o OTP já foi validado (`hasRecentOTPVerification`). Ele bloqueia TODA ação financeira quando `forbidFinancial=true`, mesmo que o cliente já tenha passado pelo OTP. Resultado: o `process-chat-flow` recebe `exitKeywordDetected=true` e avança para o escape node em vez de permitir a coleta de dados.
+### Bug 16 ✅ — Regex de transferência incompleta
+### Bug 17 ✅ — Afirmativo "Sim" com pontuação não detectado
+### Bug 18 ✅ — Deploy forçado para ativar V8-V12
 
-**Fix:** Adicionar bypass na trava financeira de entrada quando `hasRecentOTPVerification === true`:
+## Fixes V13 (Deploy realizado)
 
-```typescript
-// L1639 — Adicionar && !hasRecentOTPVerification
-if (ragConfig.blockFinancial && flowForbidFinancial && !hasRecentOTPVerification && customerMessage && ...)
-```
+### Bug 20+21 ✅ — flowExit de Transfer Intent re-invoca flow → mensagens duplicadas + handoff não executa
+- **Fix:** Guard PRÉ-flowExit nos dois webhooks (`meta-whatsapp-webhook` e `handle-whatsapp-event`)
+- Quando `reason === 'customer_transfer_intent'` ou `reason === 'global_anti_loop_handoff'`:
+  - **Pula** re-invocação do `process-chat-flow` (elimina mensagens duplicadas)
+  - Executa handoff **direto**: `ai_mode = 'waiting_human'`, `assigned_to = null`
+  - Chama `route-conversation` para dispatch imediato
+- Resultado: Cliente recebe apenas "Vou te transferir agora" e é transferido em < 5s
 
-Isso permite que, após OTP verificado, a mensagem financeira chegue à LLM onde o `otpVerifiedInstruction` instrui a coleta de dados.
+### Bug 22 ✅ — Global anti-loop counter sem diagnóstico
+- **Fix:** Telemetria adicionada no bloco L9326 do `ai-autopilot-chat`:
+  - Log: `🔢 V13 Bug 22: Global counter — isFallback=X, current=Y, new=Z, nodeId=N`
+- Permite monitorar se `isFallbackResponse` está sendo setado e se o counter incrementa
 
----
+## Deploy
+- `ai-autopilot-chat` ✅ re-deployed V13
+- `meta-whatsapp-webhook` ✅ re-deployed V13
+- `handle-whatsapp-event` ✅ re-deployed V13
 
-## Bug 34 (MODERADO): `financialGuardInstruction` contradiz `otpVerifiedInstruction`
+## Fixes V14 (Deploy realizado)
 
-**Localização:** `ai-autopilot-chat/index.ts` L6834
+### Bug 24 ✅ — RLS do `inbox_view` sem cláusula AI queue global
+- **Fix:** Migration recriou policy `optimized_inbox_select` com cláusula adicional:
+  - `ai_mode IN ('autopilot','waiting_human') AND status<>'closed' AND assigned_to IS NULL`
+  - Permite todos os roles internos verem fila IA independente de departamento
 
-**Conflito:** No prompt assembly (L6834), ambas as instruções são injetadas simultaneamente:
-- `otpVerifiedInstruction`: "NÃO emita [[FLOW_EXIT]]. Permaneça no nó e COLETE dados."
-- `financialGuardInstruction`: "Se o cliente pedir ação financeira → [[FLOW_EXIT:financeiro]]"
+### Bug 25 ✅ — Client-side filter `useInboxView` restringia por departamento
+- **Fix:** Expandido `.or()` nos 2 blocos de query (main + chunked) para incluir:
+  - `and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed)`
+  - `and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
+- Realtime `shouldShow` atualizado com `isAIQueueGlobal`
 
-Se o Bug 33 for corrigido e a mensagem chegar à LLM, a IA recebe instruções **contraditórias**: uma diz para ficar e coletar, outra diz para sair imediatamente.
+### Bug 26 ✅ — `get-inbox-counts` `applyVisibility` restringia fila IA
+- **Fix:** Expandido `.or()` no `applyVisibility` com mesmas cláusulas AI queue
+- Edge function redeployada
 
-**Fix:** Desativar `financialGuardInstruction` quando `otpVerified === true`:
+## Deploy V14
+- Migration RLS ✅
+- `useInboxView.tsx` ✅ (3 blocos corrigidos)
+- `get-inbox-counts` ✅ re-deployed
 
-```typescript
-const financialGuardInstruction = (flowForbidFinancial && !flow_context?.otpVerified) ? `...` : '';
-```
+## Fixes V15 (Deploy realizado)
 
----
+### Bug 27 ✅ — Telemetria skipInitialMessage no webhook Meta
+- **Fix:** Logs estruturados com conversationId, contactId, nodeId, flowId, timestamp e originalMessage
+- Permite diagnosticar se `skipInitialMessage` é propagado na primeira transição menu → AI node
 
-## Bug 35 (MENOR): `smart_collection_enabled` e `smart_collection_fields` não existem no código
+### Bug 28+30 ✅ — Nó financeiro sem edges de intenção cruzada
+- **Fix:** Atualizado `flow_definition` do fluxo `cafe2831` (V5 Enterprise):
+  - Adicionado edge `cancelamento`: `node_ia_financeiro` → `node_ia_cancelamento`
+  - Adicionado edge `saque`: `node_ia_financeiro` → `node_escape_financeiro`
+  - Setado `forbid_cancellation: true` e `forbid_commercial: true` no `node_ia_financeiro`
 
-**Localização:** Nenhuma referência encontrada no codebase
+### Bug 29 ✅ — OTP alucinado pela LLM dentro de fluxos ativos
+- **Fix 1:** Removido guard `!flow_context` em L6421 do `ai-autopilot-chat`
+  - OTP agora funciona como camada transversal de segurança, independente do fluxo ativo
+- **Fix 2:** Adicionada regra anti-alucinação OTP no `generateRestrictedPrompt`
+  - LLM proibida de prometer envio de códigos, OTP ou verificação por email
 
-**Problema:** O plano V16 mencionou habilitar `smart_collection_enabled: true` e `smart_collection_fields` no flow_definition, mas **nenhum código** no `ai-autopilot-chat` ou `process-chat-flow` lê essas flags. A instrução de coleta depende exclusivamente do `otpVerifiedInstruction` no prompt — o que é uma boa abordagem, mas as flags no DB são inúteis sem código que as consuma.
+## Deploy V15
+- `ai-autopilot-chat` ✅ re-deployed
+- `meta-whatsapp-webhook` ✅ re-deployed
+- Flow `cafe2831` ✅ atualizado (edges + flags)
 
-**Fix:** Não é blocker — a instrução via prompt é suficiente. Remover as flags do DB para evitar confusão, ou implementar leitura futura.
+## Fixes V16 (Deploy realizado)
 
----
+### Bug 31 ✅ — Escape Node enviado SEM opções (fallback separado)
+- **Fix:** Removido DB insert direto do fallback_message no `process-chat-flow` (L3697)
+- Fallback agora acumulado como `pendingFallbackMsg` e injetado no `extraMessages` (L4598)
+- Resultado: Caller recebe UMA resposta combinada: "Não consegui resolver...\n\nO que prefere fazer?\n\n1️⃣ Voltar\n2️⃣ Atendente"
 
-## Bug 36 (MODERADO): `create_ticket` hard guard bloqueia tickets financeiros mesmo pós-OTP parcialmente
+### Bug 32 ✅ — Pós-OTP não coletou dados financeiros (FLOW_EXIT prematuro)
+- **Fix 1:** Expandido `otpVerifiedInstruction` no `ai-autopilot-chat` com regras de coleta pós-OTP
+  - IA instruída a COLETAR campos (pix_key, bank, reason, amount) ao invés de buscar KB
+  - Proibida de emitir `[[FLOW_EXIT]]` até coletar todos os campos
+- **Fix 2:** Atualizado `objective` do `node_ia_financeiro` no fluxo `cafe2831` com FASE 1 (pré-OTP) e FASE 2 (pós-OTP coleta)
+- **Fix 3:** Habilitado `smart_collection_enabled: true` e `smart_collection_fields: [pix_key, bank, reason, amount]`
 
-**Localização:** `ai-autopilot-chat/index.ts` L8309
+## Deploy V16
+- `process-chat-flow` ✅ re-deployed
+- `ai-autopilot-chat` ✅ re-deployed
+- Flow `cafe2831` ✅ atualizado (objective + smart_collection)
 
-**Status:** Já tem bypass: `!flow_context?.otpVerified` — ou seja, se `otpVerified=true`, o ticket passa. ✅ OK, sem conflito aqui.
+## Fixes V16.1 (Deploy realizado)
 
----
+### Bug 33 ✅ — Trava financeira ENTRADA bloqueia coleta pós-OTP
+- **Fix:** Adicionado `!otpAlreadyVerified` (derivado de `flow_context?.otpVerified`) na condição L1639
+- Quando OTP já verificado, mensagem financeira bypassa o guard e chega à LLM para coleta de dados
 
-## Plano de Correção
+### Bug 34 ✅ — `financialGuardInstruction` contradiz `otpVerifiedInstruction` no prompt
+- **Fix:** Condicionado `financialGuardInstruction` a `!flow_context?.otpVerified` (L6721)
+- Quando OTP verificado, apenas `otpVerifiedInstruction` é injetado (coleta de dados), sem contradição
 
-### Prioridade 1 — Bug 33: Bypass da trava financeira pós-OTP
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts` L1639
-- Adicionar `&& !hasRecentOTPVerification` na condição do if
+### Bug 35 (MENOR) — Flags `smart_collection_*` sem código consumidor
+- Sem impacto funcional — instrução via prompt é suficiente
 
-### Prioridade 2 — Bug 34: Desativar guard financeiro no prompt pós-OTP
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts` L6719
-- Condicionar `financialGuardInstruction` a `!flow_context?.otpVerified`
-
-### Prioridade 3 — Bug 35: Cleanup das flags inúteis (opcional)
-- Sem impacto funcional, pode ser feito depois
-
-### Resumo: 1 arquivo, 2 edições cirúrgicas
-
+## Deploy V16.1
+- `ai-autopilot-chat` ✅ re-deployed
