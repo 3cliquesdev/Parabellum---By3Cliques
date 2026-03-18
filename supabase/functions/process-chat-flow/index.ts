@@ -2511,6 +2511,7 @@ serve(async (req) => {
                       forbidSupport: resolvedNode.data?.forbid_support ?? false,
                       forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
                       ticketConfig: resolvedNode.data?.ticket_config || null,
+                      otpVerified: collectedData?.__ai_otp_verified === true,
                     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                   }
 
