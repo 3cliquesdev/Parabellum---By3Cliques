@@ -140,3 +140,20 @@
 
 ## Deploy V16.2
 - `process-chat-flow` ✅ re-deployed
+
+## Fixes V16.3 (Deploy realizado)
+
+### Bug 37 ✅ — `useCanTakeControl` bloqueava agente em conversa self-assigned
+- **Fix:** Adicionado bypass `assignedTo === user.id` antes do check de departamento
+
+### Bug 38 ✅ — `handle-whatsapp-event` NÃO implementa `skipInitialMessage`
+- **Fix 1:** Adicionado check `flowResult.skipInitialMessage === true` no L1314
+  - Quando ativo, `effectiveMessage = ""` → IA recebe mensagem vazia → saudação proativa
+  - Adicionado `kbProductFilter` ao flow_context
+- **Fix 2:** Expandido response `ask_options → ai_response` no `process-chat-flow` L2932
+  - Adicionados 14 campos ausentes: `personaId`, `kbProductFilter`, `kbCategories`, `objective`, `fallbackMessage`, `maxSentences`, `forbidQuestions`, `forbidOptions`, `forbidFinancial`, `forbidCommercial`, `forbidCancellation`, `forbidSupport`, `forbidConsultant`, `allowedSources`
+  - Alinhado com retorno de `intent-routing → ai_response` (L4556-4587)
+
+## Deploy V16.3
+- `handle-whatsapp-event` ✅ re-deployed
+- `process-chat-flow` ✅ re-deployed
