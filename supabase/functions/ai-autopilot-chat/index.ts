@@ -7266,7 +7266,11 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     let skipLLMForGreeting = false;
     // Não disparar saudação quando OTP já foi verificado (cliente aguarda resposta à solicitação)
     const skipGreetingForOtp = flow_context?.otpVerified === true;
-    if (flow_context && !skipGreetingForOtp && (isFirstNodeInteraction || isMenuNoise)) {
+    // 🆕 FIX Resíduo 2: Guard de saudação por nó — verificar flag no metadata antes de enviar
+    const currentNodeId = flow_context?.node_id || flow_context?.collectedData?.__ai?.ai_node_current_id || 'unknown';
+    const greetingFlagKey = `greeting_sent_node_${currentNodeId}`;
+    const alreadySentGreeting = !!(customerMetadata as any)?.[greetingFlagKey];
+    if (flow_context && !skipGreetingForOtp && !alreadySentGreeting && (isFirstNodeInteraction || isMenuNoise)) {
       const personaGreetName = persona?.name || 'nossa equipe';
       const personaRole = (persona as any)?.role || '';
       // NÃO usar flow_context.objective — contém instruções internas do sistema
