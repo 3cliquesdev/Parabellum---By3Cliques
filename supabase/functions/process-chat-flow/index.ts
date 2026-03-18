@@ -2067,6 +2067,7 @@ serve(async (req) => {
                   return new Response(JSON.stringify({
                     useAI: true,
                     aiNodeActive: true,
+                    skipInitialMessage: true, // 🆕 FIX: OTP not-customer → ai_response
                     nodeId: resolvedNode.id,
                     response: notCustomerMsg || '',
                     flowId: activeState.flow_id,
