@@ -7212,10 +7212,22 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       const greetProduto = (flow_context.collectedData?.produto || flow_context.collectedData?.Produto || '') as string;
       const greetDepartment = (flow_context.collectedData?.assunto || flow_context.collectedData?.Assunto || '') as string;
       let greetingMsg = 'Olá! Sou ' + personaGreetName;
-      if (personaRole) greetingMsg += ', ' + personaRole;
+      // Bug fix 1: só incluir role se for diferente do nome
+      if (personaRole && personaRole.toLowerCase() !== personaGreetName.toLowerCase()) {
+        greetingMsg += ', ' + personaRole;
+      }
       if (greetProduto) greetingMsg += ' do ' + greetProduto;
       greetingMsg += '.';
-      if (greetDepartment) greetingMsg += ' Vou te ajudar com ' + greetDepartment + '.';
+      // Bug fix 2: se não há departamento coletado, extrair especialidade do nome/role da persona
+      if (greetDepartment) {
+        greetingMsg += ' Vou te ajudar com ' + greetDepartment + '.';
+      } else {
+        const specialtyMatch = personaGreetName.match(/helper\s+(.+)/i)
+          || personaRole.match(/helper\s+(.+)/i);
+        if (specialtyMatch) {
+          greetingMsg += ' Posso te ajudar com ' + specialtyMatch[1].toLowerCase() + '.';
+        }
+      }
       greetingMsg += ' Como posso te ajudar? 😊';
       skipLLMForGreeting = true;
       console.log('[ai-autopilot-chat] Saudação proativa enviada, pulando LLM');
@@ -7232,7 +7244,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         status: 'sending',
         channel: responseChannel,
       });
-      if (!greetSaveErr && responseChannel === 'whatsapp') {
+      // Bug fix 3: incluir whatsapp_meta (canal real das conversas Meta)
+      if (!greetSaveErr && (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta')) {
         await supabaseClient.functions.invoke('send-meta-whatsapp', {
           body: { conversationId, message: assistantMessageGreeting, contactPhone: contact.phone }
         }).catch((e: any) => console.warn('[ai-autopilot-chat] Falha ao enviar saudação proativa:', e));
