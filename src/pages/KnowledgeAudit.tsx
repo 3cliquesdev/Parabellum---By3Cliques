@@ -13,7 +13,7 @@ import {
   useKnowledgeAuditArticles,
   useDistinctProductTags,
   usePersonaCategories,
-  useKnowledgeCategories,
+  
   getArticleIssues,
   type AuditArticle,
   type AuditIssue,
