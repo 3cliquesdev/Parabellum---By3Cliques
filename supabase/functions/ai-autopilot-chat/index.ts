@@ -9549,6 +9549,8 @@ Conversa: ${conversationId}`;
         const messageWasEmptied = !cleanedMessage || cleanedMessage.length < 5;
         if (messageWasEmptied) {
           cleanedMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
+          isFallbackResponse = true; // 🆕 FIX CRITICAL: Marcar como fallback quando strip esvazia a mensagem
+          console.log('[ai-autopilot-chat] 🚨 Strip esvaziou mensagem → isFallbackResponse=true');
         }
         
         if (cleanedMessage !== assistantMessage) {
