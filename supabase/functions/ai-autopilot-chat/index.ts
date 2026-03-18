@@ -8927,8 +8927,9 @@ Conversa: ${conversationId}`;
       }
     }
 
-    // 🆕 FIX LOOP: Anti-loop counter - máximo 5 fallbacks consecutivos no mesmo nó AI
-    if (!isFallbackResponse && flow_context) {
+    // 🆕 FIX BUG 2/3: Anti-loop counter - máximo 2 fallbacks/violations consecutivos no mesmo nó AI
+    // Threshold reduzido de 5 para 2 — após 2 tentativas sem sucesso, forçar handoff obrigatório
+    if (flow_context) {
       const existingMetadata = conversation.customer_metadata || {};
       const aiNodeFallbackCount = existingMetadata.ai_node_fallback_count || 0;
       const aiNodeId = existingMetadata.ai_node_current_id || null;
@@ -8936,19 +8937,19 @@ Conversa: ${conversationId}`;
       // Se mudou de nó, resetar contador
       if (aiNodeId !== flow_context.node_id) {
         // Novo nó, resetar
-      } else if (aiNodeFallbackCount >= 5) {
-        console.log('[ai-autopilot-chat] 🚨 ANTI-LOOP: Máximo de 5 fallbacks atingido no nó AI â†’ forçando flow_advance_needed', {
+      } else if (aiNodeFallbackCount >= 2) {
+        console.log('[ai-autopilot-chat] 🚨 ANTI-LOOP: 2+ fallbacks/violations no nó AI → forçando flowExit com handoff OBRIGATÓRIO', {
           node_id: flow_context.node_id,
           fallback_count: aiNodeFallbackCount
         });
-        // 📊 FIX 4: Telemetria anti-alucinação â€” Anti-loop
+        // 📊 Telemetria anti-alucinação — Anti-loop
         console.log(JSON.stringify({
           event: 'ai_decision',
           conversation_id: conversationId,
           reason: 'anti_loop_max_fallbacks',
           score: 0,
           hasFlowContext: true,
-          exitType: 'flow_advance_needed',
+          exitType: 'flowExit_handoff',
           fallback_used: true,
           articles_found: 0,
           timestamp: new Date().toISOString()
@@ -8959,9 +8960,25 @@ Conversa: ${conversationId}`;
           event_type: 'ai_decision_anti_loop_max_fallbacks',
           model: 'system',
           score: 0,
-          output_json: { reason: 'anti_loop_max_fallbacks', exitType: 'flow_advance_needed', fallback_used: true, articles_found: 0, hasFlowContext: true },
+          output_json: { reason: 'anti_loop_max_fallbacks', exitType: 'flowExit_handoff', fallback_used: true, articles_found: 0, hasFlowContext: true, fallback_count: aiNodeFallbackCount },
         })).catch(() => {});
-        isFallbackResponse = true;
+        
+        // 🆕 FIX BUG 3: Forçar flowExit com handoff OBRIGATÓRIO — não ficar em loop
+        // Resetar contador para evitar loop infinito caso o webhook não processe
+        await supabaseClient.from('conversations').update({
+          customer_metadata: { ...existingMetadata, ai_node_fallback_count: 0 }
+        }).eq('id', conversationId);
+        
+        return new Response(JSON.stringify({
+          flowExit: true,
+          reason: 'anti_loop_max_fallbacks_handoff',
+          hasFlowContext: true,
+          response: 'Percebi que não estou conseguindo te ajudar adequadamente. Vou te transferir para um atendente que poderá resolver isso. Um momento! 🙏',
+          message: 'Percebi que não estou conseguindo te ajudar adequadamente. Vou te transferir para um atendente que poderá resolver isso. Um momento! 🙏',
+          flow_context: { flow_id: flow_context.flow_id, node_id: flow_context.node_id }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
     }
 
