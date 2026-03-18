@@ -81,6 +81,22 @@ serve(async (req) => {
           .maybeSingle();
 
         if (!job && orphan.department) {
+          // 🆕 FIX: Cooldown de 30min — evitar loop infinito de reconciliação
+          // Se já existe job completed nos últimos 30min, não recriar
+          const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+          const { data: recentCompleted } = await supabase
+            .from('conversation_dispatch_jobs')
+            .select('id')
+            .eq('conversation_id', orphan.id)
+            .eq('status', 'completed')
+            .gte('updated_at', thirtyMinAgo)
+            .maybeSingle();
+
+          if (recentCompleted) {
+            console.log(`[RECONCILE] ⏳ Cooldown: conversation ${orphan.id.substring(0, 8)} has recent completed job, skipping`);
+            continue;
+          }
+
           await supabase.from('conversation_dispatch_jobs').insert({
             conversation_id: orphan.id,
             department_id: orphan.department,
