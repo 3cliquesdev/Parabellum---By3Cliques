@@ -5830,6 +5830,8 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // 2. REEMBOLSO DE PEDIDO - Exige OTP (acao que gera ticket)
     // 3. CANCELAMENTO DE ASSINATURA - Sem OTP (processo Kiwify)
     // Duvidas informativas - SEM OTP, IA responde normalmente
+    
+    const isFinancialRequest = FINANCIAL_BARRIER_KEYWORDS.some(keyword =>
       customerMessage.toLowerCase().includes(keyword)
     );
     
