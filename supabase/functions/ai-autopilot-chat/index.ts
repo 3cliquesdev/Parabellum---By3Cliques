@@ -6313,8 +6313,10 @@ Digite **"reenviar"** se precisar de um novo código.`;
       
       const maskedEmail = maskEmail(contactEmail);
       
-      console.log('[ai-autopilot-chat] 🔒 OTP SAQUE - Solicitação de saque detectada:', {
-        is_withdrawal_request: isWithdrawalRequest,
+      console.log('[ai-autopilot-chat] 🔒 OTP FINANCEIRO - Ação financeira detectada:', {
+        is_financial_action: isFinancialActionRequest,
+        is_withdrawal: isWithdrawalRequest,
+        is_refund: isRefundRequest,
         has_recent_otp: hasRecentOTPVerification,
         contact_email: maskedEmail,
         message_preview: customerMessage.substring(0, 50)
