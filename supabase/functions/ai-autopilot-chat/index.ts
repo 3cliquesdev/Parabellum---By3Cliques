@@ -7522,13 +7522,19 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
             if (searchError || !existingCustomer) {
               console.log('[ai-autopilot-chat] ❌ FASE 2: Email não encontrado - Perguntando confirma��o');
               
-              // Salvar email pendente para confirmação na metadata da conversa
-              const currentMetadata = conversation.customer_metadata || {};
+              // Refetch metadata fresco para não sobrescrever updates incrementais
+              const { data: freshEmailConvA } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshEmailMetaA = (freshEmailConvA?.customer_metadata || {}) as Record<string, any>;
+              
               await supabaseClient
                 .from('conversations')
                 .update({ 
                   customer_metadata: { 
-                    ...currentMetadata,
+                    ...freshEmailMetaA,
                     pending_email_confirmation: emailInformado,
                     pending_email_timestamp: new Date().toISOString()
                   }
