@@ -4549,6 +4549,7 @@ serve(async (req) => {
           JSON.stringify({
             useAI: true,
             aiNodeActive: true,
+            skipInitialMessage: true, // 🆕 FIX: intent-routing → ai_response — não enviar dígito de menu ao autopilot
             nodeId: nextNode.id,
             flowId: activeState.flow_id,
             flowName: activeState.chat_flows?.name || null,
