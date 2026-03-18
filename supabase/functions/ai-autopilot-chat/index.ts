@@ -7525,6 +7525,74 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // 🆕 V11 FIX Bug 12: Detecção PRÉ-LLM de intenção de transferência do cliente
+    const CUSTOMER_TRANSFER_INTENT = /\b(me\s+transfere|transfere\s+pra|me\s+conecte|falar\s+com\s+(atendente|humano|pessoa|algu[eé]m)|quero\s+(um\s+)?(atendente|humano)|passa\s+pra\s+(um\s+)?(atendente|humano)|chama\s+(um\s+)?(atendente|humano))\b/i;
+    const CUSTOMER_AFFIRM_TRANSFER = /^(sim|quero|pode|por\s+favor|pode\s+ser|claro|ok|quero\s+sim|sim\s+quero|sim\s+por\s+favor)[\s!.,]*$/i;
+    const customerMsgTrimmed = customerMessage.trim();
+    const hasTransferIntent = CUSTOMER_TRANSFER_INTENT.test(customerMsgTrimmed);
+    const hasAffirmTransfer = CUSTOMER_AFFIRM_TRANSFER.test(customerMsgTrimmed);
+
+    if (hasTransferIntent || hasAffirmTransfer) {
+      // Verificar se houve fallback recente (últimos 120s) para confirmar contexto de transferência
+      const { data: recentFallbacks } = await supabaseClient
+        .from('messages')
+        .select('id, content')
+        .eq('conversation_id', conversationId)
+        .eq('is_ai_generated', true)
+        .gte('created_at', new Date(Date.now() - 120000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      const hasFallbackContext = (recentFallbacks || []).length >= 1;
+      // Para intent explícito ("me transfere"), sempre executar. Para afirmativo ("sim"), só com contexto.
+      if (hasTransferIntent || (hasAffirmTransfer && hasFallbackContext)) {
+        console.log(`[ai-autopilot-chat] 🎯 V11 Bug 12: Intenção de transferência detectada PRÉ-LLM: "${customerMsgTrimmed}" (intent=${hasTransferIntent}, affirm=${hasAffirmTransfer}, fallbackContext=${hasFallbackContext})`);
+        // Telemetria
+        Promise.resolve(supabaseClient.from('ai_events').insert({
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          event_type: 'customer_transfer_intent_detected',
+          model: 'system',
+          score: 0,
+          output_json: { message: customerMsgTrimmed, hasTransferIntent, hasAffirmTransfer, hasFallbackContext },
+        })).catch(() => {});
+
+        const transferMsg = 'Entendido! Vou te transferir agora para um atendente. Um momento, por favor! 🙏';
+        // Salvar mensagem
+        await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: transferMsg,
+          sender_type: 'user',
+          message_type: 'ai_response',
+          is_ai_generated: true,
+          sender_id: null,
+          status: 'sending',
+          channel: responseChannel,
+        });
+        if (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta') {
+          try {
+            const whatsappResult = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, conversation.whatsapp_instance_id, conversation);
+            if (whatsappResult && whatsappResult.provider === 'meta') {
+              const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+              await supabaseClient.functions.invoke('send-meta-whatsapp', {
+                body: { instance_id: whatsappResult.instance.id, phone_number: targetNumber, message: transferMsg, conversation_id: conversationId, skip_db_save: true, is_bot_message: true }
+              });
+            }
+          } catch (e: any) {
+            console.warn('[ai-autopilot-chat] Falha ao enviar msg transfer intent:', e);
+          }
+        }
+        return new Response(JSON.stringify({
+          flowExit: true,
+          reason: 'customer_transfer_intent',
+          hasFlowContext: !!flow_context,
+          response: transferMsg,
+          message: transferMsg,
+          flow_context: flow_context ? { flow_id: flow_context.flow_id, node_id: flow_context.node_id } : undefined,
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
     const aiData = await callAIWithFallback(aiPayload);
     // âœ… FIX 2: Fallback não usa 'Desculpe' que está na lista de frases proibidas (auto-loop).
     let rawAIContent = aiData.choices?.[0]?.message?.content;
