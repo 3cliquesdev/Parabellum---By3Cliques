@@ -1,5 +1,5 @@
 ﻿import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-// BUILD: 2026-03-17T03:00:00Z — cache-bust redeploy
+// BUILD: V11 — 2026-03-18T14:00:00Z — Bugs 12-15 fix
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/business-hours.ts";
 
@@ -7401,6 +7401,23 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         // Pular envio do greeting mas continuar o fluxo normalmente
       }
 
+      // 🆕 V11 FIX Bug 14: Suprimir greeting se há fallback recente (últimos 60s)
+      if (!recentAIMsg) {
+        const { data: recentFallbackMsg } = await supabaseClient
+          .from('messages')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('is_ai_generated', true)
+          .gte('created_at', new Date(Date.now() - 60000).toISOString())
+          .limit(5);
+        const hasFallbackRecent = (recentFallbackMsg || []).some((m: any) => m.id);
+        // Se há 2+ msgs IA nos últimos 60s, contexto já está ativo — skip greeting
+        if (recentFallbackMsg && recentFallbackMsg.length >= 2) {
+          console.log('[ai-autopilot-chat] 🛡️ V11 Bug 14: Fallback recente detectado (60s), suprimindo greeting pós-fallback');
+          skipLLMForGreeting = true;
+        }
+      }
+
       // Persistir e enviar pelo pipeline normal (apenas se não dedup)
       const greetSaveErr = recentAIMsg ? null : (await supabaseClient.from('messages').insert({
         conversation_id: conversationId,
@@ -7506,6 +7523,74 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         type: 'greeting_skip',
         skipped: false,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // 🆕 V11 FIX Bug 12: Detecção PRÉ-LLM de intenção de transferência do cliente
+    const CUSTOMER_TRANSFER_INTENT = /\b(me\s+transfere|transfere\s+pra|me\s+conecte|falar\s+com\s+(atendente|humano|pessoa|algu[eé]m)|quero\s+(um\s+)?(atendente|humano)|passa\s+pra\s+(um\s+)?(atendente|humano)|chama\s+(um\s+)?(atendente|humano))\b/i;
+    const CUSTOMER_AFFIRM_TRANSFER = /^(sim|quero|pode|por\s+favor|pode\s+ser|claro|ok|quero\s+sim|sim\s+quero|sim\s+por\s+favor)[\s!.,]*$/i;
+    const customerMsgTrimmed = customerMessage.trim();
+    const hasTransferIntent = CUSTOMER_TRANSFER_INTENT.test(customerMsgTrimmed);
+    const hasAffirmTransfer = CUSTOMER_AFFIRM_TRANSFER.test(customerMsgTrimmed);
+
+    if (hasTransferIntent || hasAffirmTransfer) {
+      // Verificar se houve fallback recente (últimos 120s) para confirmar contexto de transferência
+      const { data: recentFallbacks } = await supabaseClient
+        .from('messages')
+        .select('id, content')
+        .eq('conversation_id', conversationId)
+        .eq('is_ai_generated', true)
+        .gte('created_at', new Date(Date.now() - 120000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      const hasFallbackContext = (recentFallbacks || []).length >= 1;
+      // Para intent explícito ("me transfere"), sempre executar. Para afirmativo ("sim"), só com contexto.
+      if (hasTransferIntent || (hasAffirmTransfer && hasFallbackContext)) {
+        console.log(`[ai-autopilot-chat] 🎯 V11 Bug 12: Intenção de transferência detectada PRÉ-LLM: "${customerMsgTrimmed}" (intent=${hasTransferIntent}, affirm=${hasAffirmTransfer}, fallbackContext=${hasFallbackContext})`);
+        // Telemetria
+        Promise.resolve(supabaseClient.from('ai_events').insert({
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          event_type: 'customer_transfer_intent_detected',
+          model: 'system',
+          score: 0,
+          output_json: { message: customerMsgTrimmed, hasTransferIntent, hasAffirmTransfer, hasFallbackContext },
+        })).catch(() => {});
+
+        const transferMsg = 'Entendido! Vou te transferir agora para um atendente. Um momento, por favor! 🙏';
+        // Salvar mensagem
+        await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: transferMsg,
+          sender_type: 'user',
+          message_type: 'ai_response',
+          is_ai_generated: true,
+          sender_id: null,
+          status: 'sending',
+          channel: responseChannel,
+        });
+        if (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta') {
+          try {
+            const whatsappResult = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, conversation.whatsapp_instance_id, conversation);
+            if (whatsappResult && whatsappResult.provider === 'meta') {
+              const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+              await supabaseClient.functions.invoke('send-meta-whatsapp', {
+                body: { instance_id: whatsappResult.instance.id, phone_number: targetNumber, message: transferMsg, conversation_id: conversationId, skip_db_save: true, is_bot_message: true }
+              });
+            }
+          } catch (e: any) {
+            console.warn('[ai-autopilot-chat] Falha ao enviar msg transfer intent:', e);
+          }
+        }
+        return new Response(JSON.stringify({
+          flowExit: true,
+          reason: 'customer_transfer_intent',
+          hasFlowContext: !!flow_context,
+          response: transferMsg,
+          message: transferMsg,
+          flow_context: flow_context ? { flow_id: flow_context.flow_id, node_id: flow_context.node_id } : undefined,
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
 
     const aiData = await callAIWithFallback(aiPayload);
@@ -9236,6 +9321,11 @@ Conversa: ${conversationId}`;
       if (isFallbackResponse) {
         newCount = (aiNodeId === flow_context.node_id) ? ((existingMetadata.ai_node_fallback_count || 0) + 1) : 1;
       }
+
+      // 🆕 V11 FIX Bug 13: Contador GLOBAL de fallbacks — nunca reseta entre nós
+      const currentGlobalCount = existingMetadata.ai_total_fallback_count || 0;
+      const newGlobalCount = isFallbackResponse ? currentGlobalCount + 1 : currentGlobalCount;
+
       // Sempre atualizar o nó atual e o contador (merge incremental preserva greeting flags)
       await supabaseClient
         .from('conversations')
@@ -9243,10 +9333,34 @@ Conversa: ${conversationId}`;
           customer_metadata: {
             ...existingMetadata,
             ai_node_current_id: flow_context.node_id,
-            ai_node_fallback_count: isFallbackResponse ? newCount : 0
+            ai_node_fallback_count: isFallbackResponse ? newCount : 0,
+            ai_total_fallback_count: newGlobalCount,
           }
         })
         .eq('id', conversationId);
+
+      // 🆕 V11 FIX Bug 13: Se total >= 4, handoff obrigatório independente do nó
+      if (isFallbackResponse && newGlobalCount >= 4) {
+        console.log(`[ai-autopilot-chat] 🚨 V11 Bug 13: GLOBAL ANTI-LOOP — ${newGlobalCount} fallbacks totais → handoff obrigatório`);
+        Promise.resolve(supabaseClient.from('ai_events').insert({
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          event_type: 'ai_decision_global_anti_loop',
+          model: 'system',
+          score: 0,
+          output_json: { reason: 'global_anti_loop', total_fallbacks: newGlobalCount, node_id: flow_context.node_id },
+        })).catch(() => {});
+
+        const globalHandoffMsg = 'Percebi que não estou conseguindo te ajudar da melhor forma. Vou te transferir para um atendente agora! 🙏';
+        return new Response(JSON.stringify({
+          flowExit: true,
+          reason: 'global_anti_loop_handoff',
+          hasFlowContext: true,
+          response: globalHandoffMsg,
+          message: globalHandoffMsg,
+          flow_context: { flow_id: flow_context.flow_id, node_id: flow_context.node_id },
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
     }
 
     if (isFallbackResponse) {
