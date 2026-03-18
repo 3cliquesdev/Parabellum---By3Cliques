@@ -79,6 +79,14 @@ export function useAutopilotTrigger(conversationId: string | null) {
           maxSentences: data?.maxSentences ?? 3,
           forbidQuestions: data?.forbidQuestions ?? true,
           forbidOptions: data?.forbidOptions ?? true,
+          // 🆕 Flags de restrição de categoria
+          forbidFinancial: data?.forbidFinancial ?? false,
+          forbidCommercial: data?.forbidCommercial ?? false,
+          forbidCancellation: data?.forbidCancellation ?? false,
+          forbidSupport: data?.forbidSupport ?? false,
+          forbidConsultant: data?.forbidConsultant ?? false,
+          // 🆕 OTP verificado
+          otpVerified: data?.otpVerified || false,
           // 🆕 Configuração de ticket
           ticketConfig: data?.ticketConfig || null,
         } : undefined,
