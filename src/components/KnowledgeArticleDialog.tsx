@@ -5,14 +5,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateKnowledgeArticle } from "@/hooks/useCreateKnowledgeArticle";
 import { useUpdateKnowledgeArticle } from "@/hooks/useUpdateKnowledgeArticle";
 import { useGenerateEmbedding } from "@/hooks/useGenerateEmbedding";
 import { useFindSimilarArticles } from "@/hooks/useFindSimilarArticles";
 import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
+import { useDistinctProductTags } from "@/hooks/useKnowledgeAudit";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, X } from "lucide-react";
 
 interface KnowledgeArticle {
   id: string;
@@ -20,6 +22,7 @@ interface KnowledgeArticle {
   content: string;
   category: string | null;
   tags: string[];
+  product_tags?: string[];
   is_published: boolean;
   source?: string | null;
 }
@@ -35,6 +38,7 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
   const [tagsInput, setTagsInput] = useState("");
+  const [productTags, setProductTags] = useState<string[]>([]);
   const [isPublished, setIsPublished] = useState(false);
   const [isCustomCategory, setIsCustomCategory] = useState(false);
 
@@ -42,8 +46,8 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
   const updateArticle = useUpdateKnowledgeArticle();
   const generateEmbedding = useGenerateEmbedding();
   const { data: existingCategories = [] } = useKnowledgeCategories();
+  const { data: existingProductTags = [] } = useDistinctProductTags();
   
-  // Check for similar articles after editing
   const { data: similarArticles } = useFindSimilarArticles(
     article?.id || null,
     0.90
@@ -56,8 +60,8 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
       const articleCategory = article.category || "";
       setCategory(articleCategory);
       setTagsInput(article.tags.join(", "));
+      setProductTags(article.product_tags || []);
       setIsPublished(article.is_published);
-      // Check if category is custom (not in existing list)
       if (articleCategory && existingCategories.length > 0 && !existingCategories.includes(articleCategory)) {
         setIsCustomCategory(true);
       } else {
@@ -68,6 +72,7 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
       setContent("");
       setCategory("");
       setTagsInput("");
+      setProductTags([]);
       setIsPublished(false);
       setIsCustomCategory(false);
     }
@@ -86,6 +91,7 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
         content,
         category: category || undefined,
         tags,
+        product_tags: productTags,
         is_published: isPublished,
       });
       articleId = article.id;
@@ -95,12 +101,12 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
         content,
         category: category || undefined,
         tags,
+        product_tags: productTags,
         is_published: isPublished,
       });
       articleId = newArticle.id;
     }
 
-    // FASE 3: Gerar embedding automaticamente para busca semântica
     if (articleId && content) {
       generateEmbedding.mutate({ articleId, content });
     }
@@ -108,10 +114,24 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
     onOpenChange(false);
   };
 
-  // Check if this is an AI draft
   const isAIDraft = article?.source === 'ai_draft';
   const urlParams = new URLSearchParams(window.location.search);
   const isEditingAIDraft = urlParams.get('ai_draft') === 'true' || isAIDraft;
+
+  const toggleProductTag = (tag: string) => {
+    setProductTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const [newProductTag, setNewProductTag] = useState("");
+  const addCustomProductTag = () => {
+    const trimmed = newProductTag.trim();
+    if (trimmed && !productTags.includes(trimmed)) {
+      setProductTags((prev) => [...prev, trimmed]);
+    }
+    setNewProductTag("");
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -120,7 +140,6 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
           <DialogTitle>{article ? "Editar Artigo" : "Novo Artigo"}</DialogTitle>
         </DialogHeader>
 
-        {/* AI Draft Warning Banner */}
         {isEditingAIDraft && (
           <Alert className="bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -199,8 +218,43 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
             )}
           </div>
 
+          {/* Product Tags — campo que AFETA a busca da IA */}
           <div>
-            <Label htmlFor="tags">Tags (separadas por vírgula)</Label>
+            <Label>Product Tags <span className="text-xs text-muted-foreground">(afeta filtro de busca da IA)</span></Label>
+            <div className="flex flex-wrap gap-1.5 mt-1.5 mb-2">
+              {existingProductTags.map((tag) => (
+                <Badge
+                  key={tag}
+                  variant={productTags.includes(tag) ? "default" : "outline"}
+                  className="cursor-pointer select-none"
+                  onClick={() => toggleProductTag(tag)}
+                >
+                  {tag}
+                  {productTags.includes(tag) && <X className="h-3 w-3 ml-1" />}
+                </Badge>
+              ))}
+              {productTags.filter((t) => !existingProductTags.includes(t)).map((tag) => (
+                <Badge key={tag} variant="default" className="cursor-pointer select-none" onClick={() => toggleProductTag(tag)}>
+                  {tag} <X className="h-3 w-3 ml-1" />
+                </Badge>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                value={newProductTag}
+                onChange={(e) => setNewProductTag(e.target.value)}
+                placeholder="Adicionar nova product tag..."
+                className="flex-1"
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomProductTag(); } }}
+              />
+              <Button type="button" variant="outline" size="sm" onClick={addCustomProductTag} disabled={!newProductTag.trim()}>
+                Adicionar
+              </Button>
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="tags">Tags (separadas por vírgula) <span className="text-xs text-muted-foreground">(informativo)</span></Label>
             <Input
               id="tags"
               value={tagsInput}

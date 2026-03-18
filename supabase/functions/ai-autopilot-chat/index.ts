@@ -4671,7 +4671,7 @@ Responda APENAS: skip ou search`
                   .from('knowledge_articles')
                   .select('id, title, content, category, updated_at')
                   .eq('status', 'published')
-                  .or(`title.ilike.%${term}%,content.ilike.%${term}%`);
+                  .or(`title.ilike.%${term}%,content.ilike.%${term}%,tags.cs.{"${term}"}`);
                 
                 if (hasPersonaCategories) {
                   query = query.in('category', personaCategories);
