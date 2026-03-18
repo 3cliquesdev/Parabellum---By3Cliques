@@ -2323,6 +2323,7 @@ serve(async (req) => {
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
                     ticketConfig: resolvedNode.data?.ticket_config || null,
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
 
                 return new Response(JSON.stringify({
                   useAI: false,
