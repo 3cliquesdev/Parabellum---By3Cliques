@@ -1,7 +1,11 @@
 
-# Auditoria IA — Melhorias Implementadas
 
-## Concluído
-1. ✅ `create_lead` no EndNode — Cria deal no pipeline padrão com dados coletados do fluxo
-2. ✅ Métricas de latência end-to-end — Log `⏱️ Latência total: Xms` em toda resposta do autopilot
-3. ✅ Deploy: `process-chat-flow` + `ai-autopilot-chat`
+# Deploy Edge Functions
+
+Deploy das duas edge functions atualizadas com as correções recentes (OTP, saudação proativa, create_lead, métricas de latência):
+
+1. **`ai-autopilot-chat`** — Correções: `is_bot_message: true`, remoção do `return` prematuro, métricas de latência
+2. **`process-chat-flow`** — Correções: `create_lead` no EndNode
+
+Ação: Executar deploy de ambas via ferramenta de deploy.
+
