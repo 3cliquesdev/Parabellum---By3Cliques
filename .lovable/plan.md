@@ -1,9 +1,9 @@
 
 
-# Redeploy `ai-autopilot-chat` com correção de encoding
+# Redeploy `ai-autopilot-chat` — Limpeza Final de Encoding
 
 ## Ação
-Redeploy da Edge Function `ai-autopilot-chat` que contém a correção de 2000+ ocorrências de mojibake, conforme o último commit do GitHub.
+Deploy da Edge Function `ai-autopilot-chat` com o commit mais recente do GitHub (`fix(encoding): limpeza final de encoding no ai-autopilot-chat`), que completa a auditoria de encoding com 0 problemas restantes em todos os 5 arquivos críticos.
 
 ## Passo único
 - Deploy da função `ai-autopilot-chat` via ferramenta de deploy de Edge Functions.
