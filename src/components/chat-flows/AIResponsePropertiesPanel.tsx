@@ -42,6 +42,34 @@ export function AIResponsePropertiesPanel({
     updateNodeData("ticket_config", { ...ticketConfig, [field]: value });
   };
 
+  // Refs para inserção de variáveis nos templates de ticket
+  const subjectRef = useRef<HTMLInputElement>(null);
+  const descRef = useRef<HTMLTextAreaElement>(null);
+  const activeFieldRef = useRef<"subject" | "description">("subject");
+
+  const handleInsertVariable = (varText: string) => {
+    const isSubject = activeFieldRef.current === "subject";
+    const el = isSubject ? subjectRef.current : descRef.current;
+    const field = isSubject ? "subject_template" : "description_template";
+    const current = ticketConfig[field] || "";
+
+    if (el) {
+      const start = el.selectionStart ?? current.length;
+      const end = el.selectionEnd ?? current.length;
+      const newValue = current.slice(0, start) + varText + current.slice(end);
+      updateTicketConfig(field, newValue);
+      // Restore cursor after React re-render
+      requestAnimationFrame(() => {
+        el.focus();
+        const pos = start + varText.length;
+        el.setSelectionRange(pos, pos);
+      });
+    } else {
+      // Fallback: append
+      updateTicketConfig(field, current + varText);
+    }
+  };
+
   // Personas ativas
   const activePersonas = personas?.filter((p) => p.is_active) || [];
 
