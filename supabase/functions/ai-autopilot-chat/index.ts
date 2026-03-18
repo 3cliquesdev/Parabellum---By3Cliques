@@ -1635,8 +1635,10 @@ serve(async (req) => {
       console.log('[ai-autopilot-chat] 🔒 DESAMBIGUAÇÃO CONSULTOR: Termo ambíguo detectado, IA vai perguntar ao cliente:', customerMessage?.substring(0, 80));
     }
     
-    // Só bloquear AÇÁ•ES financeiras. Info passa para LLM responder via KB. Ambíguo â†’ IA pergunta.
-    if (ragConfig.blockFinancial && flowForbidFinancial && customerMessage && customerMessage.trim().length > 0 && isFinancialAction && !isFinancialInfo) {
+    // Só bloquear AÇÕES financeiras. Info passa para LLM responder via KB. Ambíguo → IA pergunta.
+    // ✅ V16.1 Bug 33: Bypass quando OTP já verificado — permitir coleta de dados pós-OTP
+    const otpAlreadyVerified = !!(flow_context?.otpVerified);
+    if (ragConfig.blockFinancial && flowForbidFinancial && !otpAlreadyVerified && customerMessage && customerMessage.trim().length > 0 && isFinancialAction && !isFinancialInfo) {
       console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
       const fixedMessage = 'Entendi sua solicitação. Vou te encaminhar para o setor financeiro que poderá te ajudar com isso.';
