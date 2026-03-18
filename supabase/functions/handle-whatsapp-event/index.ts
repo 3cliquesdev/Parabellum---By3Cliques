@@ -897,11 +897,19 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         }
 
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        // 🆕 V5-F1: Refetch metadata fresco antes de update OTP
+        const { data: freshOtpStartConv } = await supabase
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const freshOtpStartMeta = (freshOtpStartConv?.customer_metadata || {}) as Record<string, any>;
+
         await supabase
           .from('conversations')
           .update({
             customer_metadata: {
-              ...metadata,
+              ...freshOtpStartMeta,
               awaiting_otp: true,
               claimant_email: claimedEmail,
               claimed_contact_id: existingEmailContact.id,
