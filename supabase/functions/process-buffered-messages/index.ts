@@ -377,6 +377,13 @@ async function callPipeline(
           forbidOptions: flowData.forbidOptions ?? true,
           forbidFinancial: flowData.forbidFinancial ?? false,
           forbidCommercial: flowData.forbidCommercial ?? false,
+          forbidCancellation: flowData.forbidCancellation ?? false,
+          forbidConsultant: flowData.forbidConsultant ?? false,
+          forbidSupport: flowData.forbidSupport ?? false,
+          returnReasons: flowData.returnReasons || null,
+          collectedData: flowData.collectedData || null,
+          ticketConfig: flowData.ticketConfig || null,
+          otpVerified: flowData.otpVerified || false,
         };
       }
 

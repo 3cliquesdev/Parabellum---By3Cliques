@@ -1234,7 +1234,11 @@ serve(async (req) => {
                           forbidCommercial: (flowData as any).forbidCommercial ?? false,
                           forbidCancellation: (flowData as any).forbidCancellation ?? false,
                           forbidConsultant: (flowData as any).forbidConsultant ?? false,
+                          forbidSupport: (flowData as any).forbidSupport ?? false,
                           returnReasons: (flowData as any).returnReasons || null,
+                          ticketConfig: (flowData as any).ticketConfig || null,
+                          otpVerified: (flowData as any).otpVerified || false,
+                          collectedData: (flowData as any).collectedData || null,
                           },
                         }),
                       }
