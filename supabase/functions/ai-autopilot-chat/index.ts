@@ -6425,10 +6425,10 @@ Digite **"reenviar"** se precisar de um novo código.`;
     // - Cancelamento Kiwify -> Sem OTP
     // - Duvida informativa -> Sem OTP
     // ============================================================
-    if (contactHasEmail && isFinancialActionRequest && !hasRecentOTPVerification && !flow_context) {
-      // 🆕 GUARD: Se existe flow_context (qualquer), PULAR o bloco OTP inteiro.
-      // O fluxo visual é soberano e tem seu próprio ramo financeiro com OTP nativo.
-      // Ref: flow-sovereignty-principle
+    if (contactHasEmail && isFinancialActionRequest && !hasRecentOTPVerification) {
+      // 🆕 V15 Bug 29: Removido guard !flow_context — OTP é camada de segurança transversal.
+      // Mesmo dentro de fluxos ativos, ações financeiras (saque/reembolso) DEVEM passar pelo OTP.
+      // O fluxo visual NÃO tem nó OTP nativo no V5 Enterprise, então o código assume.
       
       const maskedEmail = maskEmail(contactEmail);
       
