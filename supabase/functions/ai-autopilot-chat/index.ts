@@ -9797,23 +9797,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           console.log('[ai-autopilot-chat] Contract violation - substituindo msg e permanecendo no no');
           assistantMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
           isFallbackResponse = true;
-          try {
-            const { data: freshMetaCV } = await supabaseClient
-              .from('conversations')
-              .select('customer_metadata')
-              .eq('id', conversationId)
-              .single();
-            const metaCV = (freshMetaCV?.customer_metadata as Record<string, any>) || {};
-            const cvNodeId = flow_context.node_id;
-            const cvPrevNode = metaCV.ai_node_current_id || null;
-            const cvCount = (cvPrevNode === cvNodeId) ? ((metaCV.ai_node_fallback_count || 0) + 1) : 1;
-            await supabaseClient.from('conversations').update({
-              customer_metadata: { ...metaCV, ai_node_current_id: cvNodeId, ai_node_fallback_count: cvCount }
-            }).eq('id', conversationId);
-            console.log('[ai-autopilot-chat] Contract violation counter: ' + cvCount);
-          } catch (counterErr: any) {
-            console.error('[ai-autopilot-chat] Falha counter direto:', counterErr);
-          }
+          // 🆕 FIX V14: Counter parcial REMOVIDO — update unificado no final do pipeline
+          console.log('[ai-autopilot-chat] Contract violation detectada — counter será atualizado no final do pipeline');
         }
       }
       
