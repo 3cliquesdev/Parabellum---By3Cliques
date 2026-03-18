@@ -2481,11 +2481,14 @@ serve(async (req) => {
           
           const askEmailAgainMessage = '📧 Não consegui identificar seu email. Por favor, envie apenas o email em uma linha (ex: seunome@email.com)';
           
-          // Atualizar timestamp para anti-spam
+          // Atualizar timestamp para anti-spam - FIX: Refetch metadata fresco
+          const { data: freshConvSpam } = await supabaseClient.from('conversations')
+            .select('customer_metadata').eq('id', conversationId).maybeSingle();
+          const freshSpamMeta = ((freshConvSpam?.customer_metadata || {}) as Record<string, any>);
           await supabaseClient.from('conversations')
             .update({
               customer_metadata: {
-                ...customerMetadata,
+                ...freshSpamMeta,
                 handoff_blocked_at: new Date().toISOString()
               }
             })
