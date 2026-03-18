@@ -5471,6 +5471,7 @@ serve(async (req) => {
               forbidCancellation: node.data?.forbid_cancellation ?? false,
               forbidSupport: node.data?.forbid_support ?? false,
               forbidConsultant: node.data?.forbid_consultant ?? false,
+              ticketConfig: node.data?.ticket_config || null,
               debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
