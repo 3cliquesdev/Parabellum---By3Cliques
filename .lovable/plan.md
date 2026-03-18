@@ -23,6 +23,8 @@
 ### Bug 6 (MENOR) ✅ — Typo persona
 - **Fix:** Migration corrigiu "Assisntente" → "Assistente"
 
-## Deploy
-- `ai-autopilot-chat` ✅
-- `process-chat-flow` ✅
+## Deploy V9 — Re-deploy Forçado ✅
+- `ai-autopilot-chat` ✅ re-deployed 13:17 UTC
+- `process-chat-flow` ✅ re-deployed 13:17 UTC
+- 0 `contract_violation_blocked` nos 10 min pós-deploy ✅
+- Fixes V8 agora ativos em produção ✅
