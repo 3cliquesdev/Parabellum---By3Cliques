@@ -9890,12 +9890,12 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
     // FASE 2: Salvar resposta no cache para futuras consultas (TTL 1h)
     // (Escape detection já foi movido para ANTES do save/send â€” linhas ~7842)
 
-    const shouldSkipCache = FALLBACK_PHRASES.some(phrase => 
+    const shouldSkipCache = isFallbackResponse || FALLBACK_PHRASES.some(phrase => 
       assistantMessage.toLowerCase().includes(phrase)
     );
     
     if (shouldSkipCache) {
-      console.log('âš ï¸ [CACHE SKIP] Resposta de fallback detectada - NÃO cacheando');
+      console.log('⚠️ [CACHE SKIP] Resposta de fallback detectada - NÃO cacheando (isFallbackResponse:', isFallbackResponse, ')');
     } else {
       try {
         await supabaseClient.from('ai_response_cache').insert({
