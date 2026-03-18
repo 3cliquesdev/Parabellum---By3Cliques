@@ -8112,6 +8112,7 @@ Via: Atendimento Automatizado (IA)`;
                 category: ticketCategory,
                 internal_note: internalNote,
                 ...(tc?.department_id ? { department_id: tc.department_id } : {}),
+                ...(tc?.assigned_to ? { assigned_to: tc.assigned_to } : {}),
               })
               .select()
               .single();

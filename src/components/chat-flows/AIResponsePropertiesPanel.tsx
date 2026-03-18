@@ -9,6 +9,8 @@ import { Bot, Sparkles, AlertTriangle, GraduationCap, Ticket, Info } from "lucid
 import { usePersonas } from "@/hooks/usePersonas";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTicketCategories } from "@/hooks/useTicketCategories";
+import { useSupportAgents } from "@/hooks/useSupportAgents";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
