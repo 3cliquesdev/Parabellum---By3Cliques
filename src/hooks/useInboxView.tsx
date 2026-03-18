@@ -280,7 +280,7 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
           `assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null),and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed),and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
         );
       }
-    } else if (role === "consultant" || role === "user") {
+    } else if (role === "user") {
       query = query.eq("assigned_to", userId);
     }
   }
