@@ -7814,12 +7814,19 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
               console.error('[ai-autopilot-chat] ❌ Erro ao criar deal:', dealError);
             }
 
-            // Limpar email pendente da metadata
+            // Refetch metadata fresco antes de limpar (pode ter sido atualizado durante criação do deal)
+            const { data: freshConfirmConv2 } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshConfirmMeta2 = (freshConfirmConv2?.customer_metadata || {}) as Record<string, any>;
+            
             await supabaseClient
               .from('conversations')
               .update({ 
                 customer_metadata: { 
-                  ...currentMetadata,
+                  ...freshConfirmMeta2,
                   pending_email_confirmation: null,
                   pending_email_timestamp: null
                 }
