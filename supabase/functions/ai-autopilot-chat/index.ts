@@ -1446,8 +1446,9 @@ serve(async (req) => {
   }
 
   // Wrapper: garante charset=utf-8 em TODAS as responses JSON
-  const rawHandler = async (): Promise<Response> => {
   const _startTs = Date.now();
+  const rawHandler = async (): Promise<Response> => {
+  try {
   try {
     // Handler de warmup rápido (sem processamento de IA)
     const bodyText = await req.text();
