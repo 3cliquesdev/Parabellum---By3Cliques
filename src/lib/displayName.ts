@@ -1,15 +1,46 @@
 /**
- * Monta o nome de exibição evitando duplicação (ex: "João Silva João Silva").
- * Usado em todos os componentes que exibem nome de contato.
+ * Nomes genéricos que devem acionar fallback para email/phone.
  */
-export function displayName(firstName?: string | null, lastName?: string | null): string {
+const GENERIC_NAMES = new Set(['cliente', 'desconhecido', 'sem nome', 'contato', '']);
+
+/**
+ * Monta o nome de exibição evitando duplicação e usando fallback inteligente.
+ * Quando o nome é genérico ("Cliente", etc.), usa email ou phone como fallback.
+ */
+export function displayName(
+  firstName?: string | null,
+  lastName?: string | null,
+  email?: string | null,
+  phone?: string | null,
+): string {
   const f = (firstName || '').trim();
   const l = (lastName || '').trim();
 
-  // Se ambos forem iguais, exibe apenas uma vez
-  if (f && l && f === l) return f;
+  let name: string;
 
-  return `${f} ${l}`.trim() || 'Cliente';
+  // Se ambos forem iguais, exibe apenas uma vez
+  if (f && l && f === l) {
+    name = f;
+  } else {
+    name = `${f} ${l}`.trim();
+  }
+
+  // Se o nome é genérico, usar fallback
+  if (GENERIC_NAMES.has(name.toLowerCase())) {
+    if (email) {
+      // Pega parte antes do @ e capitaliza
+      const local = email.split('@')[0] || '';
+      if (local) {
+        return local.charAt(0).toUpperCase() + local.slice(1);
+      }
+    }
+    if (phone) {
+      return phone;
+    }
+    return name || 'Cliente';
+  }
+
+  return name || 'Cliente';
 }
 
 /**
