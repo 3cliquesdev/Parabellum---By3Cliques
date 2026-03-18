@@ -7213,7 +7213,9 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     const isFirstNodeInteraction = rawInteractionCount === undefined || rawInteractionCount === 0;
     const isMenuNoise = !!(customerMessage && (customerMessage.trim().length <= 3 || /^\d+$/.test(customerMessage.trim())));
     let skipLLMForGreeting = false;
-    if (flow_context && (isFirstNodeInteraction || isMenuNoise)) {
+    // Não disparar saudação quando OTP já foi verificado (cliente aguarda resposta à solicitação)
+    const skipGreetingForOtp = flow_context?.otpVerified === true;
+    if (flow_context && !skipGreetingForOtp && (isFirstNodeInteraction || isMenuNoise)) {
       const personaGreetName = persona?.name || 'nossa equipe';
       const personaRole = (persona as any)?.role || '';
       // NÃO usar flow_context.objective — contém instruções internas do sistema

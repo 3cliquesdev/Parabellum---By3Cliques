@@ -3434,7 +3434,7 @@ serve(async (req) => {
           }
         }
 
-        if (financialIntentMatch) {
+        if (financialIntentMatch && !collectedData.__ai_otp_verified) {
           console.log(`[process-chat-flow] 🔒 TRAVA FINANCEIRA: Intenção financeira AÇÃO detectada no nó AI, tratando como exit | msg="${(userMessage || '').substring(0, 100)}" | forceExit=${forceFinancialExit} | actionMatch=${isFinancialAction} | infoMatch=${isFinancialInfo}`);
           
           try {
