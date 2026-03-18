@@ -1,159 +1,108 @@
-# Auditoria V14 — Correções Aplicadas ✅
 
-## Fixes V13 (anteriores)
-| Fix | Status |
-|---|---|
-| Bug 1: Self-blocking loop | ✅ |
-| Bug 2: Greeting double-send | ✅ (causa raiz real corrigida no Bug 7) |
-| Bug 3: {{vars}} vazando | ✅ |
-| Bug 4: Detecção financeira | ✅ |
-| Bug 5: KB sandbox | ✅ |
-| Bug 6: Typo persona | ✅ |
+# Corrigir de vez o caso do Luiz na atribuição de tickets
 
-## Fixes V10 (Deploy realizado)
+## O que eu confirmei
+Do I know what the issue is? Sim.
 
-### Bug 7 ✅ — isProactiveGreeting não pulava LLM
-### Bug 8 ✅ — Dígitos de menu pós-greeting causavam loop fallback
-### Bug 9 ✅ — Race condition: mensagens IA duplicadas
-### Bug 10 ✅ — Persona "Helper Sistema" com role "elper Sistema"
-### Bug 11 (MENOR) — KB sem cobertura (recomendação manual)
+O problema real não é só “a policy antiga”. São 2 causas juntas:
 
-## Fixes V11 (Deploy realizado)
+1. **A tela de ticket usa update direto na tabela**
+   - Em `src/components/TicketDetails.tsx`, o campo **Atribuído** chama `handleAssignChange()`.
+   - Esse handler usa `useUpdateTicket()`.
+   - Em `src/hooks/useUpdateTicket.tsx`, a atribuição faz:
+     ```ts
+     supabase.from("tickets").update(...).eq("id", id)
+     ```
+   - Ou seja: a ação depende totalmente da RLS da tabela `tickets`.
 
-### Bug 12 ✅ — Cliente aceita transferência e IA ignora
-### Bug 13 ✅ — Contador anti-loop reseta entre nós
-### Bug 14 ✅ — Greeting enviado DEPOIS de fallback
-### Bug 15 ✅ — Build timestamp para rastreabilidade
+2. **A correção anterior só liberou consultor para tickets da própria carteira**
+   - A policy atual `canonical_update_tickets` só deixa `consultant` atualizar quando:
+     ```sql
+     customer_id IN (SELECT get_consultant_contact_ids(auth.uid()))
+     ```
+   - No ticket do print (`TK-2026-01004`), o contato `Vanessa Gonçalves` está com:
+     - `consultant_id = null`
+   - Então esse ticket **não entra** na carteira do Luiz.
+   - Resultado: o update continua falhando com:
+     `new row violates row-level security policy for table "tickets"`
 
-## Fixes V12 (Deploy realizado)
+## Diagnóstico final
+A correção anterior atacou o caso errado.
 
-### Bug 16 ✅ — Regex de transferência incompleta
-### Bug 17 ✅ — Afirmativo "Sim" com pontuação não detectado
-### Bug 18 ✅ — Deploy forçado para ativar V8-V12
+- `luiz.silva@3cliques.net` tem só o role **`consultant`**
+- O ticket mostrado não pertence à carteira dele
+- A UI usa **update direto** em `tickets`
+- Portanto, para esse ticket, o banco bloqueia a alteração corretamente
 
-## Fixes V13 (Deploy realizado)
+## Plano de implementação
 
-### Bug 20+21 ✅ — flowExit de Transfer Intent re-invoca flow → mensagens duplicadas + handoff não executa
-- **Fix:** Guard PRÉ-flowExit nos dois webhooks (`meta-whatsapp-webhook` e `handle-whatsapp-event`)
-- Quando `reason === 'customer_transfer_intent'` ou `reason === 'global_anti_loop_handoff'`:
-  - **Pula** re-invocação do `process-chat-flow` (elimina mensagens duplicadas)
-  - Executa handoff **direto**: `ai_mode = 'waiting_human'`, `assigned_to = null`
-  - Chama `route-conversation` para dispatch imediato
-- Resultado: Cliente recebe apenas "Vou te transferir agora" e é transferido em < 5s
+### 1. Corrigir a regra de negócio, não só a RLS
+Vou alinhar o sistema com o comportamento esperado para o Luiz.
 
-### Bug 22 ✅ — Global anti-loop counter sem diagnóstico
-- **Fix:** Telemetria adicionada no bloco L9326 do `ai-autopilot-chat`:
-  - Log: `🔢 V13 Bug 22: Global counter — isFallback=X, current=Y, new=Z, nodeId=N`
-- Permite monitorar se `isFallbackResponse` está sendo setado e se o counter incrementa
+**Se o Luiz precisa atuar na fila de suporte/equipe**, o ajuste correto é:
+- manter `consultant`
+- adicionar também um role operacional, como **`support_agent`** (ou outro papel operacional adequado)
 
-## Deploy
-- `ai-autopilot-chat` ✅ re-deployed V13
-- `meta-whatsapp-webhook` ✅ re-deployed V13
-- `handle-whatsapp-event` ✅ re-deployed V13
+Isso é consistente com o padrão já usado no projeto: consultor puro não é papel operacional de fila.
 
-## Fixes V14 (Deploy realizado)
+### 2. Parar de usar update direto para atribuição na tela do ticket
+Hoje a atribuição simples passa por `useUpdateTicket`, que depende de RLS pura.
 
-### Bug 24 ✅ — RLS do `inbox_view` sem cláusula AI queue global
-- **Fix:** Migration recriou policy `optimized_inbox_select` com cláusula adicional:
-  - `ai_mode IN ('autopilot','waiting_human') AND status<>'closed' AND assigned_to IS NULL`
-  - Permite todos os roles internos verem fila IA independente de departamento
+Vou planejar trocar a atribuição para um fluxo seguro:
+- criar ou reutilizar uma **RPC SECURITY DEFINER** específica para atribuição de ticket
+- validar no backend quem pode atribuir
+- só depois atualizar `assigned_to` / `status`
 
-### Bug 25 ✅ — Client-side filter `useInboxView` restringia por departamento
-- **Fix:** Expandido `.or()` nos 2 blocos de query (main + chunked) para incluir:
-  - `and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed)`
-  - `and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
-- Realtime `shouldShow` atualizado com `isAIQueueGlobal`
+Assim a lógica de permissão fica centralizada, igual já acontece em transferências com `transfer_ticket_secure`.
 
-### Bug 26 ✅ — `get-inbox-counts` `applyVisibility` restringia fila IA
-- **Fix:** Expandido `.or()` no `applyVisibility` com mesmas cláusulas AI queue
-- Edge function redeployada
+### 3. Ajustar a tela para usar o fluxo seguro
+Em vez de:
+- `handleAssignChange()` → `useUpdateTicket()`
 
-## Deploy V14
-- Migration RLS ✅
-- `useInboxView.tsx` ✅ (3 blocos corrigidos)
-- `get-inbox-counts` ✅ re-deployed
+ficará:
+- `handleAssignChange()` → hook de atribuição segura (`assign_ticket_secure` ou equivalente)
 
-## Fixes V15 (Deploy realizado)
+Isso evita que a UI continue batendo na RLS bruta da tabela para uma ação operacional.
 
-### Bug 27 ✅ — Telemetria skipInitialMessage no webhook Meta
-- **Fix:** Logs estruturados com conversationId, contactId, nodeId, flowId, timestamp e originalMessage
-- Permite diagnosticar se `skipInitialMessage` é propagado na primeira transição menu → AI node
+### 4. Manter rastreabilidade
+Depois da atribuição segura:
+- continuar registrando evento em `ticket_events`
+- continuar invalidando queries
+- manter toast de sucesso/erro
 
-### Bug 28+30 ✅ — Nó financeiro sem edges de intenção cruzada
-- **Fix:** Atualizado `flow_definition` do fluxo `cafe2831` (V5 Enterprise):
-  - Adicionado edge `cancelamento`: `node_ia_financeiro` → `node_ia_cancelamento`
-  - Adicionado edge `saque`: `node_ia_financeiro` → `node_escape_financeiro`
-  - Setado `forbid_cancellation: true` e `forbid_commercial: true` no `node_ia_financeiro`
+## Arquivos/recursos que vou ajustar
+- `src/components/TicketDetails.tsx`
+- `src/hooks/useUpdateTicket.tsx` ou novo hook dedicado para atribuição
+- nova migration SQL para:
+  - criar/atualizar RPC segura de atribuição
+  - opcionalmente aplicar o role operacional ao Luiz, se essa for a regra desejada
 
-### Bug 29 ✅ — OTP alucinado pela LLM dentro de fluxos ativos
-- **Fix 1:** Removido guard `!flow_context` em L6421 do `ai-autopilot-chat`
-  - OTP agora funciona como camada transversal de segurança, independente do fluxo ativo
-- **Fix 2:** Adicionada regra anti-alucinação OTP no `generateRestrictedPrompt`
-  - LLM proibida de prometer envio de códigos, OTP ou verificação por email
+## Resultado esperado
+Depois disso:
+- o Luiz conseguirá atribuir tickets **de acordo com a permissão operacional correta**
+- a atribuição deixará de falhar por depender de update direto na tabela
+- a permissão ficará consistente entre tela, backend e regras de negócio
 
-## Deploy V15
-- `ai-autopilot-chat` ✅ re-deployed
-- `meta-whatsapp-webhook` ✅ re-deployed
-- Flow `cafe2831` ✅ atualizado (edges + flags)
+## Detalhe técnico importante
+O print mostra erro na ação de **atribuir** dentro de `TicketDetails`, não na transferência entre departamentos.
 
-## Fixes V16 (Deploy realizado)
+Então o ponto principal a corrigir é este:
 
-### Bug 31 ✅ — Escape Node enviado SEM opções (fallback separado)
-- **Fix:** Removido DB insert direto do fallback_message no `process-chat-flow` (L3697)
-- Fallback agora acumulado como `pendingFallbackMsg` e injetado no `extraMessages` (L4598)
-- Resultado: Caller recebe UMA resposta combinada: "Não consegui resolver...\n\nO que prefere fazer?\n\n1️⃣ Voltar\n2️⃣ Atendente"
+```text
+TicketDetails
+  -> handleAssignChange
+    -> useUpdateTicket
+      -> update direto em public.tickets
+        -> RLS bloqueia
+```
 
-### Bug 32 ✅ — Pós-OTP não coletou dados financeiros (FLOW_EXIT prematuro)
-- **Fix 1:** Expandido `otpVerifiedInstruction` no `ai-autopilot-chat` com regras de coleta pós-OTP
-  - IA instruída a COLETAR campos (pix_key, bank, reason, amount) ao invés de buscar KB
-  - Proibida de emitir `[[FLOW_EXIT]]` até coletar todos os campos
-- **Fix 2:** Atualizado `objective` do `node_ia_financeiro` no fluxo `cafe2831` com FASE 1 (pré-OTP) e FASE 2 (pós-OTP coleta)
-- **Fix 3:** Habilitado `smart_collection_enabled: true` e `smart_collection_fields: [pix_key, bank, reason, amount]`
+E não apenas a policy de consultor.
 
-## Deploy V16
-- `process-chat-flow` ✅ re-deployed
-- `ai-autopilot-chat` ✅ re-deployed
-- Flow `cafe2831` ✅ atualizado (objective + smart_collection)
+## Implementação recomendada
+Minha recomendação é seguir com este pacote:
 
-## Fixes V16.1 (Deploy realizado)
+1. adicionar um role operacional ao Luiz
+2. mover a atribuição do dropdown para uma RPC segura
+3. manter consultor puro limitado à carteira, sem abrir UPDATE geral para todos os consultores
 
-### Bug 33 ✅ — Trava financeira ENTRADA bloqueia coleta pós-OTP
-- **Fix:** Adicionado `!otpAlreadyVerified` (derivado de `flow_context?.otpVerified`) na condição L1639
-- Quando OTP já verificado, mensagem financeira bypassa o guard e chega à LLM para coleta de dados
-
-### Bug 34 ✅ — `financialGuardInstruction` contradiz `otpVerifiedInstruction` no prompt
-- **Fix:** Condicionado `financialGuardInstruction` a `!flow_context?.otpVerified` (L6721)
-- Quando OTP verificado, apenas `otpVerifiedInstruction` é injetado (coleta de dados), sem contradição
-
-### Bug 35 (MENOR) — Flags `smart_collection_*` sem código consumidor
-- Sem impacto funcional — instrução via prompt é suficiente
-
-## Deploy V16.1
-- `ai-autopilot-chat` ✅ re-deployed
-
-## Fixes V16.2 (Deploy realizado)
-
-### Bug 36 ✅ — `financialIntentMatch` no `process-chat-flow` ignora OTP verificado
-- **Fix:** Adicionado `!otpVerifiedInFlow` (derivado de `collectedData.__ai_otp_verified`) na condição L3336
-- Quando OTP verificado, `financialIntentMatch` é suprimido → mensagem permanece no nó AI para coleta de dados
-- Log de telemetria adicionado para diagnóstico
-
-## Deploy V16.2
-- `process-chat-flow` ✅ re-deployed
-
-## Fixes V16.3 (Deploy realizado)
-
-### Bug 37 ✅ — `useCanTakeControl` bloqueava agente em conversa self-assigned
-- **Fix:** Adicionado bypass `assignedTo === user.id` antes do check de departamento
-
-### Bug 38 ✅ — `handle-whatsapp-event` NÃO implementa `skipInitialMessage`
-- **Fix 1:** Adicionado check `flowResult.skipInitialMessage === true` no L1314
-  - Quando ativo, `effectiveMessage = ""` → IA recebe mensagem vazia → saudação proativa
-  - Adicionado `kbProductFilter` ao flow_context
-- **Fix 2:** Expandido response `ask_options → ai_response` no `process-chat-flow` L2932
-  - Adicionados 14 campos ausentes: `personaId`, `kbProductFilter`, `kbCategories`, `objective`, `fallbackMessage`, `maxSentences`, `forbidQuestions`, `forbidOptions`, `forbidFinancial`, `forbidCommercial`, `forbidCancellation`, `forbidSupport`, `forbidConsultant`, `allowedSources`
-  - Alinhado com retorno de `intent-routing → ai_response` (L4556-4587)
-
-## Deploy V16.3
-- `handle-whatsapp-event` ✅ re-deployed
-- `process-chat-flow` ✅ re-deployed
+Isso resolve o caso dele sem afrouxar a segurança da tabela `tickets`.
