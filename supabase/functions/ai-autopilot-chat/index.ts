@@ -6230,11 +6230,19 @@ Digite **"reenviar"** se precisar de um novo código.`;
         
         // Se OTP foi validado com sucesso, limpar flags de OTP pendente
         if (otpData?.success) {
+          // Refetch metadata fresco para não sobrescrever updates incrementais
+          const { data: freshOtpConv } = await supabaseClient
+            .from('conversations')
+            .select('customer_metadata')
+            .eq('id', conversationId)
+            .maybeSingle();
+          const freshOtpMeta = (freshOtpConv?.customer_metadata || {}) as Record<string, any>;
+          
           await supabaseClient
             .from('conversations')
             .update({ 
               customer_metadata: {
-                ...conversationMetadata,
+                ...freshOtpMeta,
                 awaiting_otp: false,
                 otp_expires_at: null,
                 last_otp_verified_at: new Date().toISOString()
