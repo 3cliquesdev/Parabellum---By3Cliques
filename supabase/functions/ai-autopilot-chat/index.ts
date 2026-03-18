@@ -9289,18 +9289,18 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       );
 
       // Só é request financeiro se tiver padrão de ação E não for dúvida informativa
-      let isFinancialRequest = FINANCIAL_ACTION_PATTERNS.some(pattern => 
+      let isFinancialHandoffRequest = FINANCIAL_ACTION_PATTERNS.some(pattern => 
         pattern.test(customerMessage)
       );
 
       if (isInformationalQuestion) {
-        isFinancialRequest = false; // Anular se for dúvida
-        console.log('[ai-autopilot-chat] â„¹ï¸ Pergunta informativa detectada - NÃO criar ticket');
+        isFinancialHandoffRequest = false;
+        console.log('[ai-autopilot-chat] ℹ️ Pergunta informativa detectada - NÃO criar ticket');
       }
       
       // 🔒 Só criar ticket automático se não foi criado COM SUCESSO pelo tool call
       // Se o tool call falhou, permitir que o fallback detector crie como backup
-      if (isFinancialRequest && !ticketCreatedSuccessfully) {
+      if (isFinancialHandoffRequest && !ticketCreatedSuccessfully) {
         console.log('[ai-autopilot-chat] 💰 Solicitação financeira detectada - Criando ticket de segurança');
         
         const { data: ticket, error: ticketError } = await supabaseClient
