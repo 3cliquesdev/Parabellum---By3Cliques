@@ -7280,10 +7280,27 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           console.warn('[ai-autopilot-chat] Falha ao enviar saudação proativa:', e);
         }
       }
-      // cache-bust: 2026-03-18T01:40Z — NÃO retornar aqui; deixar o fluxo continuar para a LLM processar a mensagem do cliente
-      console.log('[ai-autopilot-chat] ✅ Saudação proativa concluída, continuando para processar mensagem do cliente pela LLM');
+      // 🆕 FIX: Se a mensagem do cliente é uma saudação pura, a saudação proativa já cobre a resposta.
+      // NÃO chamar a LLM para evitar retorno vazio + fallback desnecessário.
+      const isGreetingOnly = /^(oi|olá|ola|bom dia|boa tarde|boa noite|ei|eae|e aí|hey|hi|hello|tudo bem|tudo bom|blz|beleza|fala|salve|obrigad[oa]|valeu|ok)[\s!.,?]*$/i.test(customerMessage.trim());
+      if (isGreetingOnly || isMenuNoise) {
+        skipLLMForGreeting = true;
+        console.log('[ai-autopilot-chat] ✅ Saudação proativa cobre a resposta — skip LLM para greeting/menu noise:', customerMessage);
+      } else {
+        console.log('[ai-autopilot-chat] ✅ Saudação proativa concluída, continuando para processar mensagem do cliente pela LLM');
+      }
     }
 
+    // 🆕 FIX: Se skipLLMForGreeting, retornar sucesso sem chamar a LLM
+    if (skipLLMForGreeting) {
+      console.log('[ai-autopilot-chat] ⏭️ skipLLMForGreeting=true — retornando sucesso sem chamar LLM');
+      return new Response(JSON.stringify({
+        status: 'success',
+        message: 'Greeting handled by proactive message',
+        type: 'greeting_skip',
+        skipped: false,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     const aiData = await callAIWithFallback(aiPayload);
     // âœ… FIX 2: Fallback não usa 'Desculpe' que está na lista de frases proibidas (auto-loop).
