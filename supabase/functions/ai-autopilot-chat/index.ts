@@ -7675,13 +7675,19 @@ Como posso te ajudar hoje?`;
             }
 
             // 🔒 ATUALIZAR OTP PENDENTE NA METADATA (novo código, novo timer)
-            const currentMetadata = conversation.customer_metadata || {};
+            // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+            const { data: freshConvResendOtp } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshMetaResendOtp = (freshConvResendOtp?.customer_metadata || {}) as Record<string, any>;
             const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
             await supabaseClient
               .from('conversations')
               .update({ 
                 customer_metadata: {
-                  ...currentMetadata,
+                  ...freshMetaResendOtp,
                   awaiting_otp: true,
                   otp_expires_at: otpExpiresAt,
                   claimant_email: contactEmail
