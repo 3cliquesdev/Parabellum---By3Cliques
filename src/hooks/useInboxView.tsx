@@ -565,10 +565,16 @@ export function useInboxView(filters?: InboxFilters, scope: InboxScope = 'active
             row.department !== null && 
             isInAllowedDepartment;
 
+          const isAIQueueGlobal = 
+            row.assigned_to === null && 
+            (row.ai_mode === 'autopilot' || row.ai_mode === 'waiting_human') &&
+            row.status !== 'closed';
+
           const shouldShow = hasFullAccess || 
             isAssignedToMe || 
             isUnassignedAllowed ||
-            isAssignedToColleagueInMyDept;
+            isAssignedToColleagueInMyDept ||
+            isAIQueueGlobal;
 
           if (DEBUG) {
             console.log(`[Inbox-Debug] ${new Date().toISOString()} | EVENT=${payload.eventType} | conv=${row.conversation_id.slice(0, 8)}`);
