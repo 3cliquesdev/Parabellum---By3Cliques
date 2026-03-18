@@ -1,10 +1,7 @@
 
+# Auditoria IA — Melhorias Implementadas
 
-# Redeploy `ai-autopilot-chat` — Saudação com Role da Persona
-
-## Ação
-Deploy da Edge Function `ai-autopilot-chat` com o commit `feat(ai): incluir role da persona na saudação proativa`, que adiciona o campo `persona.role` na mensagem de saudação para informar o cliente sobre as capacidades da IA.
-
-## Passo único
-- Deploy da função `ai-autopilot-chat` via ferramenta de deploy de Edge Functions.
-
+## Concluído
+1. ✅ `create_lead` no EndNode — Cria deal no pipeline padrão com dados coletados do fluxo
+2. ✅ Métricas de latência end-to-end — Log `⏱️ Latência total: Xms` em toda resposta do autopilot
+3. ✅ Deploy: `process-chat-flow` + `ai-autopilot-chat`
