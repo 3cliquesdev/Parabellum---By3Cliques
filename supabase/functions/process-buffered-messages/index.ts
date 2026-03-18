@@ -144,13 +144,30 @@ serve(async (req) => {
           const effFlowContext = metaMsg.flow_context;
           const effFlowData = metaMsg.flow_data;
 
-          // 🆕 FIX: Safety check — se skipInitialMessage está ativo, filtrar dígitos de menu do buffer
+          // 🆕 FIX v2: Se skipInitialMessage está ativo e mensagem é dígito de menu,
+          // chamar IA com mensagem vazia para saudação proativa (em vez de pular)
           if (effFlowData?.skipInitialMessage === true) {
             const isMenuDigit = /^\d{1,2}$/.test(concatenatedMessage.trim());
             if (isMenuDigit) {
-              console.log(`[process-buffered-messages] ⏭️ Conv ${convId}: skipInitialMessage=true + menu digit "${concatenatedMessage.trim()}" — skipping autopilot`);
+              console.log(`[process-buffered-messages] ⏭️ Conv ${convId}: skipInitialMessage=true + menu digit → chamando IA com mensagem vazia para saudação`);
+              // Substituir mensagem por vazio para acionar saudação proativa
+              const greetSuccess = await callPipeline(supabase, {
+                conversationId: convId,
+                concatenatedMessage: "",
+                contactId: effContactId,
+                instanceId: effInstanceId || (await supabase.from("conversations").select("whatsapp_meta_instance_id").eq("id", convId).single()).data?.whatsapp_meta_instance_id,
+                fromNumber: effFromNumber,
+                flowContext: effFlowContext,
+                flowData: effFlowData,
+              });
               await supabase.from("message_buffer").update({ processed: true }).in("id", msgs.map((m: any) => m.id));
-              processedCount++;
+              if (greetSuccess) {
+                processedCount++;
+                console.log(`[process-buffered-messages] ✅ Conv ${convId}: saudação proativa enviada via skipInitialMessage`);
+              } else {
+                errorCount++;
+                console.error(`[process-buffered-messages] ❌ Conv ${convId}: falha na saudação proativa`);
+              }
               continue;
             }
           }
