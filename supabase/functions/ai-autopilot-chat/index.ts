@@ -7548,7 +7548,9 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
 
       if (hasKBArticles && hasFlowCtx) {
         console.log('[ai-autopilot-chat] 🧠 Fallback inteligente: LLM vazio + KB artigos encontrados mas irrelevantes → resposta contextual');
-        assistantMessage = 'Não encontrei informações específicas sobre isso na base de conhecimento. Posso transferir você para um atendente especializado, ou deseja tentar descrever a situação de outra forma?';
+        // 🆕 V8 FIX Bug 1: Frase reescrita para NÃO acertar ESCAPE_PATTERNS
+        // Removido "Posso transferir" que acionava o pattern e causava loop auto-infligido
+        assistantMessage = 'Não encontrei informações específicas sobre isso na nossa base. Quer que eu te conecte com a equipe de suporte, ou pode descrever a situação de outra forma?';
       } else {
         const ctxFallbackMsg = flow_context?.fallbackMessage;
         if (ctxFallbackMsg) {
