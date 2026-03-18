@@ -2245,7 +2245,13 @@ serve(async (req) => {
       // Se IA pediu confirmação de encerramento, processar resposta
       // ============================================================
       {
-        const closeMeta = conversation.customer_metadata || {};
+        // 🆕 V5-B: Refetch metadata fresco para não sobrescrever flags incrementais no close confirmation
+        const { data: freshCloseConv } = await supabaseClient
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const closeMeta = (freshCloseConv?.customer_metadata || {}) as Record<string, any>;
         if (closeMeta.awaiting_close_confirmation === true) {
           const msgLower = (customerMessage || '').toLowerCase().trim();
           
