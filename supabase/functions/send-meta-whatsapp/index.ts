@@ -441,8 +441,9 @@ serve(async (req) => {
     // 🆕 Se skip_db_save=true E tem client_message_id, o UPDATE acima já salvou o wamid
     // Só fazer INSERT para casos legacy (sem client_message_id)
     if (body.conversation_id && messageId && !body.skip_db_save && !body.client_message_id) {
+      const templateBodyText = body.template?.body_text;
       const messageContent = body.message || 
-                             (body.template ? `[Template: ${body.template.name}]` : "") ||
+                             (body.template ? (templateBodyText ? `📋 *Template: ${body.template.name}*\n\n${templateBodyText}` : `[Template: ${body.template.name}]`) : "") ||
                              (body.media ? `[${body.media.type}]` : "") ||
                              (body.interactive ? "[Interativo]" : "");
 
