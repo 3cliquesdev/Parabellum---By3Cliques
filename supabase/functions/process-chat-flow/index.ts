@@ -2067,6 +2067,7 @@ serve(async (req) => {
                   return new Response(JSON.stringify({
                     useAI: true,
                     aiNodeActive: true,
+                    skipInitialMessage: true, // 🆕 FIX: OTP not-customer → ai_response
                     nodeId: resolvedNode.id,
                     response: notCustomerMsg || '',
                     flowId: activeState.flow_id,
@@ -2295,6 +2296,7 @@ serve(async (req) => {
                   return new Response(JSON.stringify({
                     useAI: true,
                     aiNodeActive: true,
+                    skipInitialMessage: true, // 🆕 FIX: OTP verified → ai_response
                     nodeId: resolvedNode.id,
                     response: "✅ Identidade verificada!",
                     flowId: activeState.flow_id,
@@ -4549,6 +4551,7 @@ serve(async (req) => {
           JSON.stringify({
             useAI: true,
             aiNodeActive: true,
+            skipInitialMessage: true, // 🆕 FIX: intent-routing → ai_response — não enviar dígito de menu ao autopilot
             nodeId: nextNode.id,
             flowId: activeState.flow_id,
             flowName: activeState.chat_flows?.name || null,
@@ -5442,7 +5445,8 @@ serve(async (req) => {
           return new Response(
             JSON.stringify({ 
               useAI: true, 
-              aiNodeActive: true, 
+              aiNodeActive: true,
+              skipInitialMessage: true, // 🆕 FIX: Master Flow start → ai_response — não enviar msg inicial ao autopilot
               nodeId: node.id, 
               flowId: masterFlow.id, 
               flowStarted: true,
