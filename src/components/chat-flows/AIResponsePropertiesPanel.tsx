@@ -372,6 +372,7 @@ export function AIResponsePropertiesPanel({
                   <ClickableVariableBadge variable="pix_key" description="Chave PIX informada" colorClass="text-purple-600" onInsert={handleInsertVariable} />
                   <ClickableVariableBadge variable="amount" description="Valor solicitado" colorClass="text-purple-600" onInsert={handleInsertVariable} />
                   <ClickableVariableBadge variable="reason" description="Motivo / justificativa" colorClass="text-amber-600" onInsert={handleInsertVariable} />
+                  <ClickableVariableBadge variable="bank" description="Banco informado pelo cliente" colorClass="text-purple-600" onInsert={handleInsertVariable} />
                 </div>
               </div>
             </div>
