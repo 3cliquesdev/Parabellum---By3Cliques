@@ -1,97 +1,80 @@
-# Auditoria V14 — Correções Aplicadas ✅
 
-## Fixes V13 (anteriores)
-| Fix | Status |
-|---|---|
-| Bug 1: Self-blocking loop | ✅ |
-| Bug 2: Greeting double-send | ✅ (causa raiz real corrigida no Bug 7) |
-| Bug 3: {{vars}} vazando | ✅ |
-| Bug 4: Detecção financeira | ✅ |
-| Bug 5: KB sandbox | ✅ |
-| Bug 6: Typo persona | ✅ |
 
-## Fixes V10 (Deploy realizado)
+# Auditoria V16: Conversa #08277AB5
 
-### Bug 7 ✅ — isProactiveGreeting não pulava LLM
-### Bug 8 ✅ — Dígitos de menu pós-greeting causavam loop fallback
-### Bug 9 ✅ — Race condition: mensagens IA duplicadas
-### Bug 10 ✅ — Persona "Helper Sistema" com role "elper Sistema"
-### Bug 11 (MENOR) — KB sem cobertura (recomendação manual)
+## Timeline Confirmada
 
-## Fixes V11 (Deploy realizado)
+| Hora | Evento | Status |
+|---|---|---|
+| 15:01-15:02 | Menu produto + assunto → Financeiro | ✅ OK |
+| 15:02-15:04 | OTP enviado e validado com sucesso | ✅ OK |
+| 15:04:06 | "Agora posso te ajudar" (pós-OTP) | ✅ OK |
+| 15:05:54 | "Então quero sacar o valor..." | ❌ Deveria coletar dados do ticket |
+| 15:06:31 | "Não consegui resolver por aqui." | ❌ Fallback em vez de coleta |
+| 15:06:32 | "O que prefere fazer?" (SEM opções) | ❌ **BUG 31** |
+| 15:10:36 | "Quero sacar meu dinheiro" | ❌ Preso no escape node |
+| 15:10:39 | Menu retry COM opções (1-Voltar, 2-Atendente) | ✅ Retry funciona |
 
-### Bug 12 ✅ — Cliente aceita transferência e IA ignora
-### Bug 13 ✅ — Contador anti-loop reseta entre nós
-### Bug 14 ✅ — Greeting enviado DEPOIS de fallback
-### Bug 15 ✅ — Build timestamp para rastreabilidade
+## BUG 31 (CRITICO): Escape Node Enviado SEM Opções
 
-## Fixes V12 (Deploy realizado)
+**O que aconteceu:** `node_escape_financeiro` (ask_options) tem `message: "O que prefere fazer?"` e `options: [{↩ Voltar ao menu}, {👤 Falar com atendente}]`. A mensagem foi enviada como texto puro, sem as opções formatadas.
 
-### Bug 16 ✅ — Regex de transferência incompleta
-### Bug 17 ✅ — Afirmativo "Sim" com pontuação não detectado
-### Bug 18 ✅ — Deploy forçado para ativar V8-V12
+**Causa raiz:** O `process-chat-flow` insere o `fallback_message` diretamente no DB (L3697), e depois retorna `{ response: "O que prefere fazer?", options: [...] }`. O caller (webhook re-invocation L1910+) formata com `formatOptionsAsText()` e envia via `send-meta-whatsapp`. MAS o fallback_message inserido no DB (L3697) NÃO é enviado via WhatsApp — é apenas um DB insert. Então:
 
-## Fixes V13 (Deploy realizado)
+1. O fallback ("Não consegui resolver por aqui.") é salvo no DB mas NÃO enviado ao WhatsApp
+2. O webhook envia `"O que prefere fazer?" + options` via send-meta-whatsapp
 
-### Bug 20+21 ✅ — flowExit de Transfer Intent re-invoca flow → mensagens duplicadas + handoff não executa
-- **Fix:** Guard PRÉ-flowExit nos dois webhooks (`meta-whatsapp-webhook` e `handle-whatsapp-event`)
-- Quando `reason === 'customer_transfer_intent'` ou `reason === 'global_anti_loop_handoff'`:
-  - **Pula** re-invocação do `process-chat-flow` (elimina mensagens duplicadas)
-  - Executa handoff **direto**: `ai_mode = 'waiting_human'`, `assigned_to = null`
-  - Chama `route-conversation` para dispatch imediato
-- Resultado: Cliente recebe apenas "Vou te transferir agora" e é transferido em < 5s
+Porém no DB temos os dois como mensagens separadas. Há uma duplicação: o `ai-autopilot-chat` (L3504) salva a resposta no DB **antes** do webhook re-invocar o flow. O resultado é que a mensagem "O que prefere fazer?" pode ter sido salva sem options pelo ai-autopilot-chat, e depois o webhook tentou enviar com options mas o DB já tinha a versão sem.
 
-### Bug 22 ✅ — Global anti-loop counter sem diagnóstico
-- **Fix:** Telemetria adicionada no bloco L9326 do `ai-autopilot-chat`:
-  - Log: `🔢 V13 Bug 22: Global counter — isFallback=X, current=Y, new=Z, nodeId=N`
-- Permite monitorar se `isFallbackResponse` está sendo setado e se o counter incrementa
+**Fix:** No `process-chat-flow` L3697, quando o fallback_message é inserido, também incluir as opções do próximo nó (se for `ask_options`) na mesma mensagem. Alternativamente, combinar fallback + escape message + options em uma ÚNICA resposta retornada ao caller.
 
-## Deploy
-- `ai-autopilot-chat` ✅ re-deployed V13
-- `meta-whatsapp-webhook` ✅ re-deployed V13
-- `handle-whatsapp-event` ✅ re-deployed V13
+## BUG 32 (CRITICO): Após OTP Verificado, Saque Não Coletou Dados do Ticket
 
-## Fixes V14 (Deploy realizado)
+**O que aconteceu:** Após OTP verificado com sucesso, cliente pediu "quero sacar" mas a IA não iniciou a coleta de dados (pix_key, bank, reason, amount). Em vez disso, o `ai_transfer` foi disparado com `exit_reason: ai_handoff_exit` após apenas 4 interações (max=15).
 
-### Bug 24 ✅ — RLS do `inbox_view` sem cláusula AI queue global
-- **Fix:** Migration recriou policy `optimized_inbox_select` com cláusula adicional:
-  - `ai_mode IN ('autopilot','waiting_human') AND status<>'closed' AND assigned_to IS NULL`
-  - Permite todos os roles internos verem fila IA independente de departamento
+**Causa raiz:** O nó `node_ia_financeiro` tem `objective: "Validar identidade do cliente via OTP, identificar tipo (saque/reembolso), coletar dados completos..."`. Após OTP, a IA deveria entrar no modo de coleta. Mas ela emitiu `[[FLOW_EXIT]]` porque não encontrou artigos na KB sobre "sacar o valor da minha conta do seu armazem" (zero_confidence). A IA não entendeu que deveria COLETAR os dados, não buscar na KB.
 
-### Bug 25 ✅ — Client-side filter `useInboxView` restringia por departamento
-- **Fix:** Expandido `.or()` nos 2 blocos de query (main + chunked) para incluir:
-  - `and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed)`
-  - `and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
-- Realtime `shouldShow` atualizado com `isAIQueueGlobal`
+**Fix:** Atualizar o `objective` do nó financeiro para ser mais explícito pós-OTP: após verificação, a IA deve COLETAR os campos (pix_key, bank, reason, amount) via conversa e criar ticket — NÃO buscar na KB. Adicionar instrução no `context_prompt` para priorizar coleta sobre KB quando OTP já verificado.
 
-### Bug 26 ✅ — `get-inbox-counts` `applyVisibility` restringia fila IA
-- **Fix:** Expandido `.or()` no `applyVisibility` com mesmas cláusulas AI queue
-- Edge function redeployada
+## Plano de Correção
 
-## Deploy V14
-- Migration RLS ✅
-- `useInboxView.tsx` ✅ (3 blocos corrigidos)
-- `get-inbox-counts` ✅ re-deployed
+### 1. Bug 31 — Combinar fallback + escape message + options em resposta única
 
-## Fixes V15 (Deploy realizado)
+No `process-chat-flow` L3693-3710, ao invés de inserir o fallback_message separadamente no DB, acumulá-lo como `extraMessage` para ser combinado com a resposta do próximo nó. Isso garante que o caller receba UMA resposta com tudo:
 
-### Bug 27 ✅ — Telemetria skipInitialMessage no webhook Meta
-- **Fix:** Logs estruturados com conversationId, contactId, nodeId, flowId, timestamp e originalMessage
-- Permite diagnosticar se `skipInitialMessage` é propagado na primeira transição menu → AI node
+```
+"Não consegui resolver por aqui.\n\nO que prefere fazer?\n\n1️⃣ ↩ Voltar ao menu\n2️⃣ 👤 Falar com atendente"
+```
 
-### Bug 28+30 ✅ — Nó financeiro sem edges de intenção cruzada
-- **Fix:** Atualizado `flow_definition` do fluxo `cafe2831` (V5 Enterprise):
-  - Adicionado edge `cancelamento`: `node_ia_financeiro` → `node_ia_cancelamento`
-  - Adicionado edge `saque`: `node_ia_financeiro` → `node_escape_financeiro`
-  - Setado `forbid_cancellation: true` e `forbid_commercial: true` no `node_ia_financeiro`
+Remover o `supabaseClient.from('messages').insert()` do fallback (L3697) e passar o fallback como parte do `extraMessages` array que já existe no flow (L4598).
 
-### Bug 29 ✅ — OTP alucinado pela LLM dentro de fluxos ativos
-- **Fix 1:** Removido guard `!flow_context` em L6421 do `ai-autopilot-chat`
-  - OTP agora funciona como camada transversal de segurança, independente do fluxo ativo
-- **Fix 2:** Adicionada regra anti-alucinação OTP no `generateRestrictedPrompt`
-  - LLM proibida de prometer envio de códigos, OTP ou verificação por email
+### 2. Bug 32 — Atualizar objective do nó financeiro para priorizar coleta pós-OTP
 
-## Deploy V15
-- `ai-autopilot-chat` ✅ re-deployed
-- `meta-whatsapp-webhook` ✅ re-deployed
-- Flow `cafe2831` ✅ atualizado (edges + flags)
+Via migration SQL, atualizar o `objective` do `node_ia_financeiro` no fluxo `cafe2831`:
+
+```
+Objetivo: Após OTP verificado, COLETAR dados financeiros via conversa:
+1. Tipo (saque ou reembolso)
+2. Chave PIX ({{pix_key}})
+3. Banco ({{bank}})
+4. Motivo ({{reason}})
+5. Valor ({{amount}})
+Após coletar TODOS os dados, confirmar com o cliente e criar ticket com create_ticket.
+NÃO buscar na KB para pedidos de saque/reembolso — a ação é coleta de dados.
+```
+
+### 3. Anti-exit pós-OTP
+
+No `ai-autopilot-chat`, quando `otpVerified === true` e `smart_collection_fields` está configurado, suprimir `[[FLOW_EXIT]]` e forçar permanência no nó para completar a coleta. Adicionar regra no prompt:
+
+```
+APÓS VERIFICAÇÃO OTP: Sua tarefa é COLETAR os dados financeiros listados no objetivo.
+NÃO emita [[FLOW_EXIT]]. Permaneça no nó até coletar todos os campos necessários.
+```
+
+### Resumo de Arquivos
+
+1. **`supabase/functions/process-chat-flow/index.ts`** — L3693-3710: remover DB insert do fallback, acumular como extraMessage
+2. **`supabase/functions/ai-autopilot-chat/index.ts`** — Adicionar regra anti-exit pós-OTP quando smart_collection_fields ativo
+3. **Migration SQL** — Atualizar objective do `node_ia_financeiro` no fluxo `cafe2831`
+
