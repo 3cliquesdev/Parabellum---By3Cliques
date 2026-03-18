@@ -1224,6 +1224,7 @@ interface FlowContext {
   ticketConfig?: {
     enabled?: boolean;
     department_id?: string | null;
+    assigned_to?: string | null;
     category?: string | null;
     default_priority?: string | null;
     subject_template?: string | null;
