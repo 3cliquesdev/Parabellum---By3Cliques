@@ -79,6 +79,8 @@ export function useAutopilotTrigger(conversationId: string | null) {
           maxSentences: data?.maxSentences ?? 3,
           forbidQuestions: data?.forbidQuestions ?? true,
           forbidOptions: data?.forbidOptions ?? true,
+          // 🆕 Configuração de ticket
+          ticketConfig: data?.ticketConfig || null,
         } : undefined,
         response: data?.response
       };

@@ -1220,6 +1220,15 @@ interface FlowContext {
   forbidConsultant?: boolean;
   otpVerified?: boolean;
   collectedData?: any;
+  // 🆕 Configuração de ticket do nó de IA
+  ticketConfig?: {
+    enabled?: boolean;
+    department_id?: string | null;
+    category?: string | null;
+    default_priority?: string | null;
+    subject_template?: string | null;
+    description_template?: string | null;
+  } | null;
 }
 
 // 🆕 FASE 1: Função para gerar prompt RESTRITIVO baseado no flow_context
