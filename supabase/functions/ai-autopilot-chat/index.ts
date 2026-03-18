@@ -7027,6 +7027,10 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
               customer_confirmation: {
                 type: 'boolean',
                 description: '[APENAS PARA SAQUE] true se cliente confirmou explicitamente os dados (CPF, valor, destino).'
+              },
+              bank: {
+                type: 'string',
+                description: 'Banco informado pelo cliente, se aplicável.'
               }
             },
             required: ['issue_type', 'subject', 'description']
