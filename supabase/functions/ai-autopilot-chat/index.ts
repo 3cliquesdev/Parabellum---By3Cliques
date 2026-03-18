@@ -8088,17 +8088,29 @@ Via: Atendimento Automatizado (IA)`;
 - [ ] Notificar cliente`;
             }
 
+            // 🆕 Descrição: usar template do nó se configurado
+            let ticketDescription = args.description;
+            if (tc?.description_template) {
+              const templatedDesc = tc.description_template
+                .replace(/\{\{description\}\}/g, args.description || '')
+                .replace(/\{\{issue_type\}\}/g, args.issue_type || '')
+                .replace(/\{\{customer_name\}\}/g, contactName || '')
+                .replace(/\{\{order_id\}\}/g, args.order_id || '');
+              if (templatedDesc.trim()) ticketDescription = templatedDesc;
+            }
+
             const { data: ticket, error: ticketError } = await supabaseClient
               .from('tickets')
               .insert({
                 customer_id: contact.id,
                 subject: ticketSubject,
-                description: args.description,
-                priority: (args.issue_type === 'financeiro' || args.issue_type === 'saque') ? 'high' : 'medium',
+                description: ticketDescription,
+                priority: ticketPriority,
                 status: 'open',
                 source_conversation_id: conversationId,
                 category: ticketCategory,
-                internal_note: internalNote
+                internal_note: internalNote,
+                ...(tc?.department_id ? { department_id: tc.department_id } : {}),
               })
               .select()
               .single();
