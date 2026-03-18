@@ -7555,9 +7555,15 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     // 🆕 V12 FIX Bugs 16/17: Regex expandida para conjugações reais + equipe de suporte + pontuação
     const CUSTOMER_TRANSFER_INTENT = /\b(me\s+transfer[ea]|transfer[ea]\s+pra|me\s+conect[ae]|falar\s+com\s+(atendente|humano|pessoa|algu[eé]m|suporte|equipe)|quero\s+(um\s+)?(atendente|humano)|passa\s+pra\s+(um\s+)?(atendente|humano)|chama\s+(um\s+)?(atendente|humano)|equipe\s+de\s+suporte|atendimento\s+humano)\b/i;
     const CUSTOMER_AFFIRM_TRANSFER = /^(sim|quero|pode|por\s+favor|pode\s+ser|claro|ok|quero\s+sim|sim\s+quero|sim[,.]?\s*quero|sim[,.]?\s*por\s+favor|sim[,.]?\s*pode|sim[,.]?\s*pode\s+ser)[\s!.,]*$/i;
+    // 🆕 FIX Bug 42: Detecção pré-LLM de intenção de cancelamento
+    const CUSTOMER_CANCEL_INTENT = /\b(cancelar|cancelamento|encerrar\s+parceria|desativar|quero\s+cancelar|desejo\s+cancelar|preciso\s+cancelar|cancela\s+minha|cancela\s+meu|encerrar\s+contrato|rescindir|rescis[aã]o)\b/i;
     const customerMsgTrimmed = customerMessage.trim();
-    const hasTransferIntent = CUSTOMER_TRANSFER_INTENT.test(customerMsgTrimmed);
-    const hasAffirmTransfer = CUSTOMER_AFFIRM_TRANSFER.test(customerMsgTrimmed);
+    
+    // 🆕 FIX Bug 40: Para mensagens batched (multi-linha), testar CADA LINHA individualmente
+    const msgLines = customerMsgTrimmed.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const hasTransferIntent = CUSTOMER_TRANSFER_INTENT.test(customerMsgTrimmed) || msgLines.some(line => CUSTOMER_TRANSFER_INTENT.test(line));
+    const hasAffirmTransfer = CUSTOMER_AFFIRM_TRANSFER.test(customerMsgTrimmed) || msgLines.some(line => CUSTOMER_AFFIRM_TRANSFER.test(line));
+    const hasCancelIntent = CUSTOMER_CANCEL_INTENT.test(customerMsgTrimmed) || msgLines.some(line => CUSTOMER_CANCEL_INTENT.test(line));
 
     if (hasTransferIntent || hasAffirmTransfer) {
       // Verificar se houve fallback recente (últimos 120s) para confirmar contexto de transferência
@@ -7620,7 +7626,57 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }
     }
 
-    const aiData = await callAIWithFallback(aiPayload);
+    // 🆕 FIX Bug 42: Detecção pré-LLM de intenção de cancelamento
+    // Quando o nó tem forbidCancellation=true (rota de escape existe), detectar cancelamento antes da LLM
+    if (hasCancelIntent && flow_context?.forbidCancellation) {
+      console.log(`[ai-autopilot-chat] 🎯 Bug 42: Intenção de CANCELAMENTO detectada PRÉ-LLM: "${customerMsgTrimmed}" — disparando [[FLOW_EXIT:cancelamento]]`);
+      // Telemetria
+      Promise.resolve(supabaseClient.from('ai_events').insert({
+        entity_type: 'conversation',
+        entity_id: conversationId,
+        event_type: 'cancel_intent_pre_llm',
+        model: 'system',
+        score: 0,
+        output_json: { message: customerMsgTrimmed, hasCancelIntent: true, forbidCancellation: true },
+      })).catch(() => {});
+
+      const cancelMsg = 'Entendido! Vou direcionar você para o setor responsável pelo cancelamento. Um momento, por favor! 🙏';
+      // Salvar mensagem
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: cancelMsg,
+        sender_type: 'user',
+        message_type: 'ai_response',
+        is_ai_generated: true,
+        sender_id: null,
+        status: 'sending',
+        channel: responseChannel,
+      });
+      if (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta') {
+        try {
+          const whatsappResult = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, conversation.whatsapp_instance_id, conversation);
+          if (whatsappResult && whatsappResult.provider === 'meta') {
+            const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+            await supabaseClient.functions.invoke('send-meta-whatsapp', {
+              body: { instance_id: whatsappResult.instance.id, phone_number: targetNumber, message: cancelMsg, conversation_id: conversationId, skip_db_save: true, is_bot_message: true }
+            });
+          }
+        } catch (e: any) {
+          console.warn('[ai-autopilot-chat] Falha ao enviar msg cancel intent:', e);
+        }
+      }
+      return new Response(JSON.stringify({
+        flowExit: true,
+        reason: 'cancel_intent_pre_llm',
+        ai_exit_intent: 'cancelamento',
+        hasFlowContext: !!flow_context,
+        response: cancelMsg,
+        message: cancelMsg,
+        flow_context: flow_context ? { flow_id: flow_context.flow_id, node_id: flow_context.node_id } : undefined,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+
     // âœ… FIX 2: Fallback não usa 'Desculpe' que está na lista de frases proibidas (auto-loop).
     let rawAIContent = aiData.choices?.[0]?.message?.content;
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
