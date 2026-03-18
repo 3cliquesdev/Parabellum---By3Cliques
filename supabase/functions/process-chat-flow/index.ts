@@ -4100,8 +4100,72 @@ serve(async (req) => {
 
         // Executar ação final se configurada
         if (nextNode?.data?.end_action === 'create_lead') {
-          console.log('[process-chat-flow] Creating lead from collected data');
-          // TODO: Implementar criação de lead
+          console.log('[process-chat-flow] 🆕 Creating lead (deal) from collected data');
+          try {
+            const contactId = activeContactData?.id || null;
+            const contactName = activeContactData
+              ? `${activeContactData.first_name || ''} ${activeContactData.last_name || ''}`.trim()
+              : collectedData?.nome || collectedData?.name || 'Lead do Fluxo';
+
+            // Buscar pipeline padrão
+            const { data: defaultPipeline } = await supabaseClient
+              .from('pipelines')
+              .select('id, name')
+              .eq('is_default', true)
+              .limit(1)
+              .maybeSingle();
+
+            if (!defaultPipeline?.id) {
+              console.error('[process-chat-flow] ❌ Nenhum pipeline padrão encontrado para create_lead');
+            } else {
+              // Buscar primeiro stage do pipeline
+              const { data: firstStage } = await supabaseClient
+                .from('pipeline_stages')
+                .select('id')
+                .eq('pipeline_id', defaultPipeline.id)
+                .order('position', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+
+              const dealData: Record<string, any> = {
+                title: `Lead: ${contactName}`,
+                pipeline_id: defaultPipeline.id,
+                stage_id: firstStage?.id || null,
+                contact_id: contactId,
+                lead_source: 'chat_flow',
+                lead_email: collectedData?.email || activeContactData?.email || null,
+                lead_phone: collectedData?.telefone || collectedData?.phone || activeContactData?.phone || null,
+                status: 'open',
+                pain_points: collectedData?.assunto || collectedData?.motivo || null,
+              };
+
+              const { data: newDeal, error: dealError } = await supabaseClient
+                .from('deals')
+                .insert(dealData)
+                .select('id')
+                .single();
+
+              if (dealError) {
+                console.error('[process-chat-flow] ❌ Erro ao criar lead:', dealError);
+              } else {
+                console.log(`[process-chat-flow] ✅ Lead criado: ${newDeal.id}`);
+                collectedData.__last_lead_id = newDeal.id;
+
+                // Log ai_event
+                try {
+                  await supabaseClient.from('ai_events').insert({
+                    entity_id: conversationId,
+                    entity_type: 'conversation',
+                    event_type: 'flow_create_lead',
+                    model: 'flow_engine',
+                    output_json: { deal_id: newDeal.id, contact_id: contactId, pipeline: defaultPipeline.name, node_id: nextNode.id },
+                  });
+                } catch (_e) { /* non-blocking */ }
+              }
+            }
+          } catch (leadErr: any) {
+            console.error('[process-chat-flow] ❌ Exceção ao criar lead:', leadErr.message);
+          }
         }
 
         // 🎫 EndNode action: create_ticket
