@@ -231,7 +231,7 @@ function ConversationListItemComponent({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
           <p className="font-medium truncate text-foreground text-sm">
-            {displayName(conversation.contacts?.first_name, conversation.contacts?.last_name)}
+            {displayName(conversation.contacts?.first_name, conversation.contacts?.last_name, conversation.contacts?.email, conversation.contacts?.phone)}
           </p>
           <div className="flex items-center gap-1.5">
             <span className={cn(
