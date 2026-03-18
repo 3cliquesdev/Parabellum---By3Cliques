@@ -99,16 +99,27 @@ export default function Deals() {
   const canViewPendingQueue = hasPermission('deals.view_pending_queue');
   const canViewSalesDistribution = hasPermission('reports.lead_distribution');
 
+  // Ref para garantir que a seleção inicial só aconteça uma vez
+  const hasInitialized = useRef(false);
+
   // Selecionar pipeline default ao carregar (preferência do usuário → global → primeiro)
   useEffect(() => {
-    if (pipelines && pipelines.length > 0 && !selectedPipeline) {
-      const userDefault = (profile as any)?.default_pipeline_id;
-      const userPipeline = userDefault ? pipelines.find(p => p.id === userDefault) : null;
-      const globalDefault = pipelines.find(p => p.is_default);
-      const chosen = userPipeline || globalDefault || pipelines[0];
-      setSelectedPipeline(chosen.id);
+    if (!pipelines || pipelines.length === 0) return;
+
+    const userDefault = (profile as any)?.default_pipeline_id;
+    const userPipeline = userDefault ? pipelines.find(p => p.id === userDefault) : null;
+    const globalDefault = pipelines.find(p => p.is_default);
+    const chosen = userPipeline || globalDefault || pipelines[0];
+
+    // Primeira vez: sempre selecionar o pipeline correto
+    if (!hasInitialized.current) {
+      // Só inicializar quando o profile já carregou (ou não existe)
+      if (profile !== null || !user) {
+        setSelectedPipeline(chosen.id);
+        hasInitialized.current = true;
+      }
     }
-  }, [pipelines, selectedPipeline, profile]);
+  }, [pipelines, profile, user]);
 
   const filteredDeals = useMemo(() => {
     if (!deals) return [];
