@@ -4,6 +4,7 @@ import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { InternalNoteMessage } from "@/components/InternalNoteMessage";
 import { StreamingMessage } from "@/components/inbox/StreamingMessage";
 import { useMediaUrls } from "@/hooks/useMediaUrls";
+import { useRetryMessage } from "@/hooks/useRetryMessage";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
