@@ -9624,12 +9624,15 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
     // MULTI-AGENT: Limpar last_transfer apos IA receptora responder
     if (isReceivingTransfer && !saveError) {
       Promise.resolve((async () => {
-        const metaNow = (conversation.customer_metadata || {}) as Record<string, any>;
+        // FIX: Refetch metadata fresco para não sobrescrever updates feitos durante o pipeline
+        const { data: freshConvLT } = await supabaseClient.from("conversations")
+          .select("customer_metadata").eq("id", conversationId).maybeSingle();
+        const metaNow = ((freshConvLT?.customer_metadata || {}) as Record<string, any>);
         const { last_transfer: _removed, ...cleanedMeta } = metaNow;
         await supabaseClient.from("conversations")
           .update({ customer_metadata: cleanedMeta })
           .eq("id", conversationId);
-        console.log("[ai-autopilot-chat] last_transfer limpo apos continuidade");
+        console.log("[ai-autopilot-chat] last_transfer limpo apos continuidade (fresh metadata)");
       })()).catch((e: any) => console.warn("[ai-autopilot-chat] last_transfer cleanup failed:", e));
     }
 
