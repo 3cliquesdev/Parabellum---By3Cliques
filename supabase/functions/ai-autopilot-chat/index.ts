@@ -4581,7 +4581,7 @@ Responda APENAS: skip ou search`
                     'match_knowledge_articles',
                     {
                       query_embedding: queryEmbedding,
-                      match_threshold: 0.50,
+                      match_threshold: 0.55, // 🆕 V8 FIX Bug 5: Aumentado de 0.50 para 0.55
                       match_count: 5,
                       product_filter: hasProductFilter ? activeProductFilter : [],
                     }
