@@ -9999,8 +9999,10 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
   }
   }; // fim rawHandler
 
-  // Interceptor: garante Content-Type com charset=utf-8 em toda response
+  // Interceptor: garante Content-Type com charset=utf-8 em toda response + latency log
   const response = await rawHandler();
+  const totalMs = Date.now() - _startTs;
+  console.log(`[ai-autopilot-chat] ⏱️ Latência total: ${totalMs}ms | Status: ${response.status}`);
   const ct = response.headers.get('Content-Type') || '';
   if (ct.includes('application/json') && !ct.includes('charset')) {
     const newHeaders = new Headers(response.headers);
