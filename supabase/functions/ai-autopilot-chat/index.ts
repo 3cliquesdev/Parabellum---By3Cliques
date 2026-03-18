@@ -1101,6 +1101,16 @@ const WITHDRAWAL_ACTION_PATTERNS = [
   /saque\s+via\s+pix/i,                               // "saque via pix"
   /solicitar\s+saque/i,                               // "solicitar saque"
   /pedir\s+saque/i,                                   // "pedir saque"
+  // 🆕 FIX BUG 4: Patterns expandidos para cobranças sobre saque
+  /solicitei\s+(o\s+)?saque/i,                        // "solicitei o saque"
+  /saque\s+pendente/i,                                // "saque pendente"
+  /saque\s+(não|nao)\s+(caiu|chegou|recebi)/i,        // "saque não caiu", "saque não recebi"
+  /saque\s+h[áa]\s+\d+\s+dias?/i,                    // "saque há 9 dias"
+  /saque\s+e\s+at[ée]\s+agora/i,                      // "saque e até agora"
+  /meu\s+saque/i,                                     // "meu saque"
+  /saque\s+(não|nao)\s+foi/i,                         // "saque não foi processado"
+  /cadê\s+(meu\s+)?saque/i,                           // "cadê meu saque"
+  /\d+\s+dias?\s+(que\s+)?(solicitei|pedi)\s+(o\s+)?saque/i, // "9 dias que solicitei o saque"
 ];
 
 // 🆕 Padrões de REEMBOLSO DE PEDIDO (COM OTP) - Devolução de pedido Kiwify
