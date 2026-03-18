@@ -9364,7 +9364,6 @@ Conversa: ${conversationId}`;
         })).catch(() => {});
         
         // 🆕 FIX BUG 3: Forçar flowExit com handoff OBRIGATÓRIO — não ficar em loop
-        // Resetar contador para evitar loop infinito caso o webhook não processe
         // V7 FIX: Refetch metadata fresco antes do reset para não sobrescrever flags atualizadas mid-pipeline
         const { data: freshConvAntiLoop } = await supabaseClient
           .from('conversations')
@@ -9375,6 +9374,36 @@ Conversa: ${conversationId}`;
         await supabaseClient.from('conversations').update({
           customer_metadata: { ...freshMetaAntiLoop, ai_node_fallback_count: 0 }
         }).eq('id', conversationId);
+
+        // 🆕 FIX V14: Auto-ticket para conversas financeiras em anti-loop
+        const collectedData = flow_context.collectedData || {};
+        const isFinancialNode = (flow_context.node_id || '').toLowerCase().includes('financ') ||
+          (collectedData.assunto || '').toLowerCase().includes('financ');
+        if (isFinancialNode) {
+          console.log('[ai-autopilot-chat] 🎫 V14: Auto-ticket financeiro no anti-loop');
+          try {
+            const ticketSubject = `[Auto] Solicitação financeira - ${contact.first_name} ${contact.last_name}`.trim();
+            const ticketDescription = [
+              `Cliente: ${contact.first_name} ${contact.last_name}`,
+              `Produto: ${collectedData.produto || 'N/A'}`,
+              `Assunto: ${collectedData.assunto || 'financeiro'}`,
+              `Última mensagem: ${customerMessage || 'N/A'}`,
+              `Motivo: Anti-loop - IA não conseguiu resolver após ${aiNodeFallbackCount} tentativas`,
+            ].join('\n');
+            await supabaseClient.from('tickets').insert({
+              subject: ticketSubject,
+              description: ticketDescription,
+              priority: 'high',
+              category: 'financeiro',
+              customer_id: contact.id,
+              conversation_id: conversationId,
+              status: 'open',
+            });
+            console.log('[ai-autopilot-chat] ✅ Ticket financeiro criado automaticamente no anti-loop');
+          } catch (ticketErr: any) {
+            console.error('[ai-autopilot-chat] ❌ Falha ao criar ticket no anti-loop:', ticketErr);
+          }
+        }
         
         return new Response(JSON.stringify({
           flowExit: true,
@@ -9389,63 +9418,8 @@ Conversa: ${conversationId}`;
       }
     }
 
-    // 🆕 FIX LOOP: Atualizar contador de fallbacks no customer_metadata
-    // 🆕 FIX Resíduo 3: Refetch metadata fresco para não sobrescrever greeting flags
-    if (flow_context) {
-      const { data: freshConv } = await supabaseClient
-        .from('conversations')
-        .select('customer_metadata')
-        .eq('id', conversationId)
-        .single();
-      const existingMetadata = (freshConv?.customer_metadata as Record<string, any>) || {};
-      const aiNodeId = existingMetadata.ai_node_current_id || null;
-      let newCount = 0;
-      
-      if (isFallbackResponse) {
-        newCount = (aiNodeId === flow_context.node_id) ? ((existingMetadata.ai_node_fallback_count || 0) + 1) : 1;
-      }
-
-       // 🆕 V11 FIX Bug 13: Contador GLOBAL de fallbacks — nunca reseta entre nós
-       const currentGlobalCount = existingMetadata.ai_total_fallback_count || 0;
-       const newGlobalCount = isFallbackResponse ? currentGlobalCount + 1 : currentGlobalCount;
-       console.log(`[ai-autopilot-chat] 🔢 V13 Bug 22: Global counter — isFallback=${isFallbackResponse}, current=${currentGlobalCount}, new=${newGlobalCount}, nodeId=${flow_context.node_id}`);
-
-      // Sempre atualizar o nó atual e o contador (merge incremental preserva greeting flags)
-      await supabaseClient
-        .from('conversations')
-        .update({
-          customer_metadata: {
-            ...existingMetadata,
-            ai_node_current_id: flow_context.node_id,
-            ai_node_fallback_count: isFallbackResponse ? newCount : 0,
-            ai_total_fallback_count: newGlobalCount,
-          }
-        })
-        .eq('id', conversationId);
-
-      // 🆕 V11 FIX Bug 13: Se total >= 4, handoff obrigatório independente do nó
-      if (isFallbackResponse && newGlobalCount >= 4) {
-        console.log(`[ai-autopilot-chat] 🚨 V11 Bug 13: GLOBAL ANTI-LOOP — ${newGlobalCount} fallbacks totais → handoff obrigatório`);
-        Promise.resolve(supabaseClient.from('ai_events').insert({
-          entity_type: 'conversation',
-          entity_id: conversationId,
-          event_type: 'ai_decision_global_anti_loop',
-          model: 'system',
-          score: 0,
-          output_json: { reason: 'global_anti_loop', total_fallbacks: newGlobalCount, node_id: flow_context.node_id },
-        })).catch(() => {});
-
-        const globalHandoffMsg = 'Percebi que não estou conseguindo te ajudar da melhor forma. Vou te transferir para um atendente agora! 🙏';
-        return new Response(JSON.stringify({
-          flowExit: true,
-          reason: 'global_anti_loop_handoff',
-          hasFlowContext: true,
-          response: globalHandoffMsg,
-          message: globalHandoffMsg,
-          flow_context: { flow_id: flow_context.flow_id, node_id: flow_context.node_id },
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-    }
+    // 🆕 FIX V14: Counter update MOVIDO para APÓS todo o pipeline de strip/contract/restriction
+    // Aqui NÃO atualiza mais — será feito depois da linha 9993 onde isFallbackResponse é final
 
     if (isFallbackResponse) {
       console.log('[ai-autopilot-chat] 🚨 FALLBACK DETECTADO');
@@ -9549,6 +9523,8 @@ Conversa: ${conversationId}`;
         const messageWasEmptied = !cleanedMessage || cleanedMessage.length < 5;
         if (messageWasEmptied) {
           cleanedMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
+          isFallbackResponse = true; // 🆕 FIX CRITICAL: Marcar como fallback quando strip esvazia a mensagem
+          console.log('[ai-autopilot-chat] 🚨 Strip esvaziou mensagem → isFallbackResponse=true');
         }
         
         if (cleanedMessage !== assistantMessage) {
@@ -9850,23 +9826,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           console.log('[ai-autopilot-chat] Contract violation - substituindo msg e permanecendo no no');
           assistantMessage = 'Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.';
           isFallbackResponse = true;
-          try {
-            const { data: freshMetaCV } = await supabaseClient
-              .from('conversations')
-              .select('customer_metadata')
-              .eq('id', conversationId)
-              .single();
-            const metaCV = (freshMetaCV?.customer_metadata as Record<string, any>) || {};
-            const cvNodeId = flow_context.node_id;
-            const cvPrevNode = metaCV.ai_node_current_id || null;
-            const cvCount = (cvPrevNode === cvNodeId) ? ((metaCV.ai_node_fallback_count || 0) + 1) : 1;
-            await supabaseClient.from('conversations').update({
-              customer_metadata: { ...metaCV, ai_node_current_id: cvNodeId, ai_node_fallback_count: cvCount }
-            }).eq('id', conversationId);
-            console.log('[ai-autopilot-chat] Contract violation counter: ' + cvCount);
-          } catch (counterErr: any) {
-            console.error('[ai-autopilot-chat] Falha counter direto:', counterErr);
-          }
+          // 🆕 FIX V14: Counter parcial REMOVIDO — update unificado no final do pipeline
+          console.log('[ai-autopilot-chat] Contract violation detectada — counter será atualizado no final do pipeline');
         }
       }
       
@@ -9917,20 +9878,8 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
         assistantMessage = fallbackMessage;
         isFallbackResponse = true; // 🆕 FIX Resíduo 2: Sinalizar como fallback para anti-loop
         
-        // 🆕 FIX Resíduo 2: Incrementar counter anti-loop diretamente
-        try {
-          const { data: rvConv } = await supabaseClient.from('conversations').select('customer_metadata').eq('id', conversationId).single();
-          const rvMeta = (rvConv?.customer_metadata as any) || {};
-          const rvNodeId = flow_context.node_id || 'unknown';
-          const rvPrevNode = rvMeta.ai_node_current_id || '';
-          const rvCount = (rvPrevNode === rvNodeId) ? ((rvMeta.ai_node_fallback_count || 0) + 1) : 1;
-          await supabaseClient.from('conversations').update({
-            customer_metadata: { ...rvMeta, ai_node_current_id: rvNodeId, ai_node_fallback_count: rvCount }
-          }).eq('id', conversationId);
-          console.log(`[ai-autopilot-chat] 🔄 Restriction violation counter: ${rvCount} para nó ${rvNodeId}`);
-        } catch (rvErr: any) {
-          console.warn('[ai-autopilot-chat] ⚠️ Falha ao incrementar counter de restriction:', rvErr);
-        }
+        // 🆕 FIX V14: Counter parcial REMOVIDO — update unificado no final do pipeline
+        console.log('[ai-autopilot-chat] Restriction violation detectada — counter será atualizado no final do pipeline');
         
         Promise.resolve(supabaseClient.from('ai_quality_logs').insert({
           conversation_id: conversationId,
@@ -9989,7 +9938,67 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           sandboxUsedFlag
         );
         
-        console.log('[ai-autopilot-chat] âœ… Resposta passou validação anti-escape (pré-save)');
+        console.log('[ai-autopilot-chat] ✅ Resposta passou validação anti-escape (pré-save)');
+      }
+    }
+
+    // ============================================================
+    // 🆕 FIX V14: COUNTER UPDATE UNIFICADO — APÓS todo o pipeline de strip/contract/restriction
+    // Neste ponto, isFallbackResponse reflete o estado FINAL real da resposta
+    // ============================================================
+    if (flow_context) {
+      const { data: freshConvFinal } = await supabaseClient
+        .from('conversations')
+        .select('customer_metadata')
+        .eq('id', conversationId)
+        .single();
+      const finalMetadata = (freshConvFinal?.customer_metadata as Record<string, any>) || {};
+      const finalAiNodeId = finalMetadata.ai_node_current_id || null;
+      let finalNewCount = 0;
+      
+      if (isFallbackResponse) {
+        finalNewCount = (finalAiNodeId === flow_context.node_id) ? ((finalMetadata.ai_node_fallback_count || 0) + 1) : 1;
+      }
+
+      // Contador GLOBAL de fallbacks — nunca reseta entre nós
+      const finalGlobalCount = finalMetadata.ai_total_fallback_count || 0;
+      const finalNewGlobalCount = isFallbackResponse ? finalGlobalCount + 1 : finalGlobalCount;
+      console.log(`[ai-autopilot-chat] 🔢 V14 UNIFIED counter — isFallback=${isFallbackResponse}, nodeCount=${isFallbackResponse ? finalNewCount : 0}, globalCount=${finalNewGlobalCount}, nodeId=${flow_context.node_id}`);
+
+      // Sempre atualizar o nó atual e o contador (merge incremental preserva greeting flags)
+      await supabaseClient
+        .from('conversations')
+        .update({
+          customer_metadata: {
+            ...finalMetadata,
+            ai_node_current_id: flow_context.node_id,
+            ai_node_fallback_count: isFallbackResponse ? finalNewCount : 0,
+            ai_total_fallback_count: finalNewGlobalCount,
+          }
+        })
+        .eq('id', conversationId);
+
+      // Se total >= 4, handoff obrigatório independente do nó
+      if (isFallbackResponse && finalNewGlobalCount >= 4) {
+        console.log(`[ai-autopilot-chat] 🚨 V14 GLOBAL ANTI-LOOP — ${finalNewGlobalCount} fallbacks totais → handoff obrigatório`);
+        Promise.resolve(supabaseClient.from('ai_events').insert({
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          event_type: 'ai_decision_global_anti_loop',
+          model: 'system',
+          score: 0,
+          output_json: { reason: 'global_anti_loop', total_fallbacks: finalNewGlobalCount, node_id: flow_context.node_id },
+        })).catch(() => {});
+
+        const globalHandoffMsg = 'Percebi que não estou conseguindo te ajudar da melhor forma. Vou te transferir para um atendente agora! 🙏';
+        return new Response(JSON.stringify({
+          flowExit: true,
+          reason: 'global_anti_loop_handoff',
+          hasFlowContext: true,
+          response: globalHandoffMsg,
+          message: globalHandoffMsg,
+          flow_context: { flow_id: flow_context.flow_id, node_id: flow_context.node_id },
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
     }
 
@@ -10020,7 +10029,16 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       .single();
 
     if (saveError) {
-      console.error('[ai-autopilot-chat] Erro ao salvar mensagem:', saveError);
+      console.error('[ai-autopilot-chat] ❌ CRITICAL: Erro ao salvar mensagem no banco — NÃO enviará ao WhatsApp:', saveError);
+      // 🆕 FIX V14: Se falhou salvar no banco, retornar erro e NÃO enviar pelo WhatsApp (consistência)
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Falha ao persistir mensagem',
+        details: saveError.message
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     const messageId = savedMessage?.id;
