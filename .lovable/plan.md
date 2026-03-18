@@ -1,5 +1,5 @@
 
-# Auditoria V11 — Correções Aplicadas ✅
+# Auditoria V12 — Correções Aplicadas ✅
 
 ## Fixes V8 (Produção Confirmada)
 | Fix | Status |
@@ -36,5 +36,25 @@
 ### Bug 15 ✅ — Build timestamp para rastreabilidade
 - **Fix:** `// BUILD: V11 — timestamp` no topo do arquivo
 
+## Fixes V12 (Deploy realizado)
+
+### Bug 16 ✅ — Regex de transferência incompleta
+- **Fix:** Expandido `CUSTOMER_TRANSFER_INTENT` para cobrir conjugações reais:
+  - `me\s+transfer[ea]` (transfere + transfera)
+  - `me\s+conect[ae]` (conecta + conecte)
+  - `equipe\s+de\s+suporte`
+  - `atendimento\s+humano`
+  - `falar\s+com\s+(suporte|equipe)`
+
+### Bug 17 ✅ — Afirmativo "Sim" com pontuação não detectado
+- **Fix:** Expandido `CUSTOMER_AFFIRM_TRANSFER` com variantes de pontuação:
+  - `sim[,.]?\s*quero`
+  - `sim[,.]?\s*por\s+favor`
+  - `sim[,.]?\s*pode`
+  - `sim[,.]?\s*pode\s+ser`
+
+### Bug 18 ✅ — Deploy forçado para ativar V8-V12
+- **Fix:** Re-deploy da edge function `ai-autopilot-chat` com BUILD V12 timestamp
+
 ## Deploy
-- `ai-autopilot-chat` ✅ re-deployed V11
+- `ai-autopilot-chat` ✅ re-deployed V12
