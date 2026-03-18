@@ -1449,7 +1449,6 @@ serve(async (req) => {
   const _startTs = Date.now();
   const rawHandler = async (): Promise<Response> => {
   try {
-  try {
     // Handler de warmup rápido (sem processamento de IA)
     const bodyText = await req.text();
     const parsedBody = bodyText ? JSON.parse(bodyText) : {};
