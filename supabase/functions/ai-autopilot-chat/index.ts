@@ -8817,12 +8817,18 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
               }
 
               // 5. Salvar metadata na conversa
-              const existingMeta = conversation.customer_metadata || {};
+              // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+              const { data: freshConvAfterHours } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshMetaAfterHours = (freshConvAfterHours?.customer_metadata || {}) as Record<string, any>;
               await supabaseClient
                 .from('conversations')
                 .update({
                   customer_metadata: {
-                    ...existingMeta,
+                    ...freshMetaAfterHours,
                     after_hours_handoff_requested_at: new Date().toISOString(),
                     after_hours_next_open_text: nextOpenText,
                     pending_department_id: conversation.department || null,
