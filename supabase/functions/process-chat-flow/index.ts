@@ -5478,6 +5478,7 @@ serve(async (req) => {
               forbidSupport: node.data?.forbid_support ?? false,
               forbidConsultant: node.data?.forbid_consultant ?? false,
               ticketConfig: node.data?.ticket_config || null,
+              otpVerified: collectedData?.__ai_otp_verified === true,
               debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
