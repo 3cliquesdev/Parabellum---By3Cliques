@@ -6230,11 +6230,19 @@ Digite **"reenviar"** se precisar de um novo código.`;
         
         // Se OTP foi validado com sucesso, limpar flags de OTP pendente
         if (otpData?.success) {
+          // Refetch metadata fresco para não sobrescrever updates incrementais
+          const { data: freshOtpConv } = await supabaseClient
+            .from('conversations')
+            .select('customer_metadata')
+            .eq('id', conversationId)
+            .maybeSingle();
+          const freshOtpMeta = (freshOtpConv?.customer_metadata || {}) as Record<string, any>;
+          
           await supabaseClient
             .from('conversations')
             .update({ 
               customer_metadata: {
-                ...conversationMetadata,
+                ...freshOtpMeta,
                 awaiting_otp: false,
                 otp_expires_at: null,
                 last_otp_verified_at: new Date().toISOString()
@@ -7514,13 +7522,19 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
             if (searchError || !existingCustomer) {
               console.log('[ai-autopilot-chat] ❌ FASE 2: Email não encontrado - Perguntando confirma��o');
               
-              // Salvar email pendente para confirmação na metadata da conversa
-              const currentMetadata = conversation.customer_metadata || {};
+              // Refetch metadata fresco para não sobrescrever updates incrementais
+              const { data: freshEmailConvA } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshEmailMetaA = (freshEmailConvA?.customer_metadata || {}) as Record<string, any>;
+              
               await supabaseClient
                 .from('conversations')
                 .update({ 
                   customer_metadata: { 
-                    ...currentMetadata,
+                    ...freshEmailMetaA,
                     pending_email_confirmation: emailInformado,
                     pending_email_timestamp: new Date().toISOString()
                   }
@@ -7553,13 +7567,19 @@ Se estiver correto, vou te transferir para nosso time comercial. Se digitou erra
             // OTP será pedido APENAS quando cliente solicitar operação financeira
             console.log('[ai-autopilot-chat] âœ… Cliente identificado por email - SEM OTP (novo fluxo)');
             
-            // Marcar como cliente verificado por email na base (sem awaiting_otp)
-            const currentMetadata = conversation.customer_metadata || {};
+            // Refetch metadata fresco para não sobrescrever updates incrementais
+            const { data: freshEmailConvB } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshEmailMetaB = (freshEmailConvB?.customer_metadata || {}) as Record<string, any>;
+            
             await supabaseClient
               .from('conversations')
               .update({ 
                 customer_metadata: {
-                  ...currentMetadata,
+                  ...freshEmailMetaB,
                   email_verified_in_db: true,        // Email conferido na base
                   verified_email: emailInformado,     // Email do cliente
                   verified_customer_id: existingCustomer.id,
@@ -7731,8 +7751,14 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
           try {
             const args = safeParseToolArgs(toolCall.function.arguments);
             const confirmed = args.confirmed;
-            const currentMetadata = conversation.customer_metadata || {};
-            const pendingEmail = currentMetadata.pending_email_confirmation;
+            // Refetch metadata fresco para não sobrescrever updates incrementais
+            const { data: freshConfirmConv } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshConfirmMeta = (freshConfirmConv?.customer_metadata || {}) as Record<string, any>;
+            const pendingEmail = freshConfirmMeta.pending_email_confirmation;
             
             console.log('[ai-autopilot-chat] 📧 Confirmação de email não encontrado:', { confirmed, pendingEmail });
             
@@ -7742,7 +7768,7 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
                 .from('conversations')
                 .update({ 
                   customer_metadata: { 
-                    ...currentMetadata,
+                    ...freshConfirmMeta,
                     pending_email_confirmation: null,
                     pending_email_timestamp: null
                   }
@@ -7788,12 +7814,19 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
               console.error('[ai-autopilot-chat] ❌ Erro ao criar deal:', dealError);
             }
 
-            // Limpar email pendente da metadata
+            // Refetch metadata fresco antes de limpar (pode ter sido atualizado durante criação do deal)
+            const { data: freshConfirmConv2 } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshConfirmMeta2 = (freshConfirmConv2?.customer_metadata || {}) as Record<string, any>;
+            
             await supabaseClient
               .from('conversations')
               .update({ 
                 customer_metadata: { 
-                  ...currentMetadata,
+                  ...freshConfirmMeta2,
                   pending_email_confirmation: null,
                   pending_email_timestamp: null
                 }
