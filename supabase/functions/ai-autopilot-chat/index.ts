@@ -5845,7 +5845,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       customerMessage.toLowerCase().includes(keyword.toLowerCase())
     );
     
-    // 📦 REEMBOLSO DE PEDIDO - Sem OTP, explica processo
+    // 📦 REEMBOLSO DE PEDIDO - Exige OTP (ação que gera ticket financeiro)
     const isRefundRequest = REFUND_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     );
