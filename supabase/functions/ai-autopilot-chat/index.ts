@@ -6716,7 +6716,8 @@ REGRA: Tente resolver sozinha. Se não conseguir e o cliente pedir humano, use r
     ) : '';
 
     // 🔒 TRAVA FINANCEIRA: Injetar instruções diretamente no prompt da LLM
-    const financialGuardInstruction = flowForbidFinancial ? `
+    // ✅ V16.1 Bug 34: Desativar guard financeiro no prompt quando OTP já verificado (evita contradição com otpVerifiedInstruction)
+    const financialGuardInstruction = (flowForbidFinancial && !flow_context?.otpVerified) ? `
 
 🔒 TRAVA FINANCEIRA ATIVA — REGRAS OBRIGATÓRIAS:
 - Responda perguntas INFORMATIVAS sobre finanças usando APENAS dados da base de conhecimento.
