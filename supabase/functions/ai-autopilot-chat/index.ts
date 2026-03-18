@@ -7318,12 +7318,13 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       } catch (flagErr: any) {
         console.warn('[ai-autopilot-chat] Falha ao salvar flag de saudação:', flagErr);
       }
-      // Bug fix 3+4: usar getWhatsAppInstanceForConversation com parâmetros corretos
+      // 🆕 FIX Resíduo 1: Restaurar assinatura correta de 4 parâmetros
       if (!greetSaveErr && (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta')) {
         try {
           const whatsappResult = await getWhatsAppInstanceForConversation(
             supabaseClient,
             conversationId,
+            conversation.whatsapp_instance_id,
             conversation
           );
           if (whatsappResult && whatsappResult.provider === 'meta') {
