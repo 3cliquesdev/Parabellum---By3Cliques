@@ -3704,8 +3704,15 @@ serve(async (req) => {
                 })
                 .eq('id', contact.id);
               
+              // V6 FIX: Refetch metadata fresco
+              const { data: freshConvEmailVerify } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshMetaEmailVerify = (freshConvEmailVerify?.customer_metadata || {}) as Record<string, any>;
               const updatedMeta: Record<string, any> = {
-                ...(conversation.customer_metadata || {}),
+                ...freshMetaEmailVerify,
                 email_verified_at: new Date().toISOString()
               };
               
