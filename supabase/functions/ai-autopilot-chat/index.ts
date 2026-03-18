@@ -7567,13 +7567,19 @@ Se estiver correto, vou te transferir para nosso time comercial. Se digitou erra
             // OTP será pedido APENAS quando cliente solicitar operação financeira
             console.log('[ai-autopilot-chat] âœ… Cliente identificado por email - SEM OTP (novo fluxo)');
             
-            // Marcar como cliente verificado por email na base (sem awaiting_otp)
-            const currentMetadata = conversation.customer_metadata || {};
+            // Refetch metadata fresco para não sobrescrever updates incrementais
+            const { data: freshEmailConvB } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshEmailMetaB = (freshEmailConvB?.customer_metadata || {}) as Record<string, any>;
+            
             await supabaseClient
               .from('conversations')
               .update({ 
                 customer_metadata: {
-                  ...currentMetadata,
+                  ...freshEmailMetaB,
                   email_verified_in_db: true,        // Email conferido na base
                   verified_email: emailInformado,     // Email do cliente
                   verified_customer_id: existingCustomer.id,
