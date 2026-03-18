@@ -6289,19 +6289,14 @@ Digite **"reenviar"** se precisar de um novo código.`;
       });
       
       // NÃO faz nada aqui - deixa o código continuar para atendimento normal pela IA
-      // Apenas loga e segue para o próximo bloco
-    }
-    
     // ============================================================
-    // 🔒 OTP APENAS PARA SAQUE DE SALDO/CARTEIRA
+    // OTP PARA ACOES FINANCEIRAS (SAQUE, REEMBOLSO, ESTORNO)
     // ============================================================
-    // Regra simplificada:
-    // - Cliente pede SAQUE de saldo â†’ OTP para segurança
-    // - Cancelamento de assinatura Kiwify â†’ Sem OTP
-    // - Reembolso de pedido â†’ Sem OTP (explica processo)
-    // - Qualquer outra coisa â†’ Conversa normal (sem OTP)
+    // - Cliente pede SAQUE/REEMBOLSO/ESTORNO -> OTP para seguranca
+    // - Cancelamento Kiwify -> Sem OTP
+    // - Duvida informativa -> Sem OTP
     // ============================================================
-    if (contactHasEmail && isWithdrawalRequest && !hasRecentOTPVerification && !flow_context) {
+    if (contactHasEmail && isFinancialActionRequest && !hasRecentOTPVerification && !flow_context) {
       // 🆕 GUARD: Se existe flow_context (qualquer), PULAR o bloco OTP inteiro.
       // O fluxo visual é soberano e tem seu próprio ramo financeiro com OTP nativo.
       // Ref: flow-sovereignty-principle
