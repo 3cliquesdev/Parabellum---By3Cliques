@@ -6141,7 +6141,8 @@ Posso ajudar em mais alguma coisa?`;
     // responder determinístico e NÃO seguir para IA/handoff.
     // 🆕 FIX BUG 1: OTP pending context depende APENAS de flags reais
     const hasOTPPendingContext = contactHasEmail && (hasAwaitingOTP || hasRecentOTPPending);
-    if (!shouldValidateOTP && hasOTPPendingContext && otpDigitsOnly.length > 0 && otpDigitsOnly.length !== 6) {
+    // 🆕 FIX Resíduo 1: Só tratar como tentativa de OTP se >= 4 dígitos (1-3 dígitos são contexto, ex: "dia 3 de março")
+    if (!shouldValidateOTP && hasOTPPendingContext && otpDigitsOnly.length >= 4 && otpDigitsOnly.length !== 6) {
       const otpFormatResponse = `**Código inválido**\n\nO código deve ter **6 dígitos**.\n\nPor favor, envie apenas os 6 números (pode ser com ou sem espaços).\n\nDigite **"reenviar"** se precisar de um novo código.`;
 
       const { data: savedMsg } = await supabaseClient
@@ -6157,10 +6158,10 @@ Posso ajudar em mais alguma coisa?`;
         .single();
 
       if (responseChannel === 'whatsapp' && contact?.phone) {
+        // 🆕 FIX Resíduo 3: Unificar assinatura para 3 parâmetros (igual à saudação proativa)
         const whatsappResult = await getWhatsAppInstanceForConversation(
           supabaseClient,
           conversationId,
-          conversation.whatsapp_instance_id,
           conversation
         );
         if (whatsappResult) {
@@ -7265,7 +7266,11 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     let skipLLMForGreeting = false;
     // Não disparar saudação quando OTP já foi verificado (cliente aguarda resposta à solicitação)
     const skipGreetingForOtp = flow_context?.otpVerified === true;
-    if (flow_context && !skipGreetingForOtp && (isFirstNodeInteraction || isMenuNoise)) {
+    // 🆕 FIX Resíduo 2: Guard de saudação por nó — verificar flag no metadata antes de enviar
+    const currentNodeId = flow_context?.node_id || flow_context?.collectedData?.__ai?.ai_node_current_id || 'unknown';
+    const greetingFlagKey = `greeting_sent_node_${currentNodeId}`;
+    const alreadySentGreeting = !!(customerMetadata as any)?.[greetingFlagKey];
+    if (flow_context && !skipGreetingForOtp && !alreadySentGreeting && (isFirstNodeInteraction || isMenuNoise)) {
       const personaGreetName = persona?.name || 'nossa equipe';
       const personaRole = (persona as any)?.role || '';
       // NÃO usar flow_context.objective — contém instruções internas do sistema
@@ -7304,6 +7309,14 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         status: 'sending',
         channel: responseChannel,
       });
+      // 🆕 FIX Resíduo 2: Salvar flag de saudação no metadata para impedir loops
+      try {
+        const updatedMeta = { ...(customerMetadata as any || {}), [greetingFlagKey]: true };
+        await supabaseClient.from('conversations').update({ customer_metadata: updatedMeta }).eq('id', conversationId);
+        console.log(`[ai-autopilot-chat] 🏷️ Flag ${greetingFlagKey} salva no metadata`);
+      } catch (flagErr: any) {
+        console.warn('[ai-autopilot-chat] Falha ao salvar flag de saudação:', flagErr);
+      }
       // Bug fix 3+4: usar getWhatsAppInstanceForConversation com parâmetros corretos
       if (!greetSaveErr && (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta')) {
         try {
@@ -7429,8 +7442,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     } else if (isFinancialActionRequest) {
       assistantMessage = 'Para prosseguir com sua solicitação financeira, preciso confirmar sua identidade. Qual é o seu e-mail de compra?';
     } else if (isFinancialRequest) {
-      // Dúvida financeira informativa OU qualquer outro caso financeiro não-ação
-      assistantMessage = 'Posso ajudar com sua dúvida financeira! Como posso te ajudar?';
+      // 🆕 FIX Resíduo 4: Resposta contextualizada em vez de genérica
+      assistantMessage = 'Entendi sua situação financeira. Vou verificar o que está acontecendo. Pode me informar o e-mail utilizado na compra para que eu localize seus dados?';
     } else {
       // 🆕 FIX: Fallback Inteligente — se LLM retornou vazio mas KB encontrou artigos,
       // gerar resposta contextual oferecendo transferência em vez de mensagem genérica
