@@ -417,130 +417,121 @@ export function KnowledgeAuditTab() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Carregando artigos...</div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-10">
-                <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
-              </TableHead>
-              <TableHead>Título</TableHead>
-              <TableHead>Categoria</TableHead>
-              <TableHead>Product Tags</TableHead>
-              <TableHead>Tags</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Problemas</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((article) => (
-              <TableRow key={article.id} className={article.issues.length > 0 ? "bg-destructive/5" : ""}>
-                <TableCell>
-                  <Checkbox checked={selected.has(article.id)} onCheckedChange={() => toggleSelect(article.id)} />
-                </TableCell>
-                <TableCell className="font-medium max-w-[300px] truncate" title={article.title}>
-                  {article.title}
-                </TableCell>
-                <TableCell>
-                  {editingCell?.id === article.id && editingCell.field === "category" ? (
-                    <div className="flex items-center gap-1">
-                      <Select value={editValue} onValueChange={setEditValue}>
-                        <SelectTrigger className="w-[150px] h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {validCategories.map((c) => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button size="xs" onClick={() => saveInlineEdit(article.id, "category")} disabled={saving}>
-                        <Save className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <button
-                      className="text-left hover:underline text-sm cursor-pointer"
-                      onClick={() => {
-                        setEditingCell({ id: article.id, field: "category" });
-                        setEditValue(article.category || "");
-                      }}
-                    >
-                      {article.category || <span className="text-muted-foreground italic">vazio</span>}
-                    </button>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingCell?.id === article.id && editingCell.field === "product_tags" ? (
-                    <div className="flex items-center gap-1">
-                      <Input
-                        className="w-[180px] h-8 text-xs"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        placeholder="tag1, tag2"
-                      />
-                      <Button size="xs" onClick={() => saveInlineEdit(article.id, "product_tags")} disabled={saving}>
-                        <Save className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <button
-                      className="text-left cursor-pointer"
-                      onClick={() => {
-                        setEditingCell({ id: article.id, field: "product_tags" });
-                        setEditValue((article.product_tags || []).join(", "));
-                      }}
-                    >
-                      {article.product_tags?.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {article.product_tags.map((t) => (
-                            <Badge key={t} variant="outline" className="text-xs">{t}</Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground italic text-sm">vazio</span>
-                      )}
-                    </button>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {(article.tags || []).slice(0, 3).map((t) => (
-                      <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
-                    ))}
-                    {(article.tags || []).length > 3 && (
-                      <Badge variant="secondary" className="text-xs">+{(article.tags || []).length - 3}</Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={article.is_published ? "default" : "secondary"} className="text-xs">
-                    {article.is_published ? "Publicado" : "Rascunho"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {article.issues.length === 0 ? (
-                      <Badge variant="outline" className="text-xs text-emerald-600">✓ OK</Badge>
-                    ) : (
-                      article.issues.map(issueBadge)
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  {getActionButton(article)}
-                </TableCell>
-              </TableRow>
-            ))}
-            {filtered.length === 0 && (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                  Nenhum artigo encontrado com os filtros atuais.
-                </TableCell>
+                <TableHead className="w-10">
+                  <Checkbox checked={selected.size === filtered.length && filtered.length > 0} onCheckedChange={toggleAll} />
+                </TableHead>
+                <TableHead className="min-w-[200px]">Título</TableHead>
+                <TableHead className="min-w-[140px]">Categoria</TableHead>
+                <TableHead className="min-w-[150px]">Product Tags</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="min-w-[120px]">Ações</TableHead>
+                <TableHead>Problemas</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((article) => (
+                <TableRow key={article.id} className={article.issues.length > 0 ? "bg-destructive/5" : ""}>
+                  <TableCell>
+                    <Checkbox checked={selected.has(article.id)} onCheckedChange={() => toggleSelect(article.id)} />
+                  </TableCell>
+                  <TableCell className="font-medium max-w-[300px] truncate" title={article.title}>
+                    {article.title}
+                  </TableCell>
+                  <TableCell>
+                    {editingCell?.id === article.id && editingCell.field === "category" ? (
+                      <div className="flex items-center gap-1">
+                        <Select value={editValue} onValueChange={setEditValue}>
+                          <SelectTrigger className="w-[150px] h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {validCategories.map((c) => (
+                              <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button size="xs" onClick={() => saveInlineEdit(article.id, "category")} disabled={saving}>
+                          <Save className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        className="text-left hover:bg-accent/50 rounded px-2 py-1 text-sm cursor-pointer w-full"
+                        onClick={() => {
+                          setEditingCell({ id: article.id, field: "category" });
+                          setEditValue(article.category || "");
+                        }}
+                      >
+                        {article.category || <span className="text-muted-foreground italic">vazio</span>}
+                      </button>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {editingCell?.id === article.id && editingCell.field === "product_tags" ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          className="w-[180px] h-8 text-xs"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          placeholder="tag1, tag2"
+                        />
+                        <Button size="xs" onClick={() => saveInlineEdit(article.id, "product_tags")} disabled={saving}>
+                          <Save className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        className="text-left cursor-pointer hover:bg-accent/50 rounded px-2 py-1 w-full"
+                        onClick={() => {
+                          setEditingCell({ id: article.id, field: "product_tags" });
+                          setEditValue((article.product_tags || []).join(", "));
+                        }}
+                      >
+                        {article.product_tags?.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {article.product_tags.map((t) => (
+                              <Badge key={t} variant="outline" className="text-xs">{t}</Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground italic text-sm">vazio</span>
+                        )}
+                      </button>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={article.is_published ? "default" : "secondary"} className="text-xs">
+                      {article.is_published ? "Publicado" : "Rascunho"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {getActionButton(article)}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {article.issues.length === 0 ? (
+                        <Badge variant="outline" className="text-xs text-emerald-600">✓ OK</Badge>
+                      ) : (
+                        article.issues.map(issueBadge)
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Nenhum artigo encontrado com os filtros atuais.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       )}
     </div>
   );
