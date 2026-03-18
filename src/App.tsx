@@ -244,7 +244,7 @@ const App = () => {
               <Route path="/knowledge" element={<ProtectedRoute requiredPermission="inbox.view_knowledge"><Layout><Knowledge /></Layout></ProtectedRoute>} />
               <Route path="/knowledge/curation" element={<ProtectedRoute requiredPermission="knowledge.manage_articles"><Layout><KnowledgeCuration /></Layout></ProtectedRoute>} />
               <Route path="/knowledge/gaps" element={<ProtectedRoute requiredPermission="knowledge.manage_articles"><Layout><KBGapsDashboard /></Layout></ProtectedRoute>} />
-              <Route path="/knowledge/audit" element={<ProtectedRoute requiredPermission="knowledge.manage_articles"><Layout><KnowledgeAudit /></Layout></ProtectedRoute>} />
+              <Route path="/knowledge/audit" element={<Navigate to="/knowledge" replace />} />
               <Route path="/ai-studio/personas" element={<ProtectedRoute requiredPermission="ai.manage_personas"><Layout><AIStudio /></Layout></ProtectedRoute>} />
               <Route path="/ai-telemetry" element={<Navigate to="/?tab=ai-telemetry" replace />} />
               <Route path="/import-clients" element={<ProtectedRoute requiredPermission="contacts.import"><Layout><ImportClients /></Layout></ProtectedRoute>} />
