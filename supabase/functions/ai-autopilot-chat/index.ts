@@ -7555,9 +7555,15 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     // 🆕 V12 FIX Bugs 16/17: Regex expandida para conjugações reais + equipe de suporte + pontuação
     const CUSTOMER_TRANSFER_INTENT = /\b(me\s+transfer[ea]|transfer[ea]\s+pra|me\s+conect[ae]|falar\s+com\s+(atendente|humano|pessoa|algu[eé]m|suporte|equipe)|quero\s+(um\s+)?(atendente|humano)|passa\s+pra\s+(um\s+)?(atendente|humano)|chama\s+(um\s+)?(atendente|humano)|equipe\s+de\s+suporte|atendimento\s+humano)\b/i;
     const CUSTOMER_AFFIRM_TRANSFER = /^(sim|quero|pode|por\s+favor|pode\s+ser|claro|ok|quero\s+sim|sim\s+quero|sim[,.]?\s*quero|sim[,.]?\s*por\s+favor|sim[,.]?\s*pode|sim[,.]?\s*pode\s+ser)[\s!.,]*$/i;
+    // 🆕 FIX Bug 42: Detecção pré-LLM de intenção de cancelamento
+    const CUSTOMER_CANCEL_INTENT = /\b(cancelar|cancelamento|encerrar\s+parceria|desativar|quero\s+cancelar|desejo\s+cancelar|preciso\s+cancelar|cancela\s+minha|cancela\s+meu|encerrar\s+contrato|rescindir|rescis[aã]o)\b/i;
     const customerMsgTrimmed = customerMessage.trim();
-    const hasTransferIntent = CUSTOMER_TRANSFER_INTENT.test(customerMsgTrimmed);
-    const hasAffirmTransfer = CUSTOMER_AFFIRM_TRANSFER.test(customerMsgTrimmed);
+    
+    // 🆕 FIX Bug 40: Para mensagens batched (multi-linha), testar CADA LINHA individualmente
+    const msgLines = customerMsgTrimmed.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const hasTransferIntent = CUSTOMER_TRANSFER_INTENT.test(customerMsgTrimmed) || msgLines.some(line => CUSTOMER_TRANSFER_INTENT.test(line));
+    const hasAffirmTransfer = CUSTOMER_AFFIRM_TRANSFER.test(customerMsgTrimmed) || msgLines.some(line => CUSTOMER_AFFIRM_TRANSFER.test(line));
+    const hasCancelIntent = CUSTOMER_CANCEL_INTENT.test(customerMsgTrimmed) || msgLines.some(line => CUSTOMER_CANCEL_INTENT.test(line));
 
     if (hasTransferIntent || hasAffirmTransfer) {
       // Verificar se houve fallback recente (últimos 120s) para confirmar contexto de transferência
