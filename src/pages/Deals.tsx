@@ -668,7 +668,7 @@ export default function Deals() {
                         variant="ghost"
                         size="icon"
                         className="h-9 w-9"
-                        onClick={() => setDefaultPipeline.mutate(selectedPipeline)}
+                        onClick={() => setDefaultPipeline.mutate(selectedPipeline, { onSuccess: () => refetchProfile() })}
                         disabled={setDefaultPipeline.isPending}
                       >
                         <Star
