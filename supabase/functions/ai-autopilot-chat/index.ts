@@ -6282,7 +6282,7 @@ Digite **"reenviar"** se precisar de um novo código.`;
     // â†’ Atendimento NORMAL direto, SEM pedir OTP novamente
     // ============================================================
     // 🆕 GUARD CLAUSE atualizada: Bypass para atendimento normal SE não for SAQUE
-    if (contactHasEmail && hasEverVerifiedOTP && !isWithdrawalRequest) {
+    if (contactHasEmail && hasEverVerifiedOTP && !isFinancialActionRequest) {
       console.log('[ai-autopilot-chat] âœ… GUARD CLAUSE: Cliente verificado - BYPASS Identity Wall', {
         contact_email: maskEmail(contactEmail),
         contact_name: contactName,
