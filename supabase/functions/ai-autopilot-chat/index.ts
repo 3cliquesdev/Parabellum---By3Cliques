@@ -7442,8 +7442,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     } else if (isFinancialActionRequest) {
       assistantMessage = 'Para prosseguir com sua solicitação financeira, preciso confirmar sua identidade. Qual é o seu e-mail de compra?';
     } else if (isFinancialRequest) {
-      // Dúvida financeira informativa OU qualquer outro caso financeiro não-ação
-      assistantMessage = 'Posso ajudar com sua dúvida financeira! Como posso te ajudar?';
+      // 🆕 FIX Resíduo 4: Resposta contextualizada em vez de genérica
+      assistantMessage = 'Entendi sua situação financeira. Vou verificar o que está acontecendo. Pode me informar o e-mail utilizado na compra para que eu localize seus dados?';
     } else {
       // 🆕 FIX: Fallback Inteligente — se LLM retornou vazio mas KB encontrou artigos,
       // gerar resposta contextual oferecendo transferência em vez de mensagem genérica
