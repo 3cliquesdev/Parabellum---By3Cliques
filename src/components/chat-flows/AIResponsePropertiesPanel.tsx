@@ -9,6 +9,8 @@ import { Bot, Sparkles, AlertTriangle, GraduationCap, Ticket, Info } from "lucid
 import { usePersonas } from "@/hooks/usePersonas";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTicketCategories } from "@/hooks/useTicketCategories";
+import { useSupportAgents } from "@/hooks/useSupportAgents";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +38,7 @@ export function AIResponsePropertiesPanel({
   const { data: personas, isLoading: loadingPersonas } = usePersonas();
   const { data: departments = [] } = useDepartments({ activeOnly: true });
   const { data: categories = [] } = useTicketCategories();
+  const { data: supportAgents = [] } = useSupportAgents();
 
   const ticketConfig = selectedNode.data.ticket_config || {};
   const updateTicketConfig = (field: string, value: any) => {
@@ -240,6 +243,37 @@ export function AIResponsePropertiesPanel({
                   </SelectItem>
                   {departments.map((d) => (
                     <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Responsável */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Responsável</Label>
+              <Select
+                value={ticketConfig.assigned_to || "none"}
+                onValueChange={(v) => updateTicketConfig("assigned_to", v === "none" ? null : v)}
+              >
+                <SelectTrigger className="text-sm h-9">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground">Nenhum (auto)</span>
+                  </SelectItem>
+                  {supportAgents.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={agent.avatar_url || undefined} />
+                          <AvatarFallback className="text-[9px]">
+                            {agent.full_name?.substring(0, 2).toUpperCase() || "??"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{agent.full_name || "Sem nome"}</span>
+                      </div>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
