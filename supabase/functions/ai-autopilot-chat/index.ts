@@ -7261,6 +7261,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
                 message: assistantMessageGreeting,
                 conversation_id: conversationId,
                 skip_db_save: true,
+                is_bot_message: true,
               }
             });
             console.log('[ai-autopilot-chat] ✅ Saudação proativa enviada via WhatsApp Meta');
