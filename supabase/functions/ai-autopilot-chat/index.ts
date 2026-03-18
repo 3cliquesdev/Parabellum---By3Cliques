@@ -3664,8 +3664,15 @@ serve(async (req) => {
               // Revincula a conversa ao contato correto
               console.log('[ai-autopilot-chat] 🔄 Revinculando conversa ao cliente existente:', existingCustomerId);
               
+            // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+              const { data: freshConvEmailRebind } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshMetaEmailRebind = (freshConvEmailRebind?.customer_metadata || {}) as Record<string, any>;
               const updatedMeta: Record<string, any> = {
-                ...(conversation.customer_metadata || {}),
+                ...freshMetaEmailRebind,
                 email_verified_at: new Date().toISOString(),
                 original_contact_id: contact.id, // Guardar referência do lead original
                 rebind_reason: 'email_matched_existing_customer'
@@ -3697,8 +3704,15 @@ serve(async (req) => {
                 })
                 .eq('id', contact.id);
               
+              // V6 FIX: Refetch metadata fresco
+              const { data: freshConvEmailVerify } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshMetaEmailVerify = (freshConvEmailVerify?.customer_metadata || {}) as Record<string, any>;
               const updatedMeta: Record<string, any> = {
-                ...(conversation.customer_metadata || {}),
+                ...freshMetaEmailVerify,
                 email_verified_at: new Date().toISOString()
               };
               
@@ -3724,12 +3738,19 @@ serve(async (req) => {
               console.log('[ai-autopilot-chat] 🎯 CONSULTANT REDIRECT: Cliente tem consultor, redirecionando direto:', consultantId);
               
               // Atribuir conversa ao consultor em modo copilot
+              // V6 FIX: Refetch metadata fresco para consultant redirect
+              const { data: freshConvConsult } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshMetaConsult = (freshConvConsult?.customer_metadata || {}) as Record<string, any>;
               await supabaseClient.from('conversations')
                 .update({
                   assigned_to: consultantId,
                   ai_mode: 'copilot',
                   customer_metadata: {
-                    ...(conversation.customer_metadata || {}),
+                    ...freshMetaConsult,
                     email_verified_at: new Date().toISOString(),
                     consultant_redirect: true,
                     consultant_redirect_at: new Date().toISOString()
@@ -3806,10 +3827,17 @@ serve(async (req) => {
             if (isFinancialCtx && !alreadyAskedAltEmail) {
               console.log('[ai-autopilot-chat] Email nao encontrado em contexto FINANCEIRO - perguntando email alternativo');
               
+              // V6 FIX: Refetch metadata fresco
+              const { data: freshConvAltEmail } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshMetaAltEmail = (freshConvAltEmail?.customer_metadata || {}) as Record<string, any>;
               await supabaseClient.from('conversations')
                 .update({
                   customer_metadata: {
-                    ...(conversation.customer_metadata || {}),
+                    ...freshMetaAltEmail,
                     asked_alternative_email: true,
                     first_email_checked: emailInMessage.toLowerCase().trim()
                   }
@@ -3828,12 +3856,19 @@ serve(async (req) => {
             }
             
             // Atualizar conversa: departamento = Comercial, ai_mode = waiting_human
+            // V6 FIX: Refetch metadata fresco
+            const { data: freshConvLeadRoute } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshMetaLeadRoute = (freshConvLeadRoute?.customer_metadata || {}) as Record<string, any>;
             await supabaseClient.from('conversations')
               .update({ 
                 department: DEPT_COMERCIAL_ID,
                 ai_mode: 'waiting_human',
                 customer_metadata: {
-                  ...(conversation.customer_metadata || {}),
+                  ...freshMetaLeadRoute,
                   lead_email_checked: emailInMessage.toLowerCase().trim(),
                   lead_routed_to_comercial_at: new Date().toISOString()
                 }
@@ -7675,13 +7710,19 @@ Como posso te ajudar hoje?`;
             }
 
             // 🔒 ATUALIZAR OTP PENDENTE NA METADATA (novo código, novo timer)
-            const currentMetadata = conversation.customer_metadata || {};
+            // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+            const { data: freshConvResendOtp } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshMetaResendOtp = (freshConvResendOtp?.customer_metadata || {}) as Record<string, any>;
             const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
             await supabaseClient
               .from('conversations')
               .update({ 
                 customer_metadata: {
-                  ...currentMetadata,
+                  ...freshMetaResendOtp,
                   awaiting_otp: true,
                   otp_expires_at: otpExpiresAt,
                   claimant_email: contactEmail
@@ -7749,13 +7790,19 @@ Por favor, verifique sua caixa de entrada (e spam) e digite o código que você 
             }
 
             // Marcar OTP pendente na metadata
-            const currentMetadata = conversation.customer_metadata || {};
+            // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+            const { data: freshConvFinOtp } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const freshMetaFinOtp = (freshConvFinOtp?.customer_metadata || {}) as Record<string, any>;
             const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
             await supabaseClient
               .from('conversations')
               .update({ 
                 customer_metadata: {
-                  ...currentMetadata,
+                  ...freshMetaFinOtp,
                   awaiting_otp: true,
                   otp_expires_at: otpExpiresAt,
                   claimant_email: emailToUse,
@@ -8770,12 +8817,18 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
               }
 
               // 5. Salvar metadata na conversa
-              const existingMeta = conversation.customer_metadata || {};
+              // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+              const { data: freshConvAfterHours } = await supabaseClient
+                .from('conversations')
+                .select('customer_metadata')
+                .eq('id', conversationId)
+                .maybeSingle();
+              const freshMetaAfterHours = (freshConvAfterHours?.customer_metadata || {}) as Record<string, any>;
               await supabaseClient
                 .from('conversations')
                 .update({
                   customer_metadata: {
-                    ...existingMeta,
+                    ...freshMetaAfterHours,
                     after_hours_handoff_requested_at: new Date().toISOString(),
                     after_hours_next_open_text: nextOpenText,
                     pending_department_id: conversation.department || null,
@@ -8820,7 +8873,13 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             const args = safeParseToolArgs(toolCall.function.arguments);
             console.log('[ai-autopilot-chat] 🔒 close_conversation chamado:', args);
             
-            const currentMeta = conversation.customer_metadata || {};
+            // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+            const { data: freshConvClose } = await supabaseClient
+              .from('conversations')
+              .select('customer_metadata')
+              .eq('id', conversationId)
+              .maybeSingle();
+            const currentMeta = (freshConvClose?.customer_metadata || {}) as Record<string, any>;
             
             if (args.customer_confirmed === false || !currentMeta.awaiting_close_confirmation) {
               // ETAPA 1: Perguntar confirmação (anti-pulo: sempre pedir se flag não existe)

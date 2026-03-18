@@ -782,11 +782,18 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
         if (!otpError && otpResponse?.success) {
           const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
           
+          // V6 FIX: Refetch metadata fresco para não sobrescrever flags incrementais
+          const { data: freshConvOtpResend } = await supabase
+            .from('conversations')
+            .select('customer_metadata')
+            .eq('id', conversationId)
+            .maybeSingle();
+          const freshMetaOtpResend = (freshConvOtpResend?.customer_metadata || {}) as Record<string, any>;
           await supabase
             .from('conversations')
             .update({
               customer_metadata: {
-                ...currentMetadata,
+                ...freshMetaOtpResend,
                 awaiting_otp: true,
                 otp_blocked: false,
                 otp_blocked_at: null,
