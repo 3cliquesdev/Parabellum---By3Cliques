@@ -271,6 +271,8 @@ export function MessageBubble({
               <MessageStatusIndicator
                 status={status || 'sent'}
                 errorDetail={errorDetail}
+                onRetry={status === 'failed' ? onRetryMessage : undefined}
+                isRetrying={isRetrying}
                 className={
                   isAI ? "text-violet-600 dark:text-violet-400" : "text-white"
                 }
