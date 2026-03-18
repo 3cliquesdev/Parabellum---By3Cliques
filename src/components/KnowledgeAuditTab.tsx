@@ -17,7 +17,8 @@ import {
   type AuditIssue,
 } from "@/hooks/useKnowledgeAudit";
 import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
-import { AlertCircle, AlertTriangle, CheckCircle2, Search, Tag, FolderOpen, Save, Loader2, Zap, Send, ShieldCheck } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Search, Tag, FolderOpen, Save, Loader2, Zap, Send, ShieldCheck, Pencil } from "lucide-react";
+import { AuditArticleEditDialog } from "@/components/knowledge/AuditArticleEditDialog";
 
 type IssueFilter = "all" | "no_embedding" | "no_category" | "empty_product_tags" | "orphan_category" | "clean";
 
