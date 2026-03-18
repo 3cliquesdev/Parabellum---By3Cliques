@@ -99,13 +99,16 @@ export default function Deals() {
   const canViewPendingQueue = hasPermission('deals.view_pending_queue');
   const canViewSalesDistribution = hasPermission('reports.lead_distribution');
 
-  // Selecionar pipeline default ao carregar
+  // Selecionar pipeline default ao carregar (preferência do usuário → global → primeiro)
   useEffect(() => {
     if (pipelines && pipelines.length > 0 && !selectedPipeline) {
-      const defaultPipeline = pipelines.find(p => p.is_default) || pipelines[0];
-      setSelectedPipeline(defaultPipeline.id);
+      const userDefault = (profile as any)?.default_pipeline_id;
+      const userPipeline = userDefault ? pipelines.find(p => p.id === userDefault) : null;
+      const globalDefault = pipelines.find(p => p.is_default);
+      const chosen = userPipeline || globalDefault || pipelines[0];
+      setSelectedPipeline(chosen.id);
     }
-  }, [pipelines, selectedPipeline]);
+  }, [pipelines, selectedPipeline, profile]);
 
   const filteredDeals = useMemo(() => {
     if (!deals) return [];
