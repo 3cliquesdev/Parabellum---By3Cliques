@@ -273,11 +273,11 @@ async function fetchInboxData(options: FetchOptions = {}): Promise<InboxViewItem
     if (role === "sales_rep" || role === "support_agent" || role === "financial_agent") {
       if (departmentIds && departmentIds.length > 0) {
         query = query.or(
-          `assigned_to.eq.${userId},department.in.(${departmentIds.join(",")}),and(assigned_to.is.null,department.is.null)`
+          `assigned_to.eq.${userId},department.in.(${departmentIds.join(",")}),and(assigned_to.is.null,department.is.null),and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed),and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
         );
       } else {
         query = query.or(
-          `assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null)`
+          `assigned_to.eq.${userId},and(assigned_to.is.null,department.is.null),and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed),and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
         );
       }
     } else if (role === "consultant" || role === "user") {
