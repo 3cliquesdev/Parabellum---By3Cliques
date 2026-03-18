@@ -57,6 +57,19 @@ export function AuditArticleEditDialog({
       });
   }, [open, articleId]);
 
+  // Clear state when dialog closes or article changes
+  useEffect(() => {
+    if (!open) {
+      setTitle("");
+      setContent("");
+      setCategory("");
+      setProductTags("");
+      setTags("");
+      setProblem("");
+      setSolution("");
+    }
+  }, [open]);
+
   const handleSave = () => {
     if (!articleId) return;
     updateArticle.mutate(
@@ -67,6 +80,8 @@ export function AuditArticleEditDialog({
         category: category || undefined,
         product_tags: productTags.split(",").map((t) => t.trim()).filter(Boolean),
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+        problem: problem || undefined,
+        solution: solution || undefined,
       },
       {
         onSuccess: () => {

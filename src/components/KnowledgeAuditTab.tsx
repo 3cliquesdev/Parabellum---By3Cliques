@@ -441,8 +441,17 @@ export function KnowledgeAuditTab() {
                   <TableCell>
                     <Checkbox checked={selected.has(article.id)} onCheckedChange={() => toggleSelect(article.id)} />
                   </TableCell>
-                  <TableCell className="font-medium max-w-[300px] truncate" title={article.title}>
-                    {article.title}
+                  <TableCell className="font-medium max-w-[300px]">
+                    <button
+                      className="text-left truncate max-w-full hover:underline hover:text-primary cursor-pointer"
+                      title={article.title}
+                      onClick={() => {
+                        setEditArticleId(article.id);
+                        setEditDialogOpen(true);
+                      }}
+                    >
+                      {article.title}
+                    </button>
                   </TableCell>
                   <TableCell>
                     {editingCell?.id === article.id && editingCell.field === "category" ? (
