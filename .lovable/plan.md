@@ -1,159 +1,48 @@
-# Auditoria V14 — Correções Aplicadas ✅
 
-## Fixes V13 (anteriores)
-| Fix | Status |
-|---|---|
-| Bug 1: Self-blocking loop | ✅ |
-| Bug 2: Greeting double-send | ✅ (causa raiz real corrigida no Bug 7) |
-| Bug 3: {{vars}} vazando | ✅ |
-| Bug 4: Detecção financeira | ✅ |
-| Bug 5: KB sandbox | ✅ |
-| Bug 6: Typo persona | ✅ |
 
-## Fixes V10 (Deploy realizado)
+# Problema: Time comercial não consegue assumir conversas enviadas por template
 
-### Bug 7 ✅ — isProactiveGreeting não pulava LLM
-### Bug 8 ✅ — Dígitos de menu pós-greeting causavam loop fallback
-### Bug 9 ✅ — Race condition: mensagens IA duplicadas
-### Bug 10 ✅ — Persona "Helper Sistema" com role "elper Sistema"
-### Bug 11 (MENOR) — KB sem cobertura (recomendação manual)
+## Causa raiz
 
-## Fixes V11 (Deploy realizado)
+Quando um vendedor envia um template (Reengage ou Pipeline), a conversa fica com:
+- `ai_mode: 'waiting_human'`
+- `assigned_to: o próprio vendedor`
 
-### Bug 12 ✅ — Cliente aceita transferência e IA ignora
-### Bug 13 ✅ — Contador anti-loop reseta entre nós
-### Bug 14 ✅ — Greeting enviado DEPOIS de fallback
-### Bug 15 ✅ — Build timestamp para rastreabilidade
+Na tela do ChatWindow, a lógica `canShowTakeControl` verifica:
+```
+canShowTakeControl = isAutopilot || isWaitingHuman || !assigned_to
+```
 
-## Fixes V12 (Deploy realizado)
+Como `isWaitingHuman = true`, o compositor de mensagens é **escondido** e substituído pelo banner "Aguardando atendimento humano - Clique em Assumir para digitar". O vendedor precisa clicar em "Assumir" mesmo já sendo o dono da conversa.
 
-### Bug 16 ✅ — Regex de transferência incompleta
-### Bug 17 ✅ — Afirmativo "Sim" com pontuação não detectado
-### Bug 18 ✅ — Deploy forçado para ativar V8-V12
+Porém, o RPC `take_control_secure` exige que agentes estejam com status **"online"**. Se o vendedor não marcou seu status como online, o clique em "Assumir" falha com "Altere seu status para Online" — travando o vendedor numa tela sem compositor e sem conseguir responder.
 
-## Fixes V13 (Deploy realizado)
+Além disso, é um atrito desnecessário: se a conversa já está atribuída ao usuário (ele mesmo mandou o template), não faz sentido exigir que ele "assuma" novamente.
 
-### Bug 20+21 ✅ — flowExit de Transfer Intent re-invoca flow → mensagens duplicadas + handoff não executa
-- **Fix:** Guard PRÉ-flowExit nos dois webhooks (`meta-whatsapp-webhook` e `handle-whatsapp-event`)
-- Quando `reason === 'customer_transfer_intent'` ou `reason === 'global_anti_loop_handoff'`:
-  - **Pula** re-invocação do `process-chat-flow` (elimina mensagens duplicadas)
-  - Executa handoff **direto**: `ai_mode = 'waiting_human'`, `assigned_to = null`
-  - Chama `route-conversation` para dispatch imediato
-- Resultado: Cliente recebe apenas "Vou te transferir agora" e é transferido em < 5s
+## Solução
 
-### Bug 22 ✅ — Global anti-loop counter sem diagnóstico
-- **Fix:** Telemetria adicionada no bloco L9326 do `ai-autopilot-chat`:
-  - Log: `🔢 V13 Bug 22: Global counter — isFallback=X, current=Y, new=Z, nodeId=N`
-- Permite monitorar se `isFallbackResponse` está sendo setado e se o counter incrementa
+Ajustar `canShowTakeControl` no `ChatWindow.tsx` para **não mostrar o banner de "Assumir"** quando a conversa já está atribuída ao próprio usuário logado. Nesse caso, o compositor deve aparecer diretamente.
 
-## Deploy
-- `ai-autopilot-chat` ✅ re-deployed V13
-- `meta-whatsapp-webhook` ✅ re-deployed V13
-- `handle-whatsapp-event` ✅ re-deployed V13
+### Alteração no `src/components/ChatWindow.tsx`
 
-## Fixes V14 (Deploy realizado)
+Linha 473, de:
+```ts
+const canShowTakeControl = isAutopilot || isWaitingHuman || !conversation?.assigned_to;
+```
 
-### Bug 24 ✅ — RLS do `inbox_view` sem cláusula AI queue global
-- **Fix:** Migration recriou policy `optimized_inbox_select` com cláusula adicional:
-  - `ai_mode IN ('autopilot','waiting_human') AND status<>'closed' AND assigned_to IS NULL`
-  - Permite todos os roles internos verem fila IA independente de departamento
+Para:
+```ts
+const isAssignedToMe = conversation?.assigned_to === user?.id;
+const canShowTakeControl = !isAssignedToMe && (isAutopilot || isWaitingHuman || !conversation?.assigned_to);
+```
 
-### Bug 25 ✅ — Client-side filter `useInboxView` restringia por departamento
-- **Fix:** Expandido `.or()` nos 2 blocos de query (main + chunked) para incluir:
-  - `and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed)`
-  - `and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
-- Realtime `shouldShow` atualizado com `isAIQueueGlobal`
+Se a conversa já é do usuário (seja `waiting_human` ou qualquer outro modo), o compositor aparece direto sem exigir "Assumir".
 
-### Bug 26 ✅ — `get-inbox-counts` `applyVisibility` restringia fila IA
-- **Fix:** Expandido `.or()` no `applyVisibility` com mesmas cláusulas AI queue
-- Edge function redeployada
+### Resultado esperado
+- Vendedor envia template → conversa abre → compositor de mensagens aparece imediatamente
+- Sem banner "Assumir" para conversas que já são suas
+- O botão "Assumir" continua aparecendo normalmente para conversas de outros ou da fila IA
 
-## Deploy V14
-- Migration RLS ✅
-- `useInboxView.tsx` ✅ (3 blocos corrigidos)
-- `get-inbox-counts` ✅ re-deployed
+### Arquivo a alterar
+- `src/components/ChatWindow.tsx` (1 linha)
 
-## Fixes V15 (Deploy realizado)
-
-### Bug 27 ✅ — Telemetria skipInitialMessage no webhook Meta
-- **Fix:** Logs estruturados com conversationId, contactId, nodeId, flowId, timestamp e originalMessage
-- Permite diagnosticar se `skipInitialMessage` é propagado na primeira transição menu → AI node
-
-### Bug 28+30 ✅ — Nó financeiro sem edges de intenção cruzada
-- **Fix:** Atualizado `flow_definition` do fluxo `cafe2831` (V5 Enterprise):
-  - Adicionado edge `cancelamento`: `node_ia_financeiro` → `node_ia_cancelamento`
-  - Adicionado edge `saque`: `node_ia_financeiro` → `node_escape_financeiro`
-  - Setado `forbid_cancellation: true` e `forbid_commercial: true` no `node_ia_financeiro`
-
-### Bug 29 ✅ — OTP alucinado pela LLM dentro de fluxos ativos
-- **Fix 1:** Removido guard `!flow_context` em L6421 do `ai-autopilot-chat`
-  - OTP agora funciona como camada transversal de segurança, independente do fluxo ativo
-- **Fix 2:** Adicionada regra anti-alucinação OTP no `generateRestrictedPrompt`
-  - LLM proibida de prometer envio de códigos, OTP ou verificação por email
-
-## Deploy V15
-- `ai-autopilot-chat` ✅ re-deployed
-- `meta-whatsapp-webhook` ✅ re-deployed
-- Flow `cafe2831` ✅ atualizado (edges + flags)
-
-## Fixes V16 (Deploy realizado)
-
-### Bug 31 ✅ — Escape Node enviado SEM opções (fallback separado)
-- **Fix:** Removido DB insert direto do fallback_message no `process-chat-flow` (L3697)
-- Fallback agora acumulado como `pendingFallbackMsg` e injetado no `extraMessages` (L4598)
-- Resultado: Caller recebe UMA resposta combinada: "Não consegui resolver...\n\nO que prefere fazer?\n\n1️⃣ Voltar\n2️⃣ Atendente"
-
-### Bug 32 ✅ — Pós-OTP não coletou dados financeiros (FLOW_EXIT prematuro)
-- **Fix 1:** Expandido `otpVerifiedInstruction` no `ai-autopilot-chat` com regras de coleta pós-OTP
-  - IA instruída a COLETAR campos (pix_key, bank, reason, amount) ao invés de buscar KB
-  - Proibida de emitir `[[FLOW_EXIT]]` até coletar todos os campos
-- **Fix 2:** Atualizado `objective` do `node_ia_financeiro` no fluxo `cafe2831` com FASE 1 (pré-OTP) e FASE 2 (pós-OTP coleta)
-- **Fix 3:** Habilitado `smart_collection_enabled: true` e `smart_collection_fields: [pix_key, bank, reason, amount]`
-
-## Deploy V16
-- `process-chat-flow` ✅ re-deployed
-- `ai-autopilot-chat` ✅ re-deployed
-- Flow `cafe2831` ✅ atualizado (objective + smart_collection)
-
-## Fixes V16.1 (Deploy realizado)
-
-### Bug 33 ✅ — Trava financeira ENTRADA bloqueia coleta pós-OTP
-- **Fix:** Adicionado `!otpAlreadyVerified` (derivado de `flow_context?.otpVerified`) na condição L1639
-- Quando OTP já verificado, mensagem financeira bypassa o guard e chega à LLM para coleta de dados
-
-### Bug 34 ✅ — `financialGuardInstruction` contradiz `otpVerifiedInstruction` no prompt
-- **Fix:** Condicionado `financialGuardInstruction` a `!flow_context?.otpVerified` (L6721)
-- Quando OTP verificado, apenas `otpVerifiedInstruction` é injetado (coleta de dados), sem contradição
-
-### Bug 35 (MENOR) — Flags `smart_collection_*` sem código consumidor
-- Sem impacto funcional — instrução via prompt é suficiente
-
-## Deploy V16.1
-- `ai-autopilot-chat` ✅ re-deployed
-
-## Fixes V16.2 (Deploy realizado)
-
-### Bug 36 ✅ — `financialIntentMatch` no `process-chat-flow` ignora OTP verificado
-- **Fix:** Adicionado `!otpVerifiedInFlow` (derivado de `collectedData.__ai_otp_verified`) na condição L3336
-- Quando OTP verificado, `financialIntentMatch` é suprimido → mensagem permanece no nó AI para coleta de dados
-- Log de telemetria adicionado para diagnóstico
-
-## Deploy V16.2
-- `process-chat-flow` ✅ re-deployed
-
-## Fixes V16.3 (Deploy realizado)
-
-### Bug 37 ✅ — `useCanTakeControl` bloqueava agente em conversa self-assigned
-- **Fix:** Adicionado bypass `assignedTo === user.id` antes do check de departamento
-
-### Bug 38 ✅ — `handle-whatsapp-event` NÃO implementa `skipInitialMessage`
-- **Fix 1:** Adicionado check `flowResult.skipInitialMessage === true` no L1314
-  - Quando ativo, `effectiveMessage = ""` → IA recebe mensagem vazia → saudação proativa
-  - Adicionado `kbProductFilter` ao flow_context
-- **Fix 2:** Expandido response `ask_options → ai_response` no `process-chat-flow` L2932
-  - Adicionados 14 campos ausentes: `personaId`, `kbProductFilter`, `kbCategories`, `objective`, `fallbackMessage`, `maxSentences`, `forbidQuestions`, `forbidOptions`, `forbidFinancial`, `forbidCommercial`, `forbidCancellation`, `forbidSupport`, `forbidConsultant`, `allowedSources`
-  - Alinhado com retorno de `intent-routing → ai_response` (L4556-4587)
-
-## Deploy V16.3
-- `handle-whatsapp-event` ✅ re-deployed
-- `process-chat-flow` ✅ re-deployed
