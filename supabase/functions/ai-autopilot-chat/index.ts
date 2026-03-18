@@ -6324,8 +6324,10 @@ Digite **"reenviar"** se precisar de um novo código.`;
       
       // Enviar OTP para verificação de saque
       try {
-        console.log('[ai-autopilot-chat] 🔒 DECISION POINT: WITHDRAWAL_OTP_BARRIER', {
-          is_withdrawal_context: true,
+        console.log('[ai-autopilot-chat] 🔒 DECISION POINT: FINANCIAL_ACTION_OTP_BARRIER', {
+          is_financial_action: true,
+          is_withdrawal: isWithdrawalRequest,
+          is_refund: isRefundRequest,
           has_ever_verified: hasEverVerifiedOTP,
           has_recent_otp: false,
           will_send_otp: true,
