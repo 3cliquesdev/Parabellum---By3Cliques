@@ -7401,6 +7401,23 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         // Pular envio do greeting mas continuar o fluxo normalmente
       }
 
+      // 🆕 V11 FIX Bug 14: Suprimir greeting se há fallback recente (últimos 60s)
+      if (!recentAIMsg) {
+        const { data: recentFallbackMsg } = await supabaseClient
+          .from('messages')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('is_ai_generated', true)
+          .gte('created_at', new Date(Date.now() - 60000).toISOString())
+          .limit(5);
+        const hasFallbackRecent = (recentFallbackMsg || []).some((m: any) => m.id);
+        // Se há 2+ msgs IA nos últimos 60s, contexto já está ativo — skip greeting
+        if (recentFallbackMsg && recentFallbackMsg.length >= 2) {
+          console.log('[ai-autopilot-chat] 🛡️ V11 Bug 14: Fallback recente detectado (60s), suprimindo greeting pós-fallback');
+          skipLLMForGreeting = true;
+        }
+      }
+
       // Persistir e enviar pelo pipeline normal (apenas se não dedup)
       const greetSaveErr = recentAIMsg ? null : (await supabaseClient.from('messages').insert({
         conversation_id: conversationId,
