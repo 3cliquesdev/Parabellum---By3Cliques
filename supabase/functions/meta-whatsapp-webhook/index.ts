@@ -1143,6 +1143,12 @@ serve(async (req) => {
 
               // CASO 3: Fluxo ativou AIResponseNode → Chamar IA com flow_context
               if (flowData.useAI && flowData.aiNodeActive) {
+                // 🆕 FIX: Se skipInitialMessage=true (transição ask_options → ai_response),
+                // NÃO enviar o dígito de menu como mensagem ao autopilot
+                if (flowData.skipInitialMessage === true) {
+                  console.log("[meta-whatsapp-webhook] ⏭️ skipInitialMessage=true — ignorando dígito de menu, aguardando próxima mensagem real do cliente");
+                  continue;
+                }
                 // FIX: Se process-chat-flow retornou aiNodeActive=true, a soberania do fluxo
                 // já restaurou ai_mode para autopilot no DB. Confiar no fluxo em vez do objeto stale.
                 const effectiveAiMode = (flowData.useAI && flowData.aiNodeActive) 
