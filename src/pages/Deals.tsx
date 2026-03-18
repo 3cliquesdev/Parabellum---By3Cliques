@@ -87,7 +87,7 @@ export default function Deals() {
   const { role, loading: roleLoading } = useUserRole();
   const { hasPermission } = useRolePermissions();
   const { data: rottenDeals } = useRottenDeals();
-  const { user, profile, refetchProfile } = useAuth();
+  const { user, profile, refetchProfile, loading: authLoading } = useAuth();
   const updateDealStage = useUpdateDealStage();
   const updateDeal = useUpdateDeal();
   const setDefaultPipeline = useSetDefaultPipeline();
@@ -105,21 +105,18 @@ export default function Deals() {
   // Selecionar pipeline default ao carregar (preferência do usuário → global → primeiro)
   useEffect(() => {
     if (!pipelines || pipelines.length === 0) return;
+    if (authLoading) return; // Aguardar auth carregar antes de decidir
 
     const userDefault = (profile as any)?.default_pipeline_id;
     const userPipeline = userDefault ? pipelines.find(p => p.id === userDefault) : null;
     const globalDefault = pipelines.find(p => p.is_default);
     const chosen = userPipeline || globalDefault || pipelines[0];
 
-    // Primeira vez: sempre selecionar o pipeline correto
     if (!hasInitialized.current) {
-      // Só inicializar quando o profile já carregou (ou não existe)
-      if (profile !== null || !user) {
-        setSelectedPipeline(chosen.id);
-        hasInitialized.current = true;
-      }
+      setSelectedPipeline(chosen.id);
+      hasInitialized.current = true;
     }
-  }, [pipelines, profile, user]);
+  }, [pipelines, profile, user, authLoading]);
 
   const filteredDeals = useMemo(() => {
     if (!deals) return [];
