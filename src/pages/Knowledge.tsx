@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Search, Plus, Edit, Trash2, BookOpen, Eye, EyeOff, Upload, Sparkles, AlertTriangle, GraduationCap, FileText, SearchCheck } from "lucide-react";
+import { Search, Plus, Edit, Trash2, BookOpen, Eye, EyeOff, Upload, Sparkles, AlertTriangle, GraduationCap, FileText, SearchCheck, Tag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { useKnowledgeCandidateStats } from "@/hooks/useKnowledgeCandidates";
 import { KnowledgeBrainStatus } from "@/components/KnowledgeBrainStatus";
 import { KnowledgeAuditTab } from "@/components/KnowledgeAuditTab";
 import KnowledgeArticleDialog from "@/components/KnowledgeArticleDialog";
+import { ProductTagManager } from "@/components/knowledge/ProductTagManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -40,6 +41,7 @@ export default function Knowledge() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [articleToDelete, setArticleToDelete] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("artigos");
+  const [productTagManagerOpen, setProductTagManagerOpen] = useState(false);
   
   const [showDraftsOnly] = useState(filterParam === 'draft');
 
@@ -189,6 +191,12 @@ export default function Knowledge() {
             </TabsTrigger>
           )}
         </TabsList>
+        {canManageArticles && (
+          <Button variant="outline" size="sm" onClick={() => setProductTagManagerOpen(true)} className="gap-2">
+            <Tag className="h-4 w-4" />
+            Product Tags
+          </Button>
+        )}
 
         <TabsContent value="artigos" className="space-y-4">
           {/* Filters */}
@@ -318,6 +326,7 @@ export default function Knowledge() {
         onOpenChange={setDialogOpen}
         article={selectedArticle}
       />
+      <ProductTagManager open={productTagManagerOpen} onOpenChange={setProductTagManagerOpen} />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>

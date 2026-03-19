@@ -140,7 +140,33 @@ export function KnowledgeAuditTab() {
       if (field === "category") {
         updateData.category = bulkCategory || null;
       } else {
-        updateData.product_tags = bulkProductTag.split(",").map((t) => t.trim()).filter(Boolean);
+        // bulkProductTag is now a single tag from dropdown — append to existing
+        const tagToAdd = bulkProductTag.trim();
+        if (!tagToAdd) return;
+        for (let i = 0; i < ids.length; i += 100) {
+          const batch = ids.slice(i, i + 100);
+          // Fetch current tags for each article
+          const { data: currentArticles } = await supabase
+            .from("knowledge_articles")
+            .select("id, product_tags")
+            .in("id", batch);
+          if (currentArticles) {
+            for (const art of currentArticles) {
+              const current = (art.product_tags as string[]) || [];
+              if (!current.includes(tagToAdd)) {
+                await supabase
+                  .from("knowledge_articles")
+                  .update({ product_tags: [...current, tagToAdd] })
+                  .eq("id", art.id);
+              }
+            }
+          }
+        }
+        queryClient.invalidateQueries({ queryKey: ["knowledge-audit-articles"] });
+        toast({ title: "Atualizado em lote", description: `${ids.length} artigos atualizados.` });
+        setSelected(new Set());
+        setSaving(false);
+        return;
       }
       for (let i = 0; i < ids.length; i += 100) {
         const batch = ids.slice(i, i + 100);
@@ -393,7 +419,16 @@ export function KnowledgeAuditTab() {
           <Button size="sm" variant="outline" disabled={!bulkCategory || saving} onClick={() => applyBulk("category")}>
             <FolderOpen className="h-3 w-3 mr-1" /> Aplicar categoria
           </Button>
-          <Input placeholder="Product tags (vírgula)" value={bulkProductTag} onChange={(e) => setBulkProductTag(e.target.value)} className="w-[200px]" />
+          <Select value={bulkProductTag} onValueChange={setBulkProductTag}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Product tag..." />
+            </SelectTrigger>
+            <SelectContent>
+              {productTags.map((t) => (
+                <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button size="sm" variant="outline" disabled={!bulkProductTag || saving} onClick={() => applyBulk("product_tags")}>
             <Tag className="h-3 w-3 mr-1" /> Aplicar tags
           </Button>
@@ -484,13 +519,34 @@ export function KnowledgeAuditTab() {
                   </TableCell>
                   <TableCell>
                     {editingCell?.id === article.id && editingCell.field === "product_tags" ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          className="w-[180px] h-8 text-xs"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          placeholder="tag1, tag2"
-                        />
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Select
+                          value=""
+                          onValueChange={(val) => {
+                            const current = editValue ? editValue.split(",").map(t => t.trim()).filter(Boolean) : [];
+                            if (!current.includes(val)) {
+                              setEditValue([...current, val].join(", "));
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-[140px] h-8">
+                            <SelectValue placeholder="Adicionar..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {productTags.filter(t => !editValue.split(",").map(v => v.trim()).includes(t)).map((t) => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex flex-wrap gap-1">
+                          {editValue.split(",").map(t => t.trim()).filter(Boolean).map((t) => (
+                            <Badge key={t} variant="default" className="text-xs cursor-pointer" onClick={() => {
+                              setEditValue(editValue.split(",").map(v => v.trim()).filter(v => v !== t).join(", "));
+                            }}>
+                              {t} ✕
+                            </Badge>
+                          ))}
+                        </div>
                         <Button size="xs" onClick={() => saveInlineEdit(article.id, "product_tags")} disabled={saving}>
                           <Save className="h-3 w-3" />
                         </Button>

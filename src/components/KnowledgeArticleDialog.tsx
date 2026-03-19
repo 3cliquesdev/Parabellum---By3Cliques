@@ -12,7 +12,7 @@ import { useUpdateKnowledgeArticle } from "@/hooks/useUpdateKnowledgeArticle";
 import { useGenerateEmbedding } from "@/hooks/useGenerateEmbedding";
 import { useFindSimilarArticles } from "@/hooks/useFindSimilarArticles";
 import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
-import { useDistinctProductTags } from "@/hooks/useKnowledgeAudit";
+import { useProductTagNames, useCreateProductTag } from "@/hooks/useProductTags";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, X } from "lucide-react";
 
@@ -46,7 +46,8 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
   const updateArticle = useUpdateKnowledgeArticle();
   const generateEmbedding = useGenerateEmbedding();
   const { data: existingCategories = [] } = useKnowledgeCategories();
-  const { data: existingProductTags = [] } = useDistinctProductTags();
+  const { data: existingProductTags = [] } = useProductTagNames();
+  const createProductTag = useCreateProductTag();
   
   const { data: similarArticles } = useFindSimilarArticles(
     article?.id || null,
@@ -125,10 +126,14 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
   };
 
   const [newProductTag, setNewProductTag] = useState("");
-  const addCustomProductTag = () => {
+  const addCustomProductTag = async () => {
     const trimmed = newProductTag.trim();
     if (trimmed && !productTags.includes(trimmed)) {
       setProductTags((prev) => [...prev, trimmed]);
+      // Also create in the database if it doesn't exist
+      if (!existingProductTags.includes(trimmed)) {
+        createProductTag.mutate({ name: trimmed });
+      }
     }
     setNewProductTag("");
   };
