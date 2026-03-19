@@ -395,6 +395,24 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
     setSelectedNode(null);
   };
 
+  // Custom delete handler — só deleta se o foco NÃO estiver em input/textarea
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+      const el = document.activeElement;
+      if (!el) return;
+      const tag = el.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || (el as HTMLElement).isContentEditable) return;
+      // Está no canvas — deletar nó selecionado
+      if (selectedNode) {
+        e.preventDefault();
+        deleteNode();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNode]);
+
   const handleSave = () => {
     if (nodes.length <= 1) {
       toast.error("Adicione pelo menos um bloco além do início");
@@ -607,7 +625,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
           nodeTypes={chatFlowNodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={defaultEdgeOptions}
-          deleteKeyCode={['Backspace', 'Delete']}
+          deleteKeyCode={null}
           fitView
           className="bg-background"
         >
@@ -647,7 +665,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
             </Button>
           </div>
           
-           <ScrollArea className="flex-1 p-4" onKeyDown={(e) => e.stopPropagation()}>
+           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
               {/* Nome do bloco */}
               <div className="space-y-1.5">
@@ -908,7 +926,6 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       {(selectedNode.data.condition_type === "contains" || selectedNode.data.condition_type === "equals") ? (
                         <>
                         <Textarea
-                            onKeyDown={(e) => e.stopPropagation()}
                             value={selectedNode.data.condition_value || ""}
                             onChange={(e) => updateNodeData("condition_value", e.target.value)}
                             placeholder="Separe múltiplos valores por vírgula"
@@ -1006,7 +1023,6 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                         {/* Keywords textarea — só mostra se não tem field */}
                         {!rule.field && (
                           <Textarea
-                            onKeyDown={(e) => e.stopPropagation()}
                             value={rule.keywords || ""}
                             onChange={(e) => updateConditionRule(idx, "keywords", e.target.value)}
                             placeholder="Opcional: frases extras (1 por linha). Se vazio, usa o nome da regra acima."
@@ -1119,7 +1135,6 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       </Select>
                       {!rule.field && (
                         <Textarea
-                          onKeyDown={(e) => e.stopPropagation()}
                           value={rule.keywords || ""}
                           onChange={(e) => updateConditionRule(idx, "keywords", e.target.value)}
                           placeholder="Opcional: frases extras (1 por linha)."
