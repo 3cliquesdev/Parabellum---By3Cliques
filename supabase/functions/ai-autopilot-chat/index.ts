@@ -6229,7 +6229,54 @@ Posso ajudar em mais alguma coisa?`;
 
     // Flag para mostrar dados sensíveis (só após OTP verificado + permissão da persona)
     const canShowFinancialData = hasRecentOTPVerification && isRealCustomer && canAccessFinancialData;
-    
+
+    // ============================================================
+    // 🏦 GUARD DETERMINÍSTICO: Dados de saque após OTP verificado
+    // Quando cliente já verificou OTP e envia mensagem com chave PIX + valor,
+    // criar ticket DIRETAMENTE sem passar pelo GPT (evita alucinação de pedir email)
+    // ============================================================
+    if (hasRecentOTPVerification) {
+      const hasPIXKey = (
+        /\b[\w.+-]+@[\w.-]+\.\w{2,}\b/.test(customerMessage) ||
+        /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.test(customerMessage) ||
+        /\(\d{2}\)\s*[\d\s-]{8,11}/.test(customerMessage) ||
+        /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i.test(customerMessage)
+      );
+      const hasValueIndicator = /todo\s+o?\s*saldo|todo\s+valor|tudo|R\$\s*[\d.,]+|\d+[.,]\d{2}/i.test(customerMessage);
+      const hasName = /[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ][a-záéíóúàâêôãõç]{1,}\s+[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ]/.test(customerMessage);
+      const looksLikeSaqueData = hasPIXKey && (hasValueIndicator || hasName);
+
+      if (looksLikeSaqueData) {
+        console.log('[ai-autopilot-chat] 🏦 SAQUE DATA DETECTED - criando ticket determinístico', {
+          has_pix: hasPIXKey, has_value: hasValueIndicator, has_name: hasName, bypassing_ai: true
+        });
+        try {
+          const { data: ticketData, error: ticketError } = await supabaseClient.functions.invoke(
+            'generate-ticket-from-conversation',
+            { body: { conversation_id: conversationId, subject: `Solicitação de saque - ${contactName}`, priority: 'high', category: 'financial' } }
+          );
+          if (!ticketError) {
+            const ticketId = ticketData?.ticket?.id?.slice(0, 8)?.toUpperCase() || '';
+            const saqueResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação de saque. Nossa equipe financeira vai processar o PIX em até **7 dias úteis**.\n\nPosso te ajudar com mais alguma coisa?`;
+            const { data: savedMsg } = await supabaseClient
+              .from('messages')
+              .insert({ conversation_id: conversationId, content: saqueResponse, sender_type: 'user', is_ai_generated: true, channel: responseChannel })
+              .select().single();
+            if (responseChannel === 'whatsapp' && contact?.phone) {
+              const { data: wi } = await supabaseClient.from('whatsapp_instances').select('*').eq('status', 'connected').limit(1).maybeSingle();
+              if (wi) await supabaseClient.functions.invoke('send-whatsapp-message', { body: { instance_id: wi.id, phone_number: contact.phone, whatsapp_id: contact.whatsapp_id, message: saqueResponse } });
+            }
+            return await respondWithDecision(
+              { response: saqueResponse, messageId: savedMsg?.id, ticketCreated: true, ticketId, debug: { reason: 'saque_data_deterministic_ticket' } },
+              { decision: 'reply', decisionReason: 'saque_data_deterministic_ticket', messageId: savedMsg?.id || null }
+            );
+          }
+        } catch (ticketErr) {
+          console.error('[ai-autopilot-chat] ❌ Falha ao criar ticket determinístico de saque:', ticketErr);
+        }
+      }
+    }
+
     // FASE 3 & 4: Identity Wall + Diferenciação Cliente vs Lead
     let identityWallNote = '';
     
@@ -6367,25 +6414,23 @@ Posso ajudar em mais alguma coisa?`;
         // A função verify-code retorna { success: false, error: "mensagem" }
         const errorMessage = otpData?.error || 'O código não é válido. Verifique e tente novamente.';
         
-        // ✅ V16.2 Fix: Mensagem pós-OTP reconhece solicitação e inicia coleta de dados
-        const directOTPSuccessResponse = otpData?.success 
-          ? `**Código validado com sucesso!** ✅
+        // Fix: Mensagem pós-OTP verifica contexto de saque no histórico
+        let directOTPSuccessResponse: string;
+        if (otpData?.success) {
+          const recentWithdrawal = messageHistory
+            .filter((m: any) => m.role === 'user')
+            .slice().reverse()
+            .slice(0, 6)
+            .find((m: any) => /quero\s+sacar|saque|sacar|carteira|retirar/i.test(m.content));
 
-Olá ${contactName}! Sua identidade foi confirmada.
-
-Para dar andamento à sua solicitação financeira, vou precisar das seguintes informações:
-
-1. **Chave PIX** para recebimento
-2. **Banco** da conta
-3. **Valor** solicitado
-4. **Motivo** da solicitação
-
-Vamos começar: qual é a sua **chave PIX**?`
-          : `**Código inválido**
-
-${errorMessage}
-
-Digite **"reenviar"** se precisar de um novo código.`;
+          if (recentWithdrawal) {
+            directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
+          } else {
+            directOTPSuccessResponse = `✅ **Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada.\n\nAgora posso te ajudar com questões financeiras. Como posso te ajudar?`;
+          }
+        } else {
+          directOTPSuccessResponse = `❌ **Código inválido**\n\n${errorMessage}\n\nDigite **"reenviar"** se precisar de um novo código.`;
+        }
         
         // Se OTP foi validado com sucesso, limpar flags de OTP pendente
         if (otpData?.success) {
