@@ -6307,12 +6307,15 @@ Posso ajudar em mais alguma coisa?`;
         // A função verify-code retorna { success: false, error: "mensagem" }
         const errorMessage = otpData?.error || 'O código não é válido. Verifique e tente novamente.';
         
+        // ✅ V16.2 Fix: Mensagem pós-OTP reconhece solicitação e inicia coleta de dados
         const directOTPSuccessResponse = otpData?.success 
-          ? `**Código validado com sucesso!**
+          ? `**Código validado com sucesso!** ✅
 
-Olá ${contactName}! Sua identidade foi confirmada. 
+Olá ${contactName}! Sua identidade foi confirmada.
 
-Agora posso te ajudar com questões financeiras. Como posso te ajudar?`
+Vou prosseguir com sua solicitação financeira. Para dar andamento, preciso de alguns dados:
+
+Qual é a sua **chave PIX** para recebimento?`
           : `**Código inválido**
 
 ${errorMessage}
