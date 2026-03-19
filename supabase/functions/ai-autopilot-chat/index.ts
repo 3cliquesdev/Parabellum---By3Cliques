@@ -6841,23 +6841,41 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : '';
 
     // ✅ OTP VERIFICADO: Liberar ações financeiras + FORÇAR COLETA de dados (V16 Bug 32)
+    // 🆕 Coleta dinâmica: usar campos configurados no nó do fluxo
+    const FIELD_LABELS: Record<string, string> = {
+      name: 'Nome', email: 'Email', phone: 'Telefone',
+      cpf: 'CPF', pix_key: 'Chave PIX', bank: 'Banco',
+      reason: 'Motivo', amount: 'Valor', address: 'Endereço'
+    };
+    const collectionFields = flow_context?.smartCollectionFields && flow_context.smartCollectionFields.length > 0
+      ? flow_context.smartCollectionFields
+      : ['name', 'pix_key', 'bank', 'reason', 'amount'];
+    const fieldListFormatted = collectionFields
+      .map((f: string) => `${FIELD_LABELS[f] || f}:`)
+      .join('\n');
+    const structuredCollectionMessage = `Para dar andamento à sua solicitação, preciso que me envie os dados abaixo com atenção 😊
+
+${fieldListFormatted}
+
+⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução do seu caso e precisaríamos entrar em contato novamente para corrigir. Seja claro no motivo da sua solicitação!`;
+
     const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? `
 
 ✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
 
 🎯 APÓS VERIFICAÇÃO OTP — SUA TAREFA PRINCIPAL É COLETAR DADOS:
-Você está AUTORIZADO a processar solicitações financeiras. Sua tarefa agora é COLETAR os dados necessários para criar o ticket:
-1. Tipo da solicitação (saque, reembolso, estorno ou devolução)
-2. Chave PIX do cliente ({{pix_key}})
-3. Banco ({{bank}})
-4. Motivo ({{reason}})
-5. Valor solicitado ({{amount}})
+Você está AUTORIZADO a processar solicitações financeiras. Sua tarefa agora é COLETAR os dados necessários para criar o ticket.
+
+ENVIE EXATAMENTE esta mensagem estruturada para o cliente (adapte apenas o tom):
+
+"${structuredCollectionMessage}"
 
 REGRAS PÓS-OTP:
+- Peça TODOS os campos faltantes numa ÚNICA mensagem usando o formato estruturado acima.
+- NÃO pergunte um campo por vez. Envie a lista completa de uma só vez.
 - NÃO busque na base de conhecimento para pedidos de saque/reembolso — sua ação é COLETAR dados.
 - NÃO emita [[FLOW_EXIT]]. Permaneça no nó até coletar TODOS os campos necessários.
-- Pergunte UM campo por vez de forma natural e empática.
-- Após coletar TODOS os dados, confirme com o cliente e crie o ticket com create_ticket.
+- Após o cliente responder com todos os dados, confirme e crie o ticket com create_ticket.
 - NÃO peça verificação adicional — o OTP já foi validado.
 - Se o cliente já informou algum dado na conversa anterior, NÃO peça novamente.
 ` : '';
