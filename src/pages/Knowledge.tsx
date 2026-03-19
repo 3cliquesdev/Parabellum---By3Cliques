@@ -326,6 +326,7 @@ export default function Knowledge() {
         onOpenChange={setDialogOpen}
         article={selectedArticle}
       />
+      <ProductTagManager open={productTagManagerOpen} onOpenChange={setProductTagManagerOpen} />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
