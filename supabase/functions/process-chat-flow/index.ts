@@ -3350,7 +3350,18 @@ serve(async (req) => {
         const forbidConsultant: boolean = currentNode.data?.forbid_consultant ?? false;
 
         // 🆕 INFERÊNCIA AUTOMÁTICA: Se o nó tem edge para condition_v2 com regra ai_exit_intent=financeiro, forçar forbidFinancial
-        if (!forbidFinancial) {
+        // 🔒 EXCEÇÃO #22D0647F: Se o nó atual TEM ticket_config.enabled com categoria financeira OU
+        // smart_collection_fields com campos financeiros, NÃO inferir forbidFinancial.
+        // Isso evita que o nó financeiro se auto-sabote ao ter edges de roteamento.
+        const hasActiveFinancialTicket = !!(
+          currentNode.data?.ticket_config?.enabled &&
+          (
+            ['saque', 'financeiro', 'reembolso', 'estorno'].includes((currentNode.data?.ticket_config?.category || '').toLowerCase()) ||
+            (currentNode.data?.smart_collection_fields || []).some((f: string) => ['pix_key', 'bank', 'amount'].includes(f))
+          )
+        );
+        
+        if (!forbidFinancial && !hasActiveFinancialTicket) {
           const nodeEdges = (flowDef.edges || []).filter((e: any) => e.source === currentNode.id);
           for (const edge of nodeEdges) {
             const targetNode = (flowDef.nodes || []).find((n: any) => n.id === edge.target);
@@ -3366,6 +3377,9 @@ serve(async (req) => {
               }
             }
           }
+        }
+        if (hasActiveFinancialTicket && !forbidFinancial) {
+          console.log(`[process-chat-flow] 🛡️ EXCEÇÃO #22D0647F: Nó ${currentNode.id} tem ticket financeiro ativo — auto-inferência de forbidFinancial BLOQUEADA`);
         }
 
         // 🔒 TRAVA FINANCEIRA: Detectar intenção financeira como exit do nó AI

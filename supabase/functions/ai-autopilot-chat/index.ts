@@ -8734,20 +8734,42 @@ Via: Atendimento Automatizado (IA)`;
             }
 
             // 🆕 Descrição: usar template do nó se configurado
+            // 🔒 FIX #22D0647F: Template do painel tem PRIORIDADE ABSOLUTA sobre hardcoded
+            const templateVars: Record<string, string> = {
+              '{{description}}': args.description || '',
+              '{{issue_type}}': args.issue_type || '',
+              '{{customer_name}}': contactName || '',
+              '{{order_id}}': args.order_id || '',
+              '{{customer_email}}': contact?.email || '',
+              '{{customer_phone}}': contact?.phone || '',
+              '{{pix_key}}': args.pix_key || '',
+              '{{amount}}': args.withdrawal_amount ? `R$ ${args.withdrawal_amount.toFixed(2)}` : '',
+              '{{reason}}': args.description || '',
+              '{{bank}}': args.bank || '',
+              '{{subject}}': args.issue_type || args.description || '',
+            };
+            
+            const resolveTemplate = (tpl: string): string => {
+              let resolved = tpl;
+              for (const [key, val] of Object.entries(templateVars)) {
+                resolved = resolved.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), val);
+              }
+              return resolved;
+            };
+            
             let ticketDescription = args.description;
             if (tc?.description_template) {
-              const templatedDesc = tc.description_template
-                .replace(/\{\{description\}\}/g, args.description || '')
-                .replace(/\{\{issue_type\}\}/g, args.issue_type || '')
-                .replace(/\{\{customer_name\}\}/g, contactName || '')
-                .replace(/\{\{order_id\}\}/g, args.order_id || '')
-                .replace(/\{\{customer_email\}\}/g, contact?.email || '')
-                .replace(/\{\{customer_phone\}\}/g, contact?.phone || '')
-                .replace(/\{\{pix_key\}\}/g, args.pix_key || '')
-                .replace(/\{\{amount\}\}/g, args.withdrawal_amount ? `R$ ${args.withdrawal_amount.toFixed(2)}` : '')
-                .replace(/\{\{reason\}\}/g, args.description || '')
-                .replace(/\{\{bank\}\}/g, args.bank || '');
+              const templatedDesc = resolveTemplate(tc.description_template);
               if (templatedDesc.trim()) ticketDescription = templatedDesc;
+              console.log('[ai-autopilot-chat] 📋 Template do painel usado para descrição do ticket');
+            }
+
+            // 🔒 FIX #22D0647F: Se o painel tem description_template, ele TAMBÉM substitui internalNote
+            // Isso garante que o template do painel controle 100% do conteúdo do ticket
+            let finalInternalNote = internalNote;
+            if (tc?.description_template) {
+              finalInternalNote = resolveTemplate(tc.description_template);
+              console.log('[ai-autopilot-chat] 📋 Template do painel usado para internal_note do ticket (prioridade sobre hardcoded)');
             }
 
             const { data: ticket, error: ticketError } = await supabaseClient
@@ -8760,7 +8782,7 @@ Via: Atendimento Automatizado (IA)`;
                 status: 'open',
                 source_conversation_id: conversationId,
                 category: ticketCategory,
-                internal_note: internalNote,
+                internal_note: finalInternalNote,
                 ...(tc?.department_id ? { department_id: tc.department_id } : {}),
                 ...(tc?.assigned_to ? { assigned_to: tc.assigned_to } : {}),
               })
