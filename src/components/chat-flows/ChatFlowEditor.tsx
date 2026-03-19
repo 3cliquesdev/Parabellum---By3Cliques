@@ -395,6 +395,24 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
     setSelectedNode(null);
   };
 
+  // Custom delete handler — só deleta se o foco NÃO estiver em input/textarea
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+      const el = document.activeElement;
+      if (!el) return;
+      const tag = el.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || (el as HTMLElement).isContentEditable) return;
+      // Está no canvas — deletar nó selecionado
+      if (selectedNode) {
+        e.preventDefault();
+        deleteNode();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNode]);
+
   const handleSave = () => {
     if (nodes.length <= 1) {
       toast.error("Adicione pelo menos um bloco além do início");
