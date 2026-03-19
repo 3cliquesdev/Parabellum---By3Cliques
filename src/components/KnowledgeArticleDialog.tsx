@@ -46,7 +46,8 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
   const updateArticle = useUpdateKnowledgeArticle();
   const generateEmbedding = useGenerateEmbedding();
   const { data: existingCategories = [] } = useKnowledgeCategories();
-  const { data: existingProductTags = [] } = useDistinctProductTags();
+  const { data: existingProductTags = [] } = useProductTagNames();
+  const createProductTag = useCreateProductTag();
   
   const { data: similarArticles } = useFindSimilarArticles(
     article?.id || null,
