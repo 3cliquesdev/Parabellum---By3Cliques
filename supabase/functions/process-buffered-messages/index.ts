@@ -402,6 +402,8 @@ async function callPipeline(
           collectedData: flowData.collectedData || null,
           ticketConfig: flowData.ticketConfig || null,
           otpVerified: flowData.otpVerified || false,
+          smartCollectionEnabled: flowData.smartCollectionEnabled ?? false,
+          smartCollectionFields: flowData.smartCollectionFields || [],
         };
       }
 
