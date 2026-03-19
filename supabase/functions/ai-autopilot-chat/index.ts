@@ -6313,9 +6313,14 @@ Posso ajudar em mais alguma coisa?`;
 
 Olá ${contactName}! Sua identidade foi confirmada.
 
-Vou prosseguir com sua solicitação financeira. Para dar andamento, preciso de alguns dados:
+Para dar andamento à sua solicitação financeira, vou precisar das seguintes informações:
 
-Qual é a sua **chave PIX** para recebimento?`
+1. **Chave PIX** para recebimento
+2. **Banco** da conta
+3. **Valor** solicitado
+4. **Motivo** da solicitação
+
+Vamos começar: qual é a sua **chave PIX**?`
           : `**Código inválido**
 
 ${errorMessage}
@@ -6672,7 +6677,7 @@ O cliente quer cancelar a assinatura Kiwify.
     if (!identityWallNote) {
       identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.
 
-${isRecentlyVerified && !(isFinancialAction && hasRecentOTPVerification) ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
+${isRecentlyVerified && !hasRecentOTPVerification ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
     }
     
     // 🐛BUG: Confirmar que priorityInstruction está sendo gerada
@@ -6748,7 +6753,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : '';
 
     // ✅ OTP VERIFICADO: Liberar ações financeiras + FORÇAR COLETA de dados (V16 Bug 32)
-    const otpVerifiedInstruction = (flow_context?.otpVerified || (hasRecentOTPVerification && isFinancialActionRequest)) ? `
+    const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? `
 
 ✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
 
