@@ -490,10 +490,10 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
     }
   };
 
-  const updateOption = (idx: number, field: string, value: string) => {
+  const updateOption = (idx: number, updates: Record<string, string>) => {
     if (!selectedNode) return;
     const options = [...(selectedNode.data.options || [])];
-    options[idx] = { ...options[idx], [field]: value };
+    options[idx] = { ...options[idx], ...updates };
     updateNodeData('options', options);
   };
 
