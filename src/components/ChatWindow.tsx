@@ -615,7 +615,7 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
                     className="h-7 gap-1 px-2"
                   >
                     <Hand className="h-3.5 w-3.5" />
-                    <span className="text-xs hidden lg:inline">Assumir</span>
+                    <span className="text-xs">Assumir</span>
                   </Button>
                 )}
 
