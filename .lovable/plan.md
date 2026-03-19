@@ -1,62 +1,55 @@
 
 
-# Fix: Toda transferência vincula ao setor de destino
+# Fix: Opções do nó de escape não são enviadas junto com a mensagem de fallback
 
 ## Problema
-Quando o fluxo detecta uma intenção (comercial, financeiro, etc.) e navega para um nó de transferência, o `department` da conversa só é atualizado **depois** que o webhook recebe o resultado do `process-chat-flow`. Enquanto isso, a conversa fica no departamento original (ex: Suporte com auto-close de 5 min), e se o cliente demora, é encerrada antes de chegar ao destino.
+Quando a IA no nó financeiro não consegue resolver, ela responde "Não consegui resolver por aqui. O que prefere fazer?" — mas **sem as opções** (↩ Voltar ao menu / 👤 Falar com atendente). O cliente fica sem saber o que fazer.
+
+**Causa raiz**: No `ai-autopilot-chat`, quando uma "restriction violation" é detectada (linha ~10128), a resposta é substituída pelo `fallbackMessage` do nó e a IA **permanece no nó atual** em vez de avançar para o `node_escape_financeiro` (que tem as opções). As opções só são incluídas quando `process-chat-flow` avança para o nó `ask_options`, mas isso nunca acontece nesse cenário.
 
 ## Solução
 
-### 1. Atualizar department imediatamente no `process-chat-flow`
-**Arquivo:** `supabase/functions/process-chat-flow/index.ts`
+### 1. `ai-autopilot-chat`: Sinalizar `flowExit` quando fallback é acionado dentro de fluxo
+**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
 
-Em **todos os pontos** onde o flow retorna `transfer: true` com um `departmentId`, atualizar o `department` da conversa **antes** de retornar o resultado ao webhook. Isso garante que a conversa já esteja vinculada ao setor correto independente de latência no webhook.
+Na seção de "restriction violation" (linha ~10128), em vez de substituir a mensagem e ficar no nó, retornar `flowExit: true` para que o webhook re-invoque `process-chat-flow` com `forceAIExit: true`. Isso faz o motor de fluxos avançar para o `node_escape_financeiro` e devolver fallback + opções combinados.
 
-Pontos de alteração (6 locais que retornam `transfer: true`):
-- Nó de transferência direto (~linha 4600)
-- Transfer por intent comercial (~linha 4982)  
-- Transfer de nó master flow (~linha 5666)
-- Transfer de matched flow (~linha 6042)
-- Transfer por OTP non-compliant (~linha 2019)
-- Transfer por OTP max attempts (~linha 2439)
-
-Em cada um, adicionar antes do `return`:
+Alteração (~linha 10127-10131):
 ```typescript
-if (departmentId) {
-  await supabaseClient
-    .from('conversations')
-    .update({ department: departmentId })
-    .eq('id', conversationId);
-  console.log(`[process-chat-flow] 🏢 Department atualizado imediatamente: ${departmentId}`);
-}
+// ANTES: substituía e ficava no nó
+assistantMessage = fallbackMessage;
+isFallbackResponse = true;
+
+// DEPOIS: sinalizar flow exit para que process-chat-flow avance ao escape node
+console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇÃO + flow_context → flowExit para avançar ao escape node');
+return new Response(JSON.stringify({
+  flowExit: true,
+  reason: 'restriction_violation_exit',
+  hasFlowContext: true,
+  response: null, // process-chat-flow vai montar a mensagem com opções
+  conversationId,
+}), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' } });
 ```
 
-### 2. Safety net no auto-close (Stage 3 e 3b)
-**Arquivo:** `supabase/functions/auto-close-conversations/index.ts`
+### 2. Adicionar pattern de fallback no `ESCAPE_PATTERNS`
+**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
 
-Antes de fechar uma conversa no Stage 3/3b, verificar se existe um `chat_flow_state` ativo com `ai_exit_intent` definido (comercial, financeiro, etc.). Se sim, em vez de fechar, transferir para o departamento correto com `ai_mode: 'waiting_human'`.
+Adicionar um novo pattern para detectar quando a IA ecoa o fallback_message do nó (caso ela gere o texto por conta própria em vez de emitir `[[FLOW_EXIT]]`):
 
-Lógica:
-```
-- Buscar chat_flow_state ativo para a conversa
-- Se tem ai_exit_intent no collected_data → mapear para departmentId
-- Atualizar conversa: department = destino, ai_mode = 'waiting_human'
-- NÃO fechar
+```typescript
+// Na lista ESCAPE_PATTERNS (~linha 1458):
+/n[aã]o\s+consegu[ií]\s+resolver/i,
 ```
 
-Mapa de intents → departamentos:
-- `comercial` → Comercial Nacional
-- `internacional` → Comercial Internacional  
-- `financeiro` → Financeiro
-- `cancelamento` → CS
-- Outros → manter no departamento atual (fechar normalmente)
+### 3. Garantir que o `isFallbackResponse` também trigge flowExit no final
+**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
 
-### 3. Deploy
-- `process-chat-flow`
-- `auto-close-conversations`
+Na seção onde `isFallbackResponse` é verificado contra o anti-loop counter (~linha 9570+), se o fallback for detectado E estiver dentro de um fluxo com `flow_context`, retornar `flowExit: true` ao invés de enviar a mensagem truncada. Isso garante que o `process-chat-flow` sempre monte a resposta com as opções do nó de escape.
 
-## Resultado
-- Toda transferência atualiza o department imediatamente no motor de fluxos
-- Auto-close não fecha conversas que estão em trânsito para outro setor
-- Se o cliente demora, a conversa é transferida para humano no setor correto em vez de ser encerrada
+### 4. Deploy
+- `ai-autopilot-chat`
+
+## Resultado esperado
+- Quando a IA não consegue resolver, a mensagem enviada será: "Não consegui resolver por aqui.\n\nO que prefere fazer?\n\n1️⃣ ↩ Voltar ao menu\n2️⃣ 👤 Falar com atendente"
+- O fluxo avança corretamente para o nó de escape com as opções visíveis
 
