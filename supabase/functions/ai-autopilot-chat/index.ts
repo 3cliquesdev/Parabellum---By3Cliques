@@ -6859,6 +6859,24 @@ ${fieldListFormatted}
 
 ⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução do seu caso e precisaríamos entrar em contato novamente para corrigir. Seja claro no motivo da sua solicitação!`;
 
+    // 🆕 Coleta dinâmica: usar campos configurados no nó do fluxo
+    const FIELD_LABELS: Record<string, string> = {
+      name: 'Nome', email: 'Email', phone: 'Telefone',
+      cpf: 'CPF', pix_key: 'Chave PIX', bank: 'Banco',
+      reason: 'Motivo', amount: 'Valor', address: 'Endereço'
+    };
+    const collectionFields = flow_context?.smartCollectionFields && flow_context.smartCollectionFields.length > 0
+      ? flow_context.smartCollectionFields
+      : ['name', 'pix_key', 'bank', 'reason', 'amount'];
+    const fieldListFormatted = collectionFields
+      .map((f: string) => `${FIELD_LABELS[f] || f}:`)
+      .join('\n');
+    const structuredCollectionMessage = `Para dar andamento à sua solicitação, preciso que me envie os dados abaixo com atenção 😊
+
+${fieldListFormatted}
+
+⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução do seu caso e precisaríamos entrar em contato novamente para corrigir. Seja claro no motivo da sua solicitação!`;
+
     const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? `
 
 ✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
