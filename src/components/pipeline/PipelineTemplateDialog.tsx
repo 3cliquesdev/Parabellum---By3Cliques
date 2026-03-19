@@ -75,6 +75,7 @@ export function PipelineTemplateDialog({
       return data as any[];
     },
     enabled: open && !!instanceId,
+    refetchOnMount: "always",
   });
 
   const selectedTemplate = templates.find((t: any) => t.id === selectedTemplateId);
@@ -224,7 +225,7 @@ export function PipelineTemplateDialog({
           </div>
         ) : (
           <div className="space-y-4">
-            <ScrollArea className="max-h-[200px]">
+            <ScrollArea className="max-h-[340px]">
               <div className="space-y-2">
                 {templates.map((t: any) => (
                   <button
