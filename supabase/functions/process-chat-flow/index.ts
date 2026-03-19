@@ -2113,6 +2113,8 @@ serve(async (req) => {
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
                     ticketConfig: resolvedNode.data?.ticket_config || null,
                     otpVerified: collectedData?.__ai_otp_verified === true,
+                    smartCollectionEnabled: resolvedNode.data?.smart_collection_enabled ?? false,
+                    smartCollectionFields: resolvedNode.data?.smart_collection_fields || [],
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
@@ -2344,6 +2346,8 @@ serve(async (req) => {
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
                     ticketConfig: resolvedNode.data?.ticket_config || null,
                     otpVerified: collectedData?.__ai_otp_verified === true,
+                    smartCollectionEnabled: resolvedNode.data?.smart_collection_enabled ?? false,
+                    smartCollectionFields: resolvedNode.data?.smart_collection_fields || [],
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
@@ -2975,6 +2979,8 @@ serve(async (req) => {
               forbidConsultant: nextNode.data?.forbid_consultant ?? false,
               ticketConfig: nextNode.data?.ticket_config || null,
               otpVerified: collectedData?.__ai_otp_verified === true,
+              smartCollectionEnabled: nextNode.data?.smart_collection_enabled ?? false,
+              smartCollectionFields: nextNode.data?.smart_collection_fields || [],
             }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
           // 🆕 BUG 4 FIX (2nd check): verify_customer_otp after auto-advance
@@ -3884,6 +3890,8 @@ serve(async (req) => {
               forbidConsultant: currentNode.data?.forbid_consultant ?? false,
               ticketConfig: currentNode.data?.ticket_config || null,
               otpVerified: collectedData.__ai_otp_verified === true,
+              smartCollectionEnabled: currentNode.data?.smart_collection_enabled ?? false,
+              smartCollectionFields: currentNode.data?.smart_collection_fields || [],
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -5017,8 +5025,10 @@ serve(async (req) => {
           forbidCancellation: nextNode.data?.forbid_cancellation ?? false,
           forbidSupport: nextNode.data?.forbid_support ?? false,
           forbidConsultant: nextNode.data?.forbid_consultant ?? false,
-          ticketConfig: nextNode.data?.ticket_config || null,
-          otpVerified: collectedData?.__ai_otp_verified === true,
+           ticketConfig: nextNode.data?.ticket_config || null,
+           otpVerified: collectedData?.__ai_otp_verified === true,
+           smartCollectionEnabled: nextNode.data?.smart_collection_enabled ?? false,
+           smartCollectionFields: nextNode.data?.smart_collection_fields || [],
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
@@ -5602,6 +5612,8 @@ serve(async (req) => {
               forbidConsultant: node.data?.forbid_consultant ?? false,
               ticketConfig: node.data?.ticket_config || null,
               otpVerified: collectedData?.__ai_otp_verified === true,
+              smartCollectionEnabled: node.data?.smart_collection_enabled ?? false,
+              smartCollectionFields: node.data?.smart_collection_fields || [],
               debug: { startNodeType: startNode.type, contentNodeType: node.type, steps, stateId }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -5940,6 +5952,8 @@ serve(async (req) => {
           forbidConsultant: startNode.data?.forbid_consultant ?? false,
           ticketConfig: startNode.data?.ticket_config || null,
           otpVerified: false,
+          smartCollectionEnabled: startNode.data?.smart_collection_enabled ?? false,
+          smartCollectionFields: startNode.data?.smart_collection_fields || [],
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
