@@ -6349,7 +6349,37 @@ Digite **"reenviar"** se precisar de um novo código.`;
             })
             .eq('id', conversationId);
           
-          console.log('[ai-autopilot-chat] âœ… OTP validado - flags limpas');
+          console.log('[ai-autopilot-chat] ✅ OTP validado - flags limpas');
+
+          // CRITICAL: Sync __ai_otp_verified to chat_flow_states.collected_data
+          // so process-chat-flow won't re-trigger financialIntentMatch on next message
+          if (flow_context?.stateId) {
+            try {
+              const { data: currentFlowState } = await supabaseClient
+                .from('chat_flow_states')
+                .select('collected_data')
+                .eq('id', flow_context.stateId)
+                .maybeSingle();
+
+              const existingData = (currentFlowState?.collected_data || {}) as Record<string, any>;
+              await supabaseClient
+                .from('chat_flow_states')
+                .update({
+                  collected_data: {
+                    ...existingData,
+                    __ai_otp_verified: true,
+                    __ai_otp_step: undefined,
+                  }
+                })
+                .eq('id', flow_context.stateId);
+
+              console.log('[ai-autopilot-chat] ✅ Synced __ai_otp_verified to chat_flow_states');
+            } catch (syncErr) {
+              console.error('[ai-autopilot-chat] ⚠️ Failed to sync OTP to flow state:', syncErr);
+            }
+          } else {
+            console.warn('[ai-autopilot-chat] ⚠️ No stateId in flow_context - cannot sync OTP to chat_flow_states');
+          }
         }
         
         // Salvar mensagem no banco
