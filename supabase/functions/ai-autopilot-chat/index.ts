@@ -7677,7 +7677,13 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     }
 
 
-    // âœ… FIX 2: Fallback não usa 'Desculpe' que está na lista de frases proibidas (auto-loop).
+    // 🔧 FIX CRÍTICO: Chamada LLM principal — estava ausente causando ReferenceError silencioso
+    // Isto causava "IA muda" em TODAS as mensagens reais (não-greeting, não-transfer)
+    console.log('[ai-autopilot-chat] 🤖 Chamando LLM principal com aiPayload...');
+    const aiData = await callAIWithFallback(aiPayload);
+    console.log('[ai-autopilot-chat] ✅ LLM respondeu com sucesso');
+
+    // ✅ FIX 2: Fallback não usa 'Desculpe' que está na lista de frases proibidas (auto-loop).
     let rawAIContent = aiData.choices?.[0]?.message?.content;
     const toolCalls = aiData.choices?.[0]?.message?.tool_calls || [];
 

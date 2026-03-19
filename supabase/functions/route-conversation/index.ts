@@ -612,7 +612,8 @@ serve(async (req) => {
           }
           console.log(`[route-conversation] 📂 Searching in departments: [target, children, parent, siblings] = ${deptIds.length} total`);
           // N:N: Filter by department using agent_departments
-          agentsQuery = agentsQuery.overlaps('agent_departments.department_id', deptIds);
+          // FIX: .overlaps() causa "operator does not exist: uuid && unknown" — usar .in() para UUID
+          agentsQuery = agentsQuery.in('agent_departments.department_id', deptIds);
         }
 
         const result = await agentsQuery;
