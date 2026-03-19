@@ -16,6 +16,7 @@ import { useKnowledgeCandidateStats } from "@/hooks/useKnowledgeCandidates";
 import { KnowledgeBrainStatus } from "@/components/KnowledgeBrainStatus";
 import { KnowledgeAuditTab } from "@/components/KnowledgeAuditTab";
 import KnowledgeArticleDialog from "@/components/KnowledgeArticleDialog";
+import { ProductTagManager } from "@/components/knowledge/ProductTagManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
