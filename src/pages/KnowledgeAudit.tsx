@@ -120,10 +120,33 @@ export default function KnowledgeAudit() {
       if (field === "category") {
         updateData.category = bulkCategory || null;
       } else {
-        updateData.product_tags = bulkProductTag.split(",").map((t) => t.trim()).filter(Boolean);
+        const tagToAdd = bulkProductTag.trim();
+        if (!tagToAdd) return;
+        for (let i = 0; i < ids.length; i += 100) {
+          const batch = ids.slice(i, i + 100);
+          const { data: currentArticles } = await supabase
+            .from("knowledge_articles")
+            .select("id, product_tags")
+            .in("id", batch);
+          if (currentArticles) {
+            for (const art of currentArticles) {
+              const current = (art.product_tags as string[]) || [];
+              if (!current.includes(tagToAdd)) {
+                await supabase
+                  .from("knowledge_articles")
+                  .update({ product_tags: [...current, tagToAdd] })
+                  .eq("id", art.id);
+              }
+            }
+          }
+        }
+        queryClient.invalidateQueries({ queryKey: ["knowledge-audit-articles"] });
+        toast({ title: "Atualizado em lote", description: `${ids.length} artigos atualizados.` });
+        setSelected(new Set());
+        setSaving(false);
+        return;
       }
 
-      // Batch update — supabase .in() supports up to 100
       for (let i = 0; i < ids.length; i += 100) {
         const batch = ids.slice(i, i + 100);
         const { error } = await supabase.from("knowledge_articles").update(updateData).in("id", batch);
