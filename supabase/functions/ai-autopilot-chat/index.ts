@@ -7480,7 +7480,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     // Desabilitar completamente quando OTP verificado (cliente está fornecendo dados financeiros)
     const trimmedMsg = customerMessage?.trim() || '';
     const isShortDigitOnly = /^\d{1,3}$/.test(trimmedMsg);
-    const isOtpVerifiedContext = flow_context?.otpVerified === true;
+    const isOtpVerifiedContext = flow_context?.otpVerified === true || hasRecentOTPVerification;
     const isMenuNoise = !isOtpVerifiedContext && !!(customerMessage && (trimmedMsg.length <= 3 || isShortDigitOnly));
     let skipLLMForGreeting = false;
     // Não disparar saudação quando OTP já foi verificado (cliente aguarda resposta à solicitação)
