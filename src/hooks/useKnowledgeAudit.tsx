@@ -64,11 +64,14 @@ export function useKnowledgeAuditArticles() {
 
 export function useDistinctProductTags() {
   return useQuery({
-    queryKey: ["distinct-product-tags"],
+    queryKey: ["product-tags"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_distinct_product_tags" as any);
+      const { data, error } = await supabase
+        .from("product_tags")
+        .select("name")
+        .order("name");
       if (error) throw error;
-      return ((data as any[]) ?? []).map((row: { product_tag: string }) => row.product_tag);
+      return (data || []).map((row: { name: string }) => row.name);
     },
     staleTime: 5 * 60 * 1000,
   });

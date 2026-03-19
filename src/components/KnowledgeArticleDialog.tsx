@@ -12,7 +12,7 @@ import { useUpdateKnowledgeArticle } from "@/hooks/useUpdateKnowledgeArticle";
 import { useGenerateEmbedding } from "@/hooks/useGenerateEmbedding";
 import { useFindSimilarArticles } from "@/hooks/useFindSimilarArticles";
 import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
-import { useDistinctProductTags } from "@/hooks/useKnowledgeAudit";
+import { useProductTagNames, useCreateProductTag } from "@/hooks/useProductTags";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, X } from "lucide-react";
 
