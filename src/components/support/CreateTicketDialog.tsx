@@ -61,7 +61,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const { data: operations = [] } = useTicketOperations();
   const { data: origins = [] } = useTicketOrigins();
   const activeOrigins = origins.filter((o: any) => o.is_active);
-  const { settings: fieldSettings } = useTicketFieldSettings();
+  const { settings: fieldSettings, visibility: fieldVisibility } = useTicketFieldSettings();
 
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");

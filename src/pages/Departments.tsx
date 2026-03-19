@@ -346,36 +346,99 @@ export default function Departments() {
           </div>
         </TabsContent>
 
-        {/* === CAMPOS OBRIGATÓRIOS === */}
+        {/* === TEMPLATE DO TICKET (CAMPOS) === */}
         <TabsContent value="fields">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            {/* Campos fixos (sempre visíveis) */}
+            <Card className="border-dashed opacity-60">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">Assunto</p>
+                    <p className="text-sm text-muted-foreground">Resumo do problema (sempre visível e obrigatório)</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Visível</span>
+                      <Switch checked disabled />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Obrigatório</span>
+                      <Switch checked disabled />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-dashed opacity-60">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">Prioridade</p>
+                    <p className="text-sm text-muted-foreground">Nível de urgência (sempre visível e obrigatório)</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Visível</span>
+                      <Switch checked disabled />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Obrigatório</span>
+                      <Switch checked disabled />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Campos configuráveis */}
             {([
-              { field: "department" as const, label: "Departamento Responsável", desc: "Departamento ao qual o ticket será vinculado" },
+              { field: "description" as const, label: "Descrição", desc: "Detalhes do problema" },
+              { field: "attachments" as const, label: "Evidências (Print/Foto)", desc: "Upload de imagens e documentos" },
+              { field: "category" as const, label: "Categoria", desc: "Classificação do ticket por tipo de problema" },
               { field: "operation" as const, label: "Operação", desc: "Tipo de operação do ticket" },
               { field: "origin" as const, label: "Origem do Ticket", desc: "Momento da jornada do cliente" },
-              { field: "category" as const, label: "Categoria", desc: "Classificação do ticket por tipo de problema" },
-              { field: "customer" as const, label: "Cliente", desc: "Cliente vinculado ao ticket" },
+              { field: "department" as const, label: "Departamento Responsável", desc: "Departamento ao qual o ticket será vinculado" },
               { field: "assigned_to" as const, label: "Responsável (Atribuir a)", desc: "Agente responsável pelo ticket" },
+              { field: "customer" as const, label: "Cliente", desc: "Cliente vinculado ao ticket" },
               { field: "tags" as const, label: "Tags", desc: "Etiquetas de classificação do ticket" },
-            ]).map(({ field, label, desc }) => (
-              <Card key={field}>
-                <CardContent className="flex items-center justify-between py-4">
-                  <div>
-                    <p className="font-medium text-foreground">{label}</p>
-                    <p className="text-sm text-muted-foreground">{desc}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {fieldSettings[field] ? "Obrigatório" : "Opcional"}
-                    </span>
-                    <Switch
-                      checked={fieldSettings[field]}
-                      onCheckedChange={(checked) => updateField({ field, required: checked })}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            ]).map(({ field, label, desc }) => {
+              const isVisible = fieldVisibility[field];
+              return (
+                <Card key={field} className={!isVisible ? "opacity-50" : ""}>
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">{label}</p>
+                        <p className="text-sm text-muted-foreground">{desc}</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Visível</span>
+                          <Switch
+                            checked={isVisible}
+                            onCheckedChange={(checked) => {
+                              updateVisibility({ field, visible: checked });
+                              if (!checked) {
+                                updateField({ field, required: false });
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground">Obrigatório</span>
+                          <Switch
+                            checked={fieldSettings[field]}
+                            disabled={!isVisible}
+                            onCheckedChange={(checked) => updateField({ field, required: checked })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           <div className="mt-6">
