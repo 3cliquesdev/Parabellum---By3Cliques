@@ -321,6 +321,8 @@ serve(async (req) => {
           maxSentences: flowData.maxSentences ?? 3,
           forbidQuestions: flowData.forbidQuestions ?? true,
           forbidOptions: flowData.forbidOptions ?? true,
+          smartCollectionEnabled: flowData.smartCollectionEnabled ?? false,
+          smartCollectionFields: flowData.smartCollectionFields || [],
         }
       })
     });
