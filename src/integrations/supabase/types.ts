@@ -10901,8 +10901,11 @@ export type Database = {
           category: string
           content: string
           id: string
+          problem: string
           similarity: number
+          solution: string
           title: string
+          when_to_use: string
         }[]
       }
       merge_duplicate_contacts: {
