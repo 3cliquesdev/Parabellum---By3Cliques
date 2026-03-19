@@ -5059,33 +5059,6 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
 
-        // 🆕 IMMEDIATE DEPT UPDATE: Atualizar department da conversa imediatamente ao detectar intent
-        // Isso garante que o auto-close respeite as regras do departamento de destino
-        // (ex: Comercial não tem auto-close, Suporte tem 5 min)
-        if (collectedData.ai_exit_intent) {
-          const INTENT_DEPT_MAP: Record<string, string> = {
-            'comercial': 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c', // Comercial - Nacional
-            'internacional': '68195a0f-1f9e-406b-b714-c889b4145f60', // Comercial - Internacional
-            'comercial_internacional': '68195a0f-1f9e-406b-b714-c889b4145f60',
-            'financeiro': 'af3c75a9-2e3f-49f1-8e0b-7fb3f4b5ee45', // Financeiro
-            'saque': 'af3c75a9-2e3f-49f1-8e0b-7fb3f4b5ee45',
-            'cancelamento': 'b7149bf4-1356-4ca5-bc9a-8caacf7b6e80', // Customer Success
-            'suporte': '36ce66cd-7414-4fc8-bd4a-268fecc3f01a', // Suporte
-            'pedidos': '2dd0ee5c-fd20-44be-94ad-f83f1be1c4e9', // Suporte Pedidos
-            'suporte_sistema': 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4', // Suporte Sistema
-            'sistema': 'fd4fcc90-22e4-4127-ae23-9c9ecb6654b4',
-            'devolucao': '36ce66cd-7414-4fc8-bd4a-268fecc3f01a', // Suporte (fallback)
-          };
-          const immediateDeptId = INTENT_DEPT_MAP[collectedData.ai_exit_intent];
-          if (immediateDeptId) {
-            try {
-              await supabaseClient.from('conversations').update({ department: immediateDeptId }).eq('id', conversationId);
-              console.log(`[process-chat-flow] 🏢 Department atualizado imediatamente para intent="${collectedData.ai_exit_intent}": ${immediateDeptId}`);
-            } catch (deptUpdateErr) {
-              console.error(`[process-chat-flow] ⚠️ Erro ao atualizar department imediato:`, deptUpdateErr);
-            }
-          }
-        }
 
 
     } // end if (activeState)
