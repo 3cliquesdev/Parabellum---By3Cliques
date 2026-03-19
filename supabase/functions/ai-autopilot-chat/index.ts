@@ -1,5 +1,5 @@
 ﻿import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-// BUILD: V12 — 2026-03-18T16:00:00Z — Bugs 16-17 regex expansion + forced redeploy
+// BUILD: V13 — 2026-03-19T04:30:00Z — FIX#1E0A32FC: OTP sync via hasRecentOTPVerification + metadata cleanup
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/business-hours.ts";
 
@@ -6087,6 +6087,61 @@ Posso ajudar em mais alguma coisa?`;
       .single();
 
     const hasRecentOTPVerification = !!recentVerification;
+
+    // 🆕 FIX #1E0A32FC: Sync OTP verification to chat_flow_states when hasRecentOTPVerification
+    // This ensures process-chat-flow sees __ai_otp_verified even when the OTP was validated in a previous cycle
+    if (hasRecentOTPVerification && flow_context?.stateId) {
+      try {
+        const { data: flowStateForSync } = await supabaseClient
+          .from('chat_flow_states')
+          .select('collected_data')
+          .eq('id', flow_context.stateId)
+          .maybeSingle();
+
+        const existingSyncData = (flowStateForSync?.collected_data || {}) as Record<string, any>;
+        if (!existingSyncData.__ai_otp_verified) {
+          await supabaseClient
+            .from('chat_flow_states')
+            .update({
+              collected_data: {
+                ...existingSyncData,
+                __ai_otp_verified: true,
+                __ai_otp_step: undefined,
+              }
+            })
+            .eq('id', flow_context.stateId);
+          console.log('[ai-autopilot-chat] ✅ FIX#1E0A32FC: Synced __ai_otp_verified via hasRecentOTPVerification to stateId:', flow_context.stateId);
+        }
+      } catch (syncErr) {
+        console.error('[ai-autopilot-chat] ⚠️ FIX#1E0A32FC: Failed to sync OTP via recent verification:', syncErr);
+      }
+
+      // Clean up stale OTP metadata
+      try {
+        const { data: freshMetaConv } = await supabaseClient
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const freshMeta = (freshMetaConv?.customer_metadata || {}) as Record<string, any>;
+        if (freshMeta.awaiting_otp === true || !freshMeta.last_otp_verified_at) {
+          await supabaseClient
+            .from('conversations')
+            .update({
+              customer_metadata: {
+                ...freshMeta,
+                awaiting_otp: false,
+                otp_expires_at: null,
+                last_otp_verified_at: freshMeta.last_otp_verified_at || recentVerification?.created_at || new Date().toISOString(),
+              }
+            })
+            .eq('id', conversationId);
+          console.log('[ai-autopilot-chat] ✅ FIX#1E0A32FC: Cleaned stale OTP metadata (awaiting_otp=false)');
+        }
+      } catch (metaErr) {
+        console.error('[ai-autopilot-chat] ⚠️ FIX#1E0A32FC: Failed to clean OTP metadata:', metaErr);
+      }
+    }
     
     // 🆕 FASE: Verificar se cliente JÁ FEZ OTP ALGUMA VEZ (primeiro contato)
     // Se nunca verificou = primeiro contato, precisa OTP para identificar
@@ -7425,7 +7480,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     // Desabilitar completamente quando OTP verificado (cliente está fornecendo dados financeiros)
     const trimmedMsg = customerMessage?.trim() || '';
     const isShortDigitOnly = /^\d{1,3}$/.test(trimmedMsg);
-    const isOtpVerifiedContext = flow_context?.otpVerified === true;
+    const isOtpVerifiedContext = flow_context?.otpVerified === true || hasRecentOTPVerification;
     const isMenuNoise = !isOtpVerifiedContext && !!(customerMessage && (trimmedMsg.length <= 3 || isShortDigitOnly));
     let skipLLMForGreeting = false;
     // Não disparar saudação quando OTP já foi verificado (cliente aguarda resposta à solicitação)

@@ -3380,7 +3380,42 @@ serve(async (req) => {
         }
         
         // 🆕 V16.2 Bug 36: Suprimir financialIntentMatch quando OTP já verificado (coleta pós-OTP)
-        const otpVerifiedInFlow = !!(collectedData?.__ai_otp_verified);
+        // 🆕 FIX#1E0A32FC: Also check DB-level verification as defense against stale collectedData
+        let otpVerifiedInFlow = !!(collectedData?.__ai_otp_verified);
+        
+        // Defense: if collectedData doesn't have the flag, check DB for recent email verification
+        if (!otpVerifiedInFlow && conversationId) {
+          try {
+            const contactForOtp = await supabaseClient
+              .from('contacts')
+              .select('email')
+              .eq('id', contactId)
+              .maybeSingle();
+            if (contactForOtp?.data?.email) {
+              const { data: recentOtp } = await supabaseClient
+                .from('email_verifications')
+                .select('id')
+                .eq('email', contactForOtp.data.email)
+                .eq('verified', true)
+                .gte('created_at', new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString())
+                .limit(1)
+                .maybeSingle();
+              if (recentOtp) {
+                otpVerifiedInFlow = true;
+                // Sync back to collectedData for future iterations
+                collectedData.__ai_otp_verified = true;
+                await supabaseClient
+                  .from('chat_flow_states')
+                  .update({ collected_data: collectedData })
+                  .eq('id', stateId);
+                console.log('[process-chat-flow] 🔓 FIX#1E0A32FC: OTP verified via DB check — synced to collectedData');
+              }
+            }
+          } catch (otpCheckErr) {
+            console.warn('[process-chat-flow] ⚠️ FIX#1E0A32FC: OTP DB check failed:', otpCheckErr);
+          }
+        }
+
         financialIntentMatch =
           !otpVerifiedInFlow &&
           ((forceFinancialExit && forbidFinancial) ||
