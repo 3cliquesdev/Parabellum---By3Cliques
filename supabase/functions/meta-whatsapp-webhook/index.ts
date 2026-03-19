@@ -1194,6 +1194,8 @@ serve(async (req) => {
                             ticketConfig: (flowData as any).ticketConfig || null,
                             otpVerified: (flowData as any).otpVerified || false,
                             collectedData: (flowData as any).collectedData || null,
+                            smartCollectionEnabled: (flowData as any).smartCollectionEnabled ?? false,
+                            smartCollectionFields: (flowData as any).smartCollectionFields || [],
                           },
                         }),
                       }
