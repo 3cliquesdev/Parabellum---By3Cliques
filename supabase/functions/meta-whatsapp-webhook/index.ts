@@ -1173,6 +1173,7 @@ serve(async (req) => {
                             flow_id: flowData.flowId,
                             node_id: flowData.nodeId,
                             node_type: 'ai_response',
+                            stateId: (flowData as any).debug?.stateId || (flowData as any).stateId || null,
                             allowed_sources: (flowData as any).allowedSources || ['kb'],
                             response_format: 'text_only',
                             personaId: (flowData as any).personaId || null,
