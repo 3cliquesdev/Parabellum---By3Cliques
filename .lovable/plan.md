@@ -1,27 +1,35 @@
 
 
-# Fix: Campos de opções não editáveis no editor de fluxos
+# Fix: Campos de opções não editáveis no Ask Options
 
 ## Problema
 
-O `stopPropagation` no `ScrollArea` (linha 650) **não funciona** porque o ReactFlow usa um listener global no `document` (via `useKeyPress`), não um listener baseado em DOM bubbling. Quando você digita em qualquer Input do painel, o ReactFlow captura Backspace/Delete no nível do `document` antes que o `stopPropagation` tenha efeito — resultado: o nó é deletado em vez do texto ser editado.
+O `onChange` do input de opções chama `updateOption` **duas vezes** consecutivas — uma para `label` e outra para `value`. Cada chamada lê `selectedNode.data.options` do estado atual, mas a primeira chamada já atualiza o estado. A segunda chamada usa o estado **stale** (antigo), sobrescrevendo a mudança do label. Resultado: o texto digitado é imediatamente apagado.
 
 ## Correção
 
 ### Arquivo: `src/components/chat-flows/ChatFlowEditor.tsx`
 
-1. **Desativar `deleteKeyCode` nativo do ReactFlow** — trocar `deleteKeyCode={['Backspace', 'Delete']}` por `deleteKeyCode={null}`
+**1. Alterar `updateOption` (linha ~493)** para aceitar múltiplos campos de uma vez:
 
-2. **Adicionar listener manual de deleção** que verifica se o foco está em input/textarea antes de deletar:
-   - Escutar `keydown` no container do ReactFlow
-   - Se a tecla for Backspace ou Delete **e** o `document.activeElement` **não** for input/textarea/contenteditable → deletar nós e edges selecionados
-   - Caso contrário, deixar o evento seguir normalmente para o campo de texto
+```typescript
+const updateOption = (idx: number, updates: Record<string, string>) => {
+  if (!selectedNode) return;
+  const options = [...(selectedNode.data.options || [])];
+  options[idx] = { ...options[idx], ...updates };
+  updateNodeData('options', options);
+};
+```
 
-3. **Remover `onKeyDown stopPropagation` redundantes** do ScrollArea e Textareas individuais (não são mais necessários)
+**2. Alterar o `onChange` do input de opções (linha ~771)** para passar label e value numa única chamada:
 
-## Resultado
+```typescript
+onChange={(e) => {
+  updateOption(idx, { label: e.target.value, value: slugify(e.target.value) });
+}}
+```
 
-- Inputs de opções (label), condições, nomes de bloco → editáveis normalmente
-- Backspace/Delete com nó selecionado no canvas (sem foco em input) → deleta o nó como antes
-- Botões de adicionar/remover opções → continuam funcionando normalmente
+**3. Atualizar `removeOption` (linha ~478)** — não precisa mudar, já usa chamada única.
+
+Isso resolve a condição de corrida sem mudar mais nada.
 
