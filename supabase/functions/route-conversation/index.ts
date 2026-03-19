@@ -595,6 +595,7 @@ serve(async (req) => {
           .eq('availability_status', 'online')
           .in('id', genericAgentUserIds);
 
+        let deptIdsForFilter: string[] = [];
         // 🆕 HIERARQUIA EXPANDIDA: Filtrar por departamento COM fallback para pai, irmãos E filhos
         if (resolvedDepartmentId) {
           // Prioridade: 1º alvo, 2º filhos, 3º pai, 4º irmãos
@@ -611,14 +612,25 @@ serve(async (req) => {
             deptIds.push(...siblingDepartmentIds);
           }
           console.log(`[route-conversation] 📂 Searching in departments: [target, children, parent, siblings] = ${deptIds.length} total`);
-          // N:N: Filter by department using agent_departments
-          // FIX: .overlaps() causa "operator does not exist: uuid && unknown" — usar .in() para UUID
-          agentsQuery = agentsQuery.in('agent_departments.department_id', deptIds);
+          // FIX: Filtragem client-side para evitar "operator does not exist: uuid && unknown"
+          // PostgREST sem !inner não exclui registros pai — filtrar após query
+          deptIdsForFilter = deptIds;
         }
 
         const result = await agentsQuery;
         let allGenericAgents = result.data || [];
         agentsError = result.error;
+
+        // FIX: Filtrar por departamento client-side (mesmo padrão do path skill-based)
+        if (deptIdsForFilter.length > 0) {
+          allGenericAgents = allGenericAgents.filter(a => {
+            const agentDepts = Array.isArray(a.agent_departments)
+              ? a.agent_departments.map((d: any) => d.department_id)
+              : [a.agent_departments?.department_id].filter(Boolean);
+            return deptIdsForFilter.some(d => agentDepts.includes(d));
+          });
+          console.log(`[route-conversation] 📂 After dept client-side filter: ${allGenericAgents.length} agents`);
+        }
 
         // Filtrar por canal de atendimento
         genericAgents = allGenericAgents.filter(agent => {
