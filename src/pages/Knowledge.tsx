@@ -40,6 +40,7 @@ export default function Knowledge() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [articleToDelete, setArticleToDelete] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("artigos");
+  const [productTagManagerOpen, setProductTagManagerOpen] = useState(false);
   
   const [showDraftsOnly] = useState(filterParam === 'draft');
 
