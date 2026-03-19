@@ -8146,8 +8146,10 @@ export type Database = {
           external_order_id: string
           id: string
           photos: Json | null
+          product_items: Json | null
           reason: string
           registered_email: string | null
+          seller_name: string | null
           status: string
           tracking_code_original: string | null
           tracking_code_return: string | null
@@ -8161,8 +8163,10 @@ export type Database = {
           external_order_id: string
           id?: string
           photos?: Json | null
+          product_items?: Json | null
           reason: string
           registered_email?: string | null
+          seller_name?: string | null
           status?: string
           tracking_code_original?: string | null
           tracking_code_return?: string | null
@@ -8176,8 +8180,10 @@ export type Database = {
           external_order_id?: string
           id?: string
           photos?: Json | null
+          product_items?: Json | null
           reason?: string
           registered_email?: string | null
+          seller_name?: string | null
           status?: string
           tracking_code_original?: string | null
           tracking_code_return?: string | null
