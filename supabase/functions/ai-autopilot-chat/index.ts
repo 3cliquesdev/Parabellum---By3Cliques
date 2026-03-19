@@ -1234,6 +1234,10 @@ interface FlowContext {
   // 🆕 Coleta inteligente de dados do cliente
   smartCollectionEnabled?: boolean;
   smartCollectionFields?: string[];
+  // 🆕 stateId do chat_flow_states
+  stateId?: string | null;
+  // 🆕 department do flow context
+  department?: string | null;
   // 🆕 Configuração de ticket do nó de IA
   ticketConfig?: {
     enabled?: boolean;
