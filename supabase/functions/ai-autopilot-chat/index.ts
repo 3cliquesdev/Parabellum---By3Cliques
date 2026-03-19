@@ -7420,7 +7420,13 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
     // CORREÇÃO: Saudação proativa na primeira interação ou mensagem de ruído do menu
     const rawInteractionCount = flow_context?.collectedData?.__ai?.interaction_count;
     const isFirstNodeInteraction = rawInteractionCount === undefined || rawInteractionCount === 0;
-    const isMenuNoise = !!(customerMessage && (customerMessage.trim().length <= 3 || /^\d+$/.test(customerMessage.trim())));
+    // 🆕 FIX: Menu noise apenas para dígitos curtos (1-3 chars) de navegação de menu
+    // Números longos (CPF, PIX, telefone) NÃO são ruído — são dados válidos do cliente
+    // Desabilitar completamente quando OTP verificado (cliente está fornecendo dados financeiros)
+    const trimmedMsg = customerMessage?.trim() || '';
+    const isShortDigitOnly = /^\d{1,3}$/.test(trimmedMsg);
+    const isOtpVerifiedContext = flow_context?.otpVerified === true;
+    const isMenuNoise = !isOtpVerifiedContext && !!(customerMessage && (trimmedMsg.length <= 3 || isShortDigitOnly));
     let skipLLMForGreeting = false;
     // Não disparar saudação quando OTP já foi verificado (cliente aguarda resposta à solicitação)
     const skipGreetingForOtp = flow_context?.otpVerified === true;

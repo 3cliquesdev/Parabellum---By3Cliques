@@ -1324,10 +1324,13 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
           }
 
           // Construir flow_context idêntico ao meta-whatsapp-webhook
+          // 🆕 FIX: Propagar stateId para que ai-autopilot-chat possa sync __ai_otp_verified
+          const flowStateId = flowResult.debug?.stateId || flowResult.stateId || null;
           const flowContext = flowResult.flow_context || {
             flow_id: flowResult.flowId || flowResult.masterFlowId,
             node_id: flowResult.nodeId,
             node_type: 'ai_response',
+            stateId: flowStateId,
             allowed_sources: flowResult.allowedSources || ['kb'],
             response_format: 'text_only',
             personaId: flowResult.personaId || null,
