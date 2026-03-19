@@ -5952,6 +5952,8 @@ serve(async (req) => {
           forbidConsultant: startNode.data?.forbid_consultant ?? false,
           ticketConfig: startNode.data?.ticket_config || null,
           otpVerified: false,
+          smartCollectionEnabled: startNode.data?.smart_collection_enabled ?? false,
+          smartCollectionFields: startNode.data?.smart_collection_fields || [],
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
