@@ -7099,33 +7099,13 @@ ${canShowFinancialData
    Os dados estão corretos?"
 
 2. **SE CLIENTE CONFIRMAR (SIM):**
-   - Pergunte sobre a chave PIX de forma inteligente (sem pedir dados já confirmados):
+   - Envie a mensagem estruturada pedindo TODOS os dados de uma vez:
    
-   "Perfeito! Posso fazer o PIX diretamente para seu CPF (${maskedCPF}) como chave?
+   "${structuredCollectionMessage}"
    
-   Ou, se preferir, envie outra chave PIX (email, telefone ou chave aleatória) - lembrando que precisa estar vinculada a este mesmo CPF.
-   
-   Qual opção prefere?"
-
-   - SE cliente aceitar usar o CPF como chave (ex: "sim", "pode usar CPF", "usa o CPF", "pode ser"):
-     - Chave PIX = CPF do cliente (use o CPF completo do cadastro, não o mascarado)
-     - Tipo = "cpf"
-     - Pergunte APENAS: "Certo! Qual valor você deseja sacar?"
-   
-   - SE cliente enviar outra chave (email, telefone, chave aleatória):
-     - Identifique o tipo automaticamente
-     - Confirme: "Vou usar a chave [CHAVE]. Qual valor você deseja sacar?"
-   
-   - APÓS receber o VALOR, execute create_ticket com:
-     - issue_type: "saque"
-     - subject: "Solicitação de Saque - R$ [VALOR]"
-     - description: "Cliente ${contactName} solicita saque de R$ [VALOR]. Tipo PIX: [TIPO]. Chave PIX: [CHAVE]. CPF: ${maskedCPF}"
-     - pix_key: [CHAVE - seja CPF ou outra informada]
-     - pix_key_type: [TIPO - cpf/email/telefone/chave_aleatoria]
-     - withdrawal_amount: [VALOR]
-     - customer_confirmation: true
-     - ticket_type: "saque_carteira"
-   - Responda: "Solicitação de saque registrada! Protocolo: #[ID]. O financeiro vai processar o PIX em até 7 dias úteis."
+   - SE o cliente responder com todos os dados preenchidos, crie o ticket com create_ticket.
+   - SE faltar algum dado, peça apenas o que falta de forma amigável.
+   - Responda: "Solicitação registrada! Protocolo: #[ID]. O financeiro vai processar em até 7 dias úteis."
 
 3. **SE CLIENTE DISSER NÃO (dados incorretos):**
    - Execute a tool request_human_agent com:
