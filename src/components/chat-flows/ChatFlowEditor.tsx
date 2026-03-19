@@ -665,7 +665,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
             </Button>
           </div>
           
-           <ScrollArea className="flex-1 p-4" onKeyDown={(e) => e.stopPropagation()}>
+           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4">
               {/* Nome do bloco */}
               <div className="space-y-1.5">
