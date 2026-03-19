@@ -1640,8 +1640,8 @@ serve(async (req) => {
     
     // Só bloquear AÇÕES financeiras. Info passa para LLM responder via KB. Ambíguo → IA pergunta.
     // ✅ V16.1 Bug 33: Bypass quando OTP já verificado — permitir coleta de dados pós-OTP
-    // ✅ V16.2 Fix: Guard reconhece verificação OTP tanto do flow_context quanto do DB
-    const otpAlreadyVerified = !!(flow_context?.otpVerified) || hasRecentOTPVerification;
+    // ✅ V16.3 Fix: Usar apenas flow_context aqui (hasRecentOTPVerification só existe após linha ~6089)
+    const otpAlreadyVerified = !!(flow_context?.otpVerified);
     if (ragConfig.blockFinancial && flowForbidFinancial && !otpAlreadyVerified && customerMessage && customerMessage.trim().length > 0 && isFinancialAction && !isFinancialInfo) {
       console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
