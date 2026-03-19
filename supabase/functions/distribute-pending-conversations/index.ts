@@ -281,7 +281,7 @@ Deno.serve(async (req: Request) => {
         .from('conversations')
         .update({
           assigned_to: agentId,
-          ai_mode: 'waiting_human', // Agente precisa responder primeiro
+          ai_mode: 'copilot', // ✅ FIX: Conversa atribuída entra em copilot para liberar o composer
           needs_human_review: false // 🆕 Resetar flag quando atribuído
         })
         .eq('id', conv.id);

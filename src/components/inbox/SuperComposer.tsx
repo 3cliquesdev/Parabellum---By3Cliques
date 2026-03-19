@@ -309,15 +309,35 @@ export function SuperComposer({
     // =========================================================================
     // 🛡️ REGRA DE SEGURANÇA: Bloquear envio em waiting_human
     // Isso evita duplicação por re-render ou retry visual no frontend
+    // ✅ FIX: Se a conversa já está atribuída ao próprio agente, permitir envio
+    //    (estado inconsistente: assigned_to=eu + waiting_human — defensivo)
     // =========================================================================
     if (aiMode === 'waiting_human') {
-      console.warn('[SuperComposer] ⛔ Bloqueado: aiMode é waiting_human - aguarde assumir a conversa');
-      toast({
-        title: "Aguardando atendente",
-        description: "Você precisa assumir a conversa antes de enviar mensagens.",
-        variant: "default",
-      });
-      return;
+      // Verificar se a conversa já está atribuída ao próprio usuário
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('assigned_to')
+        .eq('id', conversationId)
+        .single();
+      
+      const isAssignedToMe = conv?.assigned_to === user?.id;
+      
+      if (!isAssignedToMe) {
+        console.warn('[SuperComposer] ⛔ Bloqueado: aiMode é waiting_human e não atribuída ao agente');
+        toast({
+          title: "Aguardando atendente",
+          description: "Você precisa assumir a conversa antes de enviar mensagens.",
+          variant: "default",
+        });
+        return;
+      }
+      
+      // ✅ Conversa atribuída ao agente mas em waiting_human — corrigir ai_mode automaticamente
+      console.log('[SuperComposer] ⚠️ Estado inconsistente detectado: assigned_to=eu + waiting_human. Corrigindo para copilot...');
+      await supabase
+        .from('conversations')
+        .update({ ai_mode: 'copilot' })
+        .eq('id', conversationId);
     }
 
     // =========================================================================

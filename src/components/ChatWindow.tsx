@@ -470,6 +470,8 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
   // 1. IA está controlando (autopilot) - mas avisar se global está off
   // 2. Conversa está aguardando humano (waiting_human)
   // 3. Conversa não está atribuída a ninguém (pool geral)
+  // ✅ FIX: Se a conversa está atribuída ao agente mas em waiting_human (estado inconsistente),
+  //    NÃO mostrar "Assumir" — o composer deve liberar o envio diretamente.
   const isAssignedToMe = conversation?.assigned_to === user?.id;
   const canShowTakeControl = !isAssignedToMe && (isAutopilot || isWaitingHuman || !conversation?.assigned_to);
 
