@@ -1234,6 +1234,10 @@ interface FlowContext {
   // 🆕 Coleta inteligente de dados do cliente
   smartCollectionEnabled?: boolean;
   smartCollectionFields?: string[];
+  // 🆕 stateId do chat_flow_states
+  stateId?: string | null;
+  // 🆕 department do flow context
+  department?: string | null;
   // 🆕 Configuração de ticket do nó de IA
   ticketConfig?: {
     enabled?: boolean;
@@ -3837,7 +3841,7 @@ serve(async (req) => {
             // 🎯 TRIAGEM: Email não encontrado = Lead â†’ Rotear para Comercial
             console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email não encontrado - roteando para Comercial');
             // FIX BUG 5: Verificar contexto financeiro antes de redirecionar
-            const isFinancialCtx = isFinancialRequest || isFinancialActionRequest || isWithdrawalRequest;
+            const isFinancialCtx = FINANCIAL_BARRIER_KEYWORDS.some(keyword => customerMessage.toLowerCase().includes(keyword)) || WITHDRAWAL_ACTION_PATTERNS.some(pattern => pattern.test(customerMessage)) || OTP_REQUIRED_KEYWORDS.some(keyword => customerMessage.toLowerCase().includes(keyword.toLowerCase()));
             const alreadyAskedAltEmail = (conversation.customer_metadata || {}).asked_alternative_email === true;
             
             if (isFinancialCtx && !alreadyAskedAltEmail) {
@@ -6266,10 +6270,13 @@ Posso ajudar em mais alguma coisa?`;
               const { data: wi } = await supabaseClient.from('whatsapp_instances').select('*').eq('status', 'connected').limit(1).maybeSingle();
               if (wi) await supabaseClient.functions.invoke('send-whatsapp-message', { body: { instance_id: wi.id, phone_number: contact.phone, whatsapp_id: contact.whatsapp_id, message: saqueResponse } });
             }
-            return await respondWithDecision(
-              { response: saqueResponse, messageId: savedMsg?.id, ticketCreated: true, ticketId, debug: { reason: 'saque_data_deterministic_ticket' } },
-              { decision: 'reply', decisionReason: 'saque_data_deterministic_ticket', messageId: savedMsg?.id || null }
-            );
+            return new Response(JSON.stringify({
+              response: saqueResponse,
+              messageId: savedMsg?.id,
+              ticketCreated: true,
+              ticketId,
+              debug: { reason: 'saque_data_deterministic_ticket' },
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
         } catch (ticketErr) {
           console.error('[ai-autopilot-chat] ❌ Falha ao criar ticket determinístico de saque:', ticketErr);
