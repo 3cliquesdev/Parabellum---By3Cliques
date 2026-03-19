@@ -1,159 +1,79 @@
-# Auditoria V14 — Correções Aplicadas ✅
 
-## Fixes V13 (anteriores)
-| Fix | Status |
-|---|---|
-| Bug 1: Self-blocking loop | ✅ |
-| Bug 2: Greeting double-send | ✅ (causa raiz real corrigida no Bug 7) |
-| Bug 3: {{vars}} vazando | ✅ |
-| Bug 4: Detecção financeira | ✅ |
-| Bug 5: KB sandbox | ✅ |
-| Bug 6: Typo persona | ✅ |
+Objetivo: corrigir de vez o loop do protocolo `#1E0A32FC`, onde a conversa entra em contexto financeiro, a IA pede a chave PIX, mas o próximo passo volta para fallback/genérico em vez de continuar a coleta.
 
-## Fixes V10 (Deploy realizado)
+Diagnóstico confirmado:
+1. O ajuste anterior ficou parcial.
+2. Neste protocolo, o estado do fluxo **não recebeu** `chat_flow_states.collected_data.__ai_otp_verified = true`.
+3. Evidência real:
+   - a conversa ativa é `1e0a32fc-d646-4f39-b80e-a81ab8fb27af`
+   - o fluxo ativo é `node_ia_financeiro`
+   - `chat_flow_states.collected_data` continua sem `__ai_otp_verified`
+   - `process-chat-flow` processou a mensagem `02461462270` com o fluxo ainda sem esse flag
+4. Há uma inconsistência adicional no estado da conversa:
+   - `customer_metadata.awaiting_otp = true`
+   - `customer_metadata.last_otp_verified_at = null`
+   - mesmo assim a IA já respondeu: “Sua identidade já foi verificada com sucesso... Qual é a sua chave PIX?”
+5. Causa-raiz:
+   - o sync do OTP foi implementado apenas no caminho de **validação fresca do código**
+   - este caso caiu no caminho de **OTP recente já válido / cliente já verificado**
+   - nesse caminho, o sistema libera a coleta, mas **não sincroniza o estado do fluxo** que o `process-chat-flow` usa como fonte de verdade
 
-### Bug 7 ✅ — isProactiveGreeting não pulava LLM
-### Bug 8 ✅ — Dígitos de menu pós-greeting causavam loop fallback
-### Bug 9 ✅ — Race condition: mensagens IA duplicadas
-### Bug 10 ✅ — Persona "Helper Sistema" com role "elper Sistema"
-### Bug 11 (MENOR) — KB sem cobertura (recomendação manual)
+Plano de correção:
+1. Unificar o “sync de verificação” no `ai-autopilot-chat`
+   - criar uma rotina única para marcar o cliente como verificado no fluxo
+   - essa rotina deve atualizar:
+     - `chat_flow_states.collected_data.__ai_otp_verified = true`
+     - limpeza de `__ai_otp_step`
+     - atualização coerente de metadata de conversa
 
-## Fixes V11 (Deploy realizado)
+2. Aplicar esse sync em dois cenários
+   - após OTP validado com sucesso
+   - e também quando `hasRecentOTPVerification` já permitir a coleta financeira sem novo código
 
-### Bug 12 ✅ — Cliente aceita transferência e IA ignora
-### Bug 13 ✅ — Contador anti-loop reseta entre nós
-### Bug 14 ✅ — Greeting enviado DEPOIS de fallback
-### Bug 15 ✅ — Build timestamp para rastreabilidade
+3. Limpar estado OTP obsoleto
+   - quando a IA entrar em coleta financeira por verificação já válida, limpar flags antigas como:
+     - `awaiting_otp`
+     - `otp_expires_at`
+   - isso evita que mensagens numéricas futuras sejam tratadas por caminhos errados
 
-## Fixes V12 (Deploy realizado)
+4. Adicionar defesa no `process-chat-flow`
+   - antes de decidir saída financeira/fallback, reforçar a leitura de estado verificado
+   - se o fluxo estiver em nó financeiro e a conversa já tiver verificação válida, não depender só do `collected_data` stale
 
-### Bug 16 ✅ — Regex de transferência incompleta
-### Bug 17 ✅ — Afirmativo "Sim" com pontuação não detectado
-### Bug 18 ✅ — Deploy forçado para ativar V8-V12
+5. Garantir propagação consistente nos webhooks e batch
+   - revisar `handle-whatsapp-event`, `meta-whatsapp-webhook` e `process-buffered-messages`
+   - garantir que `stateId` e `otpVerified` cheguem sempre coerentes ao `ai-autopilot-chat`
 
-## Fixes V13 (Deploy realizado)
+6. Endurecer a continuidade da coleta
+   - no contexto financeiro já verificado, entradas como CPF/telefone/chave PIX numérica devem seguir o roteiro:
+     - PIX → banco → valor → motivo
+   - nunca cair em resposta genérica ou reset de contexto
 
-### Bug 20+21 ✅ — flowExit de Transfer Intent re-invoca flow → mensagens duplicadas + handoff não executa
-- **Fix:** Guard PRÉ-flowExit nos dois webhooks (`meta-whatsapp-webhook` e `handle-whatsapp-event`)
-- Quando `reason === 'customer_transfer_intent'` ou `reason === 'global_anti_loop_handoff'`:
-  - **Pula** re-invocação do `process-chat-flow` (elimina mensagens duplicadas)
-  - Executa handoff **direto**: `ai_mode = 'waiting_human'`, `assigned_to = null`
-  - Chama `route-conversation` para dispatch imediato
-- Resultado: Cliente recebe apenas "Vou te transferir agora" e é transferido em < 5s
+Validação após implementação:
+1. Reproduzir exatamente `#1E0A32FC`
+   - menu → financeiro → “quero sacar” → IA pede PIX → enviar chave numérica
+   - esperado: pedir banco
 
-### Bug 22 ✅ — Global anti-loop counter sem diagnóstico
-- **Fix:** Telemetria adicionada no bloco L9326 do `ai-autopilot-chat`:
-  - Log: `🔢 V13 Bug 22: Global counter — isFallback=X, current=Y, new=Z, nodeId=N`
-- Permite monitorar se `isFallbackResponse` está sendo setado e se o counter incrementa
+2. Validar estado persistido
+   - `chat_flow_states.collected_data.__ai_otp_verified = true`
 
-## Deploy
-- `ai-autopilot-chat` ✅ re-deployed V13
-- `meta-whatsapp-webhook` ✅ re-deployed V13
-- `handle-whatsapp-event` ✅ re-deployed V13
+3. Validar metadata coerente
+   - `awaiting_otp = false`
+   - `last_otp_verified_at` preenchido quando aplicável
 
-## Fixes V14 (Deploy realizado)
+4. Validar continuidade completa
+   - PIX numérica
+   - banco
+   - valor
+   - motivo
+   - criação do ticket sem fallback
 
-### Bug 24 ✅ — RLS do `inbox_view` sem cláusula AI queue global
-- **Fix:** Migration recriou policy `optimized_inbox_select` com cláusula adicional:
-  - `ai_mode IN ('autopilot','waiting_human') AND status<>'closed' AND assigned_to IS NULL`
-  - Permite todos os roles internos verem fila IA independente de departamento
-
-### Bug 25 ✅ — Client-side filter `useInboxView` restringia por departamento
-- **Fix:** Expandido `.or()` nos 2 blocos de query (main + chunked) para incluir:
-  - `and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed)`
-  - `and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
-- Realtime `shouldShow` atualizado com `isAIQueueGlobal`
-
-### Bug 26 ✅ — `get-inbox-counts` `applyVisibility` restringia fila IA
-- **Fix:** Expandido `.or()` no `applyVisibility` com mesmas cláusulas AI queue
-- Edge function redeployada
-
-## Deploy V14
-- Migration RLS ✅
-- `useInboxView.tsx` ✅ (3 blocos corrigidos)
-- `get-inbox-counts` ✅ re-deployed
-
-## Fixes V15 (Deploy realizado)
-
-### Bug 27 ✅ — Telemetria skipInitialMessage no webhook Meta
-- **Fix:** Logs estruturados com conversationId, contactId, nodeId, flowId, timestamp e originalMessage
-- Permite diagnosticar se `skipInitialMessage` é propagado na primeira transição menu → AI node
-
-### Bug 28+30 ✅ — Nó financeiro sem edges de intenção cruzada
-- **Fix:** Atualizado `flow_definition` do fluxo `cafe2831` (V5 Enterprise):
-  - Adicionado edge `cancelamento`: `node_ia_financeiro` → `node_ia_cancelamento`
-  - Adicionado edge `saque`: `node_ia_financeiro` → `node_escape_financeiro`
-  - Setado `forbid_cancellation: true` e `forbid_commercial: true` no `node_ia_financeiro`
-
-### Bug 29 ✅ — OTP alucinado pela LLM dentro de fluxos ativos
-- **Fix 1:** Removido guard `!flow_context` em L6421 do `ai-autopilot-chat`
-  - OTP agora funciona como camada transversal de segurança, independente do fluxo ativo
-- **Fix 2:** Adicionada regra anti-alucinação OTP no `generateRestrictedPrompt`
-  - LLM proibida de prometer envio de códigos, OTP ou verificação por email
-
-## Deploy V15
-- `ai-autopilot-chat` ✅ re-deployed
-- `meta-whatsapp-webhook` ✅ re-deployed
-- Flow `cafe2831` ✅ atualizado (edges + flags)
-
-## Fixes V16 (Deploy realizado)
-
-### Bug 31 ✅ — Escape Node enviado SEM opções (fallback separado)
-- **Fix:** Removido DB insert direto do fallback_message no `process-chat-flow` (L3697)
-- Fallback agora acumulado como `pendingFallbackMsg` e injetado no `extraMessages` (L4598)
-- Resultado: Caller recebe UMA resposta combinada: "Não consegui resolver...\n\nO que prefere fazer?\n\n1️⃣ Voltar\n2️⃣ Atendente"
-
-### Bug 32 ✅ — Pós-OTP não coletou dados financeiros (FLOW_EXIT prematuro)
-- **Fix 1:** Expandido `otpVerifiedInstruction` no `ai-autopilot-chat` com regras de coleta pós-OTP
-  - IA instruída a COLETAR campos (pix_key, bank, reason, amount) ao invés de buscar KB
-  - Proibida de emitir `[[FLOW_EXIT]]` até coletar todos os campos
-- **Fix 2:** Atualizado `objective` do `node_ia_financeiro` no fluxo `cafe2831` com FASE 1 (pré-OTP) e FASE 2 (pós-OTP coleta)
-- **Fix 3:** Habilitado `smart_collection_enabled: true` e `smart_collection_fields: [pix_key, bank, reason, amount]`
-
-## Deploy V16
-- `process-chat-flow` ✅ re-deployed
-- `ai-autopilot-chat` ✅ re-deployed
-- Flow `cafe2831` ✅ atualizado (objective + smart_collection)
-
-## Fixes V16.1 (Deploy realizado)
-
-### Bug 33 ✅ — Trava financeira ENTRADA bloqueia coleta pós-OTP
-- **Fix:** Adicionado `!otpAlreadyVerified` (derivado de `flow_context?.otpVerified`) na condição L1639
-- Quando OTP já verificado, mensagem financeira bypassa o guard e chega à LLM para coleta de dados
-
-### Bug 34 ✅ — `financialGuardInstruction` contradiz `otpVerifiedInstruction` no prompt
-- **Fix:** Condicionado `financialGuardInstruction` a `!flow_context?.otpVerified` (L6721)
-- Quando OTP verificado, apenas `otpVerifiedInstruction` é injetado (coleta de dados), sem contradição
-
-### Bug 35 (MENOR) — Flags `smart_collection_*` sem código consumidor
-- Sem impacto funcional — instrução via prompt é suficiente
-
-## Deploy V16.1
-- `ai-autopilot-chat` ✅ re-deployed
-
-## Fixes V16.2 (Deploy realizado)
-
-### Bug 36 ✅ — `financialIntentMatch` no `process-chat-flow` ignora OTP verificado
-- **Fix:** Adicionado `!otpVerifiedInFlow` (derivado de `collectedData.__ai_otp_verified`) na condição L3336
-- Quando OTP verificado, `financialIntentMatch` é suprimido → mensagem permanece no nó AI para coleta de dados
-- Log de telemetria adicionado para diagnóstico
-
-## Deploy V16.2
-- `process-chat-flow` ✅ re-deployed
-
-## Fixes V16.3 (Deploy realizado)
-
-### Bug 37 ✅ — `useCanTakeControl` bloqueava agente em conversa self-assigned
-- **Fix:** Adicionado bypass `assignedTo === user.id` antes do check de departamento
-
-### Bug 38 ✅ — `handle-whatsapp-event` NÃO implementa `skipInitialMessage`
-- **Fix 1:** Adicionado check `flowResult.skipInitialMessage === true` no L1314
-  - Quando ativo, `effectiveMessage = ""` → IA recebe mensagem vazia → saudação proativa
-  - Adicionado `kbProductFilter` ao flow_context
-- **Fix 2:** Expandido response `ask_options → ai_response` no `process-chat-flow` L2932
-  - Adicionados 14 campos ausentes: `personaId`, `kbProductFilter`, `kbCategories`, `objective`, `fallbackMessage`, `maxSentences`, `forbidQuestions`, `forbidOptions`, `forbidFinancial`, `forbidCommercial`, `forbidCancellation`, `forbidSupport`, `forbidConsultant`, `allowedSources`
-  - Alinhado com retorno de `intent-routing → ai_response` (L4556-4587)
-
-## Deploy V16.3
-- `handle-whatsapp-event` ✅ re-deployed
-- `process-chat-flow` ✅ re-deployed
+Detalhes técnicos:
+- Arquivos principais:
+  - `supabase/functions/ai-autopilot-chat/index.ts`
+  - `supabase/functions/process-chat-flow/index.ts`
+  - `supabase/functions/handle-whatsapp-event/index.ts`
+  - `supabase/functions/meta-whatsapp-webhook/index.ts`
+  - `supabase/functions/process-buffered-messages/index.ts`
+- Não parece exigir mudança de schema; é correção de lógica e sincronização de estado.
+- O ponto central não é mais “menu noise”; neste protocolo o defeito principal é **estado de verificação inconsistente entre conversa, fluxo e autopilot**.
