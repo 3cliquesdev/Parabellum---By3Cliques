@@ -1456,6 +1456,8 @@ const ESCAPE_PATTERNS = [
   /selecione uma opção/i,
   // Menus textuais com numeração (1) ... 2) ...)
   /\b1[\)\.\-][\s\S]*?\b2[\)\.\-]/i,
+  // 🆕 FIX: Detectar quando IA ecoa o fallback_message do nó
+  /n[aã]o\s+consegu[ií]\s+resolver/i,
 ];
 
 interface AutopilotChatRequest {
