@@ -10,6 +10,20 @@ export interface TicketFieldSettings {
   customer: boolean;
   assigned_to: boolean;
   tags: boolean;
+  description: boolean;
+  attachments: boolean;
+}
+
+export interface TicketFieldVisibility {
+  department: boolean;
+  operation: boolean;
+  origin: boolean;
+  category: boolean;
+  customer: boolean;
+  assigned_to: boolean;
+  tags: boolean;
+  description: boolean;
+  attachments: boolean;
 }
 
 const FIELD_KEYS: Record<keyof TicketFieldSettings, string> = {
@@ -20,6 +34,20 @@ const FIELD_KEYS: Record<keyof TicketFieldSettings, string> = {
   customer: "ticket_field_customer_required",
   assigned_to: "ticket_field_assigned_to_required",
   tags: "ticket_field_tags_required",
+  description: "ticket_field_description_required",
+  attachments: "ticket_field_attachments_required",
+};
+
+const VISIBILITY_KEYS: Record<keyof TicketFieldVisibility, string> = {
+  department: "ticket_field_department_visible",
+  operation: "ticket_field_operation_visible",
+  origin: "ticket_field_origin_visible",
+  category: "ticket_field_category_visible",
+  customer: "ticket_field_customer_visible",
+  assigned_to: "ticket_field_assigned_to_visible",
+  tags: "ticket_field_tags_visible",
+  description: "ticket_field_description_visible",
+  attachments: "ticket_field_attachments_visible",
 };
 
 const DEFAULTS: TicketFieldSettings = {
@@ -30,36 +58,58 @@ const DEFAULTS: TicketFieldSettings = {
   customer: false,
   assigned_to: false,
   tags: false,
+  description: false,
+  attachments: false,
+};
+
+const VISIBILITY_DEFAULTS: TicketFieldVisibility = {
+  department: true,
+  operation: true,
+  origin: true,
+  category: true,
+  customer: true,
+  assigned_to: true,
+  tags: true,
+  description: true,
+  attachments: true,
 };
 
 export function useTicketFieldSettings() {
   const queryClient = useQueryClient();
 
-  const { data: settings, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["ticket-field-settings"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("system_configurations")
         .select("key, value")
         .eq("category", "tickets")
-        .like("key", "ticket_field_%_required");
+        .like("key", "ticket_field_%");
 
       if (error) {
         console.error("[useTicketFieldSettings] Error:", error);
-        return DEFAULTS;
+        return { settings: DEFAULTS, visibility: VISIBILITY_DEFAULTS };
       }
 
       const map = new Map(data?.map((r) => [r.key, r.value]) || []);
-      const result: TicketFieldSettings = { ...DEFAULTS };
-
+      
+      const settings: TicketFieldSettings = { ...DEFAULTS };
       for (const [field, key] of Object.entries(FIELD_KEYS)) {
         const val = map.get(key);
         if (val !== undefined) {
-          (result as any)[field] = val === "true";
+          (settings as any)[field] = val === "true";
         }
       }
 
-      return result;
+      const visibility: TicketFieldVisibility = { ...VISIBILITY_DEFAULTS };
+      for (const [field, key] of Object.entries(VISIBILITY_KEYS)) {
+        const val = map.get(key);
+        if (val !== undefined) {
+          (visibility as any)[field] = val === "true";
+        }
+      }
+
+      return { settings, visibility };
     },
     staleTime: 30000,
   });
@@ -79,23 +129,12 @@ export function useTicketFieldSettings() {
           { onConflict: "key" }
         );
       if (error) throw error;
-
-      // Verificação pós-upsert
-      const { data: check } = await supabase
-        .from("system_configurations")
-        .select("value")
-        .eq("key", key)
-        .single();
-
-      if (!check || check.value !== (required ? "true" : "false")) {
-        throw new Error(`Falha ao persistir configuração ${key}`);
-      }
     },
     onMutate: async ({ field, required }) => {
       await queryClient.cancelQueries({ queryKey: ["ticket-field-settings"] });
-      const previous = queryClient.getQueryData<TicketFieldSettings>(["ticket-field-settings"]);
-      queryClient.setQueryData<TicketFieldSettings>(["ticket-field-settings"], (old) =>
-        old ? { ...old, [field]: required } : old
+      const previous = queryClient.getQueryData<{ settings: TicketFieldSettings; visibility: TicketFieldVisibility }>(["ticket-field-settings"]);
+      queryClient.setQueryData<{ settings: TicketFieldSettings; visibility: TicketFieldVisibility }>(["ticket-field-settings"], (old) =>
+        old ? { ...old, settings: { ...old.settings, [field]: required } } : old
       );
       return { previous };
     },
@@ -113,9 +152,49 @@ export function useTicketFieldSettings() {
     },
   });
 
+  const updateVisibility = useMutation({
+    mutationFn: async ({ field, visible }: { field: keyof TicketFieldVisibility; visible: boolean }) => {
+      const key = VISIBILITY_KEYS[field];
+      const { error } = await supabase
+        .from("system_configurations")
+        .upsert(
+          {
+            key,
+            value: visible ? "true" : "false",
+            category: "tickets",
+            description: `Campo ${field} visível na criação de ticket`,
+          },
+          { onConflict: "key" }
+        );
+      if (error) throw error;
+    },
+    onMutate: async ({ field, visible }) => {
+      await queryClient.cancelQueries({ queryKey: ["ticket-field-settings"] });
+      const previous = queryClient.getQueryData<{ settings: TicketFieldSettings; visibility: TicketFieldVisibility }>(["ticket-field-settings"]);
+      queryClient.setQueryData<{ settings: TicketFieldSettings; visibility: TicketFieldVisibility }>(["ticket-field-settings"], (old) =>
+        old ? { ...old, visibility: { ...old.visibility, [field]: visible } } : old
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["ticket-field-settings"], context.previous);
+      }
+      toast.error("Erro ao atualizar visibilidade");
+    },
+    onSuccess: () => {
+      toast.success("Visibilidade atualizada");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["ticket-field-settings"] });
+    },
+  });
+
   return {
-    settings: settings ?? DEFAULTS,
+    settings: data?.settings ?? DEFAULTS,
+    visibility: data?.visibility ?? VISIBILITY_DEFAULTS,
     isLoading,
     updateField: updateField.mutate,
+    updateVisibility: updateVisibility.mutate,
   };
 }

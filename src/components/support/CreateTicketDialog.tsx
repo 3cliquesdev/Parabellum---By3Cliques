@@ -61,7 +61,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
   const { data: operations = [] } = useTicketOperations();
   const { data: origins = [] } = useTicketOrigins();
   const activeOrigins = origins.filter((o: any) => o.is_active);
-  const { settings: fieldSettings } = useTicketFieldSettings();
+  const { settings: fieldSettings, visibility: fieldVisibility } = useTicketFieldSettings();
 
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
@@ -201,13 +201,13 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
   const canSubmit =
     subject.trim() &&
-    (!fieldSettings.operation || operationId) &&
-    (!fieldSettings.origin || originId) &&
-    (!fieldSettings.department || departmentId) &&
-    (!fieldSettings.category || category) &&
-    (!fieldSettings.customer || customerId) &&
-    (!fieldSettings.assigned_to || assignedTo) &&
-    (!fieldSettings.tags || selectedTagIds.length > 0) &&
+    (!fieldVisibility.operation || !fieldSettings.operation || operationId) &&
+    (!fieldVisibility.origin || !fieldSettings.origin || originId) &&
+    (!fieldVisibility.department || !fieldSettings.department || departmentId) &&
+    (!fieldVisibility.category || !fieldSettings.category || category) &&
+    (!fieldVisibility.customer || !fieldSettings.customer || customerId) &&
+    (!fieldVisibility.assigned_to || !fieldSettings.assigned_to || assignedTo) &&
+    (!fieldVisibility.tags || !fieldSettings.tags || selectedTagIds.length > 0) &&
     !createTicket.isPending;
 
   // Helper for field label
@@ -231,6 +231,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Customer Search */}
+          {fieldVisibility.customer && (
           <div className="space-y-2">
             <Label htmlFor="customer">{fieldLabel("Cliente", "customer")}</Label>
             {selectedContact ? (
@@ -280,6 +281,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               </div>
             )}
           </div>
+          )}
 
           {/* Subject */}
           <div className="space-y-2">
@@ -288,10 +290,10 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
           </div>
 
           {/* Evidências */}
+          {fieldVisibility.attachments && (
           <div className="space-y-2">
             <Label className="flex items-center gap-1">
-              Evidências (Print/Foto)
-              <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+              {fieldLabel("Evidências (Print/Foto)", "attachments")}
               {uploadedAttachments.length > 0 && (
                 <Badge variant="secondary" className="ml-1 text-xs">{uploadedAttachments.length}</Badge>
               )}
@@ -322,7 +324,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               </div>
             )}
 
-            {/* Dropzone sempre visível */}
+            {/* Dropzone */}
             <div
               {...getRootProps()}
               className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'}`}
@@ -344,15 +346,19 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               )}
             </div>
           </div>
+          )}
 
           {/* Description */}
+          {fieldVisibility.description && (
           <div className="space-y-2">
-            <Label htmlFor="description">Descrição</Label>
+            <Label htmlFor="description">{fieldLabel("Descrição", "description")}</Label>
             <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descreva o problema em detalhes..." rows={3} />
           </div>
+          )}
 
           {/* Category & Priority Row */}
           <div className="grid grid-cols-2 gap-4">
+            {fieldVisibility.category && (
             <div className="space-y-2">
               <Label>{fieldLabel("Categoria", "category")}</Label>
               <Select value={category} onValueChange={handleCategoryChange} disabled={categories.length === 0}>
@@ -366,9 +372,10 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 </SelectContent>
               </Select>
             </div>
+            )}
 
             <div className="space-y-2">
-              <Label>Prioridade</Label>
+              <Label>Prioridade *</Label>
               <Input
                 value={priority === "low" ? "Baixa" : priority === "medium" ? "Média" : priority === "high" ? "Alta" : priority === "urgent" ? "Urgente" : priority}
                 readOnly
@@ -378,6 +385,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
           </div>
 
           {/* Operação */}
+          {fieldVisibility.operation && (
           <div className="space-y-2">
             <Label>{fieldLabel("Operação", "operation")}</Label>
             <Select value={operationId} onValueChange={setOperationId}>
@@ -391,8 +399,10 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               </SelectContent>
             </Select>
           </div>
+          )}
 
           {/* Origem do Ticket */}
+          {fieldVisibility.origin && (
           <div className="space-y-2">
             <Label>{fieldLabel("Origem do Ticket", "origin")}</Label>
             <Select value={originId} onValueChange={setOriginId}>
@@ -406,8 +416,10 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               </SelectContent>
             </Select>
           </div>
+          )}
 
           {/* Tags */}
+          {fieldVisibility.tags && (
           <div className="space-y-2">
             <Label className="flex items-center gap-1">
               <Tag className="h-3.5 w-3.5" />
@@ -462,9 +474,11 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               </PopoverContent>
             </Popover>
           </div>
-
+          )}
           {/* Department & Assign Row */}
+          {(fieldVisibility.department || fieldVisibility.assigned_to) && (
           <div className="grid grid-cols-2 gap-4">
+            {fieldVisibility.department && (
             <div className="space-y-2">
               <Label>{fieldLabel("Departamento", "department")}</Label>
               <Select value={departmentId || "none"} onValueChange={(v) => setDepartmentId(v === "none" ? "" : v)}>
@@ -479,7 +493,9 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 </SelectContent>
               </Select>
             </div>
+            )}
 
+            {fieldVisibility.assigned_to && (
             <div className="space-y-2">
               <Label>{fieldLabel("Atribuir a", "assigned_to")}</Label>
               <Popover open={assignedPopoverOpen} onOpenChange={setAssignedPopoverOpen}>
@@ -534,7 +550,9 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 </PopoverContent>
               </Popover>
             </div>
+            )}
           </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
