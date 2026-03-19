@@ -1,80 +1,27 @@
 
 
-# Editar Template do Ticket — Visibilidade + Obrigatoriedade
+# Fix: Campos de opções não editáveis no editor de fluxos
 
-## O que muda
+## Problema
 
-Hoje a aba **Campos** só permite marcar campos como obrigatório/opcional. O usuário quer poder também **ativar/desativar (mostrar/esconder)** cada seção do formulário de criação de ticket, além de controlar se é obrigatório.
+O `stopPropagation` no `ScrollArea` (linha 650) **não funciona** porque o ReactFlow usa um listener global no `document` (via `useKeyPress`), não um listener baseado em DOM bubbling. Quando você digita em qualquer Input do painel, o ReactFlow captura Backspace/Delete no nível do `document` antes que o `stopPropagation` tenha efeito — resultado: o nó é deletado em vez do texto ser editado.
 
-## Como vai funcionar
+## Correção
 
-Cada campo do ticket terá **dois controles**:
-- **Visível**: liga/desliga — se desligado, o campo some completamente do formulário
-- **Obrigatório**: só aparece se o campo estiver visível — define se é obrigatório para criar o ticket
+### Arquivo: `src/components/chat-flows/ChatFlowEditor.tsx`
 
-```text
-┌──────────────────────────────────────────────────┐
-│ Departamento Responsável                         │
-│ Departamento ao qual o ticket será vinculado     │
-│                                                  │
-│   [Visível: ON]    [Obrigatório: OFF]            │
-├──────────────────────────────────────────────────┤
-│ Operação                                         │
-│ Tipo de operação do ticket                       │
-│                                                  │
-│   [Visível: ON]    [Obrigatório: ON]             │
-├──────────────────────────────────────────────────┤
-│ Origem do Ticket                                 │
-│ Momento da jornada do cliente          DESATIVADO│
-│                                                  │
-│   [Visível: OFF]   [Obrigatório: ---]            │
-└──────────────────────────────────────────────────┘
-```
+1. **Desativar `deleteKeyCode` nativo do ReactFlow** — trocar `deleteKeyCode={['Backspace', 'Delete']}` por `deleteKeyCode={null}`
 
-Campos que são sempre visíveis e não podem ser desativados: **Assunto** e **Prioridade** (são campos core do ticket).
+2. **Adicionar listener manual de deleção** que verifica se o foco está em input/textarea antes de deletar:
+   - Escutar `keydown` no container do ReactFlow
+   - Se a tecla for Backspace ou Delete **e** o `document.activeElement` **não** for input/textarea/contenteditable → deletar nós e edges selecionados
+   - Caso contrário, deixar o evento seguir normalmente para o campo de texto
 
-## Alterações
+3. **Remover `onKeyDown stopPropagation` redundantes** do ScrollArea e Textareas individuais (não são mais necessários)
 
-### 1. `src/hooks/useTicketFieldSettings.tsx`
-- Adicionar interface `TicketFieldVisibility` com as mesmas keys (department, operation, origin, category, customer, assigned_to, tags, description, attachments)
-- Novas chaves `ticket_field_X_visible` na `system_configurations`
-- Defaults: todos visíveis
-- Expor `visibility` e `updateVisibility` no retorno do hook
+## Resultado
 
-### 2. `src/pages/Departments.tsx` — aba "Campos"
-- Redesenhar cada card para mostrar dois switches lado a lado:
-  - Switch "Visível" (ativo/inativo)
-  - Switch "Obrigatório" (só habilitado se visível estiver ON)
-- Adicionar campos extras: **Descrição** e **Evidências** (que hoje não tinham toggle)
-- Visual: campo desativado fica com opacidade reduzida
-
-### 3. `src/components/support/CreateTicketDialog.tsx`
-- Ler `visibility` do hook
-- Envolver cada seção com `{visibility.X && (...)}` para esconder campos desativados
-- Manter a lógica de `required` apenas para campos visíveis
-
-### 4. `src/components/support/CreateTicketFromInboxDialog.tsx`
-- Aplicar a mesma lógica de visibilidade (se existir um dialog separado para criação via inbox)
-
-## Campos configuráveis
-
-| Campo | Pode desativar | Pode ser obrigatório |
-|-------|---------------|---------------------|
-| Assunto | Não (sempre visível) | Sempre obrigatório |
-| Descrição | Sim | Sim |
-| Evidências | Sim | Sim |
-| Categoria | Sim | Sim |
-| Prioridade | Não (sempre visível) | Sempre obrigatório |
-| Operação | Sim | Sim |
-| Origem | Sim | Sim |
-| Tags | Sim | Sim |
-| Departamento | Sim | Sim |
-| Atribuir a | Sim | Sim |
-| Cliente | Sim | Sim |
-
-## Detalhes técnicos
-
-- Armazenamento via `system_configurations` com chaves `ticket_field_X_visible` (mesmo padrão das `_required`)
-- Nenhuma migração necessária — a tabela `system_configurations` já suporta chaves dinâmicas
-- O hook faz upsert com `onConflict: "key"`
+- Inputs de opções (label), condições, nomes de bloco → editáveis normalmente
+- Backspace/Delete com nó selecionado no canvas (sem foco em input) → deleta o nó como antes
+- Botões de adicionar/remover opções → continuam funcionando normalmente
 
