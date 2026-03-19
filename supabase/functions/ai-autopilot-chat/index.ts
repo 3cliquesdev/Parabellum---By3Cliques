@@ -6313,9 +6313,14 @@ Posso ajudar em mais alguma coisa?`;
 
 Olá ${contactName}! Sua identidade foi confirmada.
 
-Vou prosseguir com sua solicitação financeira. Para dar andamento, preciso de alguns dados:
+Para dar andamento à sua solicitação financeira, vou precisar das seguintes informações:
 
-Qual é a sua **chave PIX** para recebimento?`
+1. **Chave PIX** para recebimento
+2. **Banco** da conta
+3. **Valor** solicitado
+4. **Motivo** da solicitação
+
+Vamos começar: qual é a sua **chave PIX**?`
           : `**Código inválido**
 
 ${errorMessage}
