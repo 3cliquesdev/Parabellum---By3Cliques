@@ -223,7 +223,16 @@ export default function KnowledgeAudit() {
             <Button size="sm" variant="outline" disabled={!bulkCategory || saving} onClick={() => applyBulk("category")}>
               <FolderOpen className="h-3 w-3 mr-1" /> Aplicar categoria
             </Button>
-            <Input placeholder="Product tags (vírgula)" value={bulkProductTag} onChange={(e) => setBulkProductTag(e.target.value)} className="w-[200px]" />
+            <Select value={bulkProductTag} onValueChange={setBulkProductTag}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Product tag..." />
+              </SelectTrigger>
+              <SelectContent>
+                {productTags.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button size="sm" variant="outline" disabled={!bulkProductTag || saving} onClick={() => applyBulk("product_tags")}>
               <Tag className="h-3 w-3 mr-1" /> Aplicar tags
             </Button>
