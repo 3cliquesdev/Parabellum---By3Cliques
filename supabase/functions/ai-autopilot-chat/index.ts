@@ -1,5 +1,5 @@
 ﻿import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-// BUILD: V12 — 2026-03-18T16:00:00Z — Bugs 16-17 regex expansion + forced redeploy
+// BUILD: V13 — 2026-03-19T04:30:00Z — FIX#1E0A32FC: OTP sync via hasRecentOTPVerification + metadata cleanup
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getBusinessHoursInfo, type BusinessHoursResult } from "../_shared/business-hours.ts";
 
