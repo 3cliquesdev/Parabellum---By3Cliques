@@ -1,71 +1,59 @@
 
 
-# Auditoria: Conversa 1F6A8C49 — IA Falha ao Criar Ticket de Saque
+# Correção: IA Financeira Cria Ticket com Template do Painel
 
-## Diagnóstico Completo
+## Problema Real (Auditoria #22D0647F)
 
-Analisei a conversa `1f6a8c49` mensagem por mensagem. O cliente seguiu todo o fluxo corretamente:
+O `node_ia_financeiro` tem uma edge `saque → node_escape_financeiro`. O motor auto-infere `forbidFinancial=true` a partir dessa edge, o que faz a IA emitir `[[FLOW_EXIT:financeiro]]` imediatamente quando o cliente diz "quero sacar" — antes mesmo de tentar OTP ou coleta. O nó financeiro se auto-sabota.
+
+Além disso, o template de descrição configurado no painel (com as variáveis `{{customer_name}}`, `{{pix_key}}`, `{{bank}}`, etc.) já existe no `ticket_config` do nó, mas a IA nunca chega a usá-lo porque sai antes.
 
 ```text
-Cliente: "bom dia"             → Menu Produto
-Cliente: "1" (Nacional)        → Menu Assunto  
-Cliente: "2" (Financeiro)      → IA Financeiro ativada
-IA: "Sou Helper Financeiro..."
-Cliente: "quero sacar!"        → IA envia OTP
-Cliente: "100496"              → OTP validado ✅
-IA: "Código validado! Você quer: A) Cancelar? B) Sacar?"  ← PROBLEMA 1
-Cliente: "ja falei pra voce procure na conversa!"
-IA: "Não encontrei informações..."  ← PROBLEMA 2
-[auto-encerramento por inatividade]
+Fluxo atual (quebrado):
+Cliente: "quero sacar"
+→ auto-inference: forbidFinancial=true (por causa da edge saque→escape)
+→ IA: [[FLOW_EXIT:financeiro]]
+→ process-chat-flow: aiExitForced → node_escape_financeiro
+→ "Não consegui resolver. O que prefere fazer?"
+→ TICKET NUNCA CRIADO
+
+Fluxo esperado:
+Cliente: "quero sacar"
+→ IA fica no nó financeiro
+→ OTP (se necessário) → Coleta estruturada (PIX, banco, valor, motivo)
+→ create_ticket usando template do painel
+→ Protocolo entregue ao cliente
 ```
 
-## 3 Problemas Identificados
+## Correções
 
-### Problema 1: Resposta pós-OTP é hardcoded e ignora o contexto
-Após o OTP ser validado, o código (linha 8458) retorna uma mensagem fixa:
-> "Você quer: A) Cancelar? B) Sacar?"
+### 1. Remover edge `saque` do nó financeiro (Database)
+A edge `saque → node_escape_financeiro` está causando a auto-inferência de `forbidFinancial`. Removê-la resolve o problema na raiz. O saque deve ser tratado DENTRO do nó financeiro, não redirecionado para escape.
 
-Mas o cliente **já disse "quero sacar!"** 3 mensagens atrás. A IA ignora a intenção original e faz uma pergunta desnecessária.
+### 2. Proteger nó financeiro contra auto-inferência (`process-chat-flow`)
+No bloco de auto-inferência (~linha 3352), adicionar exceção: se o nó atual **é** o nó financeiro (tem `ticket_config.enabled=true` com `category` financeira ou smart_collection_fields com campos financeiros), NÃO inferir `forbidFinancial`.
 
-### Problema 2: Flag `otpVerified` não é propagada ao flow_state
-O `collected_data` do flow_state mostra `customer_validated: false` e **nenhum** `__ai_otp_verified`. O handler de `verify_otp_code` (linha 8412) marca a verificação na tabela `email_verifications`, mas **não atualiza** o `chat_flow_states.collected_data` com a flag `__ai_otp_verified: true`. O sync automático (linha 6094) só roda no **próximo** ciclo e depende de `flow_context.stateId`, que pode não estar presente.
+### 3. Garantir que `create_ticket` use 100% os templates do painel (`ai-autopilot-chat`)
+O código já lê `tc.subject_template` e `tc.description_template` — mas precisa garantir que:
+- O `description_template` do painel substitua a `internalNote` hardcoded quando existir
+- Variáveis como `{{reason}}`, `{{customer_name}}`, `{{pix_key}}`, `{{bank}}`, `{{amount}}` sejam resolvidas corretamente
+- Se o template do painel estiver configurado, ele tem prioridade absoluta sobre qualquer lógica hardcoded
 
-### Problema 3: Na invocação seguinte, a IA busca na KB ao invés de coletar dados
-Como `otpVerified` nunca chegou ao flow_context, a instrução `otpVerifiedInstruction` (que diz "COLETE DADOS DO SAQUE") não foi injetada no prompt. O resultado: a IA fez uma busca KB (confidence 0.44) e respondeu genericamente.
+### 4. Corrigir categoria do ticket no nó (`Database`)
+No `ticket_config` do `node_ia_financeiro`, a `category` está como `cancelamento` — precisa ser `saque` ou `financeiro` para refletir o objetivo real do nó.
 
-## Correções Propostas
+## Arquivos Modificados
 
-### 1. Resposta pós-OTP inteligente (ao invés de hardcoded)
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts` (~linha 8454-8464)
+| Arquivo | Mudança |
+|---|---|
+| `supabase/functions/process-chat-flow/index.ts` | Exceção na auto-inferência para nós com ticket financeiro ativo |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Template do painel tem prioridade sobre internalNote hardcoded |
+| Database (migration) | Remover edge `saque→escape` do V5; corrigir `ticket_config.category` para `financeiro` |
 
-Ao validar OTP com CPF OK:
-- Detectar se o cliente já mencionou "saque" ou "reembolso" no histórico recente
-- Se sim: pular a pergunta A/B e ir direto para a coleta de dados (enviar a `structuredCollectionMessage`)
-- Se não: manter a pergunta A/B como fallback
-- Incluir `otpVerified: true` no `collected_data` do flow_state imediatamente
+## Resultado
 
-### 2. Sync imediato do `__ai_otp_verified` no flow_state
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts` (~linha 8412-8474)
-
-Após marcar `email_verifications.verified = true`:
-- Buscar o `chat_flow_states` ativo da conversa
-- Atualizar `collected_data` com `__ai_otp_verified: true` e `customer_validated: true`
-- Isso garante que na próxima invocação, `process-chat-flow` propague `otpVerified: true` no `flow_context`
-
-### 3. Injeção de contexto da intenção original no prompt pós-OTP
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts` (~linha 6865)
-
-Quando `otpVerified` estiver ativo, injetar no prompt:
-- A intenção original do cliente extraída do histórico (ex: "quero sacar")
-- Instrução explícita: "O cliente JÁ informou que quer [saque/reembolso]. NÃO pergunte novamente. Prossiga diretamente com a coleta de dados."
-
-## Resultado Esperado
-
-Fluxo corrigido:
-```text
-Cliente: "quero sacar!"        → IA envia OTP
-Cliente: "100496"              → OTP validado ✅
-IA: "Verificado! Para seu saque, preciso dos dados: Chave PIX, Banco, Valor, Motivo"
-Cliente: [fornece dados]       → IA cria ticket automaticamente ✅
-```
+- Template configurado no painel será usado fielmente na criação do ticket
+- Mudanças futuras no template não dependem de código — basta editar no painel visual
+- A IA não sai mais do nó financeiro prematuramente
+- Categoria, departamento, prioridade e responsável vêm do `ticket_config` do nó
 
