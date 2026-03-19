@@ -5869,9 +5869,13 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
 
     let knowledgeContext = '';
     if (knowledgeArticles.length > 0) {
-      knowledgeContext = `\n\n**📚 BASE DE CONHECIMENTO:**\n${knowledgeArticles.map(a => 
-        `**${a.title}**\n${a.content}`
-      ).join('\n\n---\n\n')}`;
+      knowledgeContext = `\n\n**📚 BASE DE CONHECIMENTO:**\n${knowledgeArticles.map(a => {
+        let block = `**${a.title}**\n${a.content}`;
+        if (a.problem) block += `\n\n**Problema:** ${a.problem}`;
+        if (a.solution) block += `\n**Solução:** ${a.solution}`;
+        if (a.when_to_use) block += `\n**Quando usar:** ${a.when_to_use}`;
+        return block;
+      }).join('\n\n---\n\n')}`;
     }
     
     // 🆕 SANDBOX TRAINING: Buscar artigos de treinamento do sandbox quando fonte habilitada
