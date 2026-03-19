@@ -381,6 +381,7 @@ async function callPipeline(
           flow_id: flowData.flowId,
           node_id: flowData.nodeId,
           node_type: "ai_response",
+          stateId: flowData.debug?.stateId || flowData.stateId || null,
           allowed_sources: flowData.allowedSources || ["kb"],
           response_format: "text_only",
           personaId: flowData.personaId || null,
