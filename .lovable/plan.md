@@ -1,75 +1,66 @@
 
 
-# Auditoria Completa — Status e Problemas Pendentes
+# Fix: LLM Vazia Pós-OTP + Menu de Escape Sem Opções + Mensagem OTP Genérica
 
-## Resumo do Estado Atual
+## 3 Bugs Identificados
 
-| Métrica | Valor | Status |
-|---------|-------|--------|
-| Total de artigos | **230** | — |
-| Com `problem` + `solution` | **209** (91%) | ✅ |
-| Sem `problem` + `solution` | **21** (9%) | ⚠️ |
-| Com embedding | **228** (99%) | ✅ |
-| Sem embedding | **2** | ⚠️ |
-| Sem `product_tags` | **201** (87%) | ⚠️ |
-| Categorias órfãs | **0** reais | ✅ (personas sem filtro = acesso global) |
-| RAG enriquecido (problem/solution/when_to_use) | Implementado | ✅ |
-| OTP fallback fix (linha 7766) | Implementado | ✅ |
-| OTP prompt sync (linhas 6729/6747) | Implementado | ✅ |
+### Bug 1 — Trava Financeira bloqueia MESMO após OTP verificado (CRÍTICO)
+**Linha 1644** do `ai-autopilot-chat/index.ts` — a interceptação de entrada ("TRAVA FINANCEIRA") verifica `flow_context?.otpVerified` mas **ignora** `hasRecentOTPVerification`:
 
----
+```
+if (ragConfig.blockFinancial && flowForbidFinancial && !otpAlreadyVerified && ...)
+```
 
-## Problemas Pendentes (3)
+Quando o OTP é validado pelo caminho transversal (dentro do autopilot), `flow_context.otpVerified` continua `false`. Resultado: o usuário diz "quero sacar" → bloco dispara → retorna `financialBlocked: true` sem mensagem → webhook re-invoca `process-chat-flow` com `forceFinancialExit` → rota para nó de escape → "Não consegui resolver por aqui" sem opções.
 
-### 1. 21 artigos sem `problem` e `solution`
-- **13 manuais**: Artigos longos estilo "manual" (ex: "Abrangência e Uso do Padrão de Atendimento", "Pós-Venda: Defeito, Envio Errado...") — não seguem formato Pergunta/Resposta, por isso a migration não os capturou
-- **8 sandbox_training**: Artigos duplicados de treinamento (ex: "Boa noite", "Agora quero saber sobre loja propria") — duplicatas que provavelmente deveriam ser removidas ou consolidadas
-- **Impacto**: Baixo. O `content` desses artigos já é rico e usado pelo RAG. Os campos `problem`/`solution` são um plus.
+**Fix**: Adicionar `&& !hasRecentOTPVerification` ao guard da linha 1644:
+```typescript
+const otpAlreadyVerified = !!(flow_context?.otpVerified) || hasRecentOTPVerification;
+```
 
-**Fix proposto**: Migration SQL que:
-- Para os 13 manuais: extrai o título como `problem` e gera um `solution` resumido do conteúdo (primeiros 300 chars)
-- Para os 8 sandbox_training duplicados: avaliar remoção (são duplicatas de conteúdo idêntico)
+### Bug 2 — Mensagem OTP genérica ignora contexto do cliente
+**Linha 6309-6314** — Após validar OTP, a mensagem diz:
+> "Agora posso te ajudar com questões financeiras. **Como posso te ajudar?**"
 
-### 2. 2 artigos sem embedding
-- `Cliente não consegue ver o pedido devido à mensalidade vencida`
-- `Cliente precisa de informações sobre planos de assinatura`
-- **Impacto**: Esses artigos só aparecem via busca por keyword, nunca por similaridade semântica.
-- São artigos do `passive_learning` com conteúdo curto.
+O cliente JÁ disse "quero sacar o valor da minha conta" — perguntar de novo é percebido como burrice da IA.
 
-**Fix proposto**: Regenerar embeddings chamando a edge function que processa embeddings, ou marcar `embedding_generated = false` para que o próximo ciclo os capture.
+**Fix**: Mudar a mensagem de sucesso para reconhecer a solicitação original e iniciar a coleta:
+```typescript
+const directOTPSuccessResponse = otpData?.success 
+  ? `**Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada.\n\nVou prosseguir com sua solicitação financeira. Para isso, preciso de alguns dados.\n\nQual é a sua **chave PIX** para recebimento?`
+  : ...;
+```
 
-### 3. 201 artigos sem `product_tags`
-- **87% dos artigos** não têm product_tags
-- **Impacto**: Quando um fluxo tem filtro por produto ativo, a query RAG inclui `product_tags.eq.{}` como fallback, então artigos sem tags AINDA aparecem. Não é um bloqueio, mas reduz a precisão da filtragem.
+### Bug 3 — Instrução "CLIENTE RECÉM-VERIFICADO" manda IA perguntar "Como posso te ajudar?"
+**Linha 6671** — Quando `isRecentlyVerified = true`, a instrução no prompt diz:
+> "Seja acolhedor e pergunte 'Como posso te ajudar?'"
 
-**Fix proposto**: Migration que atribui tags baseadas na `category` do artigo (mapeamento category → product_tag). Isso requer um mapeamento definido por vocês. Alternativamente, manter como está (sem impacto funcional imediato).
+Isso contradiz o `otpVerifiedInstruction` que manda coletar PIX. E mesmo que o Bug 1 não existisse, a IA recebe instrução conflitante.
 
----
+**Fix**: Condicionar essa instrução para NÃO disparar quando `isFinancialActionRequest && hasRecentOTPVerification`:
+```typescript
+${isRecentlyVerified && !(isFinancialActionRequest && hasRecentOTPVerification) ? '...' : ''}
+```
 
-## O que JÁ está funcionando (validado no código)
+## Resumo das Alterações
 
-1. ✅ RAG enriquecido com `problem`, `solution`, `when_to_use` (linha 5870-5878)
-2. ✅ RPC `match_knowledge_articles` retorna os 3 novos campos
-3. ✅ Keyword fallback query busca `problem, solution, when_to_use` (linha 4675)
-4. ✅ OTP fallback com guard `hasRecentOTPVerification` (linha 7766-7776)
-5. ✅ `otpVerifiedInstruction` reconhece OTP transversal (linha 6747)
-6. ✅ `financialGuardInstruction` desativa com OTP verificado (linha 6729)
-7. ✅ Personas com acesso global (sem restrição por categoria)
+| Bug | Arquivo | Linha | Alteração |
+|-----|---------|-------|-----------|
+| 1 | `ai-autopilot-chat/index.ts` | ~1643 | `otpAlreadyVerified` inclui `hasRecentOTPVerification` |
+| 2 | `ai-autopilot-chat/index.ts` | ~6309-6314 | Mensagem OTP sucesso inicia coleta PIX em vez de "Como posso te ajudar?" |
+| 3 | `ai-autopilot-chat/index.ts` | ~6671 | Instrução "recém-verificado" não contradiz coleta financeira |
 
----
+## Fluxo Esperado Após Fix
 
-## Plano de Ação
+```text
+Cliente: "quero sacar o valor da minha conta"
+→ OTP enviado (barreira financeira)
+Cliente: "359019"
+→ "Código validado! Vou prosseguir com sua solicitação. Qual é sua chave PIX?"
+Cliente: "minha chave é fulano@email.com"
+→ IA coleta banco, motivo, valor (otpVerifiedInstruction ativo)
+→ IA cria ticket com create_ticket
+```
 
-### Prioridade 1: Fix dos 21 artigos sem problem/solution
-- Migration SQL para popular `problem` = título e `solution` = primeiros 300 chars do content nos 13 manuais
-- Avaliar remoção dos 8 sandbox_training duplicados
-
-### Prioridade 2: Regenerar embeddings dos 2 artigos
-- UPDATE para marcar `embedding_generated = false` nos 2 artigos, permitindo que o próximo ciclo os processe
-
-### Prioridade 3 (opcional): product_tags
-- Depende de um mapeamento category→product definido pelo time
-- Sem impacto funcional imediato (fallback já cobre)
-
-**Arquivos a alterar**: Apenas migrations SQL (sem alterações em código).
+Zero risco de regressão — apenas adiciona fallback ao check existente e corrige mensagens contraditórias.
 
