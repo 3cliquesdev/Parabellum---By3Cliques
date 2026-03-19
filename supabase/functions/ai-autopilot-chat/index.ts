@@ -6744,7 +6744,7 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : '';
 
     // ✅ OTP VERIFICADO: Liberar ações financeiras + FORÇAR COLETA de dados (V16 Bug 32)
-    const otpVerifiedInstruction = flow_context?.otpVerified ? `
+    const otpVerifiedInstruction = (flow_context?.otpVerified || (hasRecentOTPVerification && isFinancialActionRequest)) ? `
 
 ✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
 
