@@ -1,24 +1,34 @@
 
 
-# Fix: Templates não aparecem no Dialog do Pipeline
+# Produto Manual + Campos Opcionais + Validação de Rastreio
 
-## Diagnóstico
+## Mudanças no `AdminReturnDialog.tsx`
 
-O banco tem 4 templates ativos (`comercial`, `comercial_v4`, `comercial_v5`, `suporte`), todos com mesmo `instance_id` e `is_active: true`. Não há filtro por categoria no código. O problema tem duas causas:
+### 1. Campos de Produto/SKU sempre visíveis
+- Adicionar estado `manualProducts` (array de `{title, sku}`) 
+- Quando lookup encontra, preencher automaticamente e mostrar como readonly
+- Quando NÃO encontra (ou sem busca), mostrar campos editáveis para preenchimento manual
+- Botão "Adicionar produto" para múltiplos itens manuais
 
-1. **ScrollArea muito pequena** (`max-h-[200px]`) — com 4 templates, os últimos ficam escondidos e mal dá pra perceber que tem scroll
-2. **Cache do React Query** — a query `["whatsapp-templates-active", instanceId]` pode ter sido cacheada quando havia menos templates. Não há invalidação ao abrir o dialog
+### 2. Seller editável manualmente
+- Adicionar campo `sellerName` (string) — preenchido automaticamente pelo lookup, mas editável sempre
+- Quando lookup não encontra, campo fica vazio e editável
 
-## Correções
+### 3. Campos opcionais
+- Remover obrigatoriedade do "Número do Pedido" (hoje é `*` obrigatório)
+- Seller, Rastreio de Ida, Número do Pedido e Rastreio Devolução ficam todos opcionais
+- Só "Motivo" continua obrigatório
+- Atualizar `handleSubmit`: validar apenas `reason`, enviar produto/seller como metadata
 
-### 1. Aumentar altura do ScrollArea e forçar refetch
-**Arquivo:** `src/components/pipeline/PipelineTemplateDialog.tsx`
+### 4. Validação: Rastreio Devolução ≠ Rastreio Ida
+- Ao preencher o campo "Rastreio Devolução", comparar com `trackingOriginal`
+- Se forem iguais, exibir alerta: "O código de devolução deve ser o código de reversa, não o mesmo da ida"
+- Bloquear submit enquanto forem iguais
 
-- Aumentar `max-h-[200px]` para `max-h-[340px]` — cabe ~4-5 templates sem scroll
-- Adicionar `refetchOnMount: "always"` na query de templates para garantir dados frescos ao abrir o dialog
-- Aplicar a mesma correção no `ReengageTemplateDialog.tsx` se tiver o mesmo problema
+### 5. Enviar dados de produto no submit
+- Incluir `product_items` e `seller_name` no payload do `createReturn.mutateAsync`
+- Prioridade: dados do lookup > dados manuais (se ambos existirem, lookup prevalece)
 
-### 2. Resultado
-- Todos os templates ativos aparecem imediatamente ao abrir o dialog
-- Novos templates adicionados aparecem sem precisar recarregar a página
+## Arquivo modificado
+- `src/components/support/AdminReturnDialog.tsx`
 
