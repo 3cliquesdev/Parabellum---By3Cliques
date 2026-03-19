@@ -475,7 +475,10 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
             </Popover>
           </div>
           )}
+          {/* Department & Assign Row */}
+          {(fieldVisibility.department || fieldVisibility.assigned_to) && (
           <div className="grid grid-cols-2 gap-4">
+            {fieldVisibility.department && (
             <div className="space-y-2">
               <Label>{fieldLabel("Departamento", "department")}</Label>
               <Select value={departmentId || "none"} onValueChange={(v) => setDepartmentId(v === "none" ? "" : v)}>
@@ -490,7 +493,9 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 </SelectContent>
               </Select>
             </div>
+            )}
 
+            {fieldVisibility.assigned_to && (
             <div className="space-y-2">
               <Label>{fieldLabel("Atribuir a", "assigned_to")}</Label>
               <Popover open={assignedPopoverOpen} onOpenChange={setAssignedPopoverOpen}>
@@ -545,7 +550,9 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 </PopoverContent>
               </Popover>
             </div>
+            )}
           </div>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
