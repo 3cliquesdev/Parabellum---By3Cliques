@@ -290,10 +290,10 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
           </div>
 
           {/* Evidências */}
+          {fieldVisibility.attachments && (
           <div className="space-y-2">
             <Label className="flex items-center gap-1">
-              Evidências (Print/Foto)
-              <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+              {fieldLabel("Evidências (Print/Foto)", "attachments")}
               {uploadedAttachments.length > 0 && (
                 <Badge variant="secondary" className="ml-1 text-xs">{uploadedAttachments.length}</Badge>
               )}
@@ -324,7 +324,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               </div>
             )}
 
-            {/* Dropzone sempre visível */}
+            {/* Dropzone */}
             <div
               {...getRootProps()}
               className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary/50'}`}
@@ -346,15 +346,19 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               )}
             </div>
           </div>
+          )}
 
           {/* Description */}
+          {fieldVisibility.description && (
           <div className="space-y-2">
-            <Label htmlFor="description">Descrição</Label>
+            <Label htmlFor="description">{fieldLabel("Descrição", "description")}</Label>
             <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descreva o problema em detalhes..." rows={3} />
           </div>
+          )}
 
           {/* Category & Priority Row */}
           <div className="grid grid-cols-2 gap-4">
+            {fieldVisibility.category && (
             <div className="space-y-2">
               <Label>{fieldLabel("Categoria", "category")}</Label>
               <Select value={category} onValueChange={handleCategoryChange} disabled={categories.length === 0}>
@@ -368,9 +372,10 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
                 </SelectContent>
               </Select>
             </div>
+            )}
 
             <div className="space-y-2">
-              <Label>Prioridade</Label>
+              <Label>Prioridade *</Label>
               <Input
                 value={priority === "low" ? "Baixa" : priority === "medium" ? "Média" : priority === "high" ? "Alta" : priority === "urgent" ? "Urgente" : priority}
                 readOnly
@@ -380,6 +385,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
           </div>
 
           {/* Operação */}
+          {fieldVisibility.operation && (
           <div className="space-y-2">
             <Label>{fieldLabel("Operação", "operation")}</Label>
             <Select value={operationId} onValueChange={setOperationId}>
@@ -393,8 +399,10 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               </SelectContent>
             </Select>
           </div>
+          )}
 
           {/* Origem do Ticket */}
+          {fieldVisibility.origin && (
           <div className="space-y-2">
             <Label>{fieldLabel("Origem do Ticket", "origin")}</Label>
             <Select value={originId} onValueChange={setOriginId}>
@@ -408,8 +416,10 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               </SelectContent>
             </Select>
           </div>
+          )}
 
           {/* Tags */}
+          {fieldVisibility.tags && (
           <div className="space-y-2">
             <Label className="flex items-center gap-1">
               <Tag className="h-3.5 w-3.5" />
@@ -464,8 +474,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               </PopoverContent>
             </Popover>
           </div>
-
-          {/* Department & Assign Row */}
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>{fieldLabel("Departamento", "department")}</Label>
