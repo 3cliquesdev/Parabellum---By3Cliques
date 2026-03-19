@@ -2346,6 +2346,8 @@ serve(async (req) => {
                     forbidConsultant: resolvedNode.data?.forbid_consultant ?? false,
                     ticketConfig: resolvedNode.data?.ticket_config || null,
                     otpVerified: collectedData?.__ai_otp_verified === true,
+                    smartCollectionEnabled: resolvedNode.data?.smart_collection_enabled ?? false,
+                    smartCollectionFields: resolvedNode.data?.smart_collection_fields || [],
                   }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
 
