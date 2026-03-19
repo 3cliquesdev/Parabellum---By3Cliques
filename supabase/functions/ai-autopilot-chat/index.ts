@@ -1640,7 +1640,8 @@ serve(async (req) => {
     
     // Só bloquear AÇÕES financeiras. Info passa para LLM responder via KB. Ambíguo → IA pergunta.
     // ✅ V16.1 Bug 33: Bypass quando OTP já verificado — permitir coleta de dados pós-OTP
-    const otpAlreadyVerified = !!(flow_context?.otpVerified);
+    // ✅ V16.2 Fix: Guard reconhece verificação OTP tanto do flow_context quanto do DB
+    const otpAlreadyVerified = !!(flow_context?.otpVerified) || hasRecentOTPVerification;
     if (ragConfig.blockFinancial && flowForbidFinancial && !otpAlreadyVerified && customerMessage && customerMessage.trim().length > 0 && isFinancialAction && !isFinancialInfo) {
       console.warn('[ai-autopilot-chat] 🔒 TRAVA FINANCEIRA (ENTRADA): Intenção financeira detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
@@ -6306,12 +6307,15 @@ Posso ajudar em mais alguma coisa?`;
         // A função verify-code retorna { success: false, error: "mensagem" }
         const errorMessage = otpData?.error || 'O código não é válido. Verifique e tente novamente.';
         
+        // ✅ V16.2 Fix: Mensagem pós-OTP reconhece solicitação e inicia coleta de dados
         const directOTPSuccessResponse = otpData?.success 
-          ? `**Código validado com sucesso!**
+          ? `**Código validado com sucesso!** ✅
 
-Olá ${contactName}! Sua identidade foi confirmada. 
+Olá ${contactName}! Sua identidade foi confirmada.
 
-Agora posso te ajudar com questões financeiras. Como posso te ajudar?`
+Vou prosseguir com sua solicitação financeira. Para dar andamento, preciso de alguns dados:
+
+Qual é a sua **chave PIX** para recebimento?`
           : `**Código inválido**
 
 ${errorMessage}
@@ -6668,7 +6672,7 @@ O cliente quer cancelar a assinatura Kiwify.
     if (!identityWallNote) {
       identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.
 
-${isRecentlyVerified ? '**âš ï¸ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
+${isRecentlyVerified && !(isFinancialAction && hasRecentOTPVerification) ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
     }
     
     // 🐛BUG: Confirmar que priorityInstruction está sendo gerada
