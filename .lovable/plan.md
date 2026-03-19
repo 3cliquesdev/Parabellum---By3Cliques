@@ -1,152 +1,159 @@
+# Auditoria V14 — Correções Aplicadas ✅
 
+## Fixes V13 (anteriores)
+| Fix | Status |
+|---|---|
+| Bug 1: Self-blocking loop | ✅ |
+| Bug 2: Greeting double-send | ✅ (causa raiz real corrigida no Bug 7) |
+| Bug 3: {{vars}} vazando | ✅ |
+| Bug 4: Detecção financeira | ✅ |
+| Bug 5: KB sandbox | ✅ |
+| Bug 6: Typo persona | ✅ |
 
-# Auditoria Completa — Últimas 3 Horas (21:14 – 00:25)
+## Fixes V10 (Deploy realizado)
 
-## Resumo Executivo
+### Bug 7 ✅ — isProactiveGreeting não pulava LLM
+### Bug 8 ✅ — Dígitos de menu pós-greeting causavam loop fallback
+### Bug 9 ✅ — Race condition: mensagens IA duplicadas
+### Bug 10 ✅ — Persona "Helper Sistema" com role "elper Sistema"
+### Bug 11 (MENOR) — KB sem cobertura (recomendação manual)
 
-**13 conversas analisadas** | **5 problemas críticos** | **4 alertas** | **4 OK**
+## Fixes V11 (Deploy realizado)
 
----
+### Bug 12 ✅ — Cliente aceita transferência e IA ignora
+### Bug 13 ✅ — Contador anti-loop reseta entre nós
+### Bug 14 ✅ — Greeting enviado DEPOIS de fallback
+### Bug 15 ✅ — Build timestamp para rastreabilidade
 
-## Conversa por Conversa
+## Fixes V12 (Deploy realizado)
 
-### ✅ OK — Conversas sem problemas
+### Bug 16 ✅ — Regex de transferência incompleta
+### Bug 17 ✅ — Afirmativo "Sim" com pontuação não detectado
+### Bug 18 ✅ — Deploy forçado para ativar V8-V12
 
-| # | Cliente | Nó | Resultado |
-|---|---------|-----|-----------|
-| 1 | Derli (4d9388a9) | Menu produto | Abandono natural — cliente não respondeu ao menu. Encerrado por inatividade. Correto. |
-| 2 | Edileno (a0549174) | Consultor | IA detectou pedido complexo ("enviar 12 peças restantes"), encaminhou para consultor. Correto — IA não tinha como resolver. |
-| 3 | Bruno Rocha (a28334cc) | Dúvidas | IA respondeu com artigo RAG ("Publicar Catálogo"), cliente não ficou satisfeito, pediu atendente. Handoff correto após 4 interações. |
-| 4 | Magda Alves (94aab02f) | Pedidos | IA consultou pedido 16448354, trouxe dados reais (rastreio AN627118702BR). Cliente perguntou sobre prazo — IA atingiu max_interactions (5) e fez handoff. Correto. |
+## Fixes V13 (Deploy realizado)
 
----
+### Bug 20+21 ✅ — flowExit de Transfer Intent re-invoca flow → mensagens duplicadas + handoff não executa
+- **Fix:** Guard PRÉ-flowExit nos dois webhooks (`meta-whatsapp-webhook` e `handle-whatsapp-event`)
+- Quando `reason === 'customer_transfer_intent'` ou `reason === 'global_anti_loop_handoff'`:
+  - **Pula** re-invocação do `process-chat-flow` (elimina mensagens duplicadas)
+  - Executa handoff **direto**: `ai_mode = 'waiting_human'`, `assigned_to = null`
+  - Chama `route-conversation` para dispatch imediato
+- Resultado: Cliente recebe apenas "Vou te transferir agora" e é transferido em < 5s
 
-### 🔴 CRÍTICO — Problemas Graves
+### Bug 22 ✅ — Global anti-loop counter sem diagnóstico
+- **Fix:** Telemetria adicionada no bloco L9326 do `ai-autopilot-chat`:
+  - Log: `🔢 V13 Bug 22: Global counter — isFallback=X, current=Y, new=Z, nodeId=N`
+- Permite monitorar se `isFallbackResponse` está sendo setado e se o counter incrementa
 
-#### 1. Hyan (78c37575) — IA NÃO RESPONDEU ao cliente comercial
-- **Nó:** `node_ia_comercial`
-- **Problema:** Cliente mandou 3 mensagens detalhadas sobre catálogo fitness masculino, embalagens personalizadas, modelo de trabalho. A IA NUNCA respondeu a nenhuma delas.
-- **Timeline:**
-  - 00:13:17 — IA: "Sou Hunter... Como posso te ajudar?"
-  - 00:13:43 — Cliente: pergunta sobre catálogo fitness
-  - 00:16:14 — Cliente: pergunta detalhada sobre embalagens e estoque
-  - 00:18:18 — Cliente: "vocês tem essa camisa?"
-  - 00:19:26 — Cliente: "Mas eu já falei."
-  - 00:20:20 — Cliente: "6" (tentou menu de desespero)
-  - 00:20:23 — Sistema: menu escape → handoff
-- **Diagnóstico:** A IA ficou muda por 7 minutos. As mensagens do cliente estão no banco mas ZERO respostas IA entre 00:13:17 e 00:20:23. O `ai_events` mostra `zero_confidence_cautious` — a IA não encontrou artigos RAG e ficou cautelosa demais.
-- **Evento:** `ai_decision_zero_confidence_cautious` (00:20:11) + `ai_transfer max_interactions` (00:20:22)
-- **Impacto:** Lead comercial qualificado PERDIDO. Cliente frustrado.
+## Deploy
+- `ai-autopilot-chat` ✅ re-deployed V13
+- `meta-whatsapp-webhook` ✅ re-deployed V13
+- `handle-whatsapp-event` ✅ re-deployed V13
 
-#### 2. Fabiana (bbbe48fe) — IA NÃO RESPONDEU e encerrou por inatividade
-- **Nó:** `node_ia_sistema`
-- **Problema:** Cliente perguntou 3x sobre cores de copos térmicos Bluetooth. IA NUNCA respondeu.
-- **Timeline:**
-  - 22:50:34 — IA: "Sou Helper Sistema... Como posso te ajudar?"
-  - 22:50:53 — Cliente: "cores dos copos térmicos"
-  - 22:54:08 — Cliente: "cores que vocês tem em estoque"
-  - 22:57:11 — Cliente: "Estoque de copos térmicos com Bluetooth"
-  - 23:10:08 — Sistema: encerrou por inatividade (!!!)
-- **Diagnóstico:** IA ficou MUDA por 20 minutos, depois o auto-close encerrou a conversa. Provavelmente mesmo bug de `zero_confidence` — sem artigos RAG, a IA não gerou resposta. Nenhum ai_event registrado para esta conversa nas últimas 3h.
-- **Impacto:** Cliente ativo abandonado sem resposta alguma.
+## Fixes V14 (Deploy realizado)
 
-#### 3. Anderson (c1225361) — IA travou no cancelamento sem resolver
-- **Nó:** `node_ia_financeiro` → `node_ia_cancelamento`
-- **Problema:** Cliente pediu cancelamento. IA redirecionou para nó de cancelamento (`forbidCancellation` ativou `cancellation_blocked`), mas depois ficou MUDA.
-- **Timeline:**
-  - 00:05:50 — IA: "Sou Helper Financeiro..."
-  - 00:07:05 — Cliente: "quero cancelar"
-  - 00:07:24 — IA: "Sou Helper Cancelamento..." (mudou de nó — correto)
-  - 00:07:33 — Cliente: "como faço para cancelar?"
-  - 00:09:03 — Cliente: "Cancelar"
-  - 00:10:23 — Cliente: "Cancelar"
-  - 00:20:07 — Sistema: encerrou por inatividade (!!!)
-- **Diagnóstico:** Após mudar para `node_ia_cancelamento`, a IA ficou muda. O `ai_events` mostra `ai_blocked_cancellation` + `cancellation_blocked` exit. O nó de cancelamento provavelmente tem `forbidCancellation: true` que bloqueou a resposta da IA, mas o handoff para humano NÃO foi executado corretamente — a conversa ficou em `autopilot` sem resposta até o auto-close.
-- **Avaliação do cliente:** ⭐ 1/5
-- **Impacto:** Cliente quer cancelar, foi ignorado por 13 minutos.
+### Bug 24 ✅ — RLS do `inbox_view` sem cláusula AI queue global
+- **Fix:** Migration recriou policy `optimized_inbox_select` com cláusula adicional:
+  - `ai_mode IN ('autopilot','waiting_human') AND status<>'closed' AND assigned_to IS NULL`
+  - Permite todos os roles internos verem fila IA independente de departamento
 
-#### 4. Edson (8b4b0ae7) — IA ficou muda, cliente frustrado
-- **Nó:** `node_ia_duvidas`
-- **Problema:** Cliente perguntou sobre imagens indisponíveis no site. IA nunca respondeu.
-- **Timeline:**
-  - 21:55:40 — IA: "Sou Laís... Como posso te ajudar?"
-  - 21:56:14 — Cliente: "Porque tem produtos com imagem não disponível?"
-  - 22:05:11 — Cliente: "Como vou saber qual produto?"
-  - 22:06:46 — Cliente: "Suporte horrível"
-  - 22:07:29 — Cliente: "Falar com atendente" → handoff
-- **Diagnóstico:** IA ficou muda por 12 minutos. Provavelmente `zero_confidence` novamente.
-- **Impacto:** Cliente explicitamente chamou o suporte de "horrível".
+### Bug 25 ✅ — Client-side filter `useInboxView` restringia por departamento
+- **Fix:** Expandido `.or()` nos 2 blocos de query (main + chunked) para incluir:
+  - `and(ai_mode.eq.autopilot,assigned_to.is.null,status.neq.closed)`
+  - `and(ai_mode.eq.waiting_human,assigned_to.is.null,status.neq.closed)`
+- Realtime `shouldShow` atualizado com `isAIQueueGlobal`
 
-#### 5. Ezequias (7aded61b) — IA ficou muda, lead comercial perdido
-- **Nó:** `node_ia_comercial`
-- **Problema:** Interessado em vender no Mercado Livre, mandou 4 mensagens. IA nunca respondeu.
-- **Timeline:**
-  - 22:47:02 — IA: "Sou Hunter... Como posso te ajudar?"
-  - 22:47:47 — Cliente: "Gostaria de vender produtos no mercado livre"
-  - 22:48:37 — Cliente: "Quais produtos você tem?"
-  - 22:48:42 — Cliente: "Para vender"
-  - 22:49:35 — Cliente: "Vendas de produtos" → menu escape → handoff
-- **Diagnóstico:** IA muda por 2.5 minutos. Zero confidence comercial.
-- **Impacto:** Outro lead comercial perdido.
+### Bug 26 ✅ — `get-inbox-counts` `applyVisibility` restringia fila IA
+- **Fix:** Expandido `.or()` no `applyVisibility` com mesmas cláusulas AI queue
+- Edge function redeployada
 
----
+## Deploy V14
+- Migration RLS ✅
+- `useInboxView.tsx` ✅ (3 blocos corrigidos)
+- `get-inbox-counts` ✅ re-deployed
 
-### ⚠️ ALERTAS
+## Fixes V15 (Deploy realizado)
 
-#### 1. Eude (0da725ed) — IA respondeu sobre cancelamento no nó errado
-- **Nó:** `node_ia_consultor`
-- O cliente escolheu "Falar com meu consultor" (opção 6) e pediu "quero cancelar". A IA estava no nó de consultor mas respondeu com instruções de cancelamento Kiwify (link de reembolso). Tecnicamente a informação é útil, mas o nó era de consultor — a IA deveria ter feito handoff para o consultor tratar o cancelamento.
+### Bug 27 ✅ — Telemetria skipInitialMessage no webhook Meta
+- **Fix:** Logs estruturados com conversationId, contactId, nodeId, flowId, timestamp e originalMessage
+- Permite diagnosticar se `skipInitialMessage` é propagado na primeira transição menu → AI node
 
-#### 2. route-conversation ERROR
-- Erro nos logs: `operator does not exist: uuid && unknown`
-- Conversa: 94aab02f (Magda Alves) — departamento "Suporte Pedidos"
-- O dispatch job ficou `pending` sem agente atribuído. Bug no SQL do route-conversation ao buscar agentes com `.overlaps()` em campo UUID.
+### Bug 28+30 ✅ — Nó financeiro sem edges de intenção cruzada
+- **Fix:** Atualizado `flow_definition` do fluxo `cafe2831` (V5 Enterprise):
+  - Adicionado edge `cancelamento`: `node_ia_financeiro` → `node_ia_cancelamento`
+  - Adicionado edge `saque`: `node_ia_financeiro` → `node_escape_financeiro`
+  - Setado `forbid_cancellation: true` e `forbid_commercial: true` no `node_ia_financeiro`
 
-#### 3. Gabriel Saldanha (8f3c0f75) — IA ficou muda no nó de sistema
-- Nó: `node_ia_sistema` — cliente reportou cobrança indevida após cancelamento de assinatura.
-- IA ficou muda por ~3.5 minutos até o cliente pedir atendente.
-- Menos grave porque o handoff aconteceu rápido.
+### Bug 29 ✅ — OTP alucinado pela LLM dentro de fluxos ativos
+- **Fix 1:** Removido guard `!flow_context` em L6421 do `ai-autopilot-chat`
+  - OTP agora funciona como camada transversal de segurança, independente do fluxo ativo
+- **Fix 2:** Adicionada regra anti-alucinação OTP no `generateRestrictedPrompt`
+  - LLM proibida de prometer envio de códigos, OTP ou verificação por email
 
-#### 4. Claudemir (e171a782) — Fluxo de cancelamento confuso
-- IA respondeu "Vou direcionar para o setor responsável" mas logo após apareceu menu escape sem opções de transferência direta. O cliente respondeu "Não quero mais pagar" e recebeu "Desculpe, não entendi" em vez de ser transferido.
+## Deploy V15
+- `ai-autopilot-chat` ✅ re-deployed
+- `meta-whatsapp-webhook` ✅ re-deployed
+- Flow `cafe2831` ✅ atualizado (edges + flags)
 
----
+## Fixes V16 (Deploy realizado)
 
-## Diagnóstico Global: IA MUDA (zero_confidence_cautious)
+### Bug 31 ✅ — Escape Node enviado SEM opções (fallback separado)
+- **Fix:** Removido DB insert direto do fallback_message no `process-chat-flow` (L3697)
+- Fallback agora acumulado como `pendingFallbackMsg` e injetado no `extraMessages` (L4598)
+- Resultado: Caller recebe UMA resposta combinada: "Não consegui resolver...\n\nO que prefere fazer?\n\n1️⃣ Voltar\n2️⃣ Atendente"
 
-**5 de 13 conversas** tiveram o mesmo problema: a IA enviou a saudação inicial mas NUNCA respondeu às mensagens seguintes do cliente. O padrão é:
+### Bug 32 ✅ — Pós-OTP não coletou dados financeiros (FLOW_EXIT prematuro)
+- **Fix 1:** Expandido `otpVerifiedInstruction` no `ai-autopilot-chat` com regras de coleta pós-OTP
+  - IA instruída a COLETAR campos (pix_key, bank, reason, amount) ao invés de buscar KB
+  - Proibida de emitir `[[FLOW_EXIT]]` até coletar todos os campos
+- **Fix 2:** Atualizado `objective` do `node_ia_financeiro` no fluxo `cafe2831` com FASE 1 (pré-OTP) e FASE 2 (pós-OTP coleta)
+- **Fix 3:** Habilitado `smart_collection_enabled: true` e `smart_collection_fields: [pix_key, bank, reason, amount]`
 
-1. Cliente navega no menu normalmente
-2. IA envia greeting do nó ("Sou Hunter/Helper/Laís...")
-3. Cliente faz pergunta real
-4. **IA FICA MUDA** — nenhuma resposta por 3-20 minutos
-5. Cliente fica frustrado e pede atendente ou abandona
+## Deploy V16
+- `process-chat-flow` ✅ re-deployed
+- `ai-autopilot-chat` ✅ re-deployed
+- Flow `cafe2831` ✅ atualizado (objective + smart_collection)
 
-O `ai_events` confirma: `zero_confidence_cautious` — quando a IA não encontra artigos relevantes na base de conhecimento (RAG), ela entra em modo cauteloso e NÃO responde nada.
+## Fixes V16.1 (Deploy realizado)
 
----
+### Bug 33 ✅ — Trava financeira ENTRADA bloqueia coleta pós-OTP
+- **Fix:** Adicionado `!otpAlreadyVerified` (derivado de `flow_context?.otpVerified`) na condição L1639
+- Quando OTP já verificado, mensagem financeira bypassa o guard e chega à LLM para coleta de dados
 
-## Plano de Correção
+### Bug 34 ✅ — `financialGuardInstruction` contradiz `otpVerifiedInstruction` no prompt
+- **Fix:** Condicionado `financialGuardInstruction` a `!flow_context?.otpVerified` (L6721)
+- Quando OTP verificado, apenas `otpVerifiedInstruction` é injetado (coleta de dados), sem contradição
 
-### Fix 1: Zero Confidence NÃO pode significar silêncio total
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
+### Bug 35 (MENOR) — Flags `smart_collection_*` sem código consumidor
+- Sem impacto funcional — instrução via prompt é suficiente
 
-Quando `zero_confidence_cautious` é detectado, a IA atualmente retorna sem enviar mensagem. Deveria:
-- Enviar resposta genérica baseada no contexto do nó (comercial, sistema, dúvidas)
-- Após 2 tentativas sem RAG, oferecer o menu escape (voltar ao menu / falar com atendente)
-- Registrar telemetria para monitoramento
+## Deploy V16.1
+- `ai-autopilot-chat` ✅ re-deployed
 
-### Fix 2: Cancelamento bloqueado deve fazer handoff imediato
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
+## Fixes V16.2 (Deploy realizado)
 
-Quando `cancellation_blocked` dispara no `node_ia_cancelamento`, o sistema deveria fazer handoff para humano imediatamente em vez de ficar mudo. O `forbidCancellation` está impedindo a IA de responder mas não está transferindo.
+### Bug 36 ✅ — `financialIntentMatch` no `process-chat-flow` ignora OTP verificado
+- **Fix:** Adicionado `!otpVerifiedInFlow` (derivado de `collectedData.__ai_otp_verified`) na condição L3336
+- Quando OTP verificado, `financialIntentMatch` é suprimido → mensagem permanece no nó AI para coleta de dados
+- Log de telemetria adicionado para diagnóstico
 
-### Fix 3: route-conversation UUID operator error
-**Arquivo:** `supabase/functions/route-conversation/index.ts`
+## Deploy V16.2
+- `process-chat-flow` ✅ re-deployed
 
-O erro `operator does not exist: uuid && unknown` indica uso de `.overlaps()` em campo UUID. Trocar para `.in()` conforme convenção do projeto.
+## Fixes V16.3 (Deploy realizado)
 
-### Arquivos a alterar
-1. `supabase/functions/ai-autopilot-chat/index.ts` — Fix 1 (zero confidence response) + Fix 2 (cancellation handoff)
-2. `supabase/functions/route-conversation/index.ts` — Fix 3 (UUID operator)
+### Bug 37 ✅ — `useCanTakeControl` bloqueava agente em conversa self-assigned
+- **Fix:** Adicionado bypass `assignedTo === user.id` antes do check de departamento
 
+### Bug 38 ✅ — `handle-whatsapp-event` NÃO implementa `skipInitialMessage`
+- **Fix 1:** Adicionado check `flowResult.skipInitialMessage === true` no L1314
+  - Quando ativo, `effectiveMessage = ""` → IA recebe mensagem vazia → saudação proativa
+  - Adicionado `kbProductFilter` ao flow_context
+- **Fix 2:** Expandido response `ask_options → ai_response` no `process-chat-flow` L2932
+  - Adicionados 14 campos ausentes: `personaId`, `kbProductFilter`, `kbCategories`, `objective`, `fallbackMessage`, `maxSentences`, `forbidQuestions`, `forbidOptions`, `forbidFinancial`, `forbidCommercial`, `forbidCancellation`, `forbidSupport`, `forbidConsultant`, `allowedSources`
+  - Alinhado com retorno de `intent-routing → ai_response` (L4556-4587)
+
+## Deploy V16.3
+- `handle-whatsapp-event` ✅ re-deployed
+- `process-chat-flow` ✅ re-deployed
