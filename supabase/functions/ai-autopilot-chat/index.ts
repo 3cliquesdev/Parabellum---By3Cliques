@@ -1456,6 +1456,8 @@ const ESCAPE_PATTERNS = [
   /selecione uma opção/i,
   // Menus textuais com numeração (1) ... 2) ...)
   /\b1[\)\.\-][\s\S]*?\b2[\)\.\-]/i,
+  // 🆕 FIX: Detectar quando IA ecoa o fallback_message do nó
+  /n[aã]o\s+consegu[ií]\s+resolver/i,
 ];
 
 interface AutopilotChatRequest {
@@ -9695,9 +9697,22 @@ Conversa: ${conversationId}`;
         output_json: { reason: 'fallback_phrase_detected', exitType: flow_context ? 'stay_in_node' : 'handoff', fallback_used: true, articles_found: 0, hasFlowContext: !!flow_context },
       })).catch(() => {});
 
-      // 🆕 FIX: Se flow_context existe, NÃO sair do nó â€” limpar fallback phrases e continuar
+      // 🆕 FIX: Se flow_context existe, sinalizar flowExit para avançar ao escape node com opções
       if (flow_context) {
-        console.log('[ai-autopilot-chat] âš ï¸ FALLBACK + flow_context â†’ limpando fallback phrases e permanecendo no nó');
+        // Verificar se tem [[FLOW_EXIT]] — se sim, tratar como transferência intencional
+        const hasIntentionalExitPre = /\[\[FLOW_EXIT(:[a-zA-Z_]+)?\]\]/.test(assistantMessage);
+        if (!hasIntentionalExitPre) {
+          console.log('[ai-autopilot-chat] 🔄 FALLBACK + flow_context → flowExit para avançar ao escape node com opções');
+          return new Response(JSON.stringify({
+            flowExit: true,
+            reason: 'fallback_with_options_exit',
+            hasFlowContext: true,
+            response: null,
+            conversationId,
+            flow_context: { flow_id: flow_context.flow_id, node_id: flow_context.node_id },
+          }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' } });
+        }
+        console.log('[ai-autopilot-chat] ⚠️ FALLBACK + flow_context + [[FLOW_EXIT]] → tratando como transferência intencional');
 
         // Strip fallback phrases da resposta
         // âœ… FIX 5: Detectar [[FLOW_EXIT]] ANTES de stripar â€” é sinal INTENCIONAL da persona
@@ -10124,13 +10139,16 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           output_json: { reason: 'restriction_violation_' + restrictionCheck.violation, exitType: 'stay_in_node', fallback_used: true, articles_found: 0, hasFlowContext: true },
         })).catch(() => {});
         
-        // 🆕 FIX: Substituir mensagem pelo fallback e FICAR no nó (não retornar flow_advance_needed)
-        console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇNÃO + flow_context â†’ substituindo mensagem e permanecendo no nó');
-        assistantMessage = fallbackMessage;
-        isFallbackResponse = true; // 🆕 FIX Resíduo 2: Sinalizar como fallback para anti-loop
-        
-        // 🆕 FIX V14: Counter parcial REMOVIDO — update unificado no final do pipeline
-        console.log('[ai-autopilot-chat] Restriction violation detectada — counter será atualizado no final do pipeline');
+        // 🆕 FIX: Sinalizar flowExit para que process-chat-flow avance ao escape node com opções
+        console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇÃO + flow_context → flowExit para avançar ao escape node com opções');
+        return new Response(JSON.stringify({
+          flowExit: true,
+          reason: 'restriction_violation_exit',
+          hasFlowContext: true,
+          response: null,
+          conversationId,
+          flow_context: { flow_id: flow_context.flow_id, node_id: flow_context.node_id },
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' } });
         
         Promise.resolve(supabaseClient.from('ai_quality_logs').insert({
           conversation_id: conversationId,
