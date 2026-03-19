@@ -1145,7 +1145,7 @@ serve(async (req) => {
               if (flowData.useAI && flowData.aiNodeActive) {
                 // 🆕 FIX v2: Se skipInitialMessage=true (transição ask_options → ai_response),
                 // NÃO enviar o dígito de menu — mas CHAMAR a IA com mensagem vazia para saudação proativa
-                if (flowData.skipInitialMessage === true) {
+                if ((flowData as any).skipInitialMessage === true) {
                   console.log("[meta-whatsapp-webhook] ⏭️ V15 Bug27: skipInitialMessage=true — chamando IA com mensagem vazia para saudação proativa", {
                     conversationId: conversation.id,
                     contactId: contact.id,
