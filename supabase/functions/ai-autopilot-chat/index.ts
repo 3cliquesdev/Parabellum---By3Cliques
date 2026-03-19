@@ -6672,7 +6672,7 @@ O cliente quer cancelar a assinatura Kiwify.
     if (!identityWallNote) {
       identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.
 
-${isRecentlyVerified ? '**âš ï¸ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
+${isRecentlyVerified && !(isFinancialAction && hasRecentOTPVerification) ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
     }
     
     // 🐛BUG: Confirmar que priorityInstruction está sendo gerada
