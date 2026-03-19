@@ -595,6 +595,7 @@ serve(async (req) => {
           .eq('availability_status', 'online')
           .in('id', genericAgentUserIds);
 
+        let deptIdsForFilter: string[] = [];
         // 🆕 HIERARQUIA EXPANDIDA: Filtrar por departamento COM fallback para pai, irmãos E filhos
         if (resolvedDepartmentId) {
           // Prioridade: 1º alvo, 2º filhos, 3º pai, 4º irmãos
