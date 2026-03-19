@@ -5,9 +5,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Save, ChevronsUpDown, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUpdateKnowledgeArticle } from "@/hooks/useUpdateKnowledgeArticle";
+import { useProductTags } from "@/hooks/useProductTags";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface AuditArticleEditDialogProps {
@@ -27,13 +31,15 @@ export function AuditArticleEditDialog({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
-  const [productTags, setProductTags] = useState("");
+  const [productTags, setProductTags] = useState<string[]>([]);
   const [tags, setTags] = useState("");
   const [problem, setProblem] = useState("");
   const [solution, setSolution] = useState("");
 
   const updateArticle = useUpdateKnowledgeArticle();
   const queryClient = useQueryClient();
+  const { data: existingProductTags = [] } = useProductTags();
+  const productTagNames = existingProductTags.map((t) => t.name);
 
   useEffect(() => {
     if (!open || !articleId) return;
@@ -48,7 +54,7 @@ export function AuditArticleEditDialog({
           setTitle(data.title || "");
           setContent(data.content || "");
           setCategory(data.category || "");
-          setProductTags((data.product_tags || []).join(", "));
+          setProductTags((data.product_tags || []) as string[]);
           setTags((data.tags || []).join(", "));
           setProblem((data as any).problem || "");
           setSolution((data as any).solution || "");
@@ -57,18 +63,27 @@ export function AuditArticleEditDialog({
       });
   }, [open, articleId]);
 
-  // Clear state when dialog closes or article changes
   useEffect(() => {
     if (!open) {
       setTitle("");
       setContent("");
       setCategory("");
-      setProductTags("");
+      setProductTags([]);
       setTags("");
       setProblem("");
       setSolution("");
     }
   }, [open]);
+
+  const toggleProductTag = (tag: string) => {
+    setProductTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const removeProductTag = (tag: string) => {
+    setProductTags((prev) => prev.filter((t) => t !== tag));
+  };
 
   const handleSave = () => {
     if (!articleId) return;
@@ -78,7 +93,7 @@ export function AuditArticleEditDialog({
         title,
         content,
         category: category || undefined,
-        product_tags: productTags.split(",").map((t) => t.trim()).filter(Boolean),
+        product_tags: productTags,
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
         problem: problem || undefined,
         solution: solution || undefined,
@@ -133,7 +148,48 @@ export function AuditArticleEditDialog({
 
             <div className="space-y-1.5">
               <Label>Product Tags</Label>
-              <Input value={productTags} onChange={(e) => setProductTags(e.target.value)} placeholder="tag1, tag2" />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between font-normal">
+                    {productTags.length > 0
+                      ? `${productTags.length} tag(s) selecionada(s)`
+                      : "Selecionar tags..."}
+                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-2" align="start">
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {productTagNames.map((tag) => (
+                      <label
+                        key={tag}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent cursor-pointer text-sm"
+                      >
+                        <Checkbox
+                          checked={productTags.includes(tag)}
+                          onCheckedChange={() => toggleProductTag(tag)}
+                        />
+                        <span>{tag}</span>
+                      </label>
+                    ))}
+                    {productTagNames.length === 0 && (
+                      <p className="text-xs text-muted-foreground px-2 py-1">Nenhuma tag cadastrada</p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {productTags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {productTags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="gap-1 text-xs">
+                      {tag}
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => removeProductTag(tag)}
+                      />
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
