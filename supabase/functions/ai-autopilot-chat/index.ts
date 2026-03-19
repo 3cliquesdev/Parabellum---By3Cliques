@@ -3841,7 +3841,7 @@ serve(async (req) => {
             // 🎯 TRIAGEM: Email não encontrado = Lead â†’ Rotear para Comercial
             console.log('[ai-autopilot-chat] 🎯 TRIAGEM: Email não encontrado - roteando para Comercial');
             // FIX BUG 5: Verificar contexto financeiro antes de redirecionar
-            const isFinancialCtx = isFinancialRequest || isFinancialActionRequest || isWithdrawalRequest;
+            const isFinancialCtx = FINANCIAL_BARRIER_KEYWORDS.some(keyword => customerMessage.toLowerCase().includes(keyword)) || WITHDRAWAL_ACTION_PATTERNS.some(pattern => pattern.test(customerMessage)) || OTP_REQUIRED_KEYWORDS.some(keyword => customerMessage.toLowerCase().includes(keyword.toLowerCase()));
             const alreadyAskedAltEmail = (conversation.customer_metadata || {}).asked_alternative_email === true;
             
             if (isFinancialCtx && !alreadyAskedAltEmail) {
