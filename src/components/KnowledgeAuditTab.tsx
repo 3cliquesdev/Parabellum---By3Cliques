@@ -519,13 +519,34 @@ export function KnowledgeAuditTab() {
                   </TableCell>
                   <TableCell>
                     {editingCell?.id === article.id && editingCell.field === "product_tags" ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          className="w-[180px] h-8 text-xs"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          placeholder="tag1, tag2"
-                        />
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Select
+                          value=""
+                          onValueChange={(val) => {
+                            const current = editValue ? editValue.split(",").map(t => t.trim()).filter(Boolean) : [];
+                            if (!current.includes(val)) {
+                              setEditValue([...current, val].join(", "));
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-[140px] h-8">
+                            <SelectValue placeholder="Adicionar..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {productTags.filter(t => !editValue.split(",").map(v => v.trim()).includes(t)).map((t) => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex flex-wrap gap-1">
+                          {editValue.split(",").map(t => t.trim()).filter(Boolean).map((t) => (
+                            <Badge key={t} variant="default" className="text-xs cursor-pointer" onClick={() => {
+                              setEditValue(editValue.split(",").map(v => v.trim()).filter(v => v !== t).join(", "));
+                            }}>
+                              {t} ✕
+                            </Badge>
+                          ))}
+                        </div>
                         <Button size="xs" onClick={() => saveInlineEdit(article.id, "product_tags")} disabled={saving}>
                           <Save className="h-3 w-3" />
                         </Button>
