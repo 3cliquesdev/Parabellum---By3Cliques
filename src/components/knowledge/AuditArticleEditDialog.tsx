@@ -198,22 +198,16 @@ export function AuditArticleEditDialog({
             <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="tag1, tag2" />
           </div>
 
-          {(problem || solution) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {problem && (
-                <div className="space-y-1.5">
-                  <Label>Problema</Label>
-                  <Textarea value={problem} onChange={(e) => setProblem(e.target.value)} rows={3} />
-                </div>
-              )}
-              {solution && (
-                <div className="space-y-1.5">
-                  <Label>Solução</Label>
-                  <Textarea value={solution} onChange={(e) => setSolution(e.target.value)} rows={3} />
-                </div>
-              )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Problema</Label>
+              <Textarea value={problem} onChange={(e) => setProblem(e.target.value)} rows={3} placeholder="Qual problema este artigo resolve?" />
             </div>
-          )}
+            <div className="space-y-1.5">
+              <Label>Solução</Label>
+              <Textarea value={solution} onChange={(e) => setSolution(e.target.value)} rows={3} placeholder="Como o problema é resolvido?" />
+            </div>
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
