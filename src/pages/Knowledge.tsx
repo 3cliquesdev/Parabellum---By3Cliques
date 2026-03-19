@@ -190,6 +190,12 @@ export default function Knowledge() {
             </TabsTrigger>
           )}
         </TabsList>
+        {canManageArticles && (
+          <Button variant="outline" size="sm" onClick={() => setProductTagManagerOpen(true)} className="gap-2">
+            <Tag className="h-4 w-4" />
+            Product Tags
+          </Button>
+        )}
 
         <TabsContent value="artigos" className="space-y-4">
           {/* Filters */}
