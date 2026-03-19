@@ -845,16 +845,29 @@ export default function ChatWindow({ conversation, isContactPanelOpen = true, on
           )}
 
           {canShowTakeControl ? (
-            <div className="flex-none p-4 border-t border-slate-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 backdrop-blur">
-              <div className="max-w-3xl mx-auto flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-zinc-400">
-                <Bot className="h-4 w-4" />
-                <span>
-                  {isAutopilot && !isAIGlobalEnabled 
-                    ? 'IA Global DESLIGADA - Conversa não atendida' 
-                    : isWaitingHuman 
-                      ? 'Aguardando atendimento humano'
-                      : 'Modo Piloto Automático'} - Clique em "Assumir" para digitar
-                </span>
+            <div className="flex-none p-4 border-t border-border bg-background/95 backdrop-blur">
+              <div className="max-w-3xl mx-auto flex flex-col items-center justify-center gap-3">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Bot className="h-4 w-4" />
+                  <span>
+                    {isAutopilot && !isAIGlobalEnabled 
+                      ? 'IA Global DESLIGADA - Conversa não atendida' 
+                      : isWaitingHuman 
+                        ? 'Aguardando atendimento humano'
+                        : 'Modo Piloto Automático'}
+                  </span>
+                </div>
+                <Button
+                  variant="default"
+                  size="lg"
+                  onClick={openTakeControlDialog}
+                  disabled={takeControl.isPending || !canTakeControl}
+                  title={!canTakeControl ? cantTakeReason : undefined}
+                  className="gap-2"
+                >
+                  <Hand className="h-5 w-5" />
+                  Assumir Conversa
+                </Button>
               </div>
             </div>
           ) : (
