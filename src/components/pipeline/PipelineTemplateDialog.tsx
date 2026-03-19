@@ -75,6 +75,7 @@ export function PipelineTemplateDialog({
       return data as any[];
     },
     enabled: open && !!instanceId,
+    refetchOnMount: "always",
   });
 
   const selectedTemplate = templates.find((t: any) => t.id === selectedTemplateId);
