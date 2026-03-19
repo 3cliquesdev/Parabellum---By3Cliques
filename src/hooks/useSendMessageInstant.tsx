@@ -331,6 +331,22 @@ export function useSendMessageInstant() {
                   conversationId: conversationId.slice(0, 8),
                   previous_ai_mode: result.previous_ai_mode,
                 });
+
+                // 🛡️ CANCELAR FLOW STATES RESIDUAIS para evitar que IA retome controle
+                supabase
+                  .from('chat_flow_states')
+                  .update({ status: 'cancelled', completed_at: new Date().toISOString() })
+                  .eq('conversation_id', conversationId)
+                  .in('status', ['waiting_input', 'active', 'in_progress'])
+                  .then(({ error: flowError }) => {
+                    if (flowError) {
+                      console.error('[SendInstant] Erro ao cancelar flow states:', flowError);
+                    } else {
+                      console.log('[SendInstant] 🛡️ Flow states residuais cancelados');
+                      queryClient.invalidateQueries({ queryKey: ["active-flow-state", conversationId] });
+                    }
+                  });
+
                 // Atualizar caches para refletir mudança
                 queryClient.invalidateQueries({ queryKey: ["conversations"] });
                 queryClient.invalidateQueries({ queryKey: ["ai-mode", conversationId] });
