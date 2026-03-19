@@ -863,8 +863,26 @@ serve(async (req) => {
         .maybeSingle();
 
       if (activeFlowCheck) {
+        // 🛡️ PRIORIDADE HUMANA: Se há agente atribuído, cancelar fluxo residual
+        if (convState?.assigned_to) {
+          console.log(`[process-chat-flow] 🛡️ AGENTE ATIVO: assigned_to=${convState.assigned_to} — cancelando fluxo residual (${activeFlowCheck.id})`);
+          await supabaseClient.from('chat_flow_states')
+            .update({ status: 'cancelled', completed_at: new Date().toISOString() })
+            .eq('id', activeFlowCheck.id);
+
+          return new Response(JSON.stringify({
+            useAI: false,
+            aiNodeActive: false,
+            skipAutoResponse: true,
+            reason: 'agent_active_flow_cancelled',
+            message: `Agente atribuído (${convState.assigned_to}) - fluxo residual cancelado`
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Sem agente → manter soberania do fluxo (comportamento original)
         console.log(`[process-chat-flow] 🔓 SOBERANIA DO FLUXO: ai_mode=${currentAiMode} mas fluxo ativo (${activeFlowCheck.status}) → processando`);
-        // Restaurar ai_mode para autopilot (foi corrompido pelo handoff dentro do fluxo)
         await supabaseClient.from('conversations')
           .update({ ai_mode: 'autopilot' })
           .eq('id', conversationId);
