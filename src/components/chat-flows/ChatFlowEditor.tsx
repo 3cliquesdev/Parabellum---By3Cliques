@@ -1023,7 +1023,6 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                         {/* Keywords textarea — só mostra se não tem field */}
                         {!rule.field && (
                           <Textarea
-                            onKeyDown={(e) => e.stopPropagation()}
                             value={rule.keywords || ""}
                             onChange={(e) => updateConditionRule(idx, "keywords", e.target.value)}
                             placeholder="Opcional: frases extras (1 por linha). Se vazio, usa o nome da regra acima."
