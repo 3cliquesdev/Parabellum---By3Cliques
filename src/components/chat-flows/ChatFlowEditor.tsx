@@ -490,10 +490,10 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
     }
   };
 
-  const updateOption = (idx: number, field: string, value: string) => {
+  const updateOption = (idx: number, updates: Record<string, string>) => {
     if (!selectedNode) return;
     const options = [...(selectedNode.data.options || [])];
-    options[idx] = { ...options[idx], [field]: value };
+    options[idx] = { ...options[idx], ...updates };
     updateNodeData('options', options);
   };
 
@@ -769,9 +769,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       <Input
                         value={opt.label}
                         onChange={(e) => {
-                          updateOption(idx, "label", e.target.value);
-                          // Auto-generate value from label
-                          updateOption(idx, "value", slugify(e.target.value));
+                          updateOption(idx, { label: e.target.value, value: slugify(e.target.value) });
                         }}
                         placeholder={`Opção ${idx + 1} (ex: Rastreio)`}
                         className="flex-1 text-sm"
