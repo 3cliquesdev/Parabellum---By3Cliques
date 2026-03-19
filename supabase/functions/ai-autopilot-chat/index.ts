@@ -6859,13 +6859,40 @@ ${fieldListFormatted}
 
 ⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução do seu caso e precisaríamos entrar em contato novamente para corrigir. Seja claro no motivo da sua solicitação!`;
 
-
-
+    // 🆕 FIX: Detectar intenção original do cliente no histórico para injetar no prompt pós-OTP
+    let originalIntentLabel = '';
+    if (flow_context?.otpVerified || hasRecentOTPVerification) {
+      try {
+        const { data: intentMsgs } = await supabaseClient
+          .from('messages')
+          .select('content')
+          .eq('conversation_id', conversationId)
+          .eq('sender_type', 'customer')
+          .order('created_at', { ascending: false })
+          .limit(15);
+        if (intentMsgs) {
+          const allText = intentMsgs.map(m => (m.content || '').toLowerCase()).join(' ');
+          if (/saq(ue|ar)|withdraw|quero\s+sac?ar|sacar\s+saldo/i.test(allText)) {
+            originalIntentLabel = 'SAQUE de saldo';
+          } else if (/reembolso|estorno|devolu[çc][ãa]o|devolver/i.test(allText)) {
+            originalIntentLabel = 'REEMBOLSO';
+          } else if (/cancelar|cancelamento|desistir/i.test(allText)) {
+            originalIntentLabel = 'CANCELAMENTO';
+          }
+        }
+      } catch (_) { /* non-blocking */ }
+      if (originalIntentLabel) {
+        console.log('[ai-autopilot-chat] 🎯 Intent detected for OTP prompt injection:', originalIntentLabel);
+      }
+    }
 
     const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? `
 
 ✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
-
+${originalIntentLabel ? `
+🎯 INTENÇÃO ORIGINAL DO CLIENTE: O cliente JÁ informou que deseja realizar um **${originalIntentLabel}**.
+NÃO pergunte novamente o que ele quer fazer. NÃO ofereça menu A/B. Prossiga DIRETAMENTE com a coleta de dados para ${originalIntentLabel}.
+` : ''}
 🎯 APÓS VERIFICAÇÃO OTP — SUA TAREFA PRINCIPAL É COLETAR DADOS:
 Você está AUTORIZADO a processar solicitações financeiras. Sua tarefa agora é COLETAR os dados necessários para criar o ticket.
 
