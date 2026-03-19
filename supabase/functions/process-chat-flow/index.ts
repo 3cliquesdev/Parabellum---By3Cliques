@@ -4663,6 +4663,8 @@ serve(async (req) => {
             forbidConsultant: nextNode.data?.forbid_consultant ?? false,
             ticketConfig: nextNode.data?.ticket_config || null,
             otpVerified: collectedData?.__ai_otp_verified === true,
+            smartCollectionEnabled: nextNode.data?.smart_collection_enabled ?? false,
+            smartCollectionFields: nextNode.data?.smart_collection_fields || [],
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

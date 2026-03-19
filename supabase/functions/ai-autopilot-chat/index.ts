@@ -1231,6 +1231,9 @@ interface FlowContext {
   forbidConsultant?: boolean;
   otpVerified?: boolean;
   collectedData?: any;
+  // 🆕 Coleta inteligente de dados do cliente
+  smartCollectionEnabled?: boolean;
+  smartCollectionFields?: string[];
   // 🆕 Configuração de ticket do nó de IA
   ticketConfig?: {
     enabled?: boolean;
