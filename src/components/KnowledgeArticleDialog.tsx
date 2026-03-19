@@ -7,6 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCreateKnowledgeArticle } from "@/hooks/useCreateKnowledgeArticle";
 import { useUpdateKnowledgeArticle } from "@/hooks/useUpdateKnowledgeArticle";
 import { useGenerateEmbedding } from "@/hooks/useGenerateEmbedding";
@@ -14,7 +16,7 @@ import { useFindSimilarArticles } from "@/hooks/useFindSimilarArticles";
 import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
 import { useProductTagNames, useCreateProductTag } from "@/hooks/useProductTags";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, X, ChevronsUpDown, Plus } from "lucide-react";
 
 interface KnowledgeArticle {
   id: string;
@@ -223,39 +225,57 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
             )}
           </div>
 
-          {/* Product Tags — campo que AFETA a busca da IA */}
+          {/* Product Tags — dropdown multi-select */}
           <div>
             <Label>Product Tags <span className="text-xs text-muted-foreground">(afeta filtro de busca da IA)</span></Label>
-            <div className="flex flex-wrap gap-1.5 mt-1.5 mb-2">
-              {existingProductTags.map((tag) => (
-                <Badge
-                  key={tag}
-                  variant={productTags.includes(tag) ? "default" : "outline"}
-                  className="cursor-pointer select-none"
-                  onClick={() => toggleProductTag(tag)}
-                >
-                  {tag}
-                  {productTags.includes(tag) && <X className="h-3 w-3 ml-1" />}
-                </Badge>
-              ))}
-              {productTags.filter((t) => !existingProductTags.includes(t)).map((tag) => (
-                <Badge key={tag} variant="default" className="cursor-pointer select-none" onClick={() => toggleProductTag(tag)}>
-                  {tag} <X className="h-3 w-3 ml-1" />
-                </Badge>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <Input
-                value={newProductTag}
-                onChange={(e) => setNewProductTag(e.target.value)}
-                placeholder="Adicionar nova product tag..."
-                className="flex-1"
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomProductTag(); } }}
-              />
-              <Button type="button" variant="outline" size="sm" onClick={addCustomProductTag} disabled={!newProductTag.trim()}>
-                Adicionar
-              </Button>
-            </div>
+            
+            {productTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5 mb-2">
+                {productTags.map((tag) => (
+                  <Badge key={tag} variant="default" className="cursor-pointer select-none" onClick={() => toggleProductTag(tag)}>
+                    {tag} <X className="h-3 w-3 ml-1" />
+                  </Badge>
+                ))}
+              </div>
+            )}
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" className="w-full justify-between mt-1.5 font-normal text-muted-foreground">
+                  {productTags.length > 0 ? `${productTags.length} tag(s) selecionada(s)` : "Selecionar product tags..."}
+                  <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-2" align="start">
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {existingProductTags.length === 0 ? (
+                    <p className="text-sm text-muted-foreground p-2">Nenhuma tag cadastrada.</p>
+                  ) : (
+                    existingProductTags.map((tag) => (
+                      <label key={tag} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent cursor-pointer text-sm">
+                        <Checkbox
+                          checked={productTags.includes(tag)}
+                          onCheckedChange={() => toggleProductTag(tag)}
+                        />
+                        {tag}
+                      </label>
+                    ))
+                  )}
+                </div>
+                <div className="border-t mt-2 pt-2 flex gap-2">
+                  <Input
+                    value={newProductTag}
+                    onChange={(e) => setNewProductTag(e.target.value)}
+                    placeholder="Nova tag..."
+                    className="flex-1 h-8 text-sm"
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomProductTag(); } }}
+                  />
+                  <Button type="button" variant="outline" size="sm" className="h-8" onClick={addCustomProductTag} disabled={!newProductTag.trim()}>
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div>
