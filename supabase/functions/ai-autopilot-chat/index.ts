@@ -796,6 +796,9 @@ interface RetrievedDocument {
   category?: string;
   similarity: number;
   updated_at?: string;
+  problem?: string;
+  solution?: string;
+  when_to_use?: string;
 }
 
 interface ConfidenceResult {
