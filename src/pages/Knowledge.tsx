@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Search, Plus, Edit, Trash2, BookOpen, Eye, EyeOff, Upload, Sparkles, AlertTriangle, GraduationCap, FileText, SearchCheck } from "lucide-react";
+import { Search, Plus, Edit, Trash2, BookOpen, Eye, EyeOff, Upload, Sparkles, AlertTriangle, GraduationCap, FileText, SearchCheck, Tag } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
