@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { useCreateAdminReturn } from "@/hooks/useReturns";
 import { useReturnReasons } from "@/hooks/useReturnReasons";
-import { Loader2, Search, CheckCircle2, AlertCircle, Upload, X, ImageIcon } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, Upload, X, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -28,6 +28,11 @@ interface LookupResult {
   product_items?: { title: string; sku: string }[];
 }
 
+interface ManualProduct {
+  title: string;
+  sku: string;
+}
+
 export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps) {
   const createReturn = useCreateAdminReturn();
   const { data: reasons } = useReturnReasons();
@@ -40,11 +45,15 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
   const [status, setStatus] = useState("pending");
   const [searching, setSearching] = useState(false);
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
-  const [buyerName, setBuyerName] = useState<string | null>(null);
+  const [sellerName, setSellerName] = useState("");
+  const [manualProducts, setManualProducts] = useState<ManualProduct[]>([{ title: "", sku: "" }]);
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const lastSearchedRef = useRef<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const hasLookupProducts = lookupResult?.found && lookupResult.product_items && lookupResult.product_items.length > 0;
+  const trackingReturnError = trackingReturn.trim() !== "" && trackingOriginal.trim() !== "" && trackingReturn.trim() === trackingOriginal.trim();
 
   const resetForm = () => {
     setTrackingOriginal("");
@@ -56,7 +65,8 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
     setStatus("pending");
     setSearching(false);
     setLookupResult(null);
-    setBuyerName(null);
+    setSellerName("");
+    setManualProducts([{ title: "", sku: "" }]);
     setPhotos([]);
     setUploadingPhoto(false);
   };
@@ -101,10 +111,10 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
     const trimmed = trackingOriginal.trim();
     if (!trimmed || trimmed === lastSearchedRef.current) {
       if (!trimmed) {
-      setLookupResult(null);
-      setOrderId("");
-      setOrderIdManual(false);
-      setBuyerName(null);
+        setLookupResult(null);
+        setOrderId("");
+        setOrderIdManual(false);
+        setSellerName("");
       }
       return;
     }
@@ -128,11 +138,11 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
 
       if (result.found && result.external_order_id) {
         setOrderId(result.external_order_id);
-        setBuyerName(result.buyer_name || null);
+        setSellerName(result.buyer_name || "");
         setOrderIdManual(false);
       } else {
         setOrderId("");
-        setBuyerName(null);
+        setSellerName("");
         setOrderIdManual(true);
       }
     } catch (err) {
@@ -144,16 +154,45 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
     }
   };
 
+  const handleAddManualProduct = () => {
+    if (manualProducts.length < 10) {
+      setManualProducts((prev) => [...prev, { title: "", sku: "" }]);
+    }
+  };
+
+  const handleRemoveManualProduct = (index: number) => {
+    setManualProducts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleManualProductChange = (index: number, field: "title" | "sku", value: string) => {
+    setManualProducts((prev) => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
+  };
+
   const handleSubmit = async () => {
-    if (!orderId || !reason) return;
+    if (!reason) {
+      toast.error("Selecione um motivo");
+      return;
+    }
+    if (trackingReturnError) {
+      toast.error("O código de devolução deve ser o código de reversa, não o mesmo da ida");
+      return;
+    }
+
+    // Determinar product_items: lookup tem prioridade, senão manual
+    const productItems = hasLookupProducts
+      ? lookupResult!.product_items!
+      : manualProducts.filter((p) => p.title.trim() !== "");
+
     await createReturn.mutateAsync({
-      external_order_id: orderId,
+      external_order_id: orderId.trim() || "SEM-PEDIDO",
       tracking_code_original: trackingOriginal.trim() || undefined,
-      tracking_code_return: trackingReturn || undefined,
+      tracking_code_return: trackingReturn.trim() || undefined,
       reason,
       description: description || undefined,
       status,
       photos: photos.length > 0 ? photos : undefined,
+      product_items: productItems.length > 0 ? productItems : undefined,
+      seller_name: sellerName.trim() || undefined,
     });
     resetForm();
     onOpenChange(false);
@@ -161,7 +200,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nova Devolução (Admin)</DialogTitle>
           <DialogDescription>Cadastre uma devolução manualmente</DialogDescription>
@@ -181,6 +220,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
                   setOrderIdManual(false);
                 }}
                 onBlur={handleTrackingBlur}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleTrackingBlur(); } }}
                 placeholder="Cole o código de rastreio original"
               />
               {searching && (
@@ -195,24 +235,27 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
             </div>
           </div>
 
-          {/* Dados do comprador */}
-          {lookupResult?.found && buyerName && (
-            <div className="rounded-md bg-muted/50 p-3 text-sm">
-              <p className="text-xs text-muted-foreground">Seller</p>
-              <p className="font-medium">{buyerName}</p>
-            </div>
-          )}
-
           {/* Mensagem quando não encontrado */}
           {lookupResult && !lookupResult.found && (
             <p className="text-sm text-destructive">
-              Pedido não localizado. Preencha o número manualmente.
+              Pedido não localizado. Preencha os dados manualmente.
             </p>
           )}
 
-          {/* 2. Número do Pedido */}
+          {/* 2. Seller - sempre editável */}
           <div className="space-y-2">
-            <Label>Número do Pedido *</Label>
+            <Label>Seller</Label>
+            <Input
+              value={sellerName}
+              onChange={(e) => setSellerName(e.target.value)}
+              placeholder="Nome do seller"
+              className={lookupResult?.found && sellerName ? "bg-muted/50" : ""}
+            />
+          </div>
+
+          {/* 3. Número do Pedido */}
+          <div className="space-y-2">
+            <Label>Número do Pedido</Label>
             <Input
               value={orderId}
               onChange={(e) => setOrderId(e.target.value)}
@@ -222,35 +265,91 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
             />
           </div>
 
-          {/* Produto e SKU - abaixo do número do pedido */}
-          {lookupResult?.found && lookupResult.product_items && lookupResult.product_items.length > 0 && (
-            <div className="rounded-md bg-muted/50 p-3 text-sm space-y-2">
-              {lookupResult.product_items.map((item, i) => (
-                <div key={i} className="space-y-0.5">
-                  {item.title && (
-                    <div>
-                      <span className="text-xs text-muted-foreground">Produto: </span>
-                      <span className="font-medium">{item.title}</span>
-                    </div>
-                  )}
-                  {item.sku && (
-                    <div>
-                      <span className="text-xs text-muted-foreground">SKU: </span>
-                      <span className="font-medium">{item.sku}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* 3. Rastreio Devolução */}
+          {/* 4. Produto e SKU */}
           <div className="space-y-2">
-            <Label>Rastreio Devolução</Label>
-            <Input value={trackingReturn} onChange={(e) => setTrackingReturn(e.target.value)} placeholder="Código de rastreio reverso" />
+            <Label>Produto / SKU</Label>
+            {hasLookupProducts ? (
+              <div className="rounded-md bg-muted/50 p-3 text-sm space-y-2">
+                {lookupResult!.product_items!.map((item, i) => (
+                  <div key={i} className="space-y-0.5">
+                    {item.title && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Produto: </span>
+                        <span className="font-medium">{item.title}</span>
+                      </div>
+                    )}
+                    {item.sku && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">SKU: </span>
+                        <span className="font-medium">{item.sku}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {manualProducts.map((product, i) => (
+                  <div key={i} className="flex gap-2 items-start">
+                    <div className="flex-1 space-y-1">
+                      <Input
+                        value={product.title}
+                        onChange={(e) => handleManualProductChange(i, "title", e.target.value)}
+                        placeholder="Nome do produto"
+                      />
+                      <Input
+                        value={product.sku}
+                        onChange={(e) => handleManualProductChange(i, "sku", e.target.value)}
+                        placeholder="SKU (opcional)"
+                      />
+                    </div>
+                    {manualProducts.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="mt-1 h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveManualProduct(i)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {manualProducts.length < 10 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddManualProduct}
+                    className="w-full"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Adicionar produto
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* 4. Motivo */}
+          {/* 5. Rastreio Devolução */}
+          <div className="space-y-2">
+            <Label>Rastreio Devolução (reversa)</Label>
+            <Input
+              value={trackingReturn}
+              onChange={(e) => setTrackingReturn(e.target.value)}
+              placeholder="Código de rastreio reverso"
+              className={trackingReturnError ? "border-destructive focus-visible:ring-destructive" : ""}
+            />
+            {trackingReturnError && (
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                O código de devolução deve ser o código de reversa, não o mesmo da ida
+              </p>
+            )}
+          </div>
+
+          {/* 6. Motivo */}
           <div className="space-y-2">
             <Label>Motivo *</Label>
             <Select value={reason} onValueChange={setReason}>
@@ -263,13 +362,13 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
             </Select>
           </div>
 
-          {/* 5. Descrição */}
+          {/* 7. Descrição */}
           <div className="space-y-2">
             <Label>Descrição</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
           </div>
 
-          {/* 6. Status */}
+          {/* 8. Status */}
           <div className="space-y-2">
             <Label>Status</Label>
             <Select value={status} onValueChange={setStatus}>
@@ -283,7 +382,7 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
             </Select>
           </div>
 
-          {/* 7. Fotos */}
+          {/* 9. Fotos */}
           <div className="space-y-2">
             <Label>Fotos do produto (opcional)</Label>
             {photos.length > 0 && (
@@ -333,7 +432,11 @@ export function AdminReturnDialog({ open, onOpenChange }: AdminReturnDialogProps
             />
           </div>
 
-          <Button className="w-full" onClick={handleSubmit} disabled={!orderId || !reason || createReturn.isPending}>
+          <Button
+            className="w-full"
+            onClick={handleSubmit}
+            disabled={!reason || trackingReturnError || createReturn.isPending}
+          >
             {createReturn.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Cadastrar
           </Button>

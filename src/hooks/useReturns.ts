@@ -89,6 +89,8 @@ export function useCreateAdminReturn() {
       status?: string;
       photos?: string[];
       registered_email?: string;
+      product_items?: { title: string; sku: string }[];
+      seller_name?: string;
     }) => {
       const { data: inserted, error } = await supabase.from("returns").insert({
         external_order_id: data.external_order_id,
@@ -100,7 +102,9 @@ export function useCreateAdminReturn() {
         created_by: "admin",
         photos: data.photos || null,
         registered_email: data.registered_email || null,
-      }).select("id").single();
+        product_items: data.product_items && data.product_items.length > 0 ? data.product_items : null,
+        seller_name: data.seller_name || null,
+      } as any).select("id").single();
       if (error) throw error;
 
       // Enviar email de confirmação se tiver email
