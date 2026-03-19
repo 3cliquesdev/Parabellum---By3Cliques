@@ -103,7 +103,7 @@ export default function Departments() {
     operations: { title: "Operações", subtitle: "Gerencie as operações de tickets", btnLabel: "Nova Operação" },
     categories: { title: "Categorias", subtitle: "Gerencie as categorias de tickets", btnLabel: "Nova Categoria" },
     origins: { title: "Origens", subtitle: "Gerencie as origens (momento da jornada do cliente)", btnLabel: "Nova Origem" },
-    fields: { title: "Campos Obrigatórios", subtitle: "Defina quais campos são obrigatórios ao criar um ticket" },
+    fields: { title: "Template do Ticket", subtitle: "Configure visibilidade e obrigatoriedade dos campos ao criar um ticket" },
   };
 
   const current = tabConfig[activeTab] || tabConfig.departments;
