@@ -201,13 +201,13 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
   const canSubmit =
     subject.trim() &&
-    (!fieldSettings.operation || operationId) &&
-    (!fieldSettings.origin || originId) &&
-    (!fieldSettings.department || departmentId) &&
-    (!fieldSettings.category || category) &&
-    (!fieldSettings.customer || customerId) &&
-    (!fieldSettings.assigned_to || assignedTo) &&
-    (!fieldSettings.tags || selectedTagIds.length > 0) &&
+    (!fieldVisibility.operation || !fieldSettings.operation || operationId) &&
+    (!fieldVisibility.origin || !fieldSettings.origin || originId) &&
+    (!fieldVisibility.department || !fieldSettings.department || departmentId) &&
+    (!fieldVisibility.category || !fieldSettings.category || category) &&
+    (!fieldVisibility.customer || !fieldSettings.customer || customerId) &&
+    (!fieldVisibility.assigned_to || !fieldSettings.assigned_to || assignedTo) &&
+    (!fieldVisibility.tags || !fieldSettings.tags || selectedTagIds.length > 0) &&
     !createTicket.isPending;
 
   // Helper for field label
