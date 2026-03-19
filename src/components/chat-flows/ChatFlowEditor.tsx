@@ -625,7 +625,7 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
           nodeTypes={chatFlowNodeTypes}
           edgeTypes={edgeTypes}
           defaultEdgeOptions={defaultEdgeOptions}
-          deleteKeyCode={['Backspace', 'Delete']}
+          deleteKeyCode={null}
           fitView
           className="bg-background"
         >
