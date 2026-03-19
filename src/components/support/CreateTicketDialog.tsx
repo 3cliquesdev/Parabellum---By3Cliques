@@ -231,6 +231,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Customer Search */}
+          {fieldVisibility.customer && (
           <div className="space-y-2">
             <Label htmlFor="customer">{fieldLabel("Cliente", "customer")}</Label>
             {selectedContact ? (
@@ -280,6 +281,7 @@ export function CreateTicketDialog({ open, onOpenChange }: CreateTicketDialogPro
               </div>
             )}
           </div>
+          )}
 
           {/* Subject */}
           <div className="space-y-2">
