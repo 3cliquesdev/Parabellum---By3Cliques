@@ -926,7 +926,6 @@ function ChatFlowEditorInner({ initialFlow, onSave, onCancel, onFlowChange, isSa
                       {(selectedNode.data.condition_type === "contains" || selectedNode.data.condition_type === "equals") ? (
                         <>
                         <Textarea
-                            onKeyDown={(e) => e.stopPropagation()}
                             value={selectedNode.data.condition_value || ""}
                             onChange={(e) => updateNodeData("condition_value", e.target.value)}
                             placeholder="Separe múltiplos valores por vírgula"
