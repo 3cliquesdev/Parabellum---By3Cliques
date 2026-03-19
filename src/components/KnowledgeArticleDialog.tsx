@@ -126,10 +126,14 @@ export default function KnowledgeArticleDialog({ open, onOpenChange, article }: 
   };
 
   const [newProductTag, setNewProductTag] = useState("");
-  const addCustomProductTag = () => {
+  const addCustomProductTag = async () => {
     const trimmed = newProductTag.trim();
     if (trimmed && !productTags.includes(trimmed)) {
       setProductTags((prev) => [...prev, trimmed]);
+      // Also create in the database if it doesn't exist
+      if (!existingProductTags.includes(trimmed)) {
+        createProductTag.mutate({ name: trimmed });
+      }
     }
     setNewProductTag("");
   };
