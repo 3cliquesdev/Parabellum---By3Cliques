@@ -3429,7 +3429,7 @@ serve(async (req) => {
                 await supabaseClient
                   .from('chat_flow_states')
                   .update({ collected_data: collectedData })
-                  .eq('id', stateId);
+                   .eq('id', activeState.id);
                 console.log('[process-chat-flow] 🔓 FIX#1E0A32FC: OTP verified via DB check — synced to collectedData');
               }
             }

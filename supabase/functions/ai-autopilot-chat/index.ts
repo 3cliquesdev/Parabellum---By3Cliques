@@ -6270,10 +6270,13 @@ Posso ajudar em mais alguma coisa?`;
               const { data: wi } = await supabaseClient.from('whatsapp_instances').select('*').eq('status', 'connected').limit(1).maybeSingle();
               if (wi) await supabaseClient.functions.invoke('send-whatsapp-message', { body: { instance_id: wi.id, phone_number: contact.phone, whatsapp_id: contact.whatsapp_id, message: saqueResponse } });
             }
-            return await respondWithDecision(
-              { response: saqueResponse, messageId: savedMsg?.id, ticketCreated: true, ticketId, debug: { reason: 'saque_data_deterministic_ticket' } },
-              { decision: 'reply', decisionReason: 'saque_data_deterministic_ticket', messageId: savedMsg?.id || null }
-            );
+            return new Response(JSON.stringify({
+              response: saqueResponse,
+              messageId: savedMsg?.id,
+              ticketCreated: true,
+              ticketId,
+              debug: { reason: 'saque_data_deterministic_ticket' },
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
           }
         } catch (ticketErr) {
           console.error('[ai-autopilot-chat] ❌ Falha ao criar ticket determinístico de saque:', ticketErr);

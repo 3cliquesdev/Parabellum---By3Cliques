@@ -1891,7 +1891,7 @@ serve(async (req) => {
                            console.log("[meta-whatsapp-webhook] 🚀 V13: Handoff IMEDIATO (reason=" + autopilotData.reason + ") — pulando flow re-invocation");
                            
                            const DEPT_SUPORTE_IMMEDIATE = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
-                           const immediateDept = autopilotData.flow_context?.department || conversation.department || DEPT_SUPORTE_IMMEDIATE;
+                           const immediateDept = autopilotData.flow_context?.department || (conversation as any).department || DEPT_SUPORTE_IMMEDIATE;
                            
                            await supabase.from('conversations').update({
                              ai_mode: 'waiting_human',

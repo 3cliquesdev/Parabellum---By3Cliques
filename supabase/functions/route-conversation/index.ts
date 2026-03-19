@@ -626,7 +626,7 @@ serve(async (req) => {
           allGenericAgents = allGenericAgents.filter(a => {
             const agentDepts = Array.isArray(a.agent_departments)
               ? a.agent_departments.map((d: any) => d.department_id)
-              : [a.agent_departments?.department_id].filter(Boolean);
+              : [(a.agent_departments as any)?.department_id].filter(Boolean);
             return deptIdsForFilter.some(d => agentDepts.includes(d));
           });
           console.log(`[route-conversation] 📂 After dept client-side filter: ${allGenericAgents.length} agents`);
