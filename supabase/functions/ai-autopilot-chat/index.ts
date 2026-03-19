@@ -4672,7 +4672,7 @@ Responda APENAS: skip ou search`
               for (const term of searchTerms) {
                 let query = supabaseClient
                   .from('knowledge_articles')
-                  .select('id, title, content, category, updated_at')
+                  .select('id, title, content, category, updated_at, problem, solution, when_to_use')
                   .eq('status', 'published')
                   .or(`title.ilike.%${term}%,content.ilike.%${term}%,tags.cs.{"${term}"}`);
                 
