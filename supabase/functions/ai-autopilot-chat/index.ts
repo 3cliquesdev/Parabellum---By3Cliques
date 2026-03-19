@@ -7096,12 +7096,713 @@ ${canShowFinancialData
    Os dados estão corretos?"
 
 2. **SE CLIENTE CONFIRMAR (SIM):**
-   - Envie a mensagem estruturada pedindo TODOS os dados de uma vez:
+   - Pergunte sobre a chave PIX de forma inteligente (sem pedir dados já confirmados):
    
-   "${structuredCollectionMessage}"
+   "Perfeito! Posso fazer o PIX diretamente para seu CPF (${maskedCPF}) como chave?
    
-   - SE o cliente responder com todos os dados preenchidos, crie o ticket com create_ticket.
-   - SE faltar algum dado, peça apenas o que falta de forma amigável.
+   Ou, se preferir, envie outra chave PIX (email, telefone ou chave aleatória) - lembrando que precisa estar vinculada a este mesmo CPF.
+   
+   Qual opção prefere?"
+
+   - SE cliente aceitar usar o CPF como chave (ex: "sim", "pode usar CPF", "usa o CPF", "pode ser"):
+     - Chave PIX = CPF do cliente (use o CPF completo do cadastro, não o mascarado)
+     - Tipo = "cpf"
+     - Pergunte APENAS: "Certo! Qual valor você deseja sacar?"
+   
+   - SE cliente enviar outra chave (email, telefone, chave aleatória):
+     - Identifique o tipo automaticamente
+     - Confirme: "Vou usar a chave [CHAVE]. Qual valor você deseja sacar?"
+   
+   - APÓS receber o VALOR, execute create_ticket com:
+     - issue_type: "saque"
+     - subject: "Solicitação de Saque - R$ [VALOR]"
+     - description: "Cliente ${contactName} solicita saque de R$ [VALOR]. Tipo PIX: [TIPO]. Chave PIX: [CHAVE]. CPF: ${maskedCPF}"
+     - pix_key: [CHAVE - seja CPF ou outra informada]
+     - pix_key_type: [TIPO - cpf/email/telefone/chave_aleatoria]
+     - withdrawal_amount: [VALOR]
+     - customer_confirmation: true
+     - ticket_type: "saque_carteira"
+   - Responda: "Solicitação de saque registrada! Protocolo: #[ID]. O financeiro vai processar o PIX em até 7 dias úteis."
+
+3. **SE CLIENTE DISSER NÃO (dados incorretos):**
+   - Execute a tool request_human_agent com:
+     - reason: "dados_financeiros_incorretos"
+     - internal_note: "Cliente informou que dados cadastrais (Nome/CPF) estão incorretos durante solicitação de saque. Requer correção manual."
+   - A ferramenta vai responder automaticamente e transferir para um atendente.
+
+---
+
+**CENÁRIO C: REEMBOLSO/DEVOLUÇÃO (Produto Errado, Defeito, Troca)**
+
+Quando cliente mencionar "envio errado", "produto errado", "veio diferente", "veio outra cor", "veio errado", "defeito", "quebrado", "danificado", "trocar", "quero trocar", "quero devolver":
+
+**PASSO 1: PERGUNTAR TIPO DE RESOLUÇÁO PRIMEIRO**
+"Entendi que houve um problema com seu pedido. Você prefere:
+
+**A)** Reembolso do valor pago?
+**B)** Reenvio do produto correto?
+**C)** Troca por outro item?"
+
+→ AGUARDE resposta antes de prosseguir
+
+**PASSO 2: COLETAR DADOS DO PROBLEMA**
+Após cliente escolher A, B ou C:
+
+"Para resolver, preciso de algumas informações:
+
+1️⃣ **Número do pedido:** (ex: #12345 ou código de rastreio)
+2️⃣ **Qual produto veio errado/com defeito?** (nome ou descrição)
+3️⃣ **O que você esperava receber?** (ou qual era o correto)"
+
+→ AGUARDE respostas antes de prosseguir
+
+**PASSO 3: SOLICITAR EVIDÊNCIAS**
+"Para agilizar a análise da equipe, você consegue enviar uma foto do produto que recebeu? 📷
+
+Isso ajuda muito a resolver mais rápido!"
+
+→ AGUARDE cliente enviar foto OU dizer que não consegue
+
+**PASSO 4: CRIAR TICKET COM DADOS COMPLETOS**
+SOMENTE após coletar TODOS os dados acima (tipo de resolução, número pedido, problema, produto esperado), execute create_ticket com:
+- issue_type: "reembolso" ou "troca" ou "devolucao" (conforme opção escolhida)
+- subject: "[Tipo] Pedido #[NÚMERO] - [Resumo do problema]"
+- description: Incluir TODOS os dados coletados:
+  • Número do pedido
+  • Produto recebido (errado/com defeito)
+  • Produto esperado (correto)
+  • Resolução desejada (reembolso/troca/reenvio)
+  • Se foto foi enviada (sim/não)
+- order_id: [NÚMERO DO PEDIDO se fornecido]
+
+**EXEMPLO DE TICKET BEM PREENCHIDO:**
+subject: "Reembolso Pedido #12345 - Cor Errada"
+description: "Cliente Maria recebeu camiseta preta quando pediu branca.
+Pedido: #12345
+Produto recebido: Camiseta preta M
+Produto esperado: Camiseta branca M  
+Foto enviada: Sim
+Resolução desejada: Reembolso integral"
+
+**REGRAS DO CENÁRIO C:**
+- NUNCA crie ticket sem saber tipo de resolução (A, B ou C)
+- NUNCA crie ticket sem número do pedido (se cliente não souber, pergunte: "Qual email usou na compra? Vou buscar para você.")
+- NUNCA crie ticket sem saber o que veio errado vs o que era esperado
+- SEMPRE peça foto para evidência (mas prossiga se cliente não puder enviar)
+- Se cliente mencionar "envio errado" mas já escolheu resolução, pule direto para PASSO 2
+
+---
+
+**REGRAS CRÍTICAS GERAIS:**
+- NUNCA crie ticket para cancelamento Kiwify (é self-service)
+- NUNCA fale de valores com cliente não identificado
+- NUNCA pule a confirmação de dados
+- SEMPRE pergunte qual tipo (A, B ou C) antes de prosseguir em saques e reembolsos
+- SEMPRE mostre os dados e peça confirmação para saque
+- SEMPRE envie o link da Kiwify para cancelamentos
+- SEMPRE colete dados completos antes de criar ticket de reembolso/devolução
+
+---
+
+**Você tem acesso às seguintes ferramentas:**
+- create_ticket: Use APENAS quando cliente pedir explicitamente ajuda humana OU problema financeiro concreto OU você não conseguir responder após tentar. Para SAQUE, use SOMENTE após OTP validado e dados confirmados.
+- verify_customer_email: Use quando cliente FORNECER email para identificação. Verifica se existe na base. Se existir, cliente é identificado SEM OTP. OTP só é necessário para operações financeiras.
+- send_financial_otp: Use quando cliente JÁ IDENTIFICADO por email solicitar operação FINANCEIRA (saque, reembolso). Envia OTP para confirmar identidade antes de prosseguir.
+- resend_otp: Use quando cliente disser "não recebi email" ou pedir reenvio. Reenvia código para email JÁ cadastrado.
+- verify_otp_code: Valide códigos OTP de 6 dígitos
+- request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver.
+- check_tracking: Consulta rastreio de pedidos. Use quando cliente perguntar sobre entrega ou status de envio.
+- close_conversation: Encerre SOMENTE quando o cliente indicar CLARAMENTE que não tem mais dúvidas (ex: "era só isso", "não tenho mais dúvidas", "é isso", "pode encerrar"). NÃO interprete agradecimentos ("obrigado", "valeu", "muito obrigado") como sinal de encerramento — agradecer é educação, não significa que acabou. SEMPRE pergunte antes (customer_confirmed=false). Só use customer_confirmed=true após cliente confirmar "sim". Se cliente disser "não" ou tiver mais dúvidas, continue normalmente.
+- classify_and_resolve_ticket: Após encerrar conversa (close_conversation confirmado), classifique e registre a resolução. Use a categoria mais adequada do enum. Escreva summary curto e resolution_notes objetivo.
+
+${knowledgeContext}${sandboxTrainingContext}${identityWallNote}
+
+**Contexto do Cliente:**
+- Nome: ${contactName}${contactCompany}
+- Status: ${contactStatus}
+- Canal: ${responseChannel}
+${contactEmail ? `- Email: ${safeEmail}` : (flow_context ? '- Email: Não identificado (a IA pode ajudar sem email)' : '- Email: NÃO CADASTRADO - SOLICITAR')}
+${contact.phone ? `- Telefone: ${safePhone}` : ''}
+- CPF: ${maskedCPF}
+${contactOrgName ? `- Organização: ${contactOrgName}` : ''}
+${contactConsultantName ? `- Consultor responsável: ${contactConsultantName}` : ''}
+${contactSellerName ? `- Vendedor responsável: ${contactSellerName}` : ''}
+${contactTagsList.length > 0 ? `- Tags: ${contactTagsList.join(', ')}` : ''}
+${customerProducts.length > 0 ? `- Produtos/Serviços contratados: ${customerProducts.join(', ')}` : '- Produtos/Serviços contratados: Nenhum identificado'}
+
+Os "Produtos/Serviços contratados" são produtos DIGITAIS (cursos online, mentorias, assinaturas, comunidades) que o cliente COMPROU na plataforma. Use essa informação para personalizar o atendimento e contextualizar respostas sobre acesso, conteúdo e suporte dos produtos específicos do cliente. Não confunda com produtos físicos.
+${crossSessionContext}${personaToneInstruction}
+
+Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
+
+    // 6. Gerar resposta final
+    const aiPayload: any = {
+      messages: [
+        { role: 'system', content: contextualizedSystemPrompt },
+        ...fewShotMessages,  // âœ¨ Injetar exemplos de treinamento (Few-Shot Learning)
+        ...messageHistory.slice(-6), // 🔧 TOKEN OPT: limitar a últimas 6 msgs (3 turnos)
+        { role: 'user', content: customerMessage }
+      ],
+      temperature: persona.temperature ?? 0.7,  // CORRIGIDO: ?? ao invés de || (temperatura 0 é válida)
+      max_tokens: persona.max_tokens ?? 500    // CORRIGIDO: ?? ao invés de || (consistência)
+    };
+
+    console.log('[ai-autopilot-chat] Messages structure:', {
+      system: 1,
+      fewShot: fewShotMessages.length,
+      history: messageHistory.length,
+      current: 1,
+      total: aiPayload.messages.length
+    });
+
+    // Add built-in tools + persona tools (FILTRADO por data_access)
+    // 🔒 Ferramentas CORE (sempre disponíveis)
+    const coreTools = [
+      {
+        type: 'function',
+        function: {
+          name: 'create_ticket',
+          description: 'Cria um ticket de suporte. USE APENAS quando: (1) Cliente PEDIR explicitamente ajuda humana, (2) Problema financeiro CONCRETO com intenção de ação (reembolso, saque real), (3) Você NÃO conseguir responder APÁ“S tentar. Para SAQUE: use SOMENTE após seguir o FLUXO ESPECIAL no system prompt (informar regras, confirmar dados, obter confirmação). NÃO use para dúvidas informativas.',
+          parameters: {
+            type: 'object',
+            properties: {
+              issue_type: { 
+                type: 'string', 
+                enum: ['financeiro', 'devolucao', 'reembolso', 'troca', 'defeito', 'saque', 'outro'],
+                description: 'O tipo de solicitação. Use "saque" APENAS após coletar todos os dados no FLUXO ESPECIAL. Use "financeiro" para outras questões de pagamento/pix/comissão.' 
+              },
+              subject: { 
+                type: 'string', 
+                description: 'Resumo breve da solicitação (máximo 100 caracteres).' 
+              },
+              description: { 
+                type: 'string', 
+                description: 'Descrição detalhada do problema ou solicitação.' 
+              },
+              order_id: { 
+                type: 'string', 
+                description: 'O número do pedido, se aplicável. Deixe vazio se não houver pedido.' 
+              },
+              withdrawal_amount: {
+                type: 'number',
+                description: '[APENAS PARA SAQUE] Valor numérico solicitado pelo cliente após confirmação.'
+              },
+              confirmed_cpf_last4: {
+                type: 'string',
+                description: '[APENAS PARA SAQUE] Ášltimos 4 dígitos do CPF confirmados pelo cliente.'
+              },
+              pix_key: {
+                type: 'string',
+                description: '[APENAS PARA SAQUE] Chave PIX informada pelo cliente para receber o saque.'
+              },
+              customer_confirmation: {
+                type: 'boolean',
+                description: '[APENAS PARA SAQUE] true se cliente confirmou explicitamente os dados (CPF, valor, destino).'
+              },
+              bank: {
+                type: 'string',
+                description: 'Banco informado pelo cliente, se aplicável.'
+              }
+            },
+            required: ['issue_type', 'subject', 'description']
+          }
+        }
+      },
+      // FASE 2: Email Verification Tool (envia OTP automaticamente)
+      {
+        type: 'function',
+        function: {
+          name: 'verify_customer_email',
+          description: 'APENAS use quando cliente FORNECER email novo pela PRIMEIRA VEZ. Verifica se email existe na base e envia OTP. âš ï¸ NÃO use se cliente reclamar "não recebi email" - nesse caso use resend_otp.',
+          parameters: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', description: 'O email fornecido pelo cliente.' }
+            },
+            required: ['email']
+          }
+        }
+      },
+      // FASE 2: OTP Verification Tool
+      {
+        type: 'function',
+        function: {
+          name: 'verify_otp_code',
+          description: 'Verifica o código de 6 dígitos enviado por email ao cliente.',
+          parameters: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', description: 'O código de 6 dígitos fornecido pelo cliente.' }
+            },
+            required: ['code']
+          }
+        }
+      },
+      // FASE 2: Resend OTP Tool - Reenvia código para email JÁ CADASTRADO
+      {
+        type: 'function',
+        function: {
+          name: 'resend_otp',
+          description: 'Reenvia código OTP para o email JÁ CADASTRADO do cliente. Use quando cliente disser "não recebi email", "não chegou código", "reenviar código". NÃO pede email novamente.',
+          parameters: {
+            type: 'object',
+            properties: {},
+            required: []
+          }
+        }
+      },
+      // TOOL: Confirmar email não encontrado na base
+      {
+        type: 'function',
+        function: {
+          name: 'confirm_email_not_found',
+          description: 'Usar quando o email não foi encontrado na base e o cliente CONFIRMA que o email está correto (responde "sim", "correto", "está certo"). Se cliente disser que email está ERRADO ou enviar outro email, NÃO use esta tool - use verify_customer_email com o novo email.',
+          parameters: {
+            type: 'object',
+            properties: {
+              confirmed: { 
+                type: 'boolean', 
+                description: 'true se cliente confirmou que o email está correto, false se cliente disse que digitou errado' 
+              }
+            },
+            required: ['confirmed']
+          }
+        }
+      },
+      // TOOL: Handoff manual para atendente humano
+      {
+        type: 'function',
+        function: {
+          name: 'request_human_agent',
+          description: 'Transfere a conversa para um atendente humano. âš ï¸ PRÉ-REQUISITO OBRIGATÓRIO: Cliente DEVE estar identificado por email (email_verified_in_db=true) OU ter email cadastrado no contato. NÃO use esta ferramenta se cliente ainda não forneceu email - nesse caso, PEÇA O EMAIL PRIMEIRO usando verify_customer_email. Use apenas quando: 1) Cliente JÁ IDENTIFICADO pedir explicitamente atendimento humano, 2) Dados estiverem incorretos APÁ“S identificação por email, 3) Caso complexo APÁ“S identificação.',
+          parameters: {
+            type: 'object',
+            properties: {
+              reason: { 
+                type: 'string', 
+                description: 'Motivo da transferência (ex: "dados_incorretos", "solicitacao_cliente", "caso_complexo", "dados_financeiros_incorretos")' 
+              },
+              internal_note: { 
+                type: 'string', 
+                description: 'Nota interna explicando o contexto da transferência para o atendente' 
+              }
+            },
+            required: ['reason']
+          }
+        }
+      },
+      // 🆕 Tool: close_conversation - Encerramento autônomo com confirmação do cliente
+      {
+        type: 'function',
+        function: {
+          name: 'close_conversation',
+          description: 'Encerra a conversa. Use em 2 etapas: (1) Pergunte ao cliente se pode encerrar (customer_confirmed=false), (2) Após cliente confirmar "sim", execute com customer_confirmed=true. NUNCA encerre sem confirmação explícita.',
+          parameters: {
+            type: 'object',
+            properties: {
+              reason: { type: 'string', description: 'Motivo do encerramento (ex: "assunto_resolvido", "duvida_esclarecida")' },
+              customer_confirmed: { type: 'boolean', description: 'true SOMENTE após cliente confirmar explicitamente que pode encerrar' }
+            },
+            required: ['reason', 'customer_confirmed']
+          }
+        }
+      },
+      // 🆕 Tool: classify_and_resolve_ticket - Classificação e registro de resolução pós-encerramento
+      {
+        type: 'function',
+        function: {
+          name: 'classify_and_resolve_ticket',
+          description: 'Classifica e registra resolução após encerramento confirmado. Use APÁ“S close_conversation com customer_confirmed=true. Cria ticket resolvido ou atualiza existente.',
+          parameters: {
+            type: 'object',
+            properties: {
+              category: { type: 'string', enum: ['financeiro','tecnico','bug','outro','devolucao','reclamacao','saque'], description: 'Categoria do atendimento' },
+              summary: { type: 'string', description: 'Resumo curto da resolução (máx 200 chars)' },
+              resolution_notes: { type: 'string', description: 'Detalhes de como foi resolvido' },
+              severity: { type: 'string', enum: ['low','medium','high'], description: 'Gravidade do problema' },
+              tags: { type: 'array', items: { type: 'string' }, description: 'Tags descritivas' }
+            },
+            required: ['category', 'summary', 'resolution_notes']
+          }
+        }
+      }
+    ];
+    
+    // 🔒 Ferramentas CONDICIONAIS (baseadas em data_access)
+    const conditionalTools: any[] = [];
+    
+    // check_tracking - só se tiver permissão de rastreio ou histórico de pedidos
+    if (canAccessTracking) {
+      conditionalTools.push({
+        type: 'function',
+        function: {
+          name: 'check_tracking',
+          description: 'Consulta status de rastreio de pedidos no sistema de romaneio. Use quando cliente perguntar sobre entrega, rastreio ou status, ou quando enviar um número de pedido/código de rastreio. IMPORTANTE: Se cliente enviar múltiplos códigos, extraia TODOS em um array. Números como "16315521" também podem ser códigos de pedido - consulte mesmo assim.',
+          parameters: {
+            type: 'object',
+            properties: {
+              tracking_codes: { 
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Lista de códigos de rastreio ou números de pedido (ex: ["BR123456789BR", "MS-12345", "16315521"]). Aceita um ou vários códigos.'
+              },
+              customer_email: { 
+                type: 'string', 
+                description: 'Email do cliente para buscar pedidos com rastreio cadastrado.' 
+              }
+            },
+            required: []
+          }
+        }
+      });
+      console.log('[ai-autopilot-chat] âœ… check_tracking HABILITADO (tracking_data ou order_history)');
+    } else {
+      console.log('[ai-autopilot-chat] ❌ check_tracking DESABILITADO (sem permissão de rastreio)');
+    }
+    
+    // send_financial_otp - só se tiver permissão financeira
+    if (canAccessFinancialData) {
+      conditionalTools.push({
+        type: 'function',
+        function: {
+          name: 'send_financial_otp',
+          description: 'Envia código OTP para email JÁ VERIFICADO quando cliente solicita operação FINANCEIRA (saque, reembolso, etc). Use apenas após cliente já ter sido identificado por email na base. NÃO use para identificação inicial - para isso use verify_customer_email.',
+          parameters: {
+            type: 'object',
+            properties: {},
+            required: []
+          }
+        }
+      });
+      console.log('[ai-autopilot-chat] âœ… send_financial_otp HABILITADO (financial_data)');
+    } else {
+      console.log('[ai-autopilot-chat] ❌ send_financial_otp DESABILITADO (sem permissão financeira)');
+    }
+    
+    const allTools = [
+      ...coreTools,
+      ...conditionalTools,
+      ...enabledTools.map((tool: any) => ({
+        type: 'function',
+        function: tool.function_schema
+      }))
+    ];
+    
+    console.log('[ai-autopilot-chat] 🛠️ Total de ferramentas disponíveis:', allTools.length, '| Core:', coreTools.length, '| Condicionais:', conditionalTools.length, '| Custom:', enabledTools.length);
+
+    if (allTools.length > 0) {
+      aiPayload.tools = allTools;
+    }
+    // CORREÇÃO: Saudação proativa na primeira interação ou mensagem de ruído do menu
+    const rawInteractionCount = flow_context?.collectedData?.__ai?.interaction_count;
+    const isFirstNodeInteraction = rawInteractionCount === undefined || rawInteractionCount === 0;
+    // 🆕 FIX: Menu noise apenas para dígitos curtos (1-3 chars) de navegação de menu
+    // Números longos (CPF, PIX, telefone) NÃO são ruído — são dados válidos do cliente
+    // Desabilitar completamente quando OTP verificado (cliente está fornecendo dados financeiros)
+    const trimmedMsg = customerMessage?.trim() || '';
+    const isShortDigitOnly = /^\d{1,3}$/.test(trimmedMsg);
+    const isOtpVerifiedContext = flow_context?.otpVerified === true || hasRecentOTPVerification;
+    const isMenuNoise = !isOtpVerifiedContext && !!(customerMessage && (trimmedMsg.length <= 3 || isShortDigitOnly));
+    let skipLLMForGreeting = false;
+    // Não disparar saudação quando OTP já foi verificado (cliente aguarda resposta à solicitação)
+    const skipGreetingForOtp = flow_context?.otpVerified === true;
+    // 🆕 FIX Resíduo 2: Guard de saudação por nó — verificar flag no metadata antes de enviar
+    const currentNodeId = flow_context?.node_id || flow_context?.collectedData?.__ai?.ai_node_current_id || 'unknown';
+    const greetingFlagKey = `greeting_sent_node_${currentNodeId}`;
+    const alreadySentGreeting = !!(customerMetadata as any)?.[greetingFlagKey];
+    if (flow_context && !skipGreetingForOtp && !alreadySentGreeting && (isFirstNodeInteraction || isMenuNoise)) {
+      const personaGreetName = persona?.name || 'nossa equipe';
+      const personaRole = (persona as any)?.role || '';
+      // NÃO usar flow_context.objective — contém instruções internas do sistema
+      const greetProduto = (flow_context.collectedData?.produto || flow_context.collectedData?.Produto || '') as string;
+      const greetDepartment = (flow_context.collectedData?.assunto || flow_context.collectedData?.Assunto || '') as string;
+      let greetingMsg = 'Olá! Sou ' + personaGreetName;
+      // Bug fix 1: só incluir role se for diferente do nome
+      if (personaRole && personaRole.toLowerCase() !== personaGreetName.toLowerCase()) {
+        greetingMsg += ', ' + personaRole;
+      }
+      if (greetProduto) greetingMsg += ' do ' + greetProduto;
+      greetingMsg += '.';
+      // Bug fix 2: se não há departamento coletado, extrair especialidade do nome/role da persona
+      if (greetDepartment) {
+        greetingMsg += ' Vou te ajudar com ' + greetDepartment + '.';
+      } else {
+        const specialtyMatch = personaGreetName.match(/helper\s+(.+)/i)
+          || personaRole.match(/helper\s+(.+)/i);
+        if (specialtyMatch) {
+          greetingMsg += ' Posso te ajudar com ' + specialtyMatch[1].toLowerCase() + '.';
+        }
+      }
+      greetingMsg += ' Como posso te ajudar? 😊';
+      // skipLLMForGreeting removido — Modo Jarvis: a LLM processa a mensagem do cliente mesmo após saudação
+      console.log('[ai-autopilot-chat] Saudação proativa será enviada, LLM continuará processando a mensagem do cliente');
+      // Montar assistantMessage diretamente sem chamar a LLM
+      const assistantMessageGreeting = greetingMsg;
+
+      // 🆕 V10 FIX Bug 9: Dedup check — verificar se já existe mensagem IA nos últimos 5s para esta conversa
+      const { data: recentAIMsg } = await supabaseClient
+        .from('messages')
+        .select('id, created_at')
+        .eq('conversation_id', conversationId)
+        .eq('is_ai_generated', true)
+        .gte('created_at', new Date(Date.now() - 5000).toISOString())
+        .limit(1)
+        .maybeSingle();
+
+      if (recentAIMsg) {
+        console.log(`[ai-autopilot-chat] 🛡️ V10 Bug 9: Dedup — mensagem IA já existe (${recentAIMsg.id}) há menos de 5s, skip greeting duplicado`);
+        skipLLMForGreeting = true;
+        // Pular envio do greeting mas continuar o fluxo normalmente
+      }
+
+      // 🆕 V11 FIX Bug 14: Suprimir greeting se há fallback recente (últimos 60s)
+      if (!recentAIMsg) {
+        const { data: recentFallbackMsg } = await supabaseClient
+          .from('messages')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('is_ai_generated', true)
+          .gte('created_at', new Date(Date.now() - 60000).toISOString())
+          .limit(5);
+        const hasFallbackRecent = (recentFallbackMsg || []).some((m: any) => m.id);
+        // Se há 2+ msgs IA nos últimos 60s, contexto já está ativo — skip greeting
+        if (recentFallbackMsg && recentFallbackMsg.length >= 2) {
+          console.log('[ai-autopilot-chat] 🛡️ V11 Bug 14: Fallback recente detectado (60s), suprimindo greeting pós-fallback');
+          skipLLMForGreeting = true;
+        }
+      }
+
+      // Persistir e enviar pelo pipeline normal (apenas se não dedup)
+      const greetSaveErr = recentAIMsg ? null : (await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: assistantMessageGreeting,
+        sender_type: 'user',
+        message_type: 'ai_response',
+        is_ai_generated: true,
+        sender_id: null,
+        status: 'sending',
+        channel: responseChannel,
+      })).error;
+      // 🆕 V5-D: Refetch metadata fresco antes de salvar greeting flag
+      try {
+        const { data: freshGreetConv } = await supabaseClient
+          .from('conversations')
+          .select('customer_metadata')
+          .eq('id', conversationId)
+          .maybeSingle();
+        const freshGreetMeta = (freshGreetConv?.customer_metadata || {}) as Record<string, any>;
+        const updatedMeta = { ...freshGreetMeta, [greetingFlagKey]: true };
+        await supabaseClient.from('conversations').update({ customer_metadata: updatedMeta }).eq('id', conversationId);
+        console.log(`[ai-autopilot-chat] 🏷️ Flag ${greetingFlagKey} salva no metadata`);
+      } catch (flagErr: any) {
+        console.warn('[ai-autopilot-chat] Falha ao salvar flag de saudação:', flagErr);
+      }
+      // 🆕 FIX Resíduo 1: Restaurar assinatura correta de 4 parâmetros
+      if (!greetSaveErr && (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta')) {
+        try {
+          const whatsappResult = await getWhatsAppInstanceForConversation(
+            supabaseClient,
+            conversationId,
+            conversation.whatsapp_instance_id,
+            conversation
+          );
+          if (whatsappResult && whatsappResult.provider === 'meta') {
+            const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+            await supabaseClient.functions.invoke('send-meta-whatsapp', {
+              body: {
+                instance_id: whatsappResult.instance.id,
+                phone_number: targetNumber,
+                message: assistantMessageGreeting,
+                conversation_id: conversationId,
+                skip_db_save: true,
+                is_bot_message: true,
+              }
+            });
+            console.log('[ai-autopilot-chat] ✅ Saudação proativa enviada via WhatsApp Meta');
+          }
+        } catch (e: any) {
+          console.warn('[ai-autopilot-chat] Falha ao enviar saudação proativa:', e);
+        }
+      }
+      // 🆕 FIX: Se a mensagem do cliente é uma saudação pura, a saudação proativa já cobre a resposta.
+      // NÃO chamar a LLM para evitar retorno vazio + fallback desnecessário.
+      const isGreetingOnly = /^(oi|olá|ola|bom dia|boa tarde|boa noite|ei|eae|e aí|hey|hi|hello|tudo bem|tudo bom|blz|beleza|fala|salve|obrigad[oa]|valeu|ok)[\s!.,?]*$/i.test(customerMessage.trim());
+      // 🆕 V10 FIX Bug 7: isProactiveGreeting SEMPRE deve pular LLM — a mensagem [SYSTEM:...] não casa com greeting/menu regex
+      if (isGreetingOnly || isMenuNoise || isProactiveGreeting) {
+        skipLLMForGreeting = true;
+        console.log('[ai-autopilot-chat] ✅ Saudação proativa cobre a resposta — skip LLM para greeting/menu noise/proactive:', customerMessage);
+      } else {
+        console.log('[ai-autopilot-chat] ✅ Saudação proativa concluída, continuando para processar mensagem do cliente pela LLM');
+      }
+    }
+
+    // 🆕 V10 FIX Bug 8: Dígitos de menu PÓS-greeting — se greeting já foi enviado e cliente mandou dígito,
+    // responder contextualizadamente sem chamar LLM (evita zero_confidence → fallback → loop)
+    if (alreadySentGreeting && isMenuNoise && !skipLLMForGreeting) {
+      console.log('[ai-autopilot-chat] 🔢 V10 Bug 8: Dígito de menu pós-greeting detectado, skip LLM:', customerMessage);
+      const menuNoiseResponse = 'Pode me contar com mais detalhes o que você precisa? Estou aqui para ajudar! 😊';
+      // Salvar e enviar resposta contextual
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: menuNoiseResponse,
+        sender_type: 'user',
+        message_type: 'ai_response',
+        is_ai_generated: true,
+        sender_id: null,
+        status: 'sending',
+        channel: responseChannel,
+      });
+      if (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta') {
+        try {
+          const whatsappResult = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, conversation.whatsapp_instance_id, conversation);
+          if (whatsappResult && whatsappResult.provider === 'meta') {
+            const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+            await supabaseClient.functions.invoke('send-meta-whatsapp', {
+              body: { instance_id: whatsappResult.instance.id, phone_number: targetNumber, message: menuNoiseResponse, conversation_id: conversationId, skip_db_save: true, is_bot_message: true }
+            });
+          }
+        } catch (e: any) {
+          console.warn('[ai-autopilot-chat] Falha ao enviar resposta menu noise:', e);
+        }
+      }
+      return new Response(JSON.stringify({ status: 'success', message: menuNoiseResponse, type: 'menu_noise_contextual', skipped: false }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // 🆕 FIX: Se skipLLMForGreeting, retornar sucesso sem chamar a LLM
+    if (skipLLMForGreeting) {
+      console.log('[ai-autopilot-chat] ⏭️ skipLLMForGreeting=true — retornando sucesso sem chamar LLM');
+      return new Response(JSON.stringify({
+        status: 'success',
+        message: 'Greeting handled by proactive message',
+        type: 'greeting_skip',
+        skipped: false,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // 🆕 V11 FIX Bug 12: Detecção PRÉ-LLM de intenção de transferência do cliente
+    // 🆕 V12 FIX Bugs 16/17: Regex expandida para conjugações reais + equipe de suporte + pontuação
+    const CUSTOMER_TRANSFER_INTENT = /\b(me\s+transfer[ea]|transfer[ea]\s+pra|me\s+conect[ae]|falar\s+com\s+(atendente|humano|pessoa|algu[eé]m|suporte|equipe)|quero\s+(um\s+)?(atendente|humano)|passa\s+pra\s+(um\s+)?(atendente|humano)|chama\s+(um\s+)?(atendente|humano)|equipe\s+de\s+suporte|atendimento\s+humano)\b/i;
+    const CUSTOMER_AFFIRM_TRANSFER = /^(sim|quero|pode|por\s+favor|pode\s+ser|claro|ok|quero\s+sim|sim\s+quero|sim[,.]?\s*quero|sim[,.]?\s*por\s+favor|sim[,.]?\s*pode|sim[,.]?\s*pode\s+ser)[\s!.,]*$/i;
+    // 🆕 FIX Bug 42: Detecção pré-LLM de intenção de cancelamento
+    const CUSTOMER_CANCEL_INTENT = /\b(cancelar|cancelamento|encerrar\s+parceria|desativar|quero\s+cancelar|desejo\s+cancelar|preciso\s+cancelar|cancela\s+minha|cancela\s+meu|encerrar\s+contrato|rescindir|rescis[aã]o)\b/i;
+    const customerMsgTrimmed = customerMessage.trim();
+    
+    // 🆕 FIX Bug 40: Para mensagens batched (multi-linha), testar CADA LINHA individualmente
+    const msgLines = customerMsgTrimmed.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const hasTransferIntent = CUSTOMER_TRANSFER_INTENT.test(customerMsgTrimmed) || msgLines.some(line => CUSTOMER_TRANSFER_INTENT.test(line));
+    const hasAffirmTransfer = CUSTOMER_AFFIRM_TRANSFER.test(customerMsgTrimmed) || msgLines.some(line => CUSTOMER_AFFIRM_TRANSFER.test(line));
+    const hasCancelIntent = CUSTOMER_CANCEL_INTENT.test(customerMsgTrimmed) || msgLines.some(line => CUSTOMER_CANCEL_INTENT.test(line));
+
+    if (hasTransferIntent || hasAffirmTransfer) {
+      // Verificar se houve fallback recente (últimos 120s) para confirmar contexto de transferência
+      const { data: recentFallbacks } = await supabaseClient
+        .from('messages')
+        .select('id, content')
+        .eq('conversation_id', conversationId)
+        .eq('is_ai_generated', true)
+        .gte('created_at', new Date(Date.now() - 120000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      const hasFallbackContext = (recentFallbacks || []).length >= 1;
+      // Para intent explícito ("me transfere"), sempre executar. Para afirmativo ("sim"), só com contexto.
+      if (hasTransferIntent || (hasAffirmTransfer && hasFallbackContext)) {
+        console.log(`[ai-autopilot-chat] 🎯 V11 Bug 12: Intenção de transferência detectada PRÉ-LLM: "${customerMsgTrimmed}" (intent=${hasTransferIntent}, affirm=${hasAffirmTransfer}, fallbackContext=${hasFallbackContext})`);
+        // Telemetria
+        Promise.resolve(supabaseClient.from('ai_events').insert({
+          entity_type: 'conversation',
+          entity_id: conversationId,
+          event_type: 'customer_transfer_intent_detected',
+          model: 'system',
+          score: 0,
+          output_json: { message: customerMsgTrimmed, hasTransferIntent, hasAffirmTransfer, hasFallbackContext },
+        })).catch(() => {});
+
+        const transferMsg = 'Entendido! Vou te transferir agora para um atendente. Um momento, por favor! 🙏';
+        // Salvar mensagem
+        await supabaseClient.from('messages').insert({
+          conversation_id: conversationId,
+          content: transferMsg,
+          sender_type: 'user',
+          message_type: 'ai_response',
+          is_ai_generated: true,
+          sender_id: null,
+          status: 'sending',
+          channel: responseChannel,
+        });
+        if (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta') {
+          try {
+            const whatsappResult = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, conversation.whatsapp_instance_id, conversation);
+            if (whatsappResult && whatsappResult.provider === 'meta') {
+              const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+              await supabaseClient.functions.invoke('send-meta-whatsapp', {
+                body: { instance_id: whatsappResult.instance.id, phone_number: targetNumber, message: transferMsg, conversation_id: conversationId, skip_db_save: true, is_bot_message: true }
+              });
+            }
+          } catch (e: any) {
+            console.warn('[ai-autopilot-chat] Falha ao enviar msg transfer intent:', e);
+          }
+        }
+        return new Response(JSON.stringify({
+          flowExit: true,
+          reason: 'customer_transfer_intent',
+          hasFlowContext: !!flow_context,
+          response: transferMsg,
+          message: transferMsg,
+          flow_context: flow_context ? { flow_id: flow_context.flow_id, node_id: flow_context.node_id } : undefined,
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
+    // 🆕 FIX Bug 42: Detecção pré-LLM de intenção de cancelamento
+    // Quando o nó tem forbidCancellation=true (rota de escape existe), detectar cancelamento antes da LLM
+    if (hasCancelIntent && flow_context?.forbidCancellation) {
+      console.log(`[ai-autopilot-chat] 🎯 Bug 42: Intenção de CANCELAMENTO detectada PRÉ-LLM: "${customerMsgTrimmed}" — disparando [[FLOW_EXIT:cancelamento]]`);
+      // Telemetria
+      Promise.resolve(supabaseClient.from('ai_events').insert({
+        entity_type: 'conversation',
+        entity_id: conversationId,
+        event_type: 'cancel_intent_pre_llm',
+        model: 'system',
+        score: 0,
+        output_json: { message: customerMsgTrimmed, hasCancelIntent: true, forbidCancellation: true },
+      })).catch(() => {});
+
+      const cancelMsg = 'Entendido! Vou direcionar você para o setor responsável pelo cancelamento. Um momento, por favor! 🙏';
+      // Salvar mensagem
+      await supabaseClient.from('messages').insert({
+        conversation_id: conversationId,
+        content: cancelMsg,
+        sender_type: 'user',
+        message_type: 'ai_response',
+        is_ai_generated: true,
+        sender_id: null,
+        status: 'sending',
+        channel: responseChannel,
+      });
+      if (responseChannel === 'whatsapp' || responseChannel === 'whatsapp_meta') {
+        try {
+          const whatsappResult = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, conversation.whatsapp_instance_id, conversation);
+          if (whatsappResult && whatsappResult.provider === 'meta') {
+            const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+            await supabaseClient.functions.invoke('send-meta-whatsapp', {
+              body: { instance_id: whatsappResult.instance.id, phone_number: targetNumber, message: cancelMsg, conversation_id: conversationId, skip_db_save: true, is_bot_message: true }
+            });
+          }
+        } catch (e: any) {
+          console.warn('[ai-autopilot-chat] Falha ao enviar msg cancel intent:', e);
+        }
+      }
+      return new Response(JSON.stringify({
+        flowExit: true,
+        reason: 'cancel_intent_pre_llm',
+        ai_exit_intent: 'cancelamento',
+        hasFlowContext: !!flow_context,
+        response: cancelMsg,
+        message: cancelMsg,
+        flow_context: flow_context ? { flow_id: flow_context.flow_id, node_id: flow_context.node_id } : undefined,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
 
     // 🔧 FIX CRÍTICO: Chamada LLM principal — estava ausente causando ReferenceError silencioso
@@ -7193,7 +7894,7 @@ ${canShowFinancialData
     } else if (isFinancialActionRequest && hasRecentOTPVerification) {
       // 🆕 FIX: OTP JÁ verificado — iniciar coleta de dados financeiros (PIX/banco)
       console.log('[ai-autopilot-chat] ✅ OTP já verificado, fallback inicia coleta de dados financeiros');
-      assistantMessage = `Sua identidade já foi verificada com sucesso! ✅\n\n${structuredCollectionMessage}`;
+      assistantMessage = 'Sua identidade já foi verificada com sucesso! ✅ Para prosseguir com sua solicitação, preciso de alguns dados. Qual é a sua chave PIX para recebimento?';
     } else if (isFinancialRequest) {
       // 🆕 FIX Resíduo 4: Resposta contextualizada em vez de genérica
       assistantMessage = 'Entendi sua situação financeira. Vou verificar o que está acontecendo. Pode me informar o e-mail utilizado na compra para que eu localize seus dados?';
