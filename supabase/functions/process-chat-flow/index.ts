@@ -3392,10 +3392,12 @@ serve(async (req) => {
         // Defense: if collectedData doesn't have the flag, check DB for recent email verification
         if (!otpVerifiedInFlow && conversationId) {
           try {
+            const otpContactId = activeContactData?.id;
+            if (!otpContactId) throw new Error('No activeContactData.id available for OTP check');
             const contactForOtp = await supabaseClient
               .from('contacts')
               .select('email')
-              .eq('id', contactId)
+              .eq('id', otpContactId)
               .maybeSingle();
             if (contactForOtp?.data?.email) {
               const { data: recentOtp } = await supabaseClient

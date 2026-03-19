@@ -6859,13 +6859,40 @@ ${fieldListFormatted}
 
 ⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução do seu caso e precisaríamos entrar em contato novamente para corrigir. Seja claro no motivo da sua solicitação!`;
 
-
-
+    // 🆕 FIX: Detectar intenção original do cliente no histórico para injetar no prompt pós-OTP
+    let originalIntentLabel = '';
+    if (flow_context?.otpVerified || hasRecentOTPVerification) {
+      try {
+        const { data: intentMsgs } = await supabaseClient
+          .from('messages')
+          .select('content')
+          .eq('conversation_id', conversationId)
+          .eq('sender_type', 'customer')
+          .order('created_at', { ascending: false })
+          .limit(15);
+        if (intentMsgs) {
+          const allText = intentMsgs.map(m => (m.content || '').toLowerCase()).join(' ');
+          if (/saq(ue|ar)|withdraw|quero\s+sac?ar|sacar\s+saldo/i.test(allText)) {
+            originalIntentLabel = 'SAQUE de saldo';
+          } else if (/reembolso|estorno|devolu[çc][ãa]o|devolver/i.test(allText)) {
+            originalIntentLabel = 'REEMBOLSO';
+          } else if (/cancelar|cancelamento|desistir/i.test(allText)) {
+            originalIntentLabel = 'CANCELAMENTO';
+          }
+        }
+      } catch (_) { /* non-blocking */ }
+      if (originalIntentLabel) {
+        console.log('[ai-autopilot-chat] 🎯 Intent detected for OTP prompt injection:', originalIntentLabel);
+      }
+    }
 
     const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? `
 
 ✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
-
+${originalIntentLabel ? `
+🎯 INTENÇÃO ORIGINAL DO CLIENTE: O cliente JÁ informou que deseja realizar um **${originalIntentLabel}**.
+NÃO pergunte novamente o que ele quer fazer. NÃO ofereça menu A/B. Prossiga DIRETAMENTE com a coleta de dados para ${originalIntentLabel}.
+` : ''}
 🎯 APÓS VERIFICAÇÃO OTP — SUA TAREFA PRINCIPAL É COLETAR DADOS:
 Você está AUTORIZADO a processar solicitações financeiras. Sua tarefa agora é COLETAR os dados necessários para criar o ticket.
 
@@ -8453,23 +8480,104 @@ Para liberar operações financeiras como saque, preciso transferir você para u
               });
             } else {
               // CPF OK - Pode prosseguir com fluxo financeiro
-              const maskedCPFVerified = `***.***.***-${verifiedContact.document.slice(-2)}`;
-              
-              assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}!
+              console.log('[ai-autopilot-chat] ✅ CPF OK — detectando intenção do histórico para resposta inteligente');
 
-Agora posso te ajudar com operações financeiras. Você mencionou algo sobre saque ou reembolso. 
+              // 🆕 FIX: Sync __ai_otp_verified + customer_validated ao flow_state IMEDIATAMENTE
+              try {
+                const { data: activeFlowState } = await supabaseClient
+                  .from('chat_flow_states')
+                  .select('id, collected_data')
+                  .eq('conversation_id', conversationId)
+                  .in('status', ['active', 'waiting_input', 'in_progress'])
+                  .order('started_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
 
-Você quer:
+                if (activeFlowState) {
+                  const existingData = (activeFlowState.collected_data || {}) as Record<string, any>;
+                  await supabaseClient
+                    .from('chat_flow_states')
+                    .update({
+                      collected_data: {
+                        ...existingData,
+                        __ai_otp_verified: true,
+                        customer_validated: true,
+                        __ai_otp_step: undefined,
+                      },
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', activeFlowState.id);
+                  console.log('[ai-autopilot-chat] ✅ OTP synced to flow_state:', activeFlowState.id);
+                }
+              } catch (syncErr) {
+                console.error('[ai-autopilot-chat] ⚠️ Failed to sync OTP to flow_state:', syncErr);
+              }
+
+              // 🆕 FIX: Detectar intenção do histórico recente para evitar perguntas redundantes
+              let detectedIntent: 'saque' | 'reembolso' | 'cancelamento' | null = null;
+              try {
+                const { data: recentMsgs } = await supabaseClient
+                  .from('messages')
+                  .select('content, sender_type')
+                  .eq('conversation_id', conversationId)
+                  .eq('sender_type', 'customer')
+                  .order('created_at', { ascending: false })
+                  .limit(10);
+
+                if (recentMsgs) {
+                  const allCustomerText = recentMsgs.map(m => (m.content || '').toLowerCase()).join(' ');
+                  if (/saq(ue|ar)|withdraw|quero\s+sac?ar|sacar\s+saldo/i.test(allCustomerText)) {
+                    detectedIntent = 'saque';
+                  } else if (/reembolso|estorno|devolu[çc][ãa]o|devolver/i.test(allCustomerText)) {
+                    detectedIntent = 'reembolso';
+                  } else if (/cancelar|cancelamento|desistir/i.test(allCustomerText)) {
+                    detectedIntent = 'cancelamento';
+                  }
+                }
+              } catch (histErr) {
+                console.warn('[ai-autopilot-chat] ⚠️ Failed to detect intent from history:', histErr);
+              }
+
+              console.log('[ai-autopilot-chat] 🎯 Detected intent from history:', detectedIntent);
+
+              // Build smart collection fields
+              const FIELD_LABELS_OTP: Record<string, string> = {
+                name: 'Nome', email: 'Email', phone: 'Telefone',
+                cpf: 'CPF', pix_key: 'Chave PIX', bank: 'Banco',
+                reason: 'Motivo', amount: 'Valor', address: 'Endereço'
+              };
+              const otpCollectionFields = flow_context?.smartCollectionFields && flow_context.smartCollectionFields.length > 0
+                ? flow_context.smartCollectionFields
+                : ['pix_key', 'bank', 'reason', 'amount'];
+              const otpFieldList = otpCollectionFields
+                .map((f: string) => `${FIELD_LABELS_OTP[f] || f}:`)
+                .join('\n');
+
+              if (detectedIntent) {
+                // Intent detected — skip A/B question, go straight to data collection
+                assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅
+
+Entendi que você quer realizar um **${detectedIntent}**. Para dar andamento, preciso dos seguintes dados:
+
+${otpFieldList}
+
+⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
+              } else {
+                // No clear intent — fallback to A/B question
+                assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}!
+
+Agora posso te ajudar com operações financeiras. Você quer:
 **A)** Cancelar sua assinatura/curso (comprado na Kiwify)?
 **B)** Sacar o saldo da sua carteira (Seu Armazém Drop)?`;
+              }
               
               // Log interaction
               await supabaseClient.from('interactions').insert({
                 customer_id: verifiedContact.id,
                 type: 'note',
-                content: `Identidade verificada via OTP - Acesso financeiro liberado`,
+                content: `Identidade verificada via OTP - Acesso financeiro liberado. Intenção detectada: ${detectedIntent || 'nenhuma'}`,
                 channel: responseChannel,
-                metadata: { source: 'financial_barrier', otp_verified: true, financial_access_granted: true }
+                metadata: { source: 'financial_barrier', otp_verified: true, financial_access_granted: true, detected_intent: detectedIntent }
               });
             }
           } catch (error) {
