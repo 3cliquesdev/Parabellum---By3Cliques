@@ -478,6 +478,48 @@ Deno.serve(async (req) => {
               continue;
             }
 
+            // 🆕 SAFETY NET: Verificar se existe flow ativo com ai_exit_intent
+            // Se sim, transferir para o departamento correto em vez de fechar
+            const { data: activeFlowState } = await supabase
+              .from('chat_flow_states')
+              .select('id, collected_data')
+              .eq('conversation_id', conv.id)
+              .in('status', ['active', 'waiting_input', 'in_progress'])
+              .order('started_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (activeFlowState?.collected_data) {
+              const cd = activeFlowState.collected_data as Record<string, any>;
+              const exitIntent = cd.ai_exit_intent;
+              if (exitIntent) {
+                const INTENT_DEPT_MAP: Record<string, string> = {
+                  'comercial': 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c',
+                  'internacional': '68195a0f-1f9e-406b-b714-c889b4145f60',
+                  'comercial_internacional': '68195a0f-1f9e-406b-b714-c889b4145f60',
+                  'financeiro': 'af3c75a9-2e3f-49f1-8e0b-7fb3f4b5ee45',
+                  'saque': 'af3c75a9-2e3f-49f1-8e0b-7fb3f4b5ee45',
+                  'cancelamento': 'b7149bf4-1356-4ca5-bc9a-8caacf7b6e80',
+                };
+                const transferDeptId = INTENT_DEPT_MAP[exitIntent];
+                if (transferDeptId) {
+                  console.log(`[Auto-Close] 🔄 Safety net: conv ${conv.id} tem ai_exit_intent="${exitIntent}" → transferindo para dept ${transferDeptId} em vez de fechar`);
+                  await supabase.from('conversations').update({
+                    department: transferDeptId,
+                    ai_mode: 'waiting_human',
+                    assigned_to: null,
+                  }).eq('id', conv.id);
+                  // Marcar flow como transferred
+                  await supabase.from('chat_flow_states').update({
+                    status: 'transferred',
+                    completed_at: new Date().toISOString(),
+                  }).eq('id', activeFlowState.id);
+                  console.log(`[Auto-Close] ✅ Safety net applied: conv ${conv.id} → dept ${transferDeptId} (waiting_human)`);
+                  continue;
+                }
+              }
+            }
+
             const AI_CLOSE_MESSAGE = INACTIVITY_CLOSE_MESSAGE;
 
             // Inserir mensagem de encerramento
