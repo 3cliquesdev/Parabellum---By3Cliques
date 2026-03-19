@@ -59,7 +59,7 @@ export default function Departments() {
   const { data: categories, isLoading: loadingCats } = useTicketCategories();
   const { data: origins, isLoading: loadingOrigins } = useTicketOrigins();
   const { data: slaPolicies } = useSLAPolicies();
-  const { settings: fieldSettings, updateField } = useTicketFieldSettings();
+  const { settings: fieldSettings, visibility: fieldVisibility, updateField, updateVisibility } = useTicketFieldSettings();
   const { tagsRequired: convTagsRequired, updateTagsRequired } = useConversationCloseSettings();
 
   const unitLabels: Record<string, string> = { hours: "h", business_hours: "h úteis", business_days: "d úteis" };
