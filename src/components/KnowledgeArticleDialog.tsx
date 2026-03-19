@@ -7,6 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCreateKnowledgeArticle } from "@/hooks/useCreateKnowledgeArticle";
 import { useUpdateKnowledgeArticle } from "@/hooks/useUpdateKnowledgeArticle";
 import { useGenerateEmbedding } from "@/hooks/useGenerateEmbedding";
@@ -14,7 +16,7 @@ import { useFindSimilarArticles } from "@/hooks/useFindSimilarArticles";
 import { useKnowledgeCategories } from "@/hooks/useKnowledgeCategories";
 import { useProductTagNames, useCreateProductTag } from "@/hooks/useProductTags";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, X, ChevronsUpDown, Plus } from "lucide-react";
 
 interface KnowledgeArticle {
   id: string;
