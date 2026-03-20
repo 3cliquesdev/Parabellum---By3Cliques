@@ -4945,7 +4945,14 @@ Responda APENAS: skip ou search`
       console.log('[ai-autopilot-chat] 🔓 OTP verificado + dados estruturados — forçando LLM principal com tools');
     }
     
-    if (isStrictRAGMode && !isOperationalTopic && !isGreetingBypass && !looksLikeStructuredData && OPENAI_API_KEY && knowledgeArticles.length > 0) {
+    // 🆕 FIX Bug B (#EEFFF1DD): Bypass Strict RAG para ações financeiras
+    // Strict RAG não tem tools (create_ticket) — ações financeiras devem ir direto ao LLM principal
+    const isFinancialBypass = isFinancialAction || isWithdrawalRequest;
+    if (isFinancialBypass) {
+      console.log('[ai-autopilot-chat] 💰 Ação financeira detectada — BYPASS Strict RAG para LLM principal com tools');
+    }
+
+    if (isStrictRAGMode && !isOperationalTopic && !isGreetingBypass && !looksLikeStructuredData && !isFinancialBypass && OPENAI_API_KEY && knowledgeArticles.length > 0) {
       console.log('[ai-autopilot-chat] 🎯 STRICT RAG MODE ATIVO - Usando GPT-5 exclusivo');
       
       const strictResult = await callStrictRAG(
