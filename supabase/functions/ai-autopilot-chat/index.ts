@@ -6316,7 +6316,53 @@ Posso ajudar em mais alguma coisa?`;
       }
     }
 
-    // FASE 3 & 4: Identity Wall + Diferenciação Cliente vs Lead
+    // ============================================================
+    // 🎯 GUARD PÓS-OTP: Detecção de intent de saque quando OTP foi
+    // verificado mas LLM ainda não coletou dados PIX
+    // ============================================================
+    if (hasRecentOTPVerification && !looksLikeSaqueData) {
+      const historyUserMsgs = messageHistory
+        .filter((m: any) => m.role === 'user')
+        .slice().reverse().slice(0, 8);
+      const hasSaqueIntent = historyUserMsgs.some((m: any) => 
+        /quero\s+sacar|saque|sacar|carteira|retirar|retirada/i.test(m.content)
+      );
+      const otp_reason = (conversationMetadata as any)?.otp_reason;
+      
+      if (hasSaqueIntent || otp_reason === 'withdrawal') {
+        // Verificar se já recebeu template de coleta (evitar duplicata)
+        const recentCollectionMsg = messageHistory
+          .filter((m: any) => m.role === 'assistant')
+          .slice().reverse().slice(0, 3)
+          .some((m: any) => /chave\s*PIX|Nome\s*completo.*Tipo.*PIX/i.test(m.content));
+        
+        if (!recentCollectionMsg) {
+          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE INTENT DETECTED — enviando template de coleta PIX');
+          const pixCollectResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
+          
+          const { data: savedMsgPix } = await supabaseClient.from('messages').insert({
+            conversation_id: conversationId, content: pixCollectResponse,
+            sender_type: 'user', is_ai_generated: true, channel: responseChannel
+          }).select().single();
+          
+          if (responseChannel === 'whatsapp' && contact?.phone && conversation) {
+            try {
+              const wrPix = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, contact, conversation);
+              if (wrPix) await sendWhatsAppMessage(supabaseClient, wrPix, contact.phone, pixCollectResponse, conversationId, contact.whatsapp_id);
+            } catch (sendErr) {
+              console.error('[ai-autopilot-chat] ❌ Post-OTP PIX WhatsApp send failed:', sendErr);
+            }
+          }
+          
+          return new Response(JSON.stringify({
+            response: pixCollectResponse, messageId: savedMsgPix?.id,
+            debug: { reason: 'post_otp_saque_intent_collect_pix' }
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+      }
+    }
+
+
     let identityWallNote = '';
     
     // Detectar se é a primeira mensagem pós-verificação (FASE 3)
