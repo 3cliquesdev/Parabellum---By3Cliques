@@ -98,7 +98,7 @@ serve(async (req) => {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 650px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">Seu Armazém Drop</h1>
+          <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">${ORG_NAME}</h1>
         </div>
         <div style="background: #2563EB; color: white; padding: 20px; text-align: center;">
           <h1 style="margin: 0; font-size: 24px;">Nova Proposta Comercial</h1>
