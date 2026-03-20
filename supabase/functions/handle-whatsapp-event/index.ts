@@ -959,8 +959,9 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   // Telefone existe = Cliente = Suporte
   // Telefone novo = Lead = Comercial
   // ============================================================
-  const SUPORTE_DEPT_ID = depts.SUPORTE_ID;
-  const COMERCIAL_DEPT_ID = depts.COMERCIAL_ID;
+  const localDepts = await resolveDepartments(supabase);
+  const SUPORTE_DEPT_ID = localDepts.SUPORTE_ID;
+  const COMERCIAL_DEPT_ID = localDepts.COMERCIAL_ID;
 
   // isKnownCustomer já foi definido lá em cima baseado no telefone existir no banco
   let targetDepartmentId = isKnownCustomer ? SUPORTE_DEPT_ID : COMERCIAL_DEPT_ID;
