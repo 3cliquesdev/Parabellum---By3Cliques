@@ -111,7 +111,8 @@ serve(async (req) => {
 
       case 'set_copilot':
         updateData.ai_mode = 'copilot';
-        if (!conv.department && effectiveDept) updateData.department = effectiveDept;
+        if (departmentId) updateData.department = departmentId;
+        else if (!conv.department && effectiveDept) updateData.department = effectiveDept;
         break;
 
       case 'update_department':
