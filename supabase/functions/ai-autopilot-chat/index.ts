@@ -7069,7 +7069,28 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
       }
     }
 
-    const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? `
+    const nodeObjectiveForOTP = flow_context?.objective;
+    const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? (nodeObjectiveForOTP ? `
+
+✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
+${originalIntentLabel ? `
+🎯 INTENÇÃO ORIGINAL DO CLIENTE: O cliente JÁ informou que deseja realizar um **${originalIntentLabel}**.
+NÃO pergunte novamente o que ele quer fazer. NÃO ofereça menu A/B. Prossiga DIRETAMENTE com a coleta de dados para ${originalIntentLabel}.
+` : ''}
+🎯 SIGA O OBJECTIVE DO NÓ (PRIORIDADE MÁXIMA):
+${nodeObjectiveForOTP}
+
+CAMPOS A COLETAR (referência interna — NÃO envie tudo de uma vez, a menos que o objective permita):
+${structuredCollectionMessage}
+
+REGRAS PÓS-OTP:
+- Siga o objective acima como prioridade máxima (ex: se diz "pergunte um campo por vez", faça isso)
+- NÃO busque na base de conhecimento para pedidos de saque/reembolso — sua ação é COLETAR dados.
+- NÃO emita [[FLOW_EXIT]]. Permaneça no nó até coletar TODOS os campos necessários.
+- Após o cliente responder com todos os dados, confirme e crie o ticket com create_ticket.
+- NÃO peça verificação adicional — o OTP já foi validado.
+- Se o cliente já informou algum dado na conversa anterior, NÃO peça novamente.
+` : `
 
 ✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
 ${originalIntentLabel ? `
@@ -7091,7 +7112,7 @@ REGRAS PÓS-OTP:
 - Após o cliente responder com todos os dados, confirme e crie o ticket com create_ticket.
 - NÃO peça verificação adicional — o OTP já foi validado.
 - Se o cliente já informou algum dado na conversa anterior, NÃO peça novamente.
-` : '';
+`) : '';
 
     // 🚫 TRAVA CANCELAMENTO: Injetar instruções diretamente no prompt da LLM
     const cancellationGuardInstruction = flowForbidCancellation ? `
