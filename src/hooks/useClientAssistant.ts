@@ -53,7 +53,8 @@ export function useClientAssistant() {
     },
   });
 
-  const PORTAL_PERSONA_ID = "d4dc2026-bb47-4f2c-b675-b8d301240786";
+  // Fallback para UUID legado se persona não encontrada por nome
+  const PORTAL_PERSONA_ID = portalPersona?.id || "d4dc2026-bb47-4f2c-b675-b8d301240786";
 
   const invokeAssistant = useCallback(async (conversationId: string, messageText: string, contactName: string) => {
     const { data, error } = await supabase.functions.invoke("ai-autopilot-chat", {
