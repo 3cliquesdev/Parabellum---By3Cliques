@@ -1193,7 +1193,7 @@ Prazo: conforme prazo informado
 Você receberá um email confirmando a abertura do chamado.
 Quando o saque for processado, você será notificado por email também.
 
-IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu CPF. Não é possível transferir para conta de terceiros.`;
+Acompanhe o status pelo protocolo acima.`;
   }
   
   const ticketMessages: Record<string, string> = {
@@ -1571,6 +1571,19 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // ═══════════════════════════════════════════════════════════════
+    // 🏢 RESOLUÇÃO CENTRALIZADA DE DEPARTAMENTOS (1 query, usado em todo o handler)
+    // Fallbacks = UUIDs históricos, caso a query falhe ou o dept não exista
+    // ═══════════════════════════════════════════════════════════════
+    const { data: _deptRows } = await supabaseClient
+      .from('departments')
+      .select('id, name')
+      .in('name', ['Comercial - Nacional', 'Suporte']);
+    const _deptMap = new Map((_deptRows || []).map((d: any) => [d.name, d.id]));
+    const DEPT_COMERCIAL_ID = _deptMap.get('Comercial - Nacional') || 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+    const DEPT_SUPORTE_ID  = _deptMap.get('Suporte') || '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+    console.log('[ai-autopilot-chat] 🏢 Departamentos resolvidos:', { DEPT_COMERCIAL_ID, DEPT_SUPORTE_ID });
+
     let { conversationId, customerMessage, maxHistory = 20, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
 
     // 🔒 Proactive greeting: allow empty customerMessage when flow_context is present
@@ -1865,7 +1878,7 @@ serve(async (req) => {
       console.warn('[ai-autopilot-chat] 🛒 TRAVA COMERCIAL (ENTRADA): Intenção comercial detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
       const commercialMsg = 'Á“timo! Vou te conectar com nosso time comercial para te ajudar com isso.';
-      const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+      // Usa DEPT_COMERCIAL_ID centralizado (resolvido no início do handler)
       
       const hasFlowContext = !!(flow_context);
       
@@ -2651,8 +2664,7 @@ serve(async (req) => {
           
           console.log('[ai-autopilot-chat] âœ… Email salvo no contato e metadata limpo');
           
-          const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-          const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+           // Usa DEPT_COMERCIAL_ID / DEPT_SUPORTE_ID centralizados
           
           if (!verifyError && verifyResult?.found) {
             // CLIENTE EXISTENTE - Ir para Suporte
@@ -3914,7 +3926,7 @@ serve(async (req) => {
               autoResponse = 'Nao encontrei esse email na nossa base de clientes.\n\nVoce possui outro email que possa ter usado na compra? Se sim, por favor envie aqui.\n\nSe esse e o unico email, me avise que vou te encaminhar para um atendente.';
               skipEarlyReturn = true;
             } else {
-            const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+            // Usa DEPT_COMERCIAL_ID centralizado
 
             // Buscar template de lead direcionado
             let leadMessage = await getMessageTemplate(supabaseClient, 'lead_direcionado_comercial', {});
@@ -4925,7 +4937,7 @@ Responda APENAS: skip ou search`
     }
     
     // 🆕 CORREÇNÃO: Cliente validado vai para SUPORTE, não Comercial
-    const SUPORTE_DEPT_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+    const SUPORTE_DEPT_ID = DEPT_SUPORTE_ID; // Alias para compatibilidade local
     if (isValidatedCustomer) {
       const { data: currentConv } = await supabaseClient
         .from('conversations')
@@ -5630,8 +5642,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       
       // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente â†’ PEDIR EMAIL PRIMEIRO
       const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated && !isPhoneVerified;
-      const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-      const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      // Usa DEPT_COMERCIAL_ID / DEPT_SUPORTE_ID centralizados
       
       console.log('[ai-autopilot-chat] 🎯 Handoff department decision:', {
         isLeadWithoutEmail,
@@ -8532,7 +8543,7 @@ Para liberar operações financeiras como saque, preciso transferir você para u
               // Handoff para humano
               await supabaseClient
                 .from('conversations')
-                .update({ ai_mode: 'copilot', department: conversation.department || '36ce66cd-7414-4fc8-bd4a-268fecc3f01a' })
+                .update({ ai_mode: 'copilot', department: conversation.department || DEPT_SUPORTE_ID })
                 .eq('id', conversationId);
 
               await supabaseClient.functions.invoke('route-conversation', {
@@ -9265,7 +9276,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
               if (!flow_context) {
                 await supabaseClient
                   .from('conversations')
-                  .update({ ai_mode: 'copilot', department: conversation.department || '36ce66cd-7414-4fc8-bd4a-268fecc3f01a' })
+                  .update({ ai_mode: 'copilot', department: conversation.department || DEPT_SUPORTE_ID })
                   .eq('id', conversationId);
                 console.log('[ai-autopilot-chat] âœ… ai_mode mudado para copilot');
               } else {
@@ -9945,8 +9956,7 @@ Conversa: ${conversationId}`;
       
       // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente â†’ Comercial
       const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated;
-      const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-      const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      // Usa DEPT_COMERCIAL_ID / DEPT_SUPORTE_ID centralizados
       
       // âœ… Respeitar departamento definido pelo fluxo (nunca sobrescrever)
       const handoffDepartment = conversation.department || 
@@ -10946,7 +10956,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
             .from('conversations')
             .update({ 
               ai_mode: 'copilot',
-              department: conversation.department || '36ce66cd-7414-4fc8-bd4a-268fecc3f01a',
+              department: conversation.department || DEPT_SUPORTE_ID,
               last_message_at: new Date().toISOString()
             })
             .eq('id', conversationId);
