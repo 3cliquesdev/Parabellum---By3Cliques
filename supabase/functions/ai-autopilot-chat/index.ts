@@ -9916,9 +9916,12 @@ Conversa: ${conversationId}`;
         if (hasRecentOTPVerification && hasSaqueInFallback) {
           console.log('[ai-autopilot-chat] 🛡️ FIX#57AA2190: FALLBACK BLOQUEADO — OTP verificado + saque detectado');
           const nodeObjectiveFbBlocker = flow_context?.objective;
-          const pixResponseFb = nodeObjectiveFbBlocker
-            ? `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`
-            : buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone);
+          const hasDescTemplateFbBlocker = !!(flow_context as any)?.ticketConfig?.description_template;
+          const pixResponseFb = hasDescTemplateFbBlocker
+            ? buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone)
+            : (nodeObjectiveFbBlocker
+              ? `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`
+              : buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone));
           const { data: savedMsgFb } = await supabaseClient.from('messages').insert({
             conversation_id: conversationId, content: pixResponseFb,
             sender_type: 'user', is_ai_generated: true, channel: responseChannel
