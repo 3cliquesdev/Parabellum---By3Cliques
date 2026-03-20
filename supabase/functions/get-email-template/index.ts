@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveBranding } from "../_shared/branding-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -147,14 +148,15 @@ serve(async (req) => {
       sender = data;
     }
 
-    // Fallback sender values
-    const fromName = sender?.from_name || "3Cliques";
-    const fromEmail = sender?.from_email || "contato@mail.3cliques.net";
+    // Fallback sender values via branding resolver
+    const _brand = await resolveBranding(supabase, { isEmployee: !is_customer_email });
+    const fromName = sender?.from_name || _brand.fromName;
+    const fromEmail = sender?.from_email || _brand.fromEmail;
 
     // 4. Build HTML
-    const headerColor = branding?.header_color || "#1e3a5f";
-    const primaryColor = branding?.primary_color || "#2563eb";
-    const brandName = branding?.name || "3Cliques";
+    const headerColor = branding?.header_color || _brand.headerColor;
+    const primaryColor = branding?.primary_color || _brand.primaryColor;
+    const brandName = branding?.name || _brand.brandName;
     const footerText = branding?.footer_text || `${brandName} - Equipe de Suporte`;
     const logoUrl = branding?.logo_url;
 

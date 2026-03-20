@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveBranding } from "../_shared/branding-resolver.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,13 +26,9 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Resolver nome da organização dinamicamente
-    const { data: orgRow } = await supabase
-      .from('organizations')
-      .select('name')
-      .limit(1)
-      .maybeSingle();
-    const ORG_NAME = orgRow?.name || 'Sua Empresa';
+    // Resolver branding dinâmico
+    const brand = await resolveBranding(supabase);
+    const ORG_NAME = brand.brandName;
 
     // Fetch quote with all related data
     const { data: quote, error: quoteError } = await supabase
@@ -207,7 +204,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: '3Cliques Comercial <contato@mail.3cliques.net>',
+        from: `${brand.fromName} <${brand.fromEmail}>`,
         to: [contact.email],
         subject: `Proposta Comercial #${quote.quote_number} - ${contact.company || contact.first_name}`,
         html: emailHtml,

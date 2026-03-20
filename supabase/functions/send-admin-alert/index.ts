@@ -104,7 +104,7 @@ serve(async (req) => {
 
     <div class="footer">
       <p>Este é um email automático do Sistema de Monitoramento IA.<br>
-      Parabellum | 3Cliques - Sistema CRM</p>
+      Sistema CRM - Monitoramento</p>
     </div>
   </div>
 </body>

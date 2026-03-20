@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { resolveBranding } from "../_shared/branding-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -525,34 +526,13 @@ Deno.serve(async (req) => {
           } else if (dedupeErr) {
             console.warn(`[notify-ticket-event] Customer dedupe error:`, dedupeErr);
           } else if (dedupeInserted && dedupeInserted.length > 0) {
-            // Fetch branding
-            let headerColor = "#1e3a5f";
-            let brandName = "3Cliques";
-            let footerText = "3Cliques - Equipe de Suporte";
-            let fromName = "3Cliques Suporte";
-            let fromEmail = "contato@mail.3cliques.net";
-
-            try {
-              const { data: branding } = await supabase
-                .from("email_branding")
-                .select("*")
-                .eq("is_default_customer", true)
-                .single();
-              if (branding) {
-                headerColor = branding.header_color || headerColor;
-                brandName = branding.name || brandName;
-                footerText = branding.footer_text || footerText;
-              }
-              const { data: sender } = await supabase
-                .from("email_senders")
-                .select("*")
-                .eq("is_default", true)
-                .single();
-              if (sender) {
-                fromName = sender.from_name;
-                fromEmail = sender.from_email;
-              }
-            } catch (_) { /* use defaults */ }
+            // Fetch branding via shared resolver
+            const brand = await resolveBranding(supabase);
+            const headerColor = brand.headerColor;
+            const brandName = brand.brandName;
+            const footerText = brand.footerText;
+            const fromName = brand.fromName;
+            const fromEmail = brand.fromEmail;
 
             const ticketNumber = ticket.ticket_number || ticket.id.slice(0, 8).toUpperCase();
             const customerName = customer.first_name || "Cliente";

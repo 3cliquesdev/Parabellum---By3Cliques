@@ -23,7 +23,7 @@ interface BroadcastAIQueueDialogProps {
   queueCount: number;
 }
 
-const DEFAULT_MESSAGE = `Olá! 👋 Sou a assistente virtual da 3Cliques. 
+const DEFAULT_MESSAGE = `Olá! 👋 Sou a assistente virtual. 
 
 Tivemos uma instabilidade técnica e sua mensagem pode não ter sido respondida. 
 

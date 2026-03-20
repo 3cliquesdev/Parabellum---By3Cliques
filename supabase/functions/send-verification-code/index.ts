@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { resolveBranding } from "../_shared/branding-resolver.ts";
 
 // Resend helper (inline to avoid CDN issues)
 class Resend {
@@ -47,29 +48,31 @@ serve(async (req) => {
 
     console.log('[send-verification-code] Gerando código para:', email, 'type:', type);
 
-    // Define branding based on type
+    // Resolver branding dinamicamente do banco
+    const brand = await resolveBranding(supabase, { isEmployee: type !== 'customer' });
+
     const branding = type === 'customer' ? {
-      name: '3Cliques',
-      from: '3Cliques <contato@mail.3cliques.net>',
-      subject: 'Código de Verificação - 3Cliques',
-      logo: 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo_seu_armazem-drop.png',
+      name: brand.brandName,
+      from: `${brand.fromName} <${brand.fromEmail}>`,
+      subject: `Código de Verificação - ${brand.brandName}`,
+      logo: brand.logoUrl || '',
       greeting: 'Olá!',
-      systemName: '3Cliques',
-      primaryColor: '#f97316',
-      headerColor: '#1e293b',
-      description: 'Recebemos uma solicitação de verificação no 3Cliques.',
-      footer: 'Equipe 3Cliques'
+      systemName: brand.brandName,
+      primaryColor: brand.primaryColor,
+      headerColor: brand.headerColor,
+      description: `Recebemos uma solicitação de verificação no ${brand.brandName}.`,
+      footer: `Equipe ${brand.brandName}`
     } : {
-      name: '3Cliques',
-      from: '3Cliques <contato@mail.3cliques.net>',
-      subject: 'Código de Verificação - Acesso ao Sistema 3Cliques',
-      logo: 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2',
+      name: brand.brandName,
+      from: `${brand.fromName} <${brand.fromEmail}>`,
+      subject: `Código de Verificação - Acesso ao Sistema ${brand.brandName}`,
+      logo: brand.logoUrl || '',
       greeting: 'Prezado(a) Colaborador(a),',
-      systemName: '3Cliques',
-      primaryColor: '#2563eb',
-      headerColor: '#1e3a5f',
-      description: 'Recebemos uma solicitação de acesso à sua conta no sistema 3Cliques.',
-      footer: 'Atenciosamente,<br><strong style="color: #1e293b;">Equipe 3Cliques</strong>'
+      systemName: brand.brandName,
+      primaryColor: brand.primaryColor,
+      headerColor: brand.headerColor,
+      description: `Recebemos uma solicitação de acesso à sua conta no sistema ${brand.brandName}.`,
+      footer: `Atenciosamente,<br><strong style="color: #1e293b;">Equipe ${brand.brandName}</strong>`
     };
 
     // Rate limit: máximo 10 códigos por email por hora (aumentado para desenvolvimento)

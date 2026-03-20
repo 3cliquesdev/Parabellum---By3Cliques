@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveBranding } from "../_shared/branding-resolver.ts";
 
 // Resend helper (inline to avoid CDN issues)
 class Resend {
@@ -158,13 +159,18 @@ serve(async (req) => {
       }
     });
 
+    // Resolver branding dinâmico
+    const brand = await resolveBranding(supabaseAdmin, { isEmployee: true });
+
     // Send welcome email with responsibility term
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <!-- HEADER COM LOGO -->
-        <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-          <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-               alt="PARABELLUM" 
+        <div style="background: linear-gradient(135deg, ${brand.headerColor} 0%, ${brand.primaryColor} 100%); padding: 30px; text-align: center;">
+          ${brand.logoUrl
+            ? `<img src="${brand.logoUrl}" alt="${brand.brandName}" style="max-width: 200px; height: auto;" />`
+            : `<h2 style="color: white; margin: 0;">${brand.brandName}</h2>`
+          }
                style="max-width: 200px; height: auto;" />
         </div>
         
@@ -175,7 +181,7 @@ serve(async (req) => {
           </p>
           
           <p style="color: #475569; line-height: 1.6; margin-bottom: 25px;">
-            Bem-vindo à operação. Seu acesso à plataforma PARABELLUM | 3Cliques foi concedido.
+            Bem-vindo à operação. Seu acesso à plataforma ${brand.brandName} foi concedido.
           </p>
           
           <p style="color: #1e3a5f; font-weight: 600; margin-bottom: 10px;">
@@ -194,7 +200,7 @@ serve(async (req) => {
           </h3>
           
           <p style="color: #475569; line-height: 1.6; margin-bottom: 15px;">
-            Ao utilizar suas credenciais, você declara ciência das seguintes normas de segurança da informação da PARABELLUM | 3Cliques:
+            Ao utilizar suas credenciais, você declara ciência das seguintes normas de segurança da informação da ${brand.brandName}:
           </p>
           
           <div style="margin: 20px 0;">
@@ -221,32 +227,17 @@ serve(async (req) => {
           
           <p style="color: #475569; line-height: 1.6; margin-top: 25px;">
             Atenciosamente,<br>
-            <strong style="color: #1e3a5f;">Departamento de Segurança PARABELLUM</strong>
+            <strong style="color: #1e3a5f;">Departamento de Segurança ${brand.brandName}</strong>
           </p>
         </div>
         
         <!-- FOOTER -->
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #1e3a5f;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: ${brand.headerColor};">
           <tr>
             <td align="center" style="padding: 25px;">
-              <table cellpadding="0" cellspacing="0" border="0" align="center">
-                <tr>
-                  <td style="padding: 0 8px;">
-                    <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-                         alt="PARABELLUM" 
-                         width="100"
-                         style="display: block; max-width: 100px; height: auto;" />
-                  </td>
-                  <td style="padding: 0 8px;">
-                    <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-3cliques-email.png?v=2" 
-                         alt="3 CLIQUES" 
-                         width="80"
-                         style="display: block; max-width: 80px; height: auto;" />
-                  </td>
-                </tr>
-              </table>
+              ${brand.footerLogoUrl ? `<img src="${brand.footerLogoUrl}" alt="${brand.brandName}" width="100" style="display: block; max-width: 100px; height: auto; margin: 0 auto 10px;" />` : ''}
               <p style="color: #ffffff; margin: 15px 0 10px 0; font-size: 14px; font-weight: 600;">
-                PARABELLUM by 3Cliques
+                ${brand.brandName}
               </p>
               <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
                 Departamento de Segurança da Informação
@@ -261,9 +252,9 @@ serve(async (req) => {
     `;
 
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: '3Cliques <contato@mail.3cliques.net>',
+      from: `${brand.fromName} <${brand.fromEmail}>`,
       to: [email!],
-      subject: 'Acesso Concedido - Termo de Responsabilidade',
+      subject: `Acesso Concedido - ${brand.brandName}`,
       html: emailHtml,
     });
 

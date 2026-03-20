@@ -39,7 +39,22 @@ export function useClientAssistant() {
     enabled: !!user?.email,
   });
 
-  const PORTAL_PERSONA_ID = "d4dc2026-bb47-4f2c-b675-b8d301240786";
+  // Buscar persona do portal por nome (dinâmico, sem UUID hardcoded)
+  const { data: portalPersona } = useQuery({
+    queryKey: ["portal-persona"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("ai_personas")
+        .select("id, system_prompt")
+        .eq("name", "Portal Cliente")
+        .eq("is_active", true)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  // Fallback para UUID legado se persona não encontrada por nome
+  const PORTAL_PERSONA_ID = portalPersona?.id || "d4dc2026-bb47-4f2c-b675-b8d301240786";
 
   const invokeAssistant = useCallback(async (conversationId: string, messageText: string, contactName: string) => {
     const { data, error } = await supabase.functions.invoke("ai-autopilot-chat", {
@@ -55,8 +70,8 @@ export function useClientAssistant() {
           node_type: "ai_response",
           personaId: PORTAL_PERSONA_ID,
           allowed_sources: ["kb", "crm", "tracking"],
-          contextPrompt:
-            "[ROLE: especialista] Você é a assistente virtual do portal do cliente da 3Cliques. Responda dúvidas sobre pedidos, rastreio, devoluções e financeiro. Você TEM acesso à ferramenta check_tracking — use-a quando o cliente perguntar sobre status de pedido ou entrega. Use a base de conhecimento para dúvidas gerais. Seja direta, acolhedora e objetiva.",
+          contextPrompt: portalPersona?.system_prompt ||
+            "[ROLE: especialista] Você é a assistente virtual do portal do cliente. Responda dúvidas sobre pedidos, rastreio, devoluções e financeiro. Você TEM acesso à ferramenta check_tracking — use-a quando o cliente perguntar sobre status de pedido ou entrega. Use a base de conhecimento para dúvidas gerais. Seja direta, acolhedora e objetiva.",
           forbidQuestions: false,
           forbidOptions: false,
           maxSentences: 4,

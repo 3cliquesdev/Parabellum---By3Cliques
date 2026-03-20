@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveBranding } from "../_shared/branding-resolver.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -100,6 +101,9 @@ serve(async (req) => {
           throw new Error('RESEND_API_KEY not configured');
         }
 
+        // Resolver branding dinâmico
+        const brand = await resolveBranding(supabaseClient, { isEmployee: true });
+
         const emailResponse = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -107,7 +111,7 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: '3Cliques Relatorios <contato@mail.3cliques.net>',
+            from: `${brand.fromName} <${brand.fromEmail}>`,
             to: [report.email],
             subject: `${report.report_name} - ${formatDate(now)}`,
             html: `
@@ -116,10 +120,11 @@ serve(async (req) => {
                 <head><meta charset="utf-8"></head>
                 <body style="font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px;">
                   <div style="max-width: 600px; margin: 0 auto; background: white;">
-                    <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-                      <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-                           alt="PARABELLUM" 
-                           style="max-width: 200px; height: auto;" />
+                    <div style="background: linear-gradient(135deg, ${brand.headerColor} 0%, ${brand.primaryColor} 100%); padding: 30px; text-align: center;">
+                      ${brand.logoUrl
+                        ? `<img src="${brand.logoUrl}" alt="${brand.brandName}" style="max-width: 200px; height: auto;" />`
+                        : `<h2 style="color: white; margin: 0;">${brand.brandName}</h2>`
+                      }
                     </div>
                     <div style="padding: 30px; background: #f8fafc;">
                       <h2 style="color: #2563EB; margin-bottom: 20px;">Relatório Agendado</h2>
@@ -130,27 +135,12 @@ serve(async (req) => {
                         Período: ${report.days_back} dias
                       </p>
                     </div>
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #1e3a5f;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: ${brand.headerColor};">
                       <tr>
                         <td align="center" style="padding: 25px;">
-                          <table cellpadding="0" cellspacing="0" border="0" align="center">
-                            <tr>
-                              <td style="padding: 0 8px;">
-                                <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-                                     alt="PARABELLUM" 
-                                     width="100"
-                                     style="display: block; max-width: 100px; height: auto;" />
-                              </td>
-                              <td style="padding: 0 8px;">
-                                <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-3cliques-email.png?v=2" 
-                                     alt="3 CLIQUES" 
-                                     width="80"
-                                     style="display: block; max-width: 80px; height: auto;" />
-                              </td>
-                            </tr>
-                          </table>
+                          ${brand.footerLogoUrl ? `<img src="${brand.footerLogoUrl}" alt="${brand.brandName}" width="100" style="display: block; max-width: 100px; height: auto; margin: 0 auto 10px;" />` : ''}
                           <p style="color: #ffffff; margin: 15px 0 10px 0; font-size: 14px; font-weight: 600;">
-                            PARABELLUM by 3Cliques
+                            ${brand.brandName}
                           </p>
                           <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
                             Relatórios Automatizados
