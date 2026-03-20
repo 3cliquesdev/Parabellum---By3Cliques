@@ -2664,8 +2664,7 @@ serve(async (req) => {
           
           console.log('[ai-autopilot-chat] âœ… Email salvo no contato e metadata limpo');
           
-          const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-          const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+           // Usa DEPT_COMERCIAL_ID / DEPT_SUPORTE_ID centralizados
           
           if (!verifyError && verifyResult?.found) {
             // CLIENTE EXISTENTE - Ir para Suporte
