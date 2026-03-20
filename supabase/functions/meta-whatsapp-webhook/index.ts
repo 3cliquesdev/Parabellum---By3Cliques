@@ -1209,8 +1209,8 @@ serve(async (req) => {
                       // 🆕 FIX Bug A (#EEFFF1DD): Fallback — enviar saudação padrão direto via WhatsApp
                       try {
                         // Resolver nome da organização dinamicamente
-                        const { data: _orgRow } = await supabase.from('organizations').select('name').limit(1).maybeSingle();
-                        const _orgName = _orgRow?.name || 'nossa equipe';
+                        const { data: _brandRow } = await supabase.from('email_branding').select('name').eq('is_default_customer', true).maybeSingle();
+                        const _orgName = _brandRow?.name || 'nossa equipe';
                         const fallbackGreeting = `Olá! Sou a assistente virtual da ${_orgName}. Como posso te ajudar? 😊`;
                         await supabase.from('messages').insert({
                           conversation_id: conversation.id, content: fallbackGreeting,
