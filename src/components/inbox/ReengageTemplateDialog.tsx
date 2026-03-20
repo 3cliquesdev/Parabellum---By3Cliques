@@ -47,9 +47,6 @@ export function ReengageTemplateDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [variables, setVariables] = useState<Record<number, string>>({});
 
