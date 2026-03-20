@@ -152,7 +152,7 @@ export default function Auth() {
         {/* Footer */}
         <div className="relative z-10">
           <p className="text-sm text-slate-400">
-            © 2025 PARABELLUM CRM. Sistema Enterprise.
+            © 2025 {brandName.toUpperCase()}. Sistema Enterprise.
           </p>
         </div>
       </div>
