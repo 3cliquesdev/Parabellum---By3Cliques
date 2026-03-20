@@ -67,6 +67,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
       setDescription("");
       setColor("#3B82F6");
       setWhatsappNumber("");
+      setAfterHoursKeepOpen(false);
       setSlowResponseAlertEnabled(false);
       setSlowResponseAlertMinutes("");
       setSlowResponseAlertTagId("");
