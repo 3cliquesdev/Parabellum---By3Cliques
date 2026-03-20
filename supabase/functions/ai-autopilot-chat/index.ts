@@ -8724,7 +8724,8 @@ Para liberar operações financeiras como saque, preciso transferir você para u
 
               // Build smart collection fields
               // 🆕 REFATORADO: Usa buildCollectionMessage como fonte única de verdade
-              const nodeObjectiveOTPHandler = flow_context?.objective;
+          const nodeObjectiveOTPHandler = flow_context?.objective;
+              const hasDescTemplateOTPHandler = !!(flow_context as any)?.ticketConfig?.description_template;
               const otpCollectionMsg = buildCollectionMessage(flow_context, verifiedContact.first_name, contact?.email, contact?.phone, {
                 prefix: '',
                 intent: detectedIntent ? `seu ${detectedIntent}` : 'sua solicitação',
