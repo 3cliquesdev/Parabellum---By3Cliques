@@ -2926,10 +2926,10 @@ serve(async (req) => {
     
       console.log(`[ai-autopilot-chat] Canal da última mensagem: ${responseChannel}, Departamento: ${department}`);
 
-    // 🆕 TRIAGEM SILENCIOSA UNIFICADA â€” Sempre validar pela base Kiwify
+    // TRIAGEM SILENCIOSA UNIFICADA - Validar compra via eventos de pagamento
     // Só pula se já está validado (kiwify_validated = true)
     if (!contact.kiwify_validated) {
-      console.log('[ai-autopilot-chat] 🔒 Triagem silenciosa: validando phone+email+CPF contra base Kiwify...');
+      console.log('[ai-autopilot-chat] 🔒 Triagem silenciosa: validando phone+email+CPF contra base de eventos de compra...');
       
       try {
         const validationPromises: PromiseLike<any>[] = [];
@@ -3033,13 +3033,13 @@ serve(async (req) => {
           }
 
           if (!foundCustomer) {
-            console.log('[ai-autopilot-chat] â„¹ï¸ Nenhuma compra Kiwify encontrada (phone/email/CPF)');
+            console.log('[ai-autopilot-chat] â„¹ï¸ Nenhum evento de compra encontrado (phone/email/CPF)');
           }
         } else {
           console.log('[ai-autopilot-chat] â„¹ï¸ Contato sem phone/email/CPF para triagem');
         }
-      } catch (kiwifyErr) {
-        console.warn('[ai-autopilot-chat] âš ï¸ Erro na triagem silenciosa (não crítico):', kiwifyErr);
+      } catch (triageErr) {
+        console.warn('[ai-autopilot-chat] âš ï¸ Erro na triagem silenciosa (não crítico):', triageErr);
       }
     } else {
       console.log('[ai-autopilot-chat] ✅ Contato já validado (compra verificada), pulando triagem');
