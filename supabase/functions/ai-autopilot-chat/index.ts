@@ -1114,7 +1114,7 @@ const WITHDRAWAL_ACTION_PATTERNS = [
   /\d+\s+dias?\s+(que\s+)?(solicitei|pedi)\s+(o\s+)?saque/i, // "9 dias que solicitei o saque"
 ];
 
-// 🆕 Padrões de REEMBOLSO DE PEDIDO (COM OTP) - Devolução de pedido Kiwify
+// 🆕 Padrões de REEMBOLSO DE PEDIDO (COM OTP) - Devolução de pedido
 // Reembolso agora exige OTP como ação financeira — mesma segurança do saque
 const REFUND_ACTION_PATTERNS = [
   /quero\s+reembolso/i,                               // "quero reembolso"
@@ -1128,7 +1128,7 @@ const REFUND_ACTION_PATTERNS = [
   /devolver\s+pedido/i,                               // "devolver pedido"
 ];
 
-// 🆕 Padrões de CANCELAMENTO DE ASSINATURA (SEM OTP) - Kiwify
+// 🆕 Padrões de CANCELAMENTO DE ASSINATURA (SEM OTP)
 const CANCELLATION_ACTION_PATTERNS = [
   /cancelar\s+(minha\s+)?assinatura/i,                // "cancelar minha assinatura"
   /cancelamento\s+(de\s+)?assinatura/i,               // "cancelamento de assinatura"
@@ -2926,10 +2926,10 @@ serve(async (req) => {
     
       console.log(`[ai-autopilot-chat] Canal da última mensagem: ${responseChannel}, Departamento: ${department}`);
 
-    // 🆕 TRIAGEM SILENCIOSA UNIFICADA â€” Sempre validar pela base Kiwify
+    // TRIAGEM SILENCIOSA UNIFICADA - Validar compra via eventos de pagamento
     // Só pula se já está validado (kiwify_validated = true)
     if (!contact.kiwify_validated) {
-      console.log('[ai-autopilot-chat] 🔒 Triagem silenciosa: validando phone+email+CPF contra base Kiwify...');
+      console.log('[ai-autopilot-chat] 🔒 Triagem silenciosa: validando phone+email+CPF contra base de eventos de compra...');
       
       try {
         const validationPromises: PromiseLike<any>[] = [];
@@ -2968,7 +2968,7 @@ serve(async (req) => {
                   supabaseClient.from('contacts').update(updatePayload).eq('id', contact.id).then(() => {
                     supabaseClient.from('interactions').insert({
                       customer_id: contact.id, type: 'internal_note',
-                      content: `âœ… Cliente identificado via autopilot inline Kiwify. Produtos: ${products.join(', ')}`,
+                      content: `âœ… Cliente identificado via validação de compra inline. Produtos: ${products.join(', ')}`,
                       channel: 'system',
                     });
                   });
@@ -3033,19 +3033,19 @@ serve(async (req) => {
           }
 
           if (!foundCustomer) {
-            console.log('[ai-autopilot-chat] â„¹ï¸ Nenhuma compra Kiwify encontrada (phone/email/CPF)');
+            console.log('[ai-autopilot-chat] â„¹ï¸ Nenhum evento de compra encontrado (phone/email/CPF)');
           }
         } else {
           console.log('[ai-autopilot-chat] â„¹ï¸ Contato sem phone/email/CPF para triagem');
         }
-      } catch (kiwifyErr) {
-        console.warn('[ai-autopilot-chat] âš ï¸ Erro na triagem silenciosa (não crítico):', kiwifyErr);
+      } catch (triageErr) {
+        console.warn('[ai-autopilot-chat] âš ï¸ Erro na triagem silenciosa (não crítico):', triageErr);
       }
     } else {
-      console.log('[ai-autopilot-chat] âœ… Contato já validado (kiwify_validated=true), pulando triagem');
+      console.log('[ai-autopilot-chat] ✅ Contato já validado (compra verificada), pulando triagem');
     }
 
-    // 🆕 BUSCAR PRODUTOS KIWIFY DO CONTATO (para injetar no contexto da IA)
+    // 🆕 BUSCAR PRODUTOS DO CONTATO via eventos de compra (para injetar no contexto da IA)
     let customerProducts: string[] = [];
     try {
       const phoneForProducts = contact.phone || contact.whatsapp_id || '';
@@ -3098,7 +3098,7 @@ serve(async (req) => {
         }
       }
     } catch (prodErr) {
-      console.warn('[ai-autopilot-chat] âš ï¸ Erro ao buscar produtos Kiwify (não crítico):', prodErr);
+      console.warn('[ai-autopilot-chat] âš ï¸ Erro ao buscar produtos do contato (não crítico):', prodErr);
     }
 
     // FASE 1: Verificar se deve pular cache para experiência personalizada
@@ -4838,7 +4838,7 @@ Responda APENAS: skip ou search`
       } // Fechamento do else de canAccessKnowledgeBase
     }
 
-    // 5. FASE 1: Identity Wall - Verificar se contato tem email OU é cliente Kiwify validado
+    // 5. FASE 1: Identity Wall - Verificar se contato tem email OU é cliente validado (compra verificada)
     const contactEmail = customer_context?.email || contact.email;
     const contactHasEmail = !!contactEmail;
     const contactName = customer_context?.name || `${contact.first_name} ${contact.last_name}`.trim();
@@ -4893,7 +4893,7 @@ Responda APENAS: skip ou search`
       personaToneInstruction = '\n\nTom: Entusiasmado e consultivo. Este é um lead quente com alta pontuação. Seja proativo em ajudar e guiar.';
     }
     
-    // 🆕 CORREÇNÃO: Cliente é "conhecido" se tem email OU se foi validado via Kiwify OU se está na base como customer
+    // 🆕 CORREÇNÃO: Cliente é "conhecido" se tem email OU se foi validado via eventos de compra OU se está na base como customer
     const isKiwifyValidated = contact.kiwify_validated === true;
     const isCustomerInDatabase = contact.status === 'customer';
     // 🆕 Cliente identificado pelo telefone (webhook já verificou que existe no banco)
@@ -6005,7 +6005,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // 🔒 DEFINIÇÁ•ES UNIFICADAS DE CLIENTE (evita inconsistências)
     // ============================================================
     // âœ… CORREÇNÃO: Cliente verificado = tem email cadastrado (independente de status)
-    // Status é atualizado automaticamente pelo webhook Kiwify quando há compra
+    // Status é atualizado automaticamente pelo webhook de pagamento quando há compra
     const isContactVerified = !!contact.email;
     const hasCompleteCadastro = !!contactCPF; // CPF cadastrado
     const canAccessFinancialFeatures = isContactVerified && hasCompleteCadastro;
@@ -6030,7 +6030,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // DETECCAO DE TIPO DE SOLICITACAO FINANCEIRA
     // 1. SAQUE DE SALDO - Exige OTP
     // 2. REEMBOLSO DE PEDIDO - Exige OTP (acao que gera ticket)
-    // 3. CANCELAMENTO DE ASSINATURA - Sem OTP (processo Kiwify)
+    // 3. CANCELAMENTO DE ASSINATURA - Sem OTP (processo via KB)
     // Duvidas informativas - SEM OTP, IA responde normalmente
     
     const isFinancialRequest = FINANCIAL_BARRIER_KEYWORDS.some(keyword =>
@@ -6050,7 +6050,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       pattern.test(customerMessage)
     );
     
-    // ❌ CANCELAMENTO DE ASSINATURA - Sem OTP, processo Kiwify
+    // ❌ CANCELAMENTO DE ASSINATURA - Sem OTP, processo via KB
     const isCancellationRequest = CANCELLATION_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     );
@@ -6076,7 +6076,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
 
     // ============================================================
     // BYPASS DIRETO: CANCELAMENTO DE ASSINATURA
-    // Responde imediatamente com a resposta padrao Kiwify
+    // Responde imediatamente com a resposta padrao de cancelamento
     // SEM passar pelo sistema de confianca, SEM pedir email
     // ============================================================
     // Cancelamento agora é tratado pelo fluxo visual + KB (removido bypass hardcoded)
@@ -6664,7 +6664,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // OTP PARA ACOES FINANCEIRAS (SAQUE, REEMBOLSO, ESTORNO)
     // ============================================================
     // - Cliente pede SAQUE/REEMBOLSO/ESTORNO -> OTP para seguranca
-    // - Cancelamento Kiwify -> Sem OTP
+    // - Cancelamento de assinatura -> Sem OTP
     // - Duvida informativa -> Sem OTP
     // ============================================================
     if (contactHasEmail && isFinancialActionRequest && !hasRecentOTPVerification) {
@@ -8781,15 +8781,7 @@ Via: Atendimento Automatizado (IA)`;
 - Chave PIX: ${args.pix_key || 'Não informada'}
 - Confirmação do Cliente: ${args.customer_confirmation ? 'Dados conferidos pelo cliente' : 'Aguardando confirmação'}
 
-**REGRAS (conforme SLA configurado):**
-- Destino: APENAS conta do titular (CPF do cliente)
-- PIX de terceiros: CANCELAR solicitação
-
-**CHECKLIST FINANCEIRO:**
-- [ ] Verificar saldo disponível
-- [ ] Confirmar titularidade da chave PIX
-- [ ] Processar transferência
-- [ ] Notificar cliente`;
+**Observação:** Consultar regras de saque e checklist financeiro conforme configurado no painel.`;
             }
 
             // 🆕 Descrição: usar template do nó se configurado
@@ -10464,7 +10456,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           body: {
             to: contact.email,
             to_name: `${contact.first_name} ${contact.last_name}`.trim(),
-            subject: `Re: ${conversation.subject || 'Seu Armazém Drop - Resposta do Suporte'}`,
+            subject: `Re: ${conversation.subject || `${persona?.name || 'Suporte'} - Resposta`}`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #2563EB;">Olá, ${contact.first_name}!</h2>
