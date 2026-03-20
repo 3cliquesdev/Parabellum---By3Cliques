@@ -329,7 +329,7 @@ export function AppSidebar() {
               <img 
                 src={sidebarLogo} 
                 alt={sidebarAlt} 
-                className="h-12 w-auto object-contain"
+                className="max-h-14 w-full object-contain"
               />
             </div>
             <Badge variant="secondary" className="w-full justify-center text-xs font-medium">
