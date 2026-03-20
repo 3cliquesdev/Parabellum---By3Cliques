@@ -73,7 +73,7 @@ async function generateAndSaveContactSummary(
     const summary = llmData.choices?.[0]?.message?.content?.trim();
     if (!summary) return;
 
-    await supabase
+    await (supabase as any)
       .from("contacts")
       .update({ ai_summary: summary, ai_summary_updated_at: new Date().toISOString() })
       .eq("id", contactId);
