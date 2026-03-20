@@ -327,8 +327,8 @@ export function AppSidebar() {
           <div className="space-y-3">
             <div className="flex items-center justify-center">
               <img 
-                src={theme === "dark" ? logoLight : logoDark} 
-                alt="Parabellum Logo" 
+                src={sidebarLogo} 
+                alt={sidebarAlt} 
                 className="h-12 w-auto object-contain"
               />
             </div>
