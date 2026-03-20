@@ -2589,6 +2589,25 @@ serve(async (req) => {
               }
             }
             
+            // 🏷️ GUARD: Verificar se conversa tem tag antes de encerrar
+            {
+              const { data: closeConfirmTags } = await supabaseClient
+                .from('conversation_tags')
+                .select('tag_id')
+                .eq('conversation_id', conversationId);
+              
+              if (!closeConfirmTags || closeConfirmTags.length === 0) {
+                console.warn(`[ai-autopilot-chat] ⚠️ Confirmação de encerramento SEM tag na conversa ${conversationId}`);
+                await supabaseClient.from('ai_events').insert({
+                  entity_id: conversationId,
+                  entity_type: 'conversation',
+                  event_type: 'ai_close_confirm_without_tag',
+                  model: 'system',
+                  output_json: { warning: 'Cliente confirmou encerramento mas conversa não tem tag classificatória' },
+                });
+              }
+            }
+            
             // TUDO OK â†’ Chamar close-conversation
             const closeMsg = 'Foi um prazer ajudar! Seu atendimento será encerrado agora. Até a próxima! 😊';
             await supabaseClient.from('messages').insert({
@@ -10011,6 +10030,26 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             const currentMeta = (freshConvClose?.customer_metadata || {}) as Record<string, any>;
             
             if (args.customer_confirmed === false || !currentMeta.awaiting_close_confirmation) {
+              // 🏷️ GUARD: Verificar se tag_conversation foi chamada antes
+              const { data: preCloseTags } = await supabaseClient
+                .from('conversation_tags')
+                .select('tag_id')
+                .eq('conversation_id', conversationId);
+              
+              if (!preCloseTags || preCloseTags.length === 0) {
+                console.warn(`[ai-autopilot-chat] ⚠️ close_conversation chamado SEM tag prévia na conversa ${conversationId}`);
+                // Registrar warning para monitoramento
+                await supabaseClient.from('ai_events').insert({
+                  entity_id: conversationId,
+                  entity_type: 'conversation',
+                  event_type: 'ai_close_without_tag',
+                  model: 'system',
+                  output_json: { reason: args.reason || 'unknown', warning: 'close_conversation chamado sem tag_conversation prévia' },
+                });
+              } else {
+                console.log(`[ai-autopilot-chat] ✅ close_conversation: conversa já tem ${preCloseTags.length} tag(s) aplicada(s)`);
+              }
+              
               // ETAPA 1: Perguntar confirmação (anti-pulo: sempre pedir se flag não existe)
               await supabaseClient.from('conversations')
                 .update({
@@ -10023,7 +10062,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
                 .eq('id', conversationId);
               
               assistantMessage = 'Fico feliz em ter ajudado! 😊 Posso encerrar seu atendimento?';
-              console.log('[ai-autopilot-chat] ⏳ Aguardando confirma��o do cliente para encerrar');
+              console.log('[ai-autopilot-chat] ⏳ Aguardando confirmação do cliente para encerrar');
             }
             // Se customer_confirmed=true, o detector de confirmação cuida na próxima mensagem
             
