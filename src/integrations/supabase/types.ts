@@ -10413,6 +10413,30 @@ export type Database = {
       }
       generate_session_token: { Args: never; Returns: string }
       get_active_conversation_counts: { Args: never; Returns: Json }
+      get_ai_resolution_daily: {
+        Args: { p_end_date?: string; p_start_date?: string }
+        Returns: {
+          ai_resolved: number
+          day: string
+          handoff: number
+          human: number
+          total: number
+        }[]
+      }
+      get_ai_resolution_metrics: {
+        Args: { p_end_date?: string; p_start_date?: string }
+        Returns: {
+          ai_resolution_rate: number
+          ai_resolved: number
+          handoff_rate: number
+          human_handoff: number
+          human_rate: number
+          human_resolved: number
+          mixed_resolved: number
+          total_closed: number
+          unclassified: number
+        }[]
+      }
       get_ai_usage_metrics: {
         Args: { p_end_date: string; p_start_date: string; p_user_id?: string }
         Returns: {
