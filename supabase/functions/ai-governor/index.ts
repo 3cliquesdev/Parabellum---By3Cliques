@@ -1154,7 +1154,7 @@ async function sendEmailReport(
       body: JSON.stringify({
         from: `${fromName} <${fromEmail}>`,
         to: [adminEmail],
-        subject: `Report Diario CRM 3Cliques - Relatorio ${dateStr}`,
+        subject: `Report Diario ${brandName} - Relatorio ${dateStr}`,
         html: htmlContent,
       }),
     });
