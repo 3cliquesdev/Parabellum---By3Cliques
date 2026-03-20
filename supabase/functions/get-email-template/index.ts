@@ -154,9 +154,9 @@ serve(async (req) => {
     const fromEmail = sender?.from_email || _brand.fromEmail;
 
     // 4. Build HTML
-    const headerColor = branding?.header_color || "#1e3a5f";
-    const primaryColor = branding?.primary_color || "#2563eb";
-    const brandName = branding?.name || "3Cliques";
+    const headerColor = branding?.header_color || _brand.headerColor;
+    const primaryColor = branding?.primary_color || _brand.primaryColor;
+    const brandName = branding?.name || _brand.brandName;
     const footerText = branding?.footer_text || `${brandName} - Equipe de Suporte`;
     const logoUrl = branding?.logo_url;
 

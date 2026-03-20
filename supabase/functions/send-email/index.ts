@@ -214,9 +214,9 @@ serve(async (req) => {
         .slice(0, 50);                   // Limita tamanho
     };
 
-    // Buscar sender configurado
-    let senderEmail = 'contato@mail.3cliques.net';
-    let senderName = sanitizeName(brandName); // Sanitizar nome do sender
+    // Buscar sender configurado (já resolvido via branding)
+    let senderEmail = _brand.fromEmail;
+    let senderName = sanitizeName(_brand.fromName);
 
     const { data: senderConfig } = await supabase
       .from('system_configurations')

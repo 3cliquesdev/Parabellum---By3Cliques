@@ -75,41 +75,13 @@ serve(async (req) => {
 
     console.log("[send-ticket-email-reply] Sending email to:", customer.email);
 
-    // Get branding and sender from get-email-template function
-    let fromName = "3Cliques Suporte";
-    let fromEmail = "contato@mail.3cliques.net";
-    let headerColor = "#1e3a5f";
-    let brandName = "3Cliques";
-    let footerText = "3Cliques - Equipe de Suporte";
-
-    try {
-      // Try to get configured branding
-      const { data: branding } = await supabase
-        .from("email_branding")
-        .select("*")
-        .eq("is_default_customer", true)
-        .single();
-      
-      if (branding) {
-        headerColor = branding.header_color || headerColor;
-        brandName = branding.name || brandName;
-        footerText = branding.footer_text || footerText;
-      }
-
-      // Use default sender
-      const { data: defaultSender } = await supabase
-        .from("email_senders")
-        .select("*")
-        .eq("is_default", true)
-        .single();
-      
-      if (defaultSender) {
-        fromName = defaultSender.from_name;
-        fromEmail = defaultSender.from_email;
-      }
-    } catch (configError) {
-      console.log("[send-ticket-email-reply] Using default branding:", configError);
-    }
+    // Resolver branding dinamicamente do banco
+    const brand = await resolveBranding(supabase);
+    const fromName = brand.fromName;
+    const fromEmail = brand.fromEmail;
+    const headerColor = brand.headerColor;
+    const brandName = brand.brandName;
+    const footerText = brand.footerText;
 
     // Gerar HTML do email com branding configurado
     const emailHtml = `

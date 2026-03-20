@@ -236,10 +236,14 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Buscar sender configurado do banco de dados
-    let senderEmail = 'contato@mail.3cliques.net';
-    let senderName = '3Cliques';
+    // Resolver branding dinamicamente do banco
+    const brand = await resolveBranding(supabase);
+    let senderEmail = brand.fromEmail;
+    let senderName = sanitizeName(brand.fromName);
+    const brandName = brand.brandName;
+    const logoUrl = brand.logoUrl || '';
 
+    // Override com system_configurations se existir
     const { data: senderConfig } = await supabase
       .from('system_configurations')
       .select('value')
@@ -250,17 +254,6 @@ serve(async (req) => {
       senderEmail = senderConfig.value;
       console.log('[send-ticket-notification] Using configured sender:', senderEmail);
     }
-
-    // Buscar nome da marca e logo do email_branding ou usar default
-    const { data: brandingData } = await supabase
-      .from('email_branding')
-      .select('name, logo_url')
-      .eq('is_default_customer', true)
-      .single();
-
-    const brandName = brandingData?.name || '3Cliques';
-    const logoUrl = brandingData?.logo_url || 'https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-seuarmazemdrop.png';
-    senderName = sanitizeName(brandName);
 
     // Buscar URL do portal de tickets - fallback dinâmico
     const projectId = supabaseUrl?.match(/https:\/\/([^.]+)/)?.[1];

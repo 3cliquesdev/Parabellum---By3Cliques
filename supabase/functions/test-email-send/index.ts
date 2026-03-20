@@ -47,7 +47,8 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Erro ao buscar configuração de email");
     }
 
-    const fromEmail = config?.value || "3Cliques <contato@mail.3cliques.net>";
+    const _brand = await resolveBranding(supabase, { isEmployee: type !== 'customer' });
+    const fromEmail = config?.value || `${_brand.fromName} <${_brand.fromEmail}>`;
     console.log("[test-email-send] Using sender:", fromEmail);
 
     // Initialize Resend
