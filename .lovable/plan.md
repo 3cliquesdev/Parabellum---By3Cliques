@@ -1,65 +1,42 @@
 
 
-# Fix: Conversas `waiting_human` Nunca São Encerradas Fora do Horário
+# Feature: Manter Conversas Abertas Fora do Horário (por Departamento)
 
-## Diagnóstico
+## O Que Muda
 
-**48 conversas** estão presas em `waiting_human` agora (46 no Suporte, 2 no Suporte Sistema). Elas acumulam dia após dia porque:
+Departamentos como Comercial poderão ser configurados para **não encerrar** conversas fora do horário — elas recebem a mensagem de "fora do horário" mas ficam abertas na fila de distribuição para o dia seguinte. Isso será controlável por um toggle na edição de cada departamento.
 
-1. **`human_auto_close_minutes` é NULL em TODOS os departamentos** — Stage 4 do `auto-close-conversations` nunca executa
-2. **`auto-close-conversations` não tem nenhuma etapa para fechar conversas `waiting_human` fora do horário** — ele só fecha conversas `autopilot` (Stages 2, 3, 3b) ou `awaiting_close_confirmation` (Stage 3.5)
-3. **`dispatch-conversations`** tenta aplicar tag after-hours, mas usa `contact_tags` em vez de `conversation_tags` (bug na linha 899)
+## Implementação
 
-```text
-Fluxo atual:
-  Cliente → IA → handoff → waiting_human → ❌ NINGUÉM FECHA
-  
-  auto-close Stage 3: ai_mode='autopilot' only → SKIP
-  auto-close Stage 4: human_auto_close_minutes=NULL → SKIP
-  dispatch escalation: só jobs escalados → nem sempre existe
-```
+### 1. Migration — Nova coluna `after_hours_keep_open`
 
-## Correções
+Adicionar `after_hours_keep_open BOOLEAN DEFAULT false` na tabela `departments`. Os departamentos Comercial já serão ativados por padrão via UPDATE.
 
-### 1. `auto-close-conversations/index.ts` — Nova Stage 6: After-Hours Cleanup
+### 2. `auto-close-conversations/index.ts` — Respeitar flag por departamento
 
-Adicionar uma nova etapa APÓS Stage 5 que:
-- Verifica se está fora do horário comercial (`!businessHoursInfo.within_hours`)
-- Se sim, busca todas as conversas `waiting_human` que estão abertas há mais de 10 minutos
-- Aplica a tag configurada `after_hours_tag_id` ("9.05 Atendimento Fora do Horario") em `conversation_tags`
-- Envia mensagem de encerramento com template `after_hours_handoff`
-- Fecha a conversa com `closed_reason: 'after_hours_no_agent'`
+No Stage 6 (after-hours cleanup), antes de fechar cada conversa:
+- Buscar o departamento da conversa
+- Se `after_hours_keep_open = true`: enviar mensagem de fora do horário + aplicar tag, mas **não fechar** a conversa (mantém `status: 'open'`, `ai_mode: 'waiting_human'`)
+- Se `after_hours_keep_open = false`: comportamento atual (fecha a conversa)
 
-```typescript
-// ETAPA 6: After-Hours — fechar waiting_human sem agentes
-if (!businessHoursInfo.within_hours) {
-  // Buscar after_hours_tag_id da config
-  // Buscar conversas open + waiting_human + last_message_at > 10min
-  // Para cada: enviar mensagem, aplicar tag, fechar
-}
-```
+### 3. UI — Toggle no `DepartmentDialog.tsx`
 
-### 2. `dispatch-conversations/index.ts` — Fix tag table (linha 899)
+Adicionar um switch "Manter conversa aberta fora do horário" no formulário de departamento, com descrição: "Conversas recebem mensagem de fora do horário mas permanecem na fila para distribuição no próximo dia útil."
 
-Trocar `contact_tags` → `conversation_tags`:
-```typescript
-// ANTES (ERRADO):
-await supabase.from('contact_tags').upsert(...)
+### 4. Hooks e Types
 
-// DEPOIS (CORRETO):
-await supabase.from('conversation_tags').upsert(
-  { conversation_id: job.conversation_id, tag_id: msgRow.after_hours_tag_id },
-  { onConflict: 'conversation_id,tag_id' }
-);
-```
+- `useDepartments.tsx`: Adicionar `after_hours_keep_open` à interface `Department`
+- `useUpdateDepartment.tsx`: Adicionar campo ao `UpdateDepartmentParams`
+- `useCreateDepartment.tsx`: Adicionar campo ao payload de criação
 
-### 3. Deploy
+### Arquivos Modificados
 
-Redeployar `auto-close-conversations` e `dispatch-conversations`.
-
-### Resultado
-
-- Conversas `waiting_human` fora do horário serão fechadas automaticamente com a tag "9.05 Atendimento Fora do Horario"
-- As 48 conversas atuais serão fechadas na próxima execução do cron fora do horário
-- `dispatch-conversations` aplicará a tag corretamente em `conversation_tags`
+| Arquivo | Alteração |
+|---------|-----------|
+| Migration SQL | Adicionar coluna + UPDATE nos dept Comercial |
+| `supabase/functions/auto-close-conversations/index.ts` | Checar flag antes de fechar |
+| `src/components/DepartmentDialog.tsx` | Toggle "Manter aberta fora do horário" |
+| `src/hooks/useDepartments.tsx` | Interface atualizada |
+| `src/hooks/useUpdateDepartment.tsx` | Param atualizado |
+| `src/hooks/useCreateDepartment.tsx` | Param atualizado |
 
