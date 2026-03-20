@@ -135,6 +135,16 @@ Deno.serve(async (req) => {
     console.log('[Auto-Close] Starting...');
     const depts = await resolveDepartments(supabase);
 
+    // Resolver tags por nome (dinâmico) com fallback legado
+    const { data: tagRows } = await supabase
+      .from('tags')
+      .select('id, name')
+      .in('name', ['9.04 Desistência da conversa', '9.98 Falta de Interação']);
+    const tagMap = new Map((tagRows || []).map((t: any) => [t.name.trim(), t.id]));
+    const DESISTENCIA_TAG_ID = tagMap.get('9.04 Desistência da conversa') || LEGACY_DESISTENCIA_TAG_ID;
+    const FALTA_INTERACAO_TAG_ID = tagMap.get('9.98 Falta de Interação') || LEGACY_FALTA_INTERACAO_TAG_ID;
+    console.log(`[Auto-Close] Tags resolvidas: Desistência=${DESISTENCIA_TAG_ID}, FaltaInteração=${FALTA_INTERACAO_TAG_ID}`);
+
     // Buscar horário de atendimento uma vez para usar nas mensagens
     const businessHoursInfo = await getBusinessHoursInfo(supabase);
     const INACTIVITY_CLOSE_MESSAGE = buildInactivityCloseMessage(businessHoursInfo.schedule_summary);

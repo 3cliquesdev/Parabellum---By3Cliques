@@ -177,7 +177,7 @@ serve(async (req) => {
           <tr>
             <td align="center" style="padding: 25px;">
               <p style="color: #ffffff; margin: 0 0 10px 0; font-size: 24px; font-weight: bold;">
-                Seu Armazém Drop
+                ${ORG_NAME}
               </p>
               <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
                 Equipe Comercial

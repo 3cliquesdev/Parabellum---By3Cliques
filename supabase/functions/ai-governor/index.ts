@@ -369,7 +369,7 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
     if (source === 'kiwify_novo_cliente') return 'kiwify:novo_cliente';
 
     // Recuperação
-    if (deal.pipeline_id === '00000000-0000-0000-0000-000000000001') return 'recuperacao';
+    if (deal.pipeline_id === RECUPERACAO_PIPELINE_ID) return 'recuperacao';
 
     return 'direto';
   };
