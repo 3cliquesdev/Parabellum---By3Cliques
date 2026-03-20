@@ -3912,6 +3912,7 @@ serve(async (req) => {
               useAI: true,
               aiNodeActive: true,
               stayOnNode: true,
+              stateId: activeState.id,
               nodeId: currentNode.id,
               flowId: activeState.flow_id,
               contextPrompt: currentNode.data?.context_prompt,
