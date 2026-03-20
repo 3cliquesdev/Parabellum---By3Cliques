@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
       operation_id,
       origin_id,
       tag_ids,
+      department_id_override,
     }: CreateTicketRequest = await req.json();
 
     console.log('📝 Request data:', {
