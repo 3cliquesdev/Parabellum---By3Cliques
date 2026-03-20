@@ -1380,7 +1380,7 @@ serve(async (req) => {
           content: `🧪 ─── TESTE DE FLUXO INICIADO ───\nFluxo: "${flow.name}"${draftLabel}`,
           sender_type: 'system',
           is_ai_generated: false,
-          channel: 'web_chat',
+          channel: conversation?.channel || 'web_chat',
           status: 'sent'
         });
         console.log('[process-chat-flow] 🧪 System separator message inserted');
@@ -3448,6 +3448,21 @@ serve(async (req) => {
            (forbidFinancial && msgLower.length > 0 && isFinancialAction && !isFinancialInfo));
         if (otpVerifiedInFlow && (isFinancialAction || forceFinancialExit)) {
           console.log('[process-chat-flow] 🔓 V16.2 Bug36: OTP verificado — financialIntentMatch SUPRIMIDO, mantendo no nó AI para coleta');
+          
+          // 🆕 FIX #EE1426A1 Fase 4: Sincronizar departamento do ticketConfig quando OTP verificado
+          const nodeTicketConfig = currentNode.data?.ticket_config;
+          if (nodeTicketConfig?.department_id) {
+            try {
+              const deptUpdate: Record<string, any> = { department: nodeTicketConfig.department_id };
+              if (nodeTicketConfig.assigned_to) {
+                deptUpdate.assigned_to = nodeTicketConfig.assigned_to;
+              }
+              await supabaseClient.from('conversations').update(deptUpdate).eq('id', conversationId);
+              console.log(`[process-chat-flow] 🏢 FIX#EE1426A1: Dept/assigned sincronizado do ticketConfig: dept=${nodeTicketConfig.department_id} assigned=${nodeTicketConfig.assigned_to || 'none'}`);
+            } catch (deptSyncErr) {
+              console.error('[process-chat-flow] ⚠️ Erro ao sincronizar departamento do ticketConfig:', deptSyncErr);
+            }
+          }
         }
         if (forceFinancialExit) {
           console.log('[process-chat-flow] 🔒 forceFinancialExit=true recebido do webhook, forçando exit do nó AI');
@@ -3704,10 +3719,17 @@ serve(async (req) => {
         }
 
         // 🆕 forceAIExit: IA detectou handoff (strict RAG ou confidence) e quer sair do nó
-        if (forceAIExit) {
+        // 🆕 FIX #EE1426A1 Fase 2: Quando OTP está verificado no nó financeiro, NÃO permitir aiExitForced
+        // Isso evita que "Quero sacar" pós-OTP caia em fallback_phrase_detected → escape node
+        if (forceAIExit && otpVerifiedInFlow) {
+          console.log('[process-chat-flow] 🛡️ FIX#EE1426A1: forceAIExit=true BLOQUEADO — OTP verificado, mantendo no nó financeiro para coleta');
+          aiExitForced = false;
+        } else if (forceAIExit) {
           console.log('[process-chat-flow] 🔄 forceAIExit=true recebido do webhook, forçando exit do nó AI (IA não conseguiu resolver)');
+          aiExitForced = true;
+        } else {
+          aiExitForced = false;
         }
-        aiExitForced = !!forceAIExit;
 
         // 🆕 INTENT DATA: Salvar ai_exit_intent no collectedData quando recebido do webhook
         if (intentData && intentData.ai_exit_intent) {
@@ -4950,9 +4972,11 @@ serve(async (req) => {
           const preMsgs = [...extraMessages].filter(Boolean).join('\n\n');
           if (preMsgs) {
             try {
+              // 🆕 FIX #EE1426A1 Fase 3: Usar canal da conversa em vez de hardcoded web_chat
+              const transferChannel = conversation?.channel || convForDelivery?.channel || 'web_chat';
               await supabaseClient.from('messages').insert({
                 conversation_id: conversationId, content: preMsgs,
-                sender_type: 'user', is_ai_generated: true, is_internal: false, status: 'sent', channel: 'web_chat',
+                sender_type: 'user', is_ai_generated: true, is_internal: false, status: 'sent', channel: transferChannel,
               });
             } catch (e) { console.error('[process-chat-flow] ⚠️ Failed to send pre-transfer messages:', e); }
           }
