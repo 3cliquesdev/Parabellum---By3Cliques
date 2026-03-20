@@ -3704,10 +3704,17 @@ serve(async (req) => {
         }
 
         // 🆕 forceAIExit: IA detectou handoff (strict RAG ou confidence) e quer sair do nó
-        if (forceAIExit) {
+        // 🆕 FIX #EE1426A1 Fase 2: Quando OTP está verificado no nó financeiro, NÃO permitir aiExitForced
+        // Isso evita que "Quero sacar" pós-OTP caia em fallback_phrase_detected → escape node
+        if (forceAIExit && otpVerifiedInFlow) {
+          console.log('[process-chat-flow] 🛡️ FIX#EE1426A1: forceAIExit=true BLOQUEADO — OTP verificado, mantendo no nó financeiro para coleta');
+          aiExitForced = false;
+        } else if (forceAIExit) {
           console.log('[process-chat-flow] 🔄 forceAIExit=true recebido do webhook, forçando exit do nó AI (IA não conseguiu resolver)');
+          aiExitForced = true;
+        } else {
+          aiExitForced = false;
         }
-        aiExitForced = !!forceAIExit;
 
         // 🆕 INTENT DATA: Salvar ai_exit_intent no collectedData quando recebido do webhook
         if (intentData && intentData.ai_exit_intent) {
