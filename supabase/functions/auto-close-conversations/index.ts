@@ -135,6 +135,7 @@ Deno.serve(async (req) => {
     )
 
     console.log('[Auto-Close] Starting...');
+    const depts = await resolveDepartments(supabase);
 
     // Buscar horário de atendimento uma vez para usar nas mensagens
     const businessHoursInfo = await getBusinessHoursInfo(supabase);
