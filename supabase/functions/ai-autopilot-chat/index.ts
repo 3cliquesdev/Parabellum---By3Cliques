@@ -8974,6 +8974,22 @@ Via: Atendimento Automatizado (IA)`;
               console.log('[ai-autopilot-chat] âœ… Ticket criado com sucesso:', ticket.id);
               
               ticketCreatedSuccessfully = true; // 🔒 Marcar sucesso (previne duplicação no fallback)
+
+              // 🏷️ Inserir tag_ids do ticket config (se configurado no fluxo)
+              if (tc?.tag_ids?.length > 0 && ticket?.id) {
+                try {
+                  const tagInserts = tc.tag_ids.map((tid: string) => ({
+                    ticket_id: ticket.id,
+                    tag_id: tid,
+                  }));
+                  await supabaseClient
+                    .from('ticket_tags')
+                    .upsert(tagInserts, { onConflict: 'ticket_id,tag_id', ignoreDuplicates: true });
+                  console.log('[ai-autopilot-chat] 🏷️ Tags do fluxo aplicadas ao ticket:', tc.tag_ids.length);
+                } catch (tagErr) {
+                  console.warn('[ai-autopilot-chat] ⚠️ Erro ao inserir tag_ids no ticket:', tagErr);
+                }
+              }
               
               // âœ… ENVIAR EMAIL DE CONFIRMAÇÃO
               try {

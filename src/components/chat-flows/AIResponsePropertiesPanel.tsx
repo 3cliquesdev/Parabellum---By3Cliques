@@ -379,6 +379,59 @@ export function AIResponsePropertiesPanel({
               </div>
             </div>
 
+            {/* Tags do Ticket */}
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Tags do Ticket</Label>
+              <div className="flex flex-wrap gap-1.5 p-2 border rounded-md min-h-[36px] bg-background">
+                {(ticketConfig.tag_ids || []).map((tagId: string) => {
+                  const tag = allTags.find((t: any) => t.id === tagId);
+                  if (!tag) return null;
+                  return (
+                    <Badge
+                      key={tagId}
+                      variant="secondary"
+                      className="text-[10px] cursor-pointer hover:bg-destructive/20"
+                      style={tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color, borderColor: tag.color } : {}}
+                      onClick={() => {
+                        const current = ticketConfig.tag_ids || [];
+                        updateTicketConfig("tag_ids", current.filter((id: string) => id !== tagId));
+                      }}
+                    >
+                      {tag.name} ✕
+                    </Badge>
+                  );
+                })}
+                {(ticketConfig.tag_ids || []).length === 0 && (
+                  <span className="text-[10px] text-muted-foreground">Nenhuma tag selecionada</span>
+                )}
+              </div>
+              <Select
+                value=""
+                onValueChange={(tagId) => {
+                  const current = ticketConfig.tag_ids || [];
+                  if (!current.includes(tagId)) {
+                    updateTicketConfig("tag_ids", [...current, tagId]);
+                  }
+                }}
+              >
+                <SelectTrigger className="text-sm h-8 mt-1">
+                  <SelectValue placeholder="+ Adicionar tag..." />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
+                  {allTags
+                    .filter((t: any) => !(ticketConfig.tag_ids || []).includes(t.id))
+                    .map((t: any) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        <div className="flex items-center gap-2">
+                          {t.color && <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: t.color }} />}
+                          {t.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <p className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-500/10 p-2 rounded">
               🎫 A IA coleta assunto, descrição e tipo do problema com o cliente. Os defaults acima definem departamento, categoria e prioridade do ticket criado.
             </p>
