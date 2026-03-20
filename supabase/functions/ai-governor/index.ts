@@ -595,13 +595,13 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
   };
 }
 
-async function generateAIAnalysis(metrics: any, salesMetrics: any, dateStr: string, openaiKey: string): Promise<string> {
+async function generateAIAnalysis(metrics: any, salesMetrics: any, dateStr: string, openaiKey: string, brandName: string = 'CRM'): Promise<string> {
   const aiRate = metrics.totalConvs > 0 ? ((metrics.closedByAI / metrics.totalConvs) * 100).toFixed(1) : '0';
   const escRate = metrics.totalConvs > 0 ? ((metrics.escalatedToHuman / metrics.totalConvs) * 100).toFixed(1) : '0';
 
   const channelBreakdown = Object.entries(metrics.channelCounts ?? {}).map(([ch, cnt]) => `${ch}: ${cnt}`).join(', ') || 'N/A';
 
-  const prompt = `Voce e o analista executivo da Parabellum. Sua funcao e gerar um relatorio de diagnostico DIRETO e ACIONAVEL. Nao seja gentil — seja preciso e honesto.
+  const prompt = `Voce e o analista executivo da ${brandName}. Sua funcao e gerar um relatorio de diagnostico DIRETO e ACIONAVEL. Nao seja gentil — seja preciso e honesto.
 
 Este relatorio e DIARIO. Foque no que aconteceu HOJE e como melhorar AMANHA.
 
@@ -934,7 +934,7 @@ async function sendEmailReport(
             ? `<img src="${logoUrl}" alt="${brandName}" style="max-height:40px;max-width:200px;margin-bottom:8px;" />`
             : ''
           }
-          <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;">Report Diário CRM 3Cliques</h1>
+          <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;">Report Diário ${brandName}</h1>
           <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">Relatório ${dateStr} ${periodStr || ''}</p>
         </td></tr>
 
@@ -1154,7 +1154,7 @@ async function sendEmailReport(
       body: JSON.stringify({
         from: `${fromName} <${fromEmail}>`,
         to: [adminEmail],
-        subject: `Report Diario CRM 3Cliques - Relatorio ${dateStr}`,
+        subject: `Report Diario ${brandName} - Relatorio ${dateStr}`,
         html: htmlContent,
       }),
     });
@@ -1260,8 +1260,12 @@ serve(async (req) => {
       collectSalesMetrics(supabase, since.toISOString(), until.toISOString()),
     ]);
 
+    // Resolver branding dinâmico para o report
+    const { data: _org } = await supabase.from('organizations').select('name').limit(1).maybeSingle();
+    const brandNameForReport = _org?.name || 'CRM';
+
     const dateStr = formatDate(since);
-    const aiAnalysis = await generateAIAnalysis(metrics, salesMetrics, dateStr, openaiKey);
+    const aiAnalysis = await generateAIAnalysis(metrics, salesMetrics, dateStr, openaiKey, brandNameForReport);
 
     // WhatsApp message
     const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(1)}k` : `R$ ${v.toLocaleString('pt-BR')}`;
@@ -1354,7 +1358,7 @@ serve(async (req) => {
 
     const optionalSections = [tagsSummary, ticketsSummary].filter(Boolean).join('\n\n');
 
-    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr} ${periodStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${newSalesSummary}\n\n${recurrenceSummary}\n\n${salesResume}\n\n${pipelineSummaryToday}\n${channelsSummarySection}\n\n${teamTodaySummary}${optionalSections ? '\n\n' + optionalSections : ''}\n\n${'─'.repeat(30)}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const fullMessage = `*Report Diario ${brandNameForReport} — Relatorio ${dateStr} ${periodStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${newSalesSummary}\n\n${recurrenceSummary}\n\n${salesResume}\n\n${pipelineSummaryToday}\n${channelsSummarySection}\n\n${teamTodaySummary}${optionalSections ? '\n\n' + optionalSections : ''}\n\n${'─'.repeat(30)}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_${brandNameForReport} — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],

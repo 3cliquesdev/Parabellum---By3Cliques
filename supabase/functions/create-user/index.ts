@@ -279,6 +279,7 @@ serve(async (req) => {
 
     // Resolver branding dinâmico
     const brand = await resolveBranding(supabaseAdmin, { isEmployee: true });
+    const siteUrl = Deno.env.get('SITE_URL') || 'https://parabellum.work';
 
     // Enviar email de boas-vindas com Termo de Responsabilidade
     const emailHtml = `
@@ -307,14 +308,14 @@ serve(async (req) => {
           </p>
           
           <div style="background: white; border: 2px solid #1e3a5f; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <p style="margin: 8px 0; color: #1e3a5f;"><strong>Sistema:</strong> https://parabellum.work</p>
+            <p style="margin: 8px 0; color: #1e3a5f;"><strong>Sistema:</strong> ${siteUrl}</p>
             <p style="margin: 8px 0; color: #1e3a5f;"><strong>Login:</strong> ${email}</p>
             <p style="margin: 8px 0; color: #1e3a5f;"><strong>Senha Temporária:</strong> ${password}</p>
             <p style="margin: 4px 0; color: #dc2626; font-size: 13px; font-weight: 600;">(Troca obrigatória no primeiro login)</p>
           </div>
           
           <div style="text-align: center; margin: 25px 0;">
-            <a href="https://parabellum.work/auth" 
+            <a href="${siteUrl}/auth" 
                style="display: inline-block; background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); 
                       color: white; text-decoration: none; padding: 15px 40px; border-radius: 8px; 
                       font-weight: 600; font-size: 16px;">

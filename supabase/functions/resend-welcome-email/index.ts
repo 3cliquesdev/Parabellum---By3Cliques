@@ -161,6 +161,7 @@ serve(async (req) => {
 
     // Resolver branding dinâmico
     const brand = await resolveBranding(supabaseAdmin, { isEmployee: true });
+    const siteUrl = Deno.env.get('SITE_URL') || 'https://parabellum.work';
 
     // Send welcome email with responsibility term
     const emailHtml = `
@@ -189,7 +190,7 @@ serve(async (req) => {
           </p>
           
           <div style="background: white; border: 2px solid #1e3a5f; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <p style="margin: 8px 0; color: #1e3a5f;"><strong>Sistema:</strong> https://parabellum.work</p>
+            <p style="margin: 8px 0; color: #1e3a5f;"><strong>Sistema:</strong> ${siteUrl}</p>
             <p style="margin: 8px 0; color: #1e3a5f;"><strong>Login:</strong> ${email}</p>
             <p style="margin: 8px 0; color: #1e3a5f;"><strong>Senha Temporária:</strong> ${newPassword}</p>
             <p style="margin: 8px 0; color: #dc2626; font-size: 13px;">(Troca obrigatória no primeiro login)</p>

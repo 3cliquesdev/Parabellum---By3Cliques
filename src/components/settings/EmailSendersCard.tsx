@@ -115,7 +115,7 @@ function SenderDialog({ open, onOpenChange, sender }: SenderDialogProps) {
               id="from_name"
               value={formData.from_name}
               onChange={(e) => setFormData({ ...formData, from_name: e.target.value })}
-              placeholder="Ex: Seu Armazém Drop Suporte"
+              placeholder="Ex: Suporte"
             />
           </div>
 
@@ -126,7 +126,7 @@ function SenderDialog({ open, onOpenChange, sender }: SenderDialogProps) {
               type="email"
               value={formData.from_email}
               onChange={(e) => setFormData({ ...formData, from_email: e.target.value })}
-              placeholder="Ex: contato@mail.3cliques.net"
+              placeholder="Ex: contato@seudominio.com"
             />
           </div>
 
