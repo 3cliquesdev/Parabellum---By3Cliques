@@ -4407,8 +4407,18 @@ serve(async (req) => {
       } catch (primaryError) {
         const errMsg = primaryError instanceof Error ? primaryError.message : String(primaryError);
         
-        // Se é erro de quota, não tentar fallback
-        if (errMsg.includes('QUOTA_ERROR')) throw primaryError;
+        // Se é erro de quota/429, retry 1x com delay de 3s antes de desistir
+        if (errMsg.includes('QUOTA_ERROR') || errMsg.includes('429')) {
+          console.warn('[callAIWithFallback] ⚠️ QUOTA/429 detectado, aguardando 3s para retry...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          try {
+            return await tryModel(configuredModel, 'Retry pós-429');
+          } catch (retryError) {
+            console.error('[callAIWithFallback] ❌ Retry pós-429 também falhou:', retryError);
+            throw primaryError; // Propagar erro original de quota
+          }
+        }
         
         // Se é erro 400/422 (payload inválido), tentar modelo de contingência seguro
         if (errMsg.includes('400') || errMsg.includes('422')) {
