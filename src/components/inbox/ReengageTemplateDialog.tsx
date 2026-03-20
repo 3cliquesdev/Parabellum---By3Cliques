@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -16,15 +17,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, FileText, AlertTriangle } from "lucide-react";
+import { Send, FileText, AlertTriangle, Loader2 } from "lucide-react";
 
 interface ReengageTemplateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  conversationStatus?: string;
   conversation: {
     id: string;
     contact_id: string | null;
     channel: string;
+    status?: string;
     whatsapp_instance_id: string | null;
     whatsapp_meta_instance_id?: string | null;
     contacts: {
@@ -43,6 +46,7 @@ export function ReengageTemplateDialog({
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [variables, setVariables] = useState<Record<number, string>>({});
 
@@ -153,10 +157,16 @@ export function ReengageTemplateDialog({
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
       queryClient.invalidateQueries({ queryKey: ["messages", conversation.id] });
+      
+      // Fechar dialog e limpar estado
       onOpenChange(false);
       setSelectedTemplateId(null);
       setVariables({});
+      
       toast({ title: "Template enviado!", description: "Conversa reaberta e atribuída a você." });
+      
+      // Navegar para a conversa na aba "Minhas" instantaneamente
+      navigate(`/inbox?filter=mine&conversation=${conversation.id}`);
     },
     onError: (err: any) => {
       const msg = err.message || "Erro desconhecido";
@@ -185,7 +195,8 @@ export function ReengageTemplateDialog({
     }
   };
 
-  const canSend = selectedTemplate && !sendMutation.isPending;
+  const isAlreadyOpen = conversation.status === "open";
+  const canSend = selectedTemplate && !sendMutation.isPending && !isAlreadyOpen;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -267,6 +278,13 @@ export function ReengageTemplateDialog({
           </div>
         )}
 
+        {isAlreadyOpen && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm text-warning">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Conversa já está aberta. Não é necessário reengajar.
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
@@ -275,7 +293,12 @@ export function ReengageTemplateDialog({
             onClick={() => sendMutation.mutate()}
             disabled={!canSend}
           >
-            {sendMutation.isPending ? "Enviando..." : "Enviar Template"}
+            {sendMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Enviando...
+              </>
+            ) : "Enviar Template"}
           </Button>
         </DialogFooter>
       </DialogContent>
