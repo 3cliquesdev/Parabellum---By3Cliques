@@ -7348,8 +7348,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
                 description: 'O número do pedido, se aplicável. Deixe vazio se não houver pedido.' 
               },
               withdrawal_amount: {
-                type: 'number',
-                description: '[APENAS PARA SAQUE] Valor numérico solicitado pelo cliente após confirmação.'
+                type: 'string',
+                description: '[APENAS PARA SAQUE] Valor solicitado pelo cliente. Pode ser numérico ("150.00") ou texto livre ("todo saldo", "tudo", "valor total da carteira"). Aceite QUALQUER formato que o cliente usar.'
               },
               confirmed_cpf_last4: {
                 type: 'string',
