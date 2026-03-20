@@ -7062,24 +7062,13 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
-    // ✅ OTP VERIFICADO: Liberar ações financeiras + FORÇAR COLETA de dados (V16 Bug 32)
-    // 🆕 Coleta dinâmica: usar campos configurados no nó do fluxo
-    const FIELD_LABELS: Record<string, string> = {
-      name: 'Nome', email: 'Email', phone: 'Telefone',
-      cpf: 'CPF', pix_key: 'Chave PIX', bank: 'Banco',
-      reason: 'Motivo', amount: 'Valor', address: 'Endereço'
-    };
-    const collectionFields = flow_context?.smartCollectionFields && flow_context.smartCollectionFields.length > 0
-      ? flow_context.smartCollectionFields
-      : ['name', 'pix_key', 'bank', 'reason', 'amount'];
-    const fieldListFormatted = collectionFields
-      .map((f: string) => `${FIELD_LABELS[f] || f}:`)
-      .join('\n');
-    const structuredCollectionMessage = `Para dar andamento à sua solicitação, preciso que me envie os dados abaixo com atenção 😊
-
-${fieldListFormatted}
-
-⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução do seu caso e precisaríamos entrar em contato novamente para corrigir. Seja claro no motivo da sua solicitação!`;
+    // ✅ OTP VERIFICADO: Liberar ações financeiras + FORÇAR COLETA de dados
+    // 🆕 REFATORADO: Usa buildCollectionMessage como fonte única de verdade
+    const structuredCollectionMessage = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, {
+      prefix: '',
+      intent: 'sua solicitação',
+      format: 'plain'
+    }) + '\n\n⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução do seu caso.';
 
     // 🆕 FIX: Detectar intenção original do cliente no histórico para injetar no prompt pós-OTP
     let originalIntentLabel = '';
