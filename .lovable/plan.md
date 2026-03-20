@@ -1,53 +1,49 @@
 
 
-# Corrigir TODOS os pontos de "template hardcore" — Respeitar Objective do Fluxo
+# Corrigir Template de Coleta + Adicionar Tags ao Ticket Config
 
-## Problema
+## Problema 1: Template do IA Response sendo ignorado
 
-A correção anterior (L6913-6934 no `identityWallNote`) foi aplicada corretamente, mas existem **5 outros pontos** no `ai-autopilot-chat/index.ts` que continuam despejando o template completo de coleta PIX de forma literal, ignorando o `objective` do nó. O fluxo é soberano — se o nó tem `objective` dizendo "pergunte um campo por vez", TODOS os caminhos devem respeitar isso.
+A correção anterior fez o `objective` ter prioridade **absoluta** sobre o `description_template`. Porém, o `description_template` é o template configurado pelo administrador no painel do IA Response — ele É o fluxo soberano. A regra correta é:
 
-## Pontos a corrigir
+- **Se tem `description_template`** → Enviar o template verbatim (tudo de uma vez). É a configuração explícita do administrador.
+- **Se NÃO tem `description_template` mas tem `smartCollectionFields` + `objective`** → Aí sim, seguir o objective (campo a campo).
+- **Se NÃO tem nenhum** → Fallback genérico.
 
-| # | Linha | Contexto | O que faz hoje | Correção |
-|---|-------|----------|----------------|----------|
-| 1 | **L6519-6520** | `directOTPSuccessResponse` — resposta direta quando OTP valida inline | Envia `buildCollectionMessage()` verbatim | Se `nodeObjective` existe, enviar apenas "Identidade confirmada! ✅" e deixar a LLM seguir o objective |
-| 2 | **L7067-7089** | `otpVerifiedInstruction` — instrução no system prompt | Diz "ENVIE EXATAMENTE esta mensagem" e "NÃO pergunte um campo por vez" | Se `nodeObjective` existe, substituir por instrução que manda seguir o objective com campos como referência |
-| 3 | **L8006-8009** | Fallback quando LLM retorna vazio + OTP verificado | Despeja `structuredCollectionMessage` direto | Se `nodeObjective` existe, usar mensagem genérica + delegar à LLM |
-| 4 | **L8652-8666** | Handler de verificação OTP inline | Envia "preciso dos seguintes dados:" + template completo | Se `nodeObjective` existe, enviar apenas confirmação e deixar LLM coletar campo a campo |
-| 5 | **L9831-9834** | Fallback blocker (FIX#57AA2190) | Envia `buildCollectionMessage` diretamente ao WhatsApp | Se `nodeObjective` existe, enviar confirmação genérica e deixar LLM seguir |
+### Pontos a corrigir no `ai-autopilot-chat/index.ts`
 
-## Lógica unificada
+Nos 6 locais onde `nodeObjective` sobrescreve a lógica, adicionar check: se `flow_context?.ticketConfig?.description_template` existe, ele tem prioridade máxima (envia verbatim). O `objective` só governa quando a coleta é via `smartCollectionFields` sem template.
 
-Em todos os 5 pontos, aplicar o mesmo padrão:
+| Local | Linha ~aprox | Mudança |
+|-------|-------------|---------|
+| `identityWallNote` pós-OTP | ~6922 | `description_template` → enviar verbatim; `smartCollectionFields` + objective → campo a campo |
+| `directOTPSuccessResponse` | ~6520 | Idem |
+| `otpVerifiedInstruction` system prompt | ~7073 | Idem |
+| Fallback LLM vazio | ~8006 | Idem |
+| OTP handler inline | ~8684 | Idem |
+| Fallback blocker | ~9871 | Idem |
 
-```typescript
-const nodeObjective = flow_context?.objective;
+## Problema 2: Adicionar campo `tag_ids` ao Ticket Config
 
-if (nodeObjective) {
-  // Fluxo soberano: não enviar template literal
-  // Enviar apenas confirmação curta, a LLM segue o objective
-  response = `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`;
-} else {
-  // Sem objective: manter comportamento atual (template literal)
-  response = buildCollectionMessage(...);
-}
-```
+O `generate-ticket-from-conversation` já suporta `tag_ids`. Falta:
 
-Para o ponto 2 (`otpVerifiedInstruction` no system prompt), a lógica muda de:
-```
-"ENVIE EXATAMENTE esta mensagem... NÃO pergunte um campo por vez"
-```
-Para (quando `nodeObjective` existe):
-```
-"SIGA O OBJECTIVE DO NÓ: ${nodeObjective}. 
-Campos a coletar (referência interna, NÃO envie tudo de uma vez): ${structuredCollectionMessage}"
-```
+### Frontend — `AIResponsePropertiesPanel.tsx`
+Adicionar multi-select de Tags dentro da seção `ticketConfig.enabled`, usando o hook `useTags` (já importado). O campo salva `tag_ids: string[]` no `ticket_config`.
 
-## Arquivo afetado
+### Backend — `ai-autopilot-chat/index.ts`
+1. Adicionar `tag_ids` à interface `FlowContext.ticketConfig`
+2. Na criação de ticket (L8902-8917), após o `insert`, se `tc?.tag_ids?.length > 0`, inserir em `ticket_tags`
+3. Na chamada a `generate-ticket-from-conversation` (L6271), passar `tag_ids: tc?.tag_ids`
+
+### Backend — `process-chat-flow/index.ts`
+Já propaga `ticket_config` inteiro do nó, então `tag_ids` será incluído automaticamente.
+
+## Resumo de arquivos
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/ai-autopilot-chat/index.ts` | 5 blocos condicionais adicionados |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Hierarquia: `description_template` > `objective+smartFields` > fallback; + suporte a `tag_ids` na criação de ticket |
+| `src/components/chat-flows/AIResponsePropertiesPanel.tsx` | Multi-select de Tags no ticket config |
 
 ## Deploy
 - `ai-autopilot-chat`
