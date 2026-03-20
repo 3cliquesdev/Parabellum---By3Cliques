@@ -95,7 +95,7 @@ serve(async (req) => {
 
         // Verificar se excedeu tentativas
         if (codeInfo.attempts >= 3) {
-          if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'max_attempts', channel: 'whatsapp' }).then(() => {}).catch(() => {});
+          if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'max_attempts', channel: 'whatsapp' } as any).then(() => {});
           return new Response(JSON.stringify({
             success: false,
             error: 'Máximo de tentativas excedido. Solicite um novo código.'
