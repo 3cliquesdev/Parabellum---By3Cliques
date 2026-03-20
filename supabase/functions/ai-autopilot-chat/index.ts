@@ -1128,7 +1128,7 @@ const REFUND_ACTION_PATTERNS = [
   /devolver\s+pedido/i,                               // "devolver pedido"
 ];
 
-// 🆕 Padrões de CANCELAMENTO DE ASSINATURA (SEM OTP) - Kiwify
+// 🆕 Padrões de CANCELAMENTO DE ASSINATURA (SEM OTP)
 const CANCELLATION_ACTION_PATTERNS = [
   /cancelar\s+(minha\s+)?assinatura/i,                // "cancelar minha assinatura"
   /cancelamento\s+(de\s+)?assinatura/i,               // "cancelamento de assinatura"
