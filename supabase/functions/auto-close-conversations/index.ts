@@ -563,8 +563,9 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-            // Tag configurada pelo departamento ou fallback padrão
-            const aiTagId = dept.ai_auto_close_tag_id || FALTA_INTERACAO_TAG_ID;
+            // Tag do fluxo → departamento → fallback padrão
+            const flowCloseTag3a = await getFlowCloseTagId(supabase, conv.id);
+            const aiTagId = flowCloseTag3a || dept.ai_auto_close_tag_id || FALTA_INTERACAO_TAG_ID;
             await supabase.from('conversation_tags').upsert({
               conversation_id: conv.id,
               tag_id: aiTagId,
