@@ -5642,8 +5642,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       
       // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente â†’ PEDIR EMAIL PRIMEIRO
       const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated && !isPhoneVerified;
-      const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-      const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      // Usa DEPT_COMERCIAL_ID / DEPT_SUPORTE_ID centralizados
       
       console.log('[ai-autopilot-chat] 🎯 Handoff department decision:', {
         isLeadWithoutEmail,
