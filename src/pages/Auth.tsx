@@ -11,8 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Target } from "lucide-react";
 import { z } from "zod";
 import { useCRMBranding } from "@/hooks/useCRMBranding";
+import logoFallbackImg from "@/assets/logo_3cliques_horizontal.png";
 
-const logoFallback = "/logo-parabellum-light.png";
+const logoFallback = logoFallbackImg;
 const authSchema = z.object({
   email: z.string().email({
     message: "E-mail inválido"
