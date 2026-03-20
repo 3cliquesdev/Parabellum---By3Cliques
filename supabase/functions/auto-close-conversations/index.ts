@@ -393,12 +393,13 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-           // 6. Adicionar a tag "9.98 Falta de Interação"
+           // 6. Adicionar tag do fluxo ou "9.98 Falta de Interação"
+          const flowCloseTag3 = await getFlowCloseTagId(supabase, conversation.id);
           await supabase
             .from('conversation_tags')
             .upsert({
               conversation_id: conversation.id,
-              tag_id: FALTA_INTERACAO_TAG_ID,
+              tag_id: flowCloseTag3 || FALTA_INTERACAO_TAG_ID,
             }, {
               onConflict: 'conversation_id,tag_id',
               ignoreDuplicates: true
