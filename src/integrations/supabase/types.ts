@@ -6273,6 +6273,47 @@ export type Database = {
           },
         ]
       }
+      otp_verification_audit: {
+        Row: {
+          attempt_number: number | null
+          channel: string | null
+          contact_id: string | null
+          conversation_id: string | null
+          created_at: string | null
+          id: string
+          otp_reason: string | null
+          result: string
+        }
+        Insert: {
+          attempt_number?: number | null
+          channel?: string | null
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          otp_reason?: string | null
+          result: string
+        }
+        Update: {
+          attempt_number?: number | null
+          channel?: string | null
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          id?: string
+          otp_reason?: string | null
+          result?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "otp_verification_audit_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipeline_sales_reps: {
         Row: {
           created_at: string | null
