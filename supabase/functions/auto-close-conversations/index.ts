@@ -575,13 +575,22 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-            // Tag do fluxo → departamento → fallback padrão
-            const flowCloseTag3a = await getFlowCloseTagId(supabase, conv.id);
-            const aiTagId = flowCloseTag3a || dept.ai_auto_close_tag_id || FALTA_INTERACAO_TAG_ID;
-            await supabase.from('conversation_tags').upsert({
-              conversation_id: conv.id,
-              tag_id: aiTagId,
-            }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+            // Tag do fluxo → departamento → fallback padrão (respeitar tags existentes da IA)
+            const { data: existingTags3a } = await supabase
+              .from('conversation_tags')
+              .select('tag_id')
+              .eq('conversation_id', conv.id);
+            
+            if (existingTags3a && existingTags3a.length > 0) {
+              console.log(`[Auto-Close] Stage 3: Conversa ${conv.id} já tem ${existingTags3a.length} tag(s) — mantendo tags existentes`);
+            } else {
+              const flowCloseTag3a = await getFlowCloseTagId(supabase, conv.id);
+              const aiTagId = flowCloseTag3a || dept.ai_auto_close_tag_id || FALTA_INTERACAO_TAG_ID;
+              await supabase.from('conversation_tags').upsert({
+                conversation_id: conv.id,
+                tag_id: aiTagId,
+              }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+            }
 
             // CSAT se configurado
             if (dept.send_rating_on_close) {
