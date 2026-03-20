@@ -71,7 +71,7 @@ serve(async (req) => {
         
         // Verificar se já foi usado
         if (codeInfo.verified) {
-          if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'invalid_code', channel: 'whatsapp' }).then(() => {}).catch(() => {});
+          if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'invalid_code', channel: 'whatsapp' } as any).then(() => {});
           return new Response(JSON.stringify({
             success: false,
             error: 'Este código já foi utilizado. Verifique seu email para o código mais recente.'
