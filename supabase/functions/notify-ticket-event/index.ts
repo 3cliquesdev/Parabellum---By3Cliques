@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { resolveBranding } from "../_shared/branding-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
