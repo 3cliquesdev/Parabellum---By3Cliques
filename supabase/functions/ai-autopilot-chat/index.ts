@@ -7005,7 +7005,7 @@ Olá ${contactName}! Sua identidade foi verificada com sucesso.
 - Pedir dados de chave PIX nova — o cliente JÁ TEM um saque pendente com erro
 - Tratar como nova solicitação de saque
 - Pedir OTP novamente`;
-      } else if (otpJustValidated && (flow_context?.ticketConfig?.description_template || flow_context?.smartCollectionFields?.length > 0)) {
+      } else if (otpJustValidated && (flow_context?.ticketConfig?.description_template || (flow_context?.smartCollectionFields?.length ?? 0) > 0)) {
         const hasDescTemplateWall = !!(flow_context as any)?.ticketConfig?.description_template;
         
         if (hasDescTemplateWall) {
