@@ -1,43 +1,30 @@
 
-# Fix: Template de coleta PIX não enviado após OTP verificado — Conversa #8F42B1C3
+# Fix: IA Alucinando Nome da Empresa ("HidraPure") — Conversa Ronildo Oliveira
 
 ## Diagnóstico
 
-**Sintoma:** Após OTP verificado no fluxo financeiro, a IA envia mensagem genérica "✅ Identidade verificada com sucesso..." em vez do template de coleta PIX.
+**Sintoma:** A IA se apresentou como "assistente virtual da HidraPure" para um cliente no fluxo financeiro, sendo que HidraPure é apenas uma organização-cliente cadastrada no CRM.
 
-**Log decisivo:**
-```
-POST-OTP SAQUE — primeira interação sem template { aiInteractions: 0, hasSaqueIntent: true }
-```
+**Causa raiz:** O system prompt da persona Helper e a instrução de onboarding não injetavam o nome da empresa real. Sem referência explícita, a LLM alucionou "HidraPure" a partir dos dados de contexto do contato (campo `contactOrgName`).
 
-**Causa raiz DUPLA:**
+## Correções Aplicadas — `ai-autopilot-chat/index.ts`
 
-### Bug 1 — Webhook Buffer Incompleto (PRINCIPAL)
-O `meta-whatsapp-webhook` ao usar batching (L1273-1293) salva `flowData` no `message_buffer` **SEM** as propriedades:
-- `ticketConfig` ← contém `description_template`
-- `otpVerified`
-- `smartCollectionEnabled` / `smartCollectionFields`
-- `forbidSupport` / `returnReasons` / `collectedData` / `closeTagId` / `stateId`
+### 1. Busca dinâmica do brand name
+- Nova query paralela no bloco de enrichment (L2053): `email_branding` → `is_default_customer = true` → campo `name`
+- Variável `companyBrandName` propagada para os prompts
 
-Quando `process-buffered-messages` reconstrói o `flow_context` a partir desse `flowData` incompleto, o `ticketConfig` chega como `null` → `hasDescTemplateGuard = false`.
+### 2. Injeção no onboarding (primeira mensagem)
+- Template atualizado com `- Empresa: ${companyBrandName}`
+- Instrução anti-alucinação: "NÃO invente nomes de empresa. Use EXATAMENTE o nome informado."
+- Fallback sem nome: "NÃO mencione nenhum nome de empresa."
 
-### Bug 2 — Guard pós-OTP excessivamente restritivo
-Mesmo que o `ticketConfig` estivesse correto, o guard em L6359 exigia `hasDescTemplateGuard || !isFirstInteraction`. Na primeira interação (`aiInteractions=0`), sem template, o sistema "deixava a IA se apresentar" — gerando resposta genérica → `fallback_phrase_detected` → loop.
+### 3. Injeção no system prompt (L7438)
+- Bloco `🏢 IDENTIDADE DA EMPRESA` antes do `persona.system_prompt`
+- Instrução: "Este é o ÚNICO nome de empresa que você pode usar. NUNCA invente ou alucine outro nome."
 
-## Correções Aplicadas
+### 4. Desambiguação de `contactOrgName`
+- Label alterado de "Organização" para "Organização do cliente (empresa DELE, NÃO a sua)"
+- Evita que a LLM confunda a empresa do cliente com a identidade do sistema
 
-### 1. `meta-whatsapp-webhook/index.ts` — Buffer completo
-Adicionadas 11 propriedades faltantes no `flowData` salvo no buffer:
-`stateId`, `personaName`, `forbidSupport`, `returnReasons`, `ticketConfig`, `closeTagId`, `otpVerified`, `collectedData`, `smartCollectionEnabled`, `smartCollectionFields`.
-
-### 2. `ai-autopilot-chat/index.ts` — Fallback defensivo + guard relaxado
-- **Fallback defensivo:** Se `ticketConfig` está ausente mas `stateId` existe, reconstrói `ticketConfig` do `flow_definition` do nó atual no banco.
-- **Guard relaxado:** `hasSaqueIntent` agora é condição suficiente para ativar `_otpJustValidated`, mesmo na primeira interação.
-- **Logs estruturados:** Novo log `POST-OTP CONTEXT` com `post_otp_response_mode: template | smart_fields | generic`.
-
-### 3. Deploy
-- `meta-whatsapp-webhook`
-- `ai-autopilot-chat`
-
-## Impacto
-Corrige o bug para TODAS as conversas que passam pelo batching (que é o caminho padrão). O fallback defensivo adiciona resiliência mesmo se outros pontos de propagação falharem no futuro.
+## Deploy
+- ✅ `ai-autopilot-chat` deployed
