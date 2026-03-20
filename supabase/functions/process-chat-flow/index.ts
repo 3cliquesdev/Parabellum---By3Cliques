@@ -3663,7 +3663,7 @@ serve(async (req) => {
               subject: ticketSubject,
               description: ticketDesc,
               priority: 'high',
-              category: 'financeiro',
+              category: 'cancelamento',
               customer_id: convData?.contact_id || null,
               conversation_id: conversationId,
               status: 'open',
