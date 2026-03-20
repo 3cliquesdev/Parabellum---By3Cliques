@@ -1208,7 +1208,10 @@ serve(async (req) => {
                       console.error("[meta-whatsapp-webhook] ❌ Proactive greeting error:", errText);
                       // 🆕 FIX Bug A (#EEFFF1DD): Fallback — enviar saudação padrão direto via WhatsApp
                       try {
-                        const fallbackGreeting = "Olá! Sou a assistente virtual da 3Cliques. Posso te ajudar com informações financeiras, saques, reembolsos e dúvidas gerais. Como posso te ajudar? 😊";
+                        // Resolver nome da organização dinamicamente
+                        const { data: _orgRow } = await supabase.from('organizations').select('name').limit(1).maybeSingle();
+                        const _orgName = _orgRow?.name || 'nossa equipe';
+                        const fallbackGreeting = `Olá! Sou a assistente virtual da ${_orgName}. Como posso te ajudar? 😊`;
                         await supabase.from('messages').insert({
                           conversation_id: conversation.id, content: fallbackGreeting,
                           sender_type: 'user', is_ai_generated: true, channel: 'whatsapp'
@@ -1230,7 +1233,9 @@ serve(async (req) => {
                     console.error("[meta-whatsapp-webhook] ❌ Proactive greeting exception:", greetErr);
                     // 🆕 FIX Bug A (#EEFFF1DD): Fallback também no catch geral
                     try {
-                      const fallbackGreeting = "Olá! Sou a assistente virtual da 3Cliques. Posso te ajudar com informações financeiras, saques, reembolsos e dúvidas gerais. Como posso te ajudar? 😊";
+                      const { data: _orgRow2 } = await supabase.from('organizations').select('name').limit(1).maybeSingle();
+                      const _orgName2 = _orgRow2?.name || 'nossa equipe';
+                      const fallbackGreeting = `Olá! Sou a assistente virtual da ${_orgName2}. Como posso te ajudar? 😊`;
                       await supabase.from('messages').insert({
                         conversation_id: conversation.id, content: fallbackGreeting,
                         sender_type: 'user', is_ai_generated: true, channel: 'whatsapp'

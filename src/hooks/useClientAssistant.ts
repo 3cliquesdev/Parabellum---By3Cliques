@@ -70,8 +70,8 @@ export function useClientAssistant() {
           node_type: "ai_response",
           personaId: PORTAL_PERSONA_ID,
           allowed_sources: ["kb", "crm", "tracking"],
-          contextPrompt:
-            "[ROLE: especialista] Você é a assistente virtual do portal do cliente da 3Cliques. Responda dúvidas sobre pedidos, rastreio, devoluções e financeiro. Você TEM acesso à ferramenta check_tracking — use-a quando o cliente perguntar sobre status de pedido ou entrega. Use a base de conhecimento para dúvidas gerais. Seja direta, acolhedora e objetiva.",
+          contextPrompt: portalPersona?.system_prompt ||
+            "[ROLE: especialista] Você é a assistente virtual do portal do cliente. Responda dúvidas sobre pedidos, rastreio, devoluções e financeiro. Você TEM acesso à ferramenta check_tracking — use-a quando o cliente perguntar sobre status de pedido ou entrega. Use a base de conhecimento para dúvidas gerais. Seja direta, acolhedora e objetiva.",
           forbidQuestions: false,
           forbidOptions: false,
           maxSentences: 4,
