@@ -11255,6 +11255,7 @@ export type Database = {
         | "sugestao"
         | "reclamacao"
         | "saque"
+        | "cancelamento"
       ticket_priority: "low" | "medium" | "high" | "urgent"
       ticket_status:
         | "open"
@@ -11511,6 +11512,7 @@ export const Constants = {
         "sugestao",
         "reclamacao",
         "saque",
+        "cancelamento",
       ],
       ticket_priority: ["low", "medium", "high", "urgent"],
       ticket_status: [
