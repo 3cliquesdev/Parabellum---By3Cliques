@@ -24,6 +24,9 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
   const [color, setColor] = useState("#3B82F6");
   const [whatsappNumber, setWhatsappNumber] = useState("");
   
+  // After-hours behavior
+  const [afterHoursKeepOpen, setAfterHoursKeepOpen] = useState(false);
+
   // Slow response alert settings
   const [slowResponseAlertEnabled, setSlowResponseAlertEnabled] = useState(false);
   const [slowResponseAlertMinutes, setSlowResponseAlertMinutes] = useState<number | "">("");
@@ -49,6 +52,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
       setDescription(department.description || "");
       setColor(department.color);
       setWhatsappNumber(department.whatsapp_number || "");
+      setAfterHoursKeepOpen(department.after_hours_keep_open ?? false);
       setSlowResponseAlertEnabled(department.slow_response_alert_enabled ?? false);
       setSlowResponseAlertMinutes(department.slow_response_alert_minutes ?? "");
       setSlowResponseAlertTagId(department.slow_response_alert_tag_id ?? "");
@@ -63,6 +67,7 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
       setDescription("");
       setColor("#3B82F6");
       setWhatsappNumber("");
+      setAfterHoursKeepOpen(false);
       setSlowResponseAlertEnabled(false);
       setSlowResponseAlertMinutes("");
       setSlowResponseAlertTagId("");
@@ -105,6 +110,8 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
       // Human auto-close
       human_auto_close_minutes: humanAutoCloseMinutesValue,
       human_auto_close_tag_id: humanAutoCloseEnabled && humanAutoCloseTagId ? humanAutoCloseTagId : null,
+      // After-hours behavior
+      after_hours_keep_open: afterHoursKeepOpen,
     };
 
     if (department) {
@@ -206,6 +213,23 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
               <p className="text-xs text-muted-foreground">
                 Apenas números (DDI + DDD + número). Ex: 5511999999999
               </p>
+            </div>
+
+            <Separator className="my-4" />
+
+            {/* After-hours keep open */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="afterHoursKeepOpen">Manter conversa aberta fora do horário</Label>
+                <p className="text-xs text-muted-foreground">
+                  Conversas recebem mensagem de fora do horário mas permanecem na fila para distribuição no próximo dia útil.
+                </p>
+              </div>
+              <Switch
+                id="afterHoursKeepOpen"
+                checked={afterHoursKeepOpen}
+                onCheckedChange={setAfterHoursKeepOpen}
+              />
             </div>
 
             <Separator className="my-4" />

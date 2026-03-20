@@ -21,6 +21,8 @@ export interface Department {
   slow_response_alert_enabled: boolean;
   slow_response_alert_minutes: number | null;
   slow_response_alert_tag_id: string | null;
+  // After-hours behavior
+  after_hours_keep_open: boolean;
   created_at: string;
   updated_at: string;
 }
