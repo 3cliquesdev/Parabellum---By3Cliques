@@ -1,95 +1,59 @@
 
+# Plano: Fonte Única de Template — Eliminar Lógica Hardcoded
 
-## Diagnóstico — #672F64F7: Template genérico em vez do configurado
+## Problema Atual
 
-### O que aconteceu
-1. Cliente chegou ao nó financeiro, disse "Quero sacar"
-2. OTP já estava verificado de sessão anterior (recent verification no DB)
-3. O **POST-OTP guard** (L6398) foi **PULADO** porque `isFirstInteraction = true`
-4. A IA foi chamada, retornou `fallback_phrase_detected` (0 artigos)
-5. O **fallback handler** (L10006) tentou smart collection mas usou o template genérico
+A função `ai-autopilot-chat` tem **4 blocos separados** que geram mensagens de coleta de dados, cada um com seu próprio mapa `fieldLabels`/`FIELD_LABELS` hardcoded e lógica de fallback. Isso significa que a configuração do fluxo (dashboard) é ignorada na maioria dos cenários.
 
-### 3 Causas Raiz
+| Bloco | Linhas | Onde é usado |
+|-------|--------|-------------|
+| `buildCollectionMessage()` | L1219-1259 | Helper centralizado (já correto, mas subutilizado) |
+| `identityWallNote` pós-OTP | L6955-6974 | Prompt da IA quando OTP acabou de ser validado |
+| `structuredCollectionMessage` | L7057-7072 | Instrução de coleta no system prompt geral |
+| OTP verification handler | L8826-8846 | Resposta direta após verificação de OTP inline |
 
-**1. `isFirstInteraction` lê do lugar errado**
-- Código: `(conversation.customer_metadata).__ai?.interaction_count` → **undefined** → `0` → `isFirstInteraction = true` → guard pulado
-- O `interaction_count` está em `chat_flow_states.collected_data.__ai`, não em `customer_metadata`
-- **Resultado**: O guard que deveria enviar a coleta imediatamente é sempre pulado
+Cada bloco reimplementa a mesma lógica com variações e mapas diferentes, criando divergência.
 
-**2. Prioridade invertida: smartCollection > description_template**
-- O código verifica smart collection PRIMEIRO, e `description_template` só como fallback
-- Mas o usuário configurou um template explícito no dashboard:
-  ```
-  Para eu criar o seu ticket vou precisa que me enviei essas informações.
-  Nome: {{customer_name}}
-  Chave Pix: {{pix_key}}
-  Banco: {{bank}}
-  ...
-  ```
-- O `description_template` é a mensagem real que o usuário quer — deveria ter prioridade
+## Solução
 
-**3. `fieldLabels` com chaves erradas**
-- Campos configurados no nó: `pix_key`, `bank`, `reason`, `amount`, `email`
-- Chaves no mapa de labels: `nome_completo`, `tipo_chave_pix`, `chave_pix`, `valor`, `banco`, `motivo`
-- Nenhum match → cai no fallback genérico `📝 **pix_key:** [preencha]`
-- Mas como o fallback handler no L10020 ainda gera a mensagem bonita genérica, é isso que aparece
+### Passo 1 — Consolidar `buildCollectionMessage` como fonte única
 
-### Correção (3 partes)
+A função `buildCollectionMessage` (L1219) já implementa a prioridade correta:
+1. `description_template` do nó → usa direto
+2. `smartCollectionFields` → gera com labels
+3. Fallback hardcoded
 
-**Parte A — Inverter prioridade: `description_template` primeiro**
+**Ajustes nela:**
+- Aceitar um parâmetro opcional `prefix` (ex: "Identidade verificada!") para flexibilidade
+- Aceitar `intent` opcional para personalizar ("seu saque" vs "sua solicitação")
+- Remover o texto hardcoded "Para processar seu saque" do fallback — usar texto genérico
 
-Em **todos os 4 blocos** de geração de template (L2207, L6405, L6590, L10006):
-- Verificar `description_template` ANTES de smart collection
-- Se existir, usar direto com prefixo "Identidade confirmada!"
-- Smart collection só entra se NÃO houver description_template
+### Passo 2 — Substituir os 3 blocos duplicados por chamadas a `buildCollectionMessage`
 
-**Parte B — Corrigir `fieldLabels` para corresponder às chaves reais**
+- **L6955-6974** (`identityWallNote`): Substituir a resolução manual do template por `buildCollectionMessage(flow_context, contactName, ...)`
+- **L7057-7072** (`structuredCollectionMessage`): Eliminar o `FIELD_LABELS` local e usar `buildCollectionMessage`
+- **L8826-8846** (OTP handler): Eliminar `FIELD_LABELS_OTP` e usar `buildCollectionMessage`
 
-Atualizar o mapa em todos os 4 blocos para incluir as chaves reais usadas no fluxo:
-```typescript
-const fieldLabels: Record<string, string> = {
-  'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
-  'bank': '🏦 **Banco:** [nome do banco]',
-  'reason': '📝 **Motivo:** [motivo da solicitação]',
-  'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-  'email': '📧 **E-mail:** [seu e-mail]',
-  'name': '📋 **Nome completo:** [seu nome]',
-  'phone': '📱 **Telefone:** [seu telefone]',
-  'cpf': '🪪 **CPF:** [seu CPF]',
-  'address': '📍 **Endereço:** [seu endereço]',
-  // manter keys antigas por compatibilidade
-  'nome_completo': '📋 **Nome completo:** [seu nome]',
-  'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
-  'valor': '💰 **Valor:** [R$ X,XX]',
-  'banco': '🏦 **Banco:** [nome do banco]',
-  'motivo': '📝 **Motivo:** [motivo da solicitação]',
-};
+### Passo 3 — Eliminar todos os mapas `fieldLabels` duplicados
+
+Após a consolidação, restarão **zero** mapas hardcoded fora de `buildCollectionMessage`. O único mapa sobrevive dentro da função helper como fallback de último recurso (quando não há `description_template` nem `smartCollectionFields`).
+
+### Passo 4 — Corrigir leitura de `isFirstInteraction`
+
+No guard pós-OTP, buscar `interaction_count` também de `flow_context.collectedData.__ai`:
 ```
-
-**Parte C — Corrigir `isFirstInteraction` para ler do flow_context**
-
-No POST-OTP guard (L6395), buscar `interaction_count` também de `flow_context.collectedData.__ai`:
-```typescript
 const aiInteractions = 
-  (conversation.customer_metadata as any)?.__ai?.interaction_count || 
-  (flow_context as any)?.collectedData?.__ai?.interaction_count || 0;
+  customer_metadata?.__ai?.interaction_count || 
+  flow_context?.collectedData?.__ai?.interaction_count || 0;
 ```
 
-### Arquivo afetado
-`supabase/functions/ai-autopilot-chat/index.ts` — 4 blocos de template (L2207, L6390-6407, L6586-6604, L10006-10020)
+## Resultado Esperado
 
-### Resultado esperado
-"Quero sacar" com OTP verificado → template do dashboard:
-```
-✅ Identidade confirmada!
+- **1 função** (`buildCollectionMessage`) decide o que mostrar
+- **0 mapas hardcoded** espalhados pelo código
+- O `description_template` configurado no dashboard **sempre** tem prioridade
+- Os campos do fluxo controlam 100% do conteúdo da coleta
 
-Para eu criar o seu ticket vou precisa que me enviei essas informações.
-Nome: [nome]
-Chave Pix: [pix]
-Banco: [banco]
-Motivo: [motivo]
-Valor: [valor]
+## Arquivo Afetado
 
-Preencha com atenção...
-```
-
+`supabase/functions/ai-autopilot-chat/index.ts` — ~4 regiões, ~80 linhas removidas/simplificadas
