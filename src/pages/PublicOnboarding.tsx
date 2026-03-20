@@ -228,7 +228,7 @@ export default function PublicOnboarding() {
           <div className="mx-auto max-w-7xl px-6 md:px-12 py-6 flex justify-between items-center animate-fade-in">
             <div className="flex items-center gap-6">
               <img 
-                alt="Seu Armazém Drop" 
+                alt="Logo" 
                 className="h-10 w-auto object-contain" 
                 src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOvmj4FSaOAWFkqiThV2DYNv-FhkOW4Hdyl2LCSCoshUjR2133u4scoTk1QK1eiIWpff6mhnvuQJia1Id8iLbIJI7yfO8rccOI6tCo8M2S2o6epKVBVV2qrJ2vPhgOxDUCtsUfavfyxxMW33okBh6F_BiAz9qbmOYTrvc4CJhxcMd_QW3nUlecUjnbQh2mpC17ZuxPEGVEqcbR_gI0GBPRIE6_Zem3XHDsVgSKfl4n6iz-tDJj1B4PkcQWwYZkLZ5r_iYqxkp4IOI8"
               />
