@@ -342,7 +342,7 @@ export function AppSidebar() {
               <img 
                 src={sidebarLogo} 
                 alt={sidebarAlt} 
-                className="h-10 w-auto object-contain"
+                className="max-h-10 w-full object-contain"
               />
             </div>
             <div className={`h-1 w-8 rounded mx-auto ${modeInfo.color}`} />
