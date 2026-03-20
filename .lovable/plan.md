@@ -1,43 +1,37 @@
 
-# Fix: Template de coleta PIX não enviado após OTP verificado — Conversa #8F42B1C3
+
+# Correção: IA Alucinando Nome da Empresa ("HidraPure")
 
 ## Diagnóstico
 
-**Sintoma:** Após OTP verificado no fluxo financeiro, a IA envia mensagem genérica "✅ Identidade verificada com sucesso..." em vez do template de coleta PIX.
+A IA se apresentou como "assistente virtual da HidraPure" porque:
+- A persona **Helper** tem um system_prompt genérico: "assistente virtual de atendimento ao cliente" — **sem nome da empresa**
+- A instrução de onboarding (primeira mensagem) também **não injeta o nome da marca**
+- Sem referência explícita, a LLM **alucionou** "HidraPure" (que é apenas uma organização-cliente cadastrada no CRM)
+- HidraPure **não** está em knowledge articles, training examples, flow definitions, ou branding config
 
-**Log decisivo:**
-```
-POST-OTP SAQUE — primeira interação sem template { aiInteractions: 0, hasSaqueIntent: true }
-```
+## Solução
 
-**Causa raiz DUPLA:**
+Injetar o **nome da marca da empresa** dinamicamente no system prompt do `ai-autopilot-chat`, buscando da tabela `email_branding` (que já tem "3Cliques | CRM" como default).
 
-### Bug 1 — Webhook Buffer Incompleto (PRINCIPAL)
-O `meta-whatsapp-webhook` ao usar batching (L1273-1293) salva `flowData` no `message_buffer` **SEM** as propriedades:
-- `ticketConfig` ← contém `description_template`
-- `otpVerified`
-- `smartCollectionEnabled` / `smartCollectionFields`
-- `forbidSupport` / `returnReasons` / `collectedData` / `closeTagId` / `stateId`
+### Alterações no `ai-autopilot-chat/index.ts`:
 
-Quando `process-buffered-messages` reconstrói o `flow_context` a partir desse `flowData` incompleto, o `ticketConfig` chega como `null` → `hasDescTemplateGuard = false`.
+1. **Buscar brand name** no início do processamento (junto com os outros enrichments):
+   - Query: `email_branding` → `is_default_customer = true` → campo `name`
+   - Fallback: `system_configurations` key `company_name` → fallback final: sem menção
 
-### Bug 2 — Guard pós-OTP excessivamente restritivo
-Mesmo que o `ticketConfig` estivesse correto, o guard em L6359 exigia `hasDescTemplateGuard || !isFirstInteraction`. Na primeira interação (`aiInteractions=0`), sem template, o sistema "deixava a IA se apresentar" — gerando resposta genérica → `fallback_phrase_detected` → loop.
+2. **Injetar no system prompt** (linha ~7438):
+   - Antes do persona.system_prompt, adicionar: `Você trabalha para a empresa ${brandName}.`
+   - Isso garante que a LLM **nunca alucine** um nome de empresa
 
-## Correções Aplicadas
+3. **Injetar na instrução de onboarding** (linha ~7365):
+   - Atualizar o template para incluir: `- Empresa: ${brandName}` 
+   - Instrução explícita: "NÃO invente nomes de empresa. Use EXATAMENTE o nome informado."
 
-### 1. `meta-whatsapp-webhook/index.ts` — Buffer completo
-Adicionadas 11 propriedades faltantes no `flowData` salvo no buffer:
-`stateId`, `personaName`, `forbidSupport`, `returnReasons`, `ticketConfig`, `closeTagId`, `otpVerified`, `collectedData`, `smartCollectionEnabled`, `smartCollectionFields`.
+4. **Diferenciar `contactOrgName`**: Adicionar nota no prompt deixando claro que "Organização" no contexto do cliente é a **empresa do cliente** (não a sua empresa).
 
-### 2. `ai-autopilot-chat/index.ts` — Fallback defensivo + guard relaxado
-- **Fallback defensivo:** Se `ticketConfig` está ausente mas `stateId` existe, reconstrói `ticketConfig` do `flow_definition` do nó atual no banco.
-- **Guard relaxado:** `hasSaqueIntent` agora é condição suficiente para ativar `_otpJustValidated`, mesmo na primeira interação.
-- **Logs estruturados:** Novo log `POST-OTP CONTEXT` com `post_otp_response_mode: template | smart_fields | generic`.
+### Resultado Esperado
 
-### 3. Deploy
-- `meta-whatsapp-webhook`
-- `ai-autopilot-chat`
+Em vez de "Sou a assistente virtual da HidraPure", a IA dirá algo como:
+> "Olá! Sou a Helper Suporte, assistente virtual da 3Cliques | CRM. Como posso te ajudar?"
 
-## Impacto
-Corrige o bug para TODAS as conversas que passam pelo batching (que é o caminho padrão). O fallback defensivo adiciona resiliência mesmo se outros pontos de propagação falharem no futuro.
