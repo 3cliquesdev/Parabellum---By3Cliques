@@ -160,10 +160,16 @@ export function ReengageTemplateDialog({
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
       queryClient.invalidateQueries({ queryKey: ["inbox-items"] });
       queryClient.invalidateQueries({ queryKey: ["messages", conversation.id] });
+      
+      // Fechar dialog e limpar estado
       onOpenChange(false);
       setSelectedTemplateId(null);
       setVariables({});
+      
       toast({ title: "Template enviado!", description: "Conversa reaberta e atribuída a você." });
+      
+      // Navegar para a conversa na aba "Minhas" instantaneamente
+      navigate(`/inbox?filter=mine&conversation=${conversation.id}`);
     },
     onError: (err: any) => {
       const msg = err.message || "Erro desconhecido";
