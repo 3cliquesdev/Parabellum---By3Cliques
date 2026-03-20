@@ -445,6 +445,10 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
+    // Resolver nome da organização dinamicamente
+    const { data: _orgRow } = await supabase.from('organizations').select('name').limit(1).maybeSingle();
+    const orgName = _orgRow?.name || 'Sua Empresa';
+
     // Read body as text for signature verification
     const bodyText = await req.text();
     
