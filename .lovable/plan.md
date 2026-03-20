@@ -71,6 +71,31 @@
 - Instruções explícitas: apresentar-se, mencionar habilidades, desambiguar dúvida vs ação financeira
 - Removido prompt genérico "Como posso ajudar?"
 
+### Auditoria #4A8BC4A3 — Correções Aplicadas (rodada 5)
+
+**Fix 16: TDZ `isWithdrawalRequest` no bypass do Strict RAG** ✅
+- Linha 4950: `isWithdrawalRequest` era referenciada mas só declarada na L5999
+- Substituído por `isWithdrawalEarly` com detecção inline via `WITHDRAWAL_ACTION_PATTERNS`
+- Saudação proativa voltou a funcionar
+
+**Fix 17: TDZ `conversationMetadata` no guard pós-OTP** ✅
+- Linha 6340: `conversationMetadata` era referenciada mas só declarada na L6411
+- Substituído por `conversation.customer_metadata` (já disponível)
+- Fluxo "Quero sacar" pós-OTP voltou a funcionar
+
+**Fix 18: `channel: 'whatsapp'` no insert legacy do `send-meta-whatsapp`** ✅
+- Linha 450: INSERT não incluía campo `channel`, causando default `web_chat`
+- Mensagens de menu do fluxo agora aparecem corretamente no inbox
+
+**Blindagem: Comentários de zona de segurança** ✅
+- L6001: `isWithdrawalRequest` marcada com "NÃO MOVER PARA CIMA"
+- L6415: `conversationMetadata` marcada com "NÃO MOVER PARA CIMA"
+- Previne regressões TDZ em futuros refactors
+
+### Deploy
+- `ai-autopilot-chat` — Fix 16, 17 + blindagem
+- `send-meta-whatsapp` — Fix 18
+
 ### Bug A (skipInitialMessage) — Monitoramento
 - Funciona para outras conversas (log 98ab6b41 confirmado)
 - Fix 7 (stateId) melhora diagnóstico
