@@ -7092,7 +7092,28 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
     }
 
     const nodeObjectiveForOTP = flow_context?.objective;
-    const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? (nodeObjectiveForOTP ? `
+    const hasDescTemplateForOTP = !!(flow_context as any)?.ticketConfig?.description_template;
+    const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? (hasDescTemplateForOTP ? `
+
+✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
+${originalIntentLabel ? `
+🎯 INTENÇÃO ORIGINAL DO CLIENTE: O cliente JÁ informou que deseja realizar um **${originalIntentLabel}**.
+NÃO pergunte novamente o que ele quer fazer. NÃO ofereça menu A/B. Prossiga DIRETAMENTE com a coleta de dados para ${originalIntentLabel}.
+` : ''}
+🎫 TEMPLATE DO ADMINISTRADOR (PRIORIDADE MÁXIMA — ENVIE VERBATIM):
+
+ENVIE EXATAMENTE esta mensagem estruturada para o cliente (adapte apenas o tom):
+
+"${structuredCollectionMessage}"
+
+REGRAS PÓS-OTP:
+- Peça TODOS os campos faltantes numa ÚNICA mensagem usando o formato estruturado acima.
+- NÃO pergunte um campo por vez. Envie a lista completa de uma só vez.
+- NÃO busque na base de conhecimento para pedidos de saque/reembolso — sua ação é COLETAR dados.
+- NÃO emita [[FLOW_EXIT]]. Permaneça no nó até coletar TODOS os campos necessários.
+- Após o cliente responder com todos os dados, confirme e crie o ticket com create_ticket.
+- NÃO peça verificação adicional — o OTP já foi validado.
+` : nodeObjectiveForOTP ? `
 
 ✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
 ${originalIntentLabel ? `
