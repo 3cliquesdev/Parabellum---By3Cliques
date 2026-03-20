@@ -8681,13 +8681,18 @@ Para liberar operações financeiras como saque, preciso transferir você para u
 
               // Build smart collection fields
               // 🆕 REFATORADO: Usa buildCollectionMessage como fonte única de verdade
+              const nodeObjectiveOTPHandler = flow_context?.objective;
               const otpCollectionMsg = buildCollectionMessage(flow_context, verifiedContact.first_name, contact?.email, contact?.phone, {
                 prefix: '',
                 intent: detectedIntent ? `seu ${detectedIntent}` : 'sua solicitação',
                 format: 'plain'
               });
 
-              if (detectedIntent) {
+              if (detectedIntent && nodeObjectiveOTPHandler) {
+                // 🎯 Fluxo soberano: intent detectada + objective configurado → confirmação curta, LLM segue objective
+                assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅\n\nEntendi que você quer realizar um **${detectedIntent}**. Vou dar continuidade ao seu atendimento.`;
+                console.log('[ai-autopilot-chat] 🎯 OTP handler: respeitando objective do nó (não envia template literal)');
+              } else if (detectedIntent) {
                 // Intent detected — skip A/B question, go straight to data collection
                 assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅
 
