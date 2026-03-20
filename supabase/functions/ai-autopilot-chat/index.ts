@@ -1517,7 +1517,7 @@ serve(async (req) => {
     const isProactiveGreeting = (!customerMessage || (typeof customerMessage === 'string' && customerMessage.trim() === '')) && !!flow_context;
     if (!customerMessage || typeof customerMessage !== 'string' || customerMessage.trim() === '') {
       if (isProactiveGreeting) {
-        customerMessage = '[SYSTEM: O cliente acabou de chegar neste atendimento pelo menu. Apresente-se brevemente e pergunte como pode ajudar.]';
+        customerMessage = `[SYSTEM: O cliente acabou de chegar neste atendimento pelo menu (${flow_context?.node_id || 'departamento selecionado'}). Apresente-se brevemente, mencione suas habilidades no escopo deste atendimento. Se for um tema financeiro, pergunte se é uma dúvida ou se precisa de uma ação (saque, reembolso, etc). Se o cliente indicar ação financeira, informe que precisará verificar a identidade. NUNCA responda apenas "Como posso ajudar?" — sempre se apresente primeiro.]`;
         console.log('[ai-autopilot-chat] 🎯 Saudacao proativa ativada via flow_context (skipInitialMessage)');
       } else {
         console.error('[ai-autopilot-chat] ❌ BAD_REQUEST: customerMessage ausente ou vazio');
