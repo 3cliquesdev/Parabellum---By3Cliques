@@ -1,30 +1,38 @@
 
-# Fix: IA Alucinando Nome da Empresa ("HidraPure") — Conversa Ronildo Oliveira
 
-## Diagnóstico
+# Fix: IA Ainda Usando "HidraPure" — Duas Causas Raiz
 
-**Sintoma:** A IA se apresentou como "assistente virtual da HidraPure" para um cliente no fluxo financeiro, sendo que HidraPure é apenas uma organização-cliente cadastrada no CRM.
+## Diagnóstico Completo
 
-**Causa raiz:** O system prompt da persona Helper e a instrução de onboarding não injetavam o nome da empresa real. Sem referência explícita, a LLM alucionou "HidraPure" a partir dos dados de contexto do contato (campo `contactOrgName`).
+A mensagem "Sou a assistente virtual da HidraPure" **não vem da LLM**. Vem de um **fallback hardcoded** no `meta-whatsapp-webhook` que dispara quando a saudação proativa via autopilot falha.
 
-## Correções Aplicadas — `ai-autopilot-chat/index.ts`
+**Evidência nos logs:**
+- `meta-whatsapp-webhook` → "✅ Fallback greeting enviado direto via WhatsApp" (09:43 hoje)
+- O fallback faz `organizations.select('name').limit(1)` → retorna "HidraPure" (2ª organização no banco)
+- `ai-autopilot-chat` → BUILD-V3 2026-03-18 (deploy antigo, fix do brand NÃO foi deployado)
 
-### 1. Busca dinâmica do brand name
-- Nova query paralela no bloco de enrichment (L2053): `email_branding` → `is_default_customer = true` → campo `name`
-- Variável `companyBrandName` propagada para os prompts
+## Correções
 
-### 2. Injeção no onboarding (primeira mensagem)
-- Template atualizado com `- Empresa: ${companyBrandName}`
-- Instrução anti-alucinação: "NÃO invente nomes de empresa. Use EXATAMENTE o nome informado."
-- Fallback sem nome: "NÃO mencione nenhum nome de empresa."
+### 1. `meta-whatsapp-webhook/index.ts` — Fallback greeting (CAUSA PRINCIPAL)
 
-### 3. Injeção no system prompt (L7438)
-- Bloco `🏢 IDENTIDADE DA EMPRESA` antes do `persona.system_prompt`
-- Instrução: "Este é o ÚNICO nome de empresa que você pode usar. NUNCA invente ou alucine outro nome."
+Duas ocorrências idênticas (linhas ~1212 e ~1236) que buscam `organizations.name`. Trocar ambas para buscar de `email_branding` com `is_default_customer = true`:
 
-### 4. Desambiguação de `contactOrgName`
-- Label alterado de "Organização" para "Organização do cliente (empresa DELE, NÃO a sua)"
-- Evita que a LLM confunda a empresa do cliente com a identidade do sistema
+```typescript
+// ANTES (ERRADO):
+const { data: _orgRow } = await supabase.from('organizations').select('name').limit(1).maybeSingle();
+const _orgName = _orgRow?.name || 'nossa equipe';
 
-## Deploy
-- ✅ `ai-autopilot-chat` deployed
+// DEPOIS (CORRETO):
+const { data: _brandRow } = await supabase.from('email_branding').select('name').eq('is_default_customer', true).maybeSingle();
+const _brandName = _brandRow?.name || 'nossa equipe';
+```
+
+### 2. Deploy de AMBAS as funções
+
+- `ai-autopilot-chat` — contém o fix do brand name no system prompt (feito anteriormente mas nunca deployado)
+- `meta-whatsapp-webhook` — com o fallback corrigido
+
+### Resultado Esperado
+
+O fallback greeting passará a usar "3Cliques | CRM" (valor em `email_branding`) em vez de "HidraPure" (organização-cliente). E mesmo que o autopilot responda, o system prompt já terá o brand name correto.
+
