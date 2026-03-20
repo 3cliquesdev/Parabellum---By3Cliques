@@ -1,84 +1,53 @@
 
 
-# Corrigir Coleta PIX: Respeitar o Objective do Nó
+# Corrigir TODOS os pontos de "template hardcore" — Respeitar Objective do Fluxo
 
-## Problema Raiz
+## Problema
 
-Quando o OTP é validado no nó financeiro, o código em `ai-autopilot-chat/index.ts` L6916 verifica se existe `description_template` ou `smartCollectionFields` e, se sim, dispara `buildCollectionMessage()` que monta uma mensagem com **todos os campos de uma vez** como instrução determinística ("envie EXATAMENTE esta mensagem").
+A correção anterior (L6913-6934 no `identityWallNote`) foi aplicada corretamente, mas existem **5 outros pontos** no `ai-autopilot-chat/index.ts` que continuam despejando o template completo de coleta PIX de forma literal, ignorando o `objective` do nó. O fluxo é soberano — se o nó tem `objective` dizendo "pergunte um campo por vez", TODOS os caminhos devem respeitar isso.
 
-Porém, o `objective` do nó `node_ia_financeiro` diz explicitamente: **"Pergunte UM campo por vez de forma empática"**.
+## Pontos a corrigir
 
-O resultado: a IA ignora o objective e despeja o template inteiro, quebrando a experiência conversacional.
+| # | Linha | Contexto | O que faz hoje | Correção |
+|---|-------|----------|----------------|----------|
+| 1 | **L6519-6520** | `directOTPSuccessResponse` — resposta direta quando OTP valida inline | Envia `buildCollectionMessage()` verbatim | Se `nodeObjective` existe, enviar apenas "Identidade confirmada! ✅" e deixar a LLM seguir o objective |
+| 2 | **L7067-7089** | `otpVerifiedInstruction` — instrução no system prompt | Diz "ENVIE EXATAMENTE esta mensagem" e "NÃO pergunte um campo por vez" | Se `nodeObjective` existe, substituir por instrução que manda seguir o objective com campos como referência |
+| 3 | **L8006-8009** | Fallback quando LLM retorna vazio + OTP verificado | Despeja `structuredCollectionMessage` direto | Se `nodeObjective` existe, usar mensagem genérica + delegar à LLM |
+| 4 | **L8652-8666** | Handler de verificação OTP inline | Envia "preciso dos seguintes dados:" + template completo | Se `nodeObjective` existe, enviar apenas confirmação e deixar LLM coletar campo a campo |
+| 5 | **L9831-9834** | Fallback blocker (FIX#57AA2190) | Envia `buildCollectionMessage` diretamente ao WhatsApp | Se `nodeObjective` existe, enviar confirmação genérica e deixar LLM seguir |
 
-## Solução
+## Lógica unificada
 
-Alterar a lógica pós-OTP (L6913-6934) no `ai-autopilot-chat/index.ts`:
-
-**Se o nó tem `objective` configurado** (ou seja, o administrador definiu instruções específicas de comportamento), usar o `objective` como guia para a IA em vez de forçar o template literal. O `buildCollectionMessage` deve ser usado apenas como **referência interna** para a IA saber quais campos coletar, não como mensagem a ser enviada verbatim.
-
-### Edição em `ai-autopilot-chat/index.ts` (L6913-6934)
-
-Substituir a lógica de `identityWallNote` pós-OTP:
+Em todos os 5 pontos, aplicar o mesmo padrão:
 
 ```typescript
-if (!identityWallNote) {
-  const otpJustValidated = (conversation as any)._otpJustValidated;
-  const nodeObjective = flow_context?.objective;
+const nodeObjective = flow_context?.objective;
 
-  if (otpJustValidated && (flow_context?.ticketConfig?.description_template || flow_context?.smartCollectionFields?.length > 0)) {
-    
-    if (nodeObjective) {
-      // 🎯 O nó tem objective configurado — respeitar a estratégia do administrador
-      // A IA deve seguir o objective (ex: "pergunte um campo por vez")
-      // Fornecemos os campos como referência, não como mensagem literal
-      const fieldsReference = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
-      
-      identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — SEGUIR OBJECTIVE DO NÓ:**
-Olá ${contactName}! Sua identidade foi verificada com sucesso.
-
-**SUA MISSÃO (definida pelo administrador):**
-${nodeObjective}
-
-**CAMPOS A COLETAR (referência):**
-${fieldsReference}
-
-**REGRAS:**
-- Siga o objective acima como prioridade máxima
-- Após coletar TODOS os dados, use \`create_ticket\` com issue_type="saque"
-- NÃO envie todos os campos de uma vez (a menos que o objective permita)`;
-      console.log('[ai-autopilot-chat] 📋 identityWallNote: respeitando objective do nó para coleta pós-OTP');
-    } else {
-      // Sem objective — usar template literal como antes
-      const resolvedMsg = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
-      identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — COLETA DE DADOS:**
-Olá ${contactName}! Sua identidade foi verificada com sucesso.
-
-Agora envie ao cliente EXATAMENTE esta mensagem de coleta de dados (sem alterar):
-
----
-${resolvedMsg}
----
-
-Após receber todos os dados, use \`create_ticket\` com issue_type="saque".`;
-      console.log('[ai-autopilot-chat] 📋 identityWallNote: usando buildCollectionMessage literal (sem objective)');
-    }
-  } else {
-    identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado...`; // mantém o else existente
-  }
+if (nodeObjective) {
+  // Fluxo soberano: não enviar template literal
+  // Enviar apenas confirmação curta, a LLM segue o objective
+  response = `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`;
+} else {
+  // Sem objective: manter comportamento atual (template literal)
+  response = buildCollectionMessage(...);
 }
 ```
 
-## Resultado Esperado
+Para o ponto 2 (`otpVerifiedInstruction` no system prompt), a lógica muda de:
+```
+"ENVIE EXATAMENTE esta mensagem... NÃO pergunte um campo por vez"
+```
+Para (quando `nodeObjective` existe):
+```
+"SIGA O OBJECTIVE DO NÓ: ${nodeObjective}. 
+Campos a coletar (referência interna, NÃO envie tudo de uma vez): ${structuredCollectionMessage}"
+```
 
-- **Com objective configurado** (caso do nó financeiro): a IA segue "pergunte um campo por vez" e usa os campos como checklist interno
-- **Sem objective** (nós mais simples): mantém o comportamento atual de enviar template literal
-- **Nenhuma alteração no frontend ou banco** — respeita a configuração existente
-
-## Arquivo Afetado
+## Arquivo afetado
 
 | Arquivo | Mudança |
 |---------|---------|
-| `supabase/functions/ai-autopilot-chat/index.ts` | Lógica pós-OTP L6913-6934 |
+| `supabase/functions/ai-autopilot-chat/index.ts` | 5 blocos condicionais adicionados |
 
 ## Deploy
 - `ai-autopilot-chat`
