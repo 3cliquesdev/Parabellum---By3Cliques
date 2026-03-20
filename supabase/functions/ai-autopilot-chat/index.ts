@@ -1188,7 +1188,7 @@ async function createTicketSuccessMessage(
 Protocolo: #${formattedId}
 Valor Solicitado: R$ ${formattedAmount}
 ${withdrawalData.cpf_last4 ? `CPF (final): ...${withdrawalData.cpf_last4}` : ''}
-Prazo: até 7 dias úteis
+Prazo: conforme prazo informado
 
 Você receberá um email confirmando a abertura do chamado.
 Quando o saque for processado, você será notificado por email também.
@@ -6888,12 +6888,13 @@ Qual é o seu **email de compra**?"
       console.log('[ai-autopilot-chat] ❌ Detectado pedido de CANCELAMENTO - sem OTP necessário');
       
       identityWallNote += `\n\n**=== CANCELAMENTO DE ASSINATURA (SEM OTP) ===**
-O cliente quer cancelar a assinatura Kiwify.
+O cliente quer cancelar sua assinatura/curso.
 
 **PROCESSO:**
-- Oriente o cliente sobre como cancelar na plataforma Kiwify
+- Consulte a base de conhecimento para instruções de cancelamento
 - NÃO precisa de OTP para cancelamento
-- Se precisar de ajuda adicional, ofereça transferir para humano
+- Se não encontrar instruções na KB, ofereça transferir para humano
+- NÃO invente procedimentos ou links
 
 **NÃO PEÇA OTP** para esta situação.`;
     }
@@ -8780,7 +8781,7 @@ Via: Atendimento Automatizado (IA)`;
 - Chave PIX: ${args.pix_key || 'Não informada'}
 - Confirmação do Cliente: ${args.customer_confirmation ? 'Dados conferidos pelo cliente' : 'Aguardando confirmação'}
 
-**REGRAS (até 7 dias úteis):**
+**REGRAS (conforme SLA configurado):**
 - Destino: APENAS conta do titular (CPF do cliente)
 - PIX de terceiros: CANCELAR solicitação
 
@@ -9843,13 +9844,18 @@ Conversa: ${conversationId}`;
           console.log('[ai-autopilot-chat] Destino do exit:', exitDestination || 'padrao');
 
           // MULTI-AGENTE: Garantir mensagem de transferência adequada
-          const TRANSFER_LABELS: { [key: string]: string } = {
+          // Buscar nome do departamento dinamicamente do banco
+          const TRANSFER_LABELS_FALLBACK: { [key: string]: string } = {
             financeiro: 'equipe financeira', cancelamento: 'equipe de retencao',
             comercial: 'equipe comercial', consultor: 'seu consultor',
             suporte: 'equipe de suporte', internacional: 'equipe internacional',
             pedidos: 'equipe de pedidos', devolucao: 'equipe de devoluções', saque: 'equipe financeira',
           };
-          const transferLabel = TRANSFER_LABELS[exitDestination] || 'equipe responsavel';
+          let transferLabel = TRANSFER_LABELS_FALLBACK[exitDestination] || 'equipe responsavel';
+          try {
+            const { data: deptData } = await supabaseClient.from('departments').select('name').ilike('name', `%${exitDestination}%`).limit(1).maybeSingle();
+            if (deptData?.name) transferLabel = deptData.name;
+          } catch (_e) { /* fallback ao mapa estático */ }
           const visibleMessage = assistantMessage.replace(/\[\[FLOW_EXIT(?::[a-zA-Z_]+)?\]\]/gi, '').trim();
 
           if (visibleMessage.length < 20) {
