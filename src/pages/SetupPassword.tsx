@@ -9,12 +9,15 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ShieldCheck, Mail, Lock, LogOut } from "lucide-react";
 import { toast } from "sonner";
-import logoLight from "@/assets/logo-parabellum-light.png";
+import logoLightFallback from "@/assets/logo-parabellum-light.png";
+import { useCRMBranding } from "@/hooks/useCRMBranding";
 import { User, Session } from "@supabase/supabase-js";
 
 type Step = "send_code" | "verify_otp" | "set_password";
 
 export default function SetupPassword() {
+  const { data: crmBranding } = useCRMBranding();
+  const setupLogo = crmBranding?.logo_url || logoLightFallback;
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -215,8 +218,8 @@ const userEmail = user.email;
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-2">
           <img 
-            src={logoLight} 
-            alt="Logo" 
+            src={setupLogo} 
+            alt={crmBranding?.name || "Logo"} 
             className="h-16 w-auto mx-auto mb-4 object-contain" 
           />
           <CardTitle className="text-2xl">Primeiro Acesso - Validação de Segurança</CardTitle>

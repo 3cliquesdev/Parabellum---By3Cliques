@@ -45,8 +45,9 @@ import { useRealtimePermissions } from "@/hooks/useRealtimePermissions";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
-import logoLight from "@/assets/logo-parabellum-light.png";
-import logoDark from "@/assets/logo-parabellum-dark.png";
+import { useCRMBranding } from "@/hooks/useCRMBranding";
+import logoLightFallback from "@/assets/logo-parabellum-light.png";
+import logoDarkFallback from "@/assets/logo-parabellum-dark.png";
 import { useAvailabilityStatus } from "@/hooks/useAvailabilityStatus";
 import { supabase } from "@/integrations/supabase/client";
 import { useSLAAlerts } from "@/hooks/useSLAAlerts";
@@ -90,6 +91,9 @@ export function AppSidebar() {
   const { data: slaAlerts = [] } = useSLAAlerts();
   const { data: myPendingCounts } = useMyPendingCounts();
   const { theme } = useTheme();
+  const { data: crmBranding } = useCRMBranding();
+  const sidebarLogo = crmBranding?.logo_url || (theme === "dark" ? logoLightFallback : logoDarkFallback);
+  const sidebarAlt = crmBranding?.name || "Logo";
 
   // ============= PREFETCH STRATEGY =============
   // Prefetch BOTH module chunks AND data on hover for instant navigation
@@ -323,8 +327,8 @@ export function AppSidebar() {
           <div className="space-y-3">
             <div className="flex items-center justify-center">
               <img 
-                src={theme === "dark" ? logoLight : logoDark} 
-                alt="Parabellum Logo" 
+                src={sidebarLogo} 
+                alt={sidebarAlt} 
                 className="h-12 w-auto object-contain"
               />
             </div>
@@ -336,8 +340,8 @@ export function AppSidebar() {
           <div className="space-y-2">
             <div className="flex items-center justify-center mx-auto">
               <img 
-                src={theme === "dark" ? logoLight : logoDark} 
-                alt="Parabellum Logo" 
+                src={sidebarLogo} 
+                alt={sidebarAlt} 
                 className="h-10 w-auto object-contain"
               />
             </div>

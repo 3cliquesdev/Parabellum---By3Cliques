@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { OnboardingProgressBar } from "./OnboardingProgress";
 import { RefreshCw, RotateCcw, Loader2 } from "lucide-react";
+import { useCRMBranding } from "@/hooks/useCRMBranding";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,12 +27,15 @@ export function OnboardingHeader({
   onValidateAll,
   onReset,
 }: OnboardingHeaderProps) {
+  const { data: crmBranding } = useCRMBranding();
+  const systemName = crmBranding?.name || "CRM";
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Bem-vindo ao Parabellum CRM
+            Bem-vindo ao {systemName}
           </h1>
           <p className="text-muted-foreground mt-1">
             Complete as etapas abaixo para configurar seu sistema e começar a usar todos os recursos.

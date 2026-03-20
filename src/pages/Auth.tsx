@@ -10,9 +10,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Target } from "lucide-react";
 import { z } from "zod";
+import { useCRMBranding } from "@/hooks/useCRMBranding";
 
-// Use public folder for LCP optimization - makes image discoverable in initial HTML
-const logoLight = "/logo-parabellum-light.png";
+const logoFallback = "/logo-parabellum-light.png";
 const authSchema = z.object({
   email: z.string().email({
     message: "E-mail inválido"
@@ -38,6 +38,9 @@ export default function Auth() {
     role,
     loading: roleLoading
   } = useUserRole();
+  const { data: crmBranding } = useCRMBranding();
+  const brandName = crmBranding?.name || "CRM";
+  const brandLogo = crmBranding?.logo_url || logoFallback;
 
   // Redirect based on role after authentication
   useEffect(() => {
@@ -129,7 +132,7 @@ export default function Auth() {
           <div className="mb-12">
             <div className="flex items-center gap-3 mb-8">
               <Target className="h-10 w-10 text-primary" />
-              <span className="text-3xl font-bold text-primary tracking-tight">PARABELLUM</span>
+              <span className="text-3xl font-bold text-primary tracking-tight">{brandName.toUpperCase()}</span>
             </div>
             <div className="h-1 w-24 bg-primary/60 rounded-full" />
           </div>
@@ -149,7 +152,7 @@ export default function Auth() {
         {/* Footer */}
         <div className="relative z-10">
           <p className="text-sm text-slate-400">
-            © 2025 PARABELLUM CRM. Sistema Enterprise.
+            © 2025 {brandName.toUpperCase()}. Sistema Enterprise.
           </p>
         </div>
       </div>
@@ -159,7 +162,7 @@ export default function Auth() {
         <div className="w-full max-w-md space-y-8">
           {/* Mobile Logo */}
           <div className="lg:hidden mb-8 text-center">
-            <img src={logoLight} alt="PARABELLUM" width={308} height={168} className="h-24 w-auto mx-auto mb-4" loading="eager" fetchPriority="high" decoding="async" />
+            <img src={brandLogo} alt={brandName} width={308} height={168} className="h-24 w-auto mx-auto mb-4" loading="eager" fetchPriority="high" decoding="async" />
           </div>
 
           {/* Header */}

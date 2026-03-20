@@ -147,17 +147,19 @@ function BrandingDialog({ open, onOpenChange, branding }: BrandingDialogProps) {
           </div>
 
           <ImageUploader
-            label="Logo (Header)"
+            label="Logo (Header) — Apenas PNG ou JPEG"
             value={formData.logo_url}
             onChange={(url) => setFormData({ ...formData, logo_url: url || "" })}
             folder="email-branding/logos"
+            accept="image/png,image/jpeg"
           />
 
           <ImageUploader
-            label="Logo (Footer)"
+            label="Logo (Footer) — Apenas PNG ou JPEG"
             value={formData.footer_logo_url}
             onChange={(url) => setFormData({ ...formData, footer_logo_url: url || "" })}
             folder="email-branding/footer-logos"
+            accept="image/png,image/jpeg"
           />
 
           <div className="grid gap-2">
