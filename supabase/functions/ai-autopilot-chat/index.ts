@@ -1571,6 +1571,19 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // ═══════════════════════════════════════════════════════════════
+    // 🏢 RESOLUÇÃO CENTRALIZADA DE DEPARTAMENTOS (1 query, usado em todo o handler)
+    // Fallbacks = UUIDs históricos, caso a query falhe ou o dept não exista
+    // ═══════════════════════════════════════════════════════════════
+    const { data: _deptRows } = await supabaseClient
+      .from('departments')
+      .select('id, name')
+      .in('name', ['Comercial - Nacional', 'Suporte']);
+    const _deptMap = new Map((_deptRows || []).map((d: any) => [d.name, d.id]));
+    const DEPT_COMERCIAL_ID = _deptMap.get('Comercial - Nacional') || 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+    const DEPT_SUPORTE_ID  = _deptMap.get('Suporte') || '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+    console.log('[ai-autopilot-chat] 🏢 Departamentos resolvidos:', { DEPT_COMERCIAL_ID, DEPT_SUPORTE_ID });
+
     let { conversationId, customerMessage, maxHistory = 20, customer_context, flow_context }: AutopilotChatRequest = parsedBody;
 
     // 🔒 Proactive greeting: allow empty customerMessage when flow_context is present
