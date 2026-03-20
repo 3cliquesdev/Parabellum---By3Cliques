@@ -6320,7 +6320,7 @@ Posso ajudar em mais alguma coisa?`;
     // 🎯 GUARD PÓS-OTP: Detecção de intent de saque quando OTP foi
     // verificado mas LLM ainda não coletou dados PIX
     // ============================================================
-    if (hasRecentOTPVerification && !looksLikeSaqueData) {
+    if (hasRecentOTPVerification) {
       const historyUserMsgs = messageHistory
         .filter((m: any) => m.role === 'user')
         .slice().reverse().slice(0, 8);
