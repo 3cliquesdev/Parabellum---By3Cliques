@@ -1,48 +1,62 @@
 
 
-## Auditoria: Fix de `withdrawal_amount` — Status Atual
+## Auditoria Completa — Conversa #8AEAB149
 
-### O que JÁ foi aplicado corretamente
-1. **Schema da tool `create_ticket`** (linha 7366-7368): `withdrawal_amount` mudou de `number` para `string` ✅
-2. **Regras de Extração Tolerante** (linhas 7271-7283): Prompt com exemplos e instrução anti-desistência ✅
-3. **Referências `.replace()`** (linhas 8748, 8790, 8816): Usam `args.withdrawal_amount` diretamente como string ✅
+### Diagnóstico dos Logs
 
-### BUG REMANESCENTE — Vai crashar em produção
+**Linha do tempo da conversa:**
+1. 23:57 — Cliente escolheu "Financeiro", AI saudou corretamente, OTP verificado, dados coletados
+2. 23:59 — Cliente enviou dados com "todo saldo da carteira" → AI FALHOU em criar ticket (código antigo, `withdrawal_amount: number`)
+3. 00:00 — "Não consegui resolver" → escape node ativado (BUG ORIGINAL, pré-deploy)
+4. 00:18 — Agente reiniciou fluxo manualmente (`__manual_test: true`)
+5. 00:20 — Cliente escolheu "2" (Financeiro) → AI recebeu "2" como query ao invés de saudação proativa → KB miss
+6. 00:21 — Cliente enviou "2" de novo → zero_confidence → "Vacilo vai tomar no cu" → fallback → escape → "Não consegui resolver" DE NOVO
 
-**Linhas 1171 e 1182** na função `createTicketSuccessMessage()` ainda chamam `.toFixed(2)` no `withdrawalData.amount`, que agora é string:
+### Bugs Identificados
+
+**Bug 1 (CORRIGIDO):** `withdrawal_amount: number` → `string`. Já deployado.
+
+**Bug 2 (CORRIGIDO):** `.toFixed(2)` em `createTicketSuccessMessage()` → `formatAmount()`. Já deployado.
+
+**Bug 3 (NÃO CORRIGIDO — CRÍTICO):** Quando batching está ativo, o webhook salva o `flowData` no buffer SEM o campo `skipInitialMessage` (linhas 1230-1249 do `meta-whatsapp-webhook`). Quando o CRON `process-buffered-messages` pega a mensagem, `effFlowData.skipInitialMessage` é `undefined`, e o dígito "2" é enviado à AI como query normal — a saudação proativa nunca dispara.
+
+**Bug 4 (NÃO CORRIGIDO):** O `callPipeline()` do `process-buffered-messages` (linha 371) SEMPRE envia `customerMessage: concatenatedMessage`. Mesmo quando `skipInitialMessage` é detectado no CRON mode (linhas 149-172), o path de DIRECT mode (linha 320-327) não faz nenhuma verificação de `skipInitialMessage`.
+
+### Plano de Correção — 2 edições + deploy
+
+**Edição 1: `meta-whatsapp-webhook/index.ts` — Propagar `skipInitialMessage` no buffer**
+
+Na função `bufferAndSchedule` (linhas 1230-1249), adicionar `skipInitialMessage` ao objeto `flowData` salvo:
 
 ```typescript
-// Linha 1171 — VAI CRASHAR com "todo saldo da carteira".toFixed(2)
-valor: withdrawalData.amount.toFixed(2),
-
-// Linha 1182 — MESMO BUG
-Valor Solicitado: R$ ${withdrawalData.amount.toFixed(2)}
+flowData: {
+  useAI: flowData.useAI,
+  aiNodeActive: flowData.aiNodeActive,
+  skipInitialMessage: (flowData as any).skipInitialMessage || false, // ← ADICIONAR
+  flowId: flowData.flowId,
+  // ... resto dos campos existentes
+}
 ```
 
-Quando o cliente enviar "todo saldo da carteira", o ticket será criado com sucesso, mas a **mensagem de confirmação vai dar erro de runtime** (`TypeError: toFixed is not a function`), resultando em erro 500 e o cliente não receberá confirmação.
+**Edição 2: `process-buffered-messages/index.ts` — CRON mode: ampliar detecção de skipInitialMessage**
 
-### Plano de Correção
-
-**1 edição em `supabase/functions/ai-autopilot-chat/index.ts`**
-
-Substituir `.toFixed(2)` por lógica que detecta se é numérico:
+No CRON mode (linhas 149-151), o check `isMenuDigit` é muito restritivo. Se `skipInitialMessage=true`, a mensagem SEMPRE deve ser substituída por vazio, independente de ser dígito ou não:
 
 ```typescript
-// Helper inline: se for número, formata; se for texto, usa direto
-const formatAmount = (val: any) => {
-  const num = parseFloat(val);
-  return isNaN(num) ? String(val) : num.toFixed(2);
-};
+if (effFlowData?.skipInitialMessage === true) {
+  // Sempre substituir por vazio quando skipInitialMessage — não apenas dígitos
+  console.log(`[process-buffered-messages] ⏭️ Conv ${convId}: skipInitialMessage=true → saudação proativa`);
+  const greetSuccess = await callPipeline(supabase, {
+    conversationId: convId,
+    concatenatedMessage: "",
+    // ... resto igual
+  });
 ```
 
-Aplicar nas linhas 1171 e 1182:
-- `valor: formatAmount(withdrawalData.amount)` 
-- `Valor Solicitado: R$ ${formatAmount(withdrawalData.amount)}`
+**Deploy:** `meta-whatsapp-webhook` + `process-buffered-messages`
 
-**2. Deploy da Edge Function**
-
-### Resultado
-- Valor numérico ("150") → exibe "R$ 150.00"
-- Valor texto ("todo saldo da carteira") → exibe "R$ todo saldo da carteira"
-- Zero crashes, ticket + confirmação funcionam 100%
+### Resultado Esperado
+- Menu selection "2" → buffer com `skipInitialMessage=true` → CRON detecta → chama AI com "" → saudação proativa "Olá! Sou Helper Financeiro..."
+- Dados financeiros com "todo saldo" → `create_ticket` com string → ticket criado → confirmação com `formatAmount()`
+- Zero crashes, zero "Não consegui resolver" falsos
 
