@@ -31,7 +31,28 @@
 - Quando `skipInitialMessage=true`, envia mensagem vazia para disparar saudação proativa
 - Paridade com o CRON mode que já tinha essa verificação
 
-### Bug A (skipInitialMessage) — Pendente de verificação
-- Os fixes no `meta-whatsapp-webhook` e `process-buffered-messages` já estavam no código
-- Fix 6 garante cobertura DIRECT mode
-- Aguardando próximo cenário de menu+batching para validar nos logs
+### Auditoria #AFDAE1C6 — Correções Aplicadas (rodada 3)
+
+**Fix 7: `stateId` no stayOnNode do `process-chat-flow`** ✅
+- Adicionado `stateId: activeState.id` ao JSON de resposta do stayOnNode
+- Permite que o webhook propague `flow_context.stateId` para o autopilot
+- Resolve BUG E: sync OTP para `collected_data` agora funciona
+
+**Fix 8: `category: 'financial'` → `'financeiro'` no guard de saque** ✅
+- Segunda instância (linha 6280) corrigida — era duplicata do Fix 4
+- Ticket de saque agora mapeado corretamente ao departamento Financeiro
+
+**Fix 9: WhatsApp Evolution → helper unificado no guard de saque** ✅
+- Substituído query `whatsapp_instances` por `getWhatsAppInstanceForConversation` + `sendWhatsAppMessage`
+- Segunda instância corrigida — duplicata do Fix 5
+
+**Fix 10: Guard pós-OTP para intent de saque** ✅
+- Adicionado guard FORA do bloco `shouldValidateOTP`
+- Quando `hasRecentOTPVerification=true` e histórico contém intent de saque → envia template de coleta PIX
+- Evita resposta genérica "Como posso ajudar?" após OTP verificado
+- Anti-duplicata: verifica se template já foi enviado nos últimos 3 msgs
+
+### Bug A (skipInitialMessage) — Monitoramento
+- Funciona para outras conversas (log 98ab6b41 confirmado)
+- Fix 7 (stateId) melhora diagnóstico
+- Aguardando próximo cenário de menu+batching para validar
