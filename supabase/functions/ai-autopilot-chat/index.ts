@@ -1220,20 +1220,27 @@ function buildCollectionMessage(
   flowContext: any,
   contactName: string,
   contactEmail?: string,
-  contactPhone?: string
+  contactPhone?: string,
+  options?: { prefix?: string; intent?: string; format?: 'plain' | 'rich' }
 ): string {
   const tc = flowContext?.ticketConfig;
+  const prefix = options?.prefix ?? '✅ **Identidade confirmada!**';
+  const intent = options?.intent ?? 'sua solicitação';
+  const format = options?.format ?? 'rich';
 
+  // 🥇 Prioridade 1: description_template configurado no dashboard do fluxo
   if (tc?.description_template) {
     const resolved = tc.description_template
       .replace(/\{\{customer_name\}\}/g, contactName || '')
       .replace(/\{\{customer_email\}\}/g, contactEmail || '')
       .replace(/\{\{customer_phone\}\}/g, contactPhone || '');
-    return `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${resolved}`;
+    if (format === 'plain') return resolved;
+    return `${prefix}\n\nOlá ${contactName}! ${resolved}`;
   }
 
+  // 🥈 Prioridade 2: smartCollectionFields configurados no nó do fluxo
   const fields = flowContext?.smartCollectionFields;
-  if (flowContext?.smartCollectionEnabled && fields && fields.length > 0) {
+  if (fields && fields.length > 0) {
     const fieldLabels: Record<string, string> = {
       'name': '📋 **Nome completo:** [seu nome]',
       'email': '📧 **E-mail:** [seu e-mail]',
@@ -1251,11 +1258,18 @@ function buildCollectionMessage(
       'banco': '🏦 **Banco:** [nome do banco]',
       'motivo': '📝 **Motivo:** [motivo da solicitação]',
     };
+    if (format === 'plain') {
+      return fields.map((f: string) => `${fieldLabels[f] || `📝 **${f}:** [preencha]`}`).join('\n');
+    }
     const fieldsText = fields.map((f: string) => fieldLabels[f] || `📝 **${f}:** [preencha]`).join('\n');
-    return `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsText}`;
+    return `${prefix}\n\nOlá ${contactName}! Para dar andamento a ${intent}, me envie os dados abaixo:\n\n${fieldsText}\n\n⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
   }
 
-  return `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
+  // 🥉 Prioridade 3: fallback genérico (último recurso)
+  if (format === 'plain') {
+    return `Nome:\nChave PIX:\nBanco:\nMotivo:\nValor:`;
+  }
+  return `${prefix}\n\nOlá ${contactName}! Para dar andamento a ${intent}, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔐 **Chave PIX:** [sua chave completa]\n🏦 **Banco:** [nome do banco]\n📝 **Motivo:** [motivo da solicitação]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]\n\n⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
 }
 
 // ============================================================
@@ -6954,13 +6968,9 @@ O cliente quer cancelar a assinatura Kiwify.
     
     if (!identityWallNote) {
       const otpJustValidated = (conversation as any)._otpJustValidated;
-      const collectionTemplate = flow_context?.ticketConfig?.description_template;
 
-      if (otpJustValidated && collectionTemplate) {
-        const resolvedTemplate = collectionTemplate
-          .replace(/\{\{customer_name\}\}/g, contactName || '')
-          .replace(/\{\{customer_email\}\}/g, contact?.email || '')
-          .replace(/\{\{customer_phone\}\}/g, contact?.phone || '');
+      if (otpJustValidated && (flow_context?.ticketConfig?.description_template || flow_context?.smartCollectionFields?.length > 0)) {
+        const resolvedMsg = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
 
         identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — COLETA DE DADOS:**
 Olá ${contactName}! Sua identidade foi verificada com sucesso.
@@ -6968,11 +6978,11 @@ Olá ${contactName}! Sua identidade foi verificada com sucesso.
 Agora envie ao cliente EXATAMENTE esta mensagem de coleta de dados (sem alterar):
 
 ---
-${resolvedTemplate}
+${resolvedMsg}
 ---
 
 Após receber todos os dados, use \`create_ticket\` com issue_type="saque".`;
-        console.log('[ai-autopilot-chat] 📋 identityWallNote: usando description_template do chatflow para coleta pós-OTP');
+        console.log('[ai-autopilot-chat] 📋 identityWallNote: usando buildCollectionMessage centralizado para coleta pós-OTP');
       } else {
         identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.
 
@@ -7052,24 +7062,13 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : ''}
 ` : '';
 
-    // ✅ OTP VERIFICADO: Liberar ações financeiras + FORÇAR COLETA de dados (V16 Bug 32)
-    // 🆕 Coleta dinâmica: usar campos configurados no nó do fluxo
-    const FIELD_LABELS: Record<string, string> = {
-      name: 'Nome', email: 'Email', phone: 'Telefone',
-      cpf: 'CPF', pix_key: 'Chave PIX', bank: 'Banco',
-      reason: 'Motivo', amount: 'Valor', address: 'Endereço'
-    };
-    const collectionFields = flow_context?.smartCollectionFields && flow_context.smartCollectionFields.length > 0
-      ? flow_context.smartCollectionFields
-      : ['name', 'pix_key', 'bank', 'reason', 'amount'];
-    const fieldListFormatted = collectionFields
-      .map((f: string) => `${FIELD_LABELS[f] || f}:`)
-      .join('\n');
-    const structuredCollectionMessage = `Para dar andamento à sua solicitação, preciso que me envie os dados abaixo com atenção 😊
-
-${fieldListFormatted}
-
-⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução do seu caso e precisaríamos entrar em contato novamente para corrigir. Seja claro no motivo da sua solicitação!`;
+    // ✅ OTP VERIFICADO: Liberar ações financeiras + FORÇAR COLETA de dados
+    // 🆕 REFATORADO: Usa buildCollectionMessage como fonte única de verdade
+    const structuredCollectionMessage = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, {
+      prefix: '',
+      intent: 'sua solicitação',
+      format: 'plain'
+    }) + '\n\n⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução do seu caso.';
 
     // 🆕 FIX: Detectar intenção original do cliente no histórico para injetar no prompt pós-OTP
     let originalIntentLabel = '';
@@ -8823,17 +8822,12 @@ Para liberar operações financeiras como saque, preciso transferir você para u
               console.log('[ai-autopilot-chat] 🎯 Detected intent from history:', detectedIntent);
 
               // Build smart collection fields
-              const FIELD_LABELS_OTP: Record<string, string> = {
-                name: 'Nome', email: 'Email', phone: 'Telefone',
-                cpf: 'CPF', pix_key: 'Chave PIX', bank: 'Banco',
-                reason: 'Motivo', amount: 'Valor', address: 'Endereço'
-              };
-              const otpCollectionFields = flow_context?.smartCollectionFields && flow_context.smartCollectionFields.length > 0
-                ? flow_context.smartCollectionFields
-                : ['pix_key', 'bank', 'reason', 'amount'];
-              const otpFieldList = otpCollectionFields
-                .map((f: string) => `${FIELD_LABELS_OTP[f] || f}:`)
-                .join('\n');
+              // 🆕 REFATORADO: Usa buildCollectionMessage como fonte única de verdade
+              const otpCollectionMsg = buildCollectionMessage(flow_context, verifiedContact.first_name, contact?.email, contact?.phone, {
+                prefix: '',
+                intent: detectedIntent ? `seu ${detectedIntent}` : 'sua solicitação',
+                format: 'plain'
+              });
 
               if (detectedIntent) {
                 // Intent detected — skip A/B question, go straight to data collection
@@ -8841,7 +8835,7 @@ Para liberar operações financeiras como saque, preciso transferir você para u
 
 Entendi que você quer realizar um **${detectedIntent}**. Para dar andamento, preciso dos seguintes dados:
 
-${otpFieldList}
+${otpCollectionMsg}
 
 ⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
               } else {
