@@ -13,7 +13,7 @@ const corsHeaders = {
 // 📊 TELEMETRIA: helpers para auditoria de saque e OTP
 // ============================================================
 async function logSaqueStep(
-  client: ReturnType<typeof createClient>,
+  client: any,
   opts: {
     conversationId: string;
     contactId?: string | null;
