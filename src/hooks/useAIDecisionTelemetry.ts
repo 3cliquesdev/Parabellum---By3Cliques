@@ -17,6 +17,21 @@ export interface AIDecisionEvent {
   created_at: string;
 }
 
+export interface TransferEvent {
+  id: string;
+  entity_id: string;
+  event_type: string;
+  created_at: string;
+  output_json: {
+    from_ai_mode?: string;
+    to_ai_mode?: string;
+    from_dept?: string | null;
+    to_dept?: string | null;
+    agent_id?: string | null;
+    reason?: string;
+  } | null;
+}
+
 export const REASON_LABELS: Record<string, string> = {
   zero_confidence_cautious: "Confiança Zero",
   strict_rag_handoff: "RAG Estrito",
@@ -24,6 +39,16 @@ export const REASON_LABELS: Record<string, string> = {
   fallback_phrase_detected: "Frase de Fallback",
   restriction_violation: "Violação de Restrição",
   anti_loop_max_fallbacks: "Anti-Loop",
+};
+
+export const TRANSITION_LABELS: Record<string, string> = {
+  state_transition_handoff_to_human: "Handoff → Humano",
+  state_transition_assign_agent: "Atribuir Agente",
+  state_transition_unassign_agent: "Desatribuir Agente",
+  state_transition_engage_ai: "Engajar IA",
+  state_transition_set_copilot: "Setar Copilot",
+  state_transition_update_department: "Atualizar Dept",
+  state_transition_close: "Encerrar",
 };
 
 export function useAIDecisionTelemetry(hoursBack = 24) {
@@ -35,6 +60,7 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
     return d.toISOString();
   }, [hoursBack]);
 
+  // Query 1: ai_decision_* events
   const { data: events = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["ai-decision-telemetry", hoursBack],
     queryFn: async () => {
@@ -54,6 +80,44 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
     staleTime: 15_000,
   });
 
+  // Query 2: state_transition_* events (transfers)
+  const { data: transferEvents = [], isLoading: isLoadingTransfers } = useQuery({
+    queryKey: ["ai-transfer-telemetry", hoursBack],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ai_events")
+        .select("id, entity_id, event_type, output_json, created_at")
+        .like("event_type", "state_transition_%")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      if (error) throw error;
+      return (data ?? []) as TransferEvent[];
+    },
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
+  // Query 3: ai_close_* events
+  const { data: closeEvents = [], isLoading: isLoadingCloses } = useQuery({
+    queryKey: ["ai-close-telemetry", hoursBack],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ai_events")
+        .select("id, entity_id, event_type, output_json, created_at")
+        .like("event_type", "ai_close_%")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      if (error) throw error;
+      return (data ?? []) as TransferEvent[];
+    },
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
   const kpis = useMemo(() => {
     const total = events.length;
     const handoffs = events.filter(e =>
@@ -67,6 +131,39 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
     ).length;
     return { total, handoffs, fallbacks, violations };
   }, [events]);
+
+  // Transfer KPIs
+  const transferKpis = useMemo(() => {
+    const totalTransfers = transferEvents.length;
+    const handoffsToHuman = transferEvents.filter(e => e.event_type === "state_transition_handoff_to_human").length;
+    const deptChanges = transferEvents.filter(e => {
+      const json = e.output_json as any;
+      return json?.from_dept && json?.to_dept && json.from_dept !== json.to_dept;
+    }).length;
+    const sameDeptTransfers = transferEvents.filter(e => {
+      const json = e.output_json as any;
+      return json?.from_dept && json?.to_dept && json.from_dept === json.to_dept && 
+             e.event_type === "state_transition_handoff_to_human";
+    }).length;
+    const closesWithoutTag = closeEvents.filter(e => 
+      e.event_type === "ai_close_without_tag" || e.event_type === "ai_close_confirm_without_tag"
+    ).length;
+    const proactiveCloses = closeEvents.filter(e => e.event_type === "ai_close_proactive").length;
+
+    return { totalTransfers, handoffsToHuman, deptChanges, sameDeptTransfers, closesWithoutTag, proactiveCloses };
+  }, [transferEvents, closeEvents]);
+
+  // Transfer type breakdown
+  const transferBreakdown = useMemo(() => {
+    const map: Record<string, number> = {};
+    transferEvents.forEach(e => {
+      const label = TRANSITION_LABELS[e.event_type] || e.event_type.replace("state_transition_", "");
+      map[label] = (map[label] || 0) + 1;
+    });
+    return Object.entries(map)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [transferEvents]);
 
   const typeBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
@@ -91,5 +188,19 @@ export function useAIDecisionTelemetry(hoursBack = 24) {
       .reverse();
   }, [events]);
 
-  return { events, isLoading, isError, error, refetch, kpis, typeBreakdown, hourlyData, lastUpdated };
+  return {
+    events,
+    transferEvents,
+    closeEvents,
+    isLoading: isLoading || isLoadingTransfers || isLoadingCloses,
+    isError,
+    error,
+    refetch,
+    kpis,
+    transferKpis,
+    transferBreakdown,
+    typeBreakdown,
+    hourlyData,
+    lastUpdated,
+  };
 }

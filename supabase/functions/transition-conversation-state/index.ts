@@ -83,7 +83,8 @@ serve(async (req) => {
       case 'handoff_to_human':
         updateData.ai_mode = 'waiting_human';
         updateData.assigned_to = null;
-        if (!conv.department && effectiveDept) updateData.department = effectiveDept;
+        if (departmentId) updateData.department = departmentId;
+        else if (!conv.department && effectiveDept) updateData.department = effectiveDept;
         shouldCreateDispatch = true;
         break;
 
@@ -91,7 +92,8 @@ serve(async (req) => {
         if (!agentId) throw new Error('agentId obrigatório para assign_agent');
         updateData.ai_mode = 'copilot';
         updateData.assigned_to = agentId;
-        if (!conv.department && effectiveDept) updateData.department = effectiveDept;
+        if (departmentId) updateData.department = departmentId;
+        else if (!conv.department && effectiveDept) updateData.department = effectiveDept;
         shouldCloseDispatch = true;
         break;
 
@@ -109,7 +111,8 @@ serve(async (req) => {
 
       case 'set_copilot':
         updateData.ai_mode = 'copilot';
-        if (!conv.department && effectiveDept) updateData.department = effectiveDept;
+        if (departmentId) updateData.department = departmentId;
+        else if (!conv.department && effectiveDept) updateData.department = effectiveDept;
         break;
 
       case 'update_department':
