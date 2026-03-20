@@ -2243,7 +2243,7 @@ serve(async (req) => {
                               }
                               
                               // 🔧 BUG 2+3 FIX: transfer com lógica completa (consultant + preferred) como CASO 2
-                              const DEPT_SUPORTE_FALLBACK_AIX = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+                              const DEPT_SUPORTE_FALLBACK_AIX = depts.SUPORTE_ID;
                               const transferDept = flowResult.departmentId || flowResult.department;
                               if (flowResult.transfer === true || flowResult.action === 'transfer') {
                                 const deptToUse = transferDept || DEPT_SUPORTE_FALLBACK_AIX;
