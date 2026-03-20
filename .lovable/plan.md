@@ -1,63 +1,44 @@
 
 
-# Auditoria: Tagging da IA — Problemas Encontrados e Correções
+# Fix: IA deve encerrar proativamente após resolver o atendimento
 
-## Diagnóstico
+## Problema
 
-### Problema 1: `auto-close-conversations` SOBRESCREVE tags da IA
-Quando a IA aplica uma tag via `tag_conversation` (ex: "5.01 Informações sobre entrega") e depois o `auto-close-conversations` encerra por inatividade, ele **sempre adiciona** a tag "9.98 Falta de Interação" como fallback — sem verificar se já existe uma tag aplicada pela IA. O resultado: a conversa fica com DUAS tags, e a "Falta de Interação" aparece como a mais recente.
+O prompt atual instrui a IA a encerrar "SOMENTE quando o cliente indicar CLARAMENTE que não tem mais dúvidas". Isso é muito passivo — a IA resolve o problema do cliente (ex: informações sobre entrega na conversa #1096B783) mas nunca oferece encerrar. A conversa fica aberta até o auto-close aplicar "Falta de Interação".
 
-**Localização:** `auto-close-conversations/index.ts` — linhas 406-416, 698-703, 796-801 (3 stages) fazem `upsert` de `FALTA_INTERACAO_TAG_ID` sem checar tags existentes.
+## Solução
 
-### Problema 2: IA pode não chamar `tag_conversation` antes de `close_conversation`
-Apesar do prompt instruir "SEMPRE chame tag_conversation ANTES de close_conversation", a LLM pode ignorar essa instrução (é probabilística). Não há guard no handler de `close_conversation` que force ou verifique a presença de tag.
+Atualizar o prompt da tool `close_conversation` para incluir comportamento **proativo**: após resolver completamente a demanda do cliente, a IA deve perguntar se pode ajudar em algo mais (usando `close_conversation` com `customer_confirmed=false`).
 
-### Problema 3: Confirmação de encerramento (linha 2592-2628) não verifica tag
-Quando o cliente confirma "sim" no 2-step, o código invoca `close-conversation` diretamente sem verificar se `tag_conversation` foi chamado na iteração anterior.
+### Alteração no prompt (linha ~7705)
 
-## Correções
-
-### 1. `auto-close-conversations` — Respeitar tags existentes (3 locais)
-
-Antes de cada `upsert` de "Falta de Interação", verificar se a conversa já tem uma tag aplicada (qualquer tag). Se já tem, **não** adicionar "9.98 Falta de Interação".
-
-```text
-// Pseudo-código para cada stage:
-const { data: existingTags } = await supabase
-  .from('conversation_tags')
-  .select('tag_id')
-  .eq('conversation_id', conv.id);
-
-const flowCloseTag = await getFlowCloseTagId(supabase, conv.id);
-
-if (existingTags && existingTags.length > 0) {
-  // Já tem tag (possivelmente da IA) — NÃO sobrescrever
-  console.log(`[Auto-Close] Conversa ${conv.id} já tem ${existingTags.length} tag(s) — mantendo`);
-} else {
-  // Sem tag — aplicar flowTag ou fallback
-  await supabase.from('conversation_tags').upsert({
-    conversation_id: conv.id,
-    tag_id: flowCloseTag || FALTA_INTERACAO_TAG_ID,
-  }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
-}
+**De:**
+```
+Encerre SOMENTE quando o cliente indicar CLARAMENTE que não tem mais dúvidas
 ```
 
-Aplicar em **4 locais**: Stage 3 (linha ~406), Stage 3a (linha ~570), Stage 3b (linha ~698), Stage 3.5 (linha ~796).
+**Para:**
+```
+Use em 2 situações:
+1. PROATIVO: Quando você resolveu completamente a demanda do cliente (respondeu a dúvida, 
+   forneceu informações, concluiu operação), chame com customer_confirmed=false para 
+   perguntar "Posso ajudar em algo mais?". Exemplos: informou status de entrega, 
+   esclareceu dúvida, confirmou dados.
+2. REATIVO: Quando o cliente indicar que não tem mais dúvidas ("era só isso", 
+   "não tenho mais dúvidas", "pode encerrar").
 
-### 2. `ai-autopilot-chat` — Guard no close_conversation handler
+NÃO interprete agradecimentos ("obrigado", "valeu") como sinal de encerramento.
+SEMPRE pergunte antes (customer_confirmed=false). 
+IMPORTANTE: SEMPRE chame tag_conversation ANTES de close_conversation.
+```
 
-No handler de `close_conversation` (linha ~10000), quando `customer_confirmed=false` (etapa 1), verificar se já existe tag na conversa. Se não, logar warning mas continuar (a IA deveria ter chamado `tag_conversation` antes, mas não bloquear o encerramento).
+Isso mantém o 2-step confirmation (segurança) mas permite que a IA tome a iniciativa de perguntar ao cliente após resolver o atendimento.
 
-### 3. `ai-autopilot-chat` — Guard na confirmação (linha ~2562)
-
-Na seção de confirmação de encerramento (quando cliente diz "sim"), antes de chamar `close-conversation`, verificar se existe tag. Se não existir, logar `ai_event` de warning para monitoramento.
-
-## Arquivos a modificar
+### Arquivo
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/auto-close-conversations/index.ts` | Checar tags existentes antes de aplicar "Falta de Interação" em 4 locais |
-| `supabase/functions/ai-autopilot-chat/index.ts` | Warning log se close_conversation chamado sem tag prévia |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Prompt da tool close_conversation mais proativo (linha ~7705) |
 
-Deploy: `auto-close-conversations` e `ai-autopilot-chat`
+Deploy: `ai-autopilot-chat`
 
