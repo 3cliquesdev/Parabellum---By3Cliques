@@ -161,6 +161,7 @@ serve(async (req) => {
 
     // Resolver branding dinâmico
     const brand = await resolveBranding(supabaseAdmin, { isEmployee: true });
+    const siteUrl = Deno.env.get('SITE_URL') || 'https://parabellum.work';
 
     // Send welcome email with responsibility term
     const emailHtml = `
