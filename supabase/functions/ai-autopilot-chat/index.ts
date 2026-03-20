@@ -7268,6 +7268,22 @@ Resolução desejada: Reembolso integral"
 
 ---
 
+**REGRAS DE EXTRAÇÃO TOLERANTE (OBRIGATÓRIO):**
+- Se o cliente usar labels diferentes ("Pix email", "chave email", "email pix" etc.) → interpretar como chave PIX pelo CONTEXTO, não pelo label exato.
+- Se "Valor" for texto livre ("todo saldo", "tudo", "valor total", "todo valor da carteira") → usar como withdrawal_amount DIRETAMENTE — NÃO exigir número.
+- Após coleta de dados para saque/reembolso: NUNCA responder "Não consegui resolver" — SEMPRE chamar create_ticket com os dados que tem.
+- Se faltar apenas 1 campo, pergunte. Se tem todos os dados (PIX + valor + confirmação), CRIE O TICKET imediatamente.
+
+**EXEMPLOS DE EXTRAÇÃO VÁLIDA:**
+1. Cliente envia: "Nome: João Silva / Pix email: joao@email.com / Valor: todo valor da carteira"
+   → pix_key="joao@email.com", pix_key_type="email", withdrawal_amount="todo valor da carteira" ✅
+2. Cliente envia: "Chave: 123.456.789-00 / quero sacar tudo"
+   → pix_key="123.456.789-00", pix_key_type="cpf", withdrawal_amount="tudo" ✅
+3. Cliente envia: "pix telefone 11999887766 valor 200 reais"
+   → pix_key="11999887766", pix_key_type="telefone", withdrawal_amount="200" ✅
+
+---
+
 **Você tem acesso às seguintes ferramentas:**
 - create_ticket: Use APENAS quando cliente pedir explicitamente ajuda humana OU problema financeiro concreto OU você não conseguir responder após tentar. Para SAQUE, use SOMENTE após OTP validado e dados confirmados.
 - verify_customer_email: Use quando cliente FORNECER email para identificação. Verifica se existe na base. Se existir, cliente é identificado SEM OTP. OTP só é necessário para operações financeiras.
@@ -7348,8 +7364,8 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
                 description: 'O número do pedido, se aplicável. Deixe vazio se não houver pedido.' 
               },
               withdrawal_amount: {
-                type: 'number',
-                description: '[APENAS PARA SAQUE] Valor numérico solicitado pelo cliente após confirmação.'
+                type: 'string',
+                description: '[APENAS PARA SAQUE] Valor solicitado pelo cliente. Pode ser numérico ("150.00") ou texto livre ("todo saldo", "tudo", "valor total da carteira"). Aceite QUALQUER formato que o cliente usar.'
               },
               confirmed_cpf_last4: {
                 type: 'string',
@@ -8729,7 +8745,7 @@ Agora posso te ajudar com operações financeiras. Você quer:
                 .replace(/\{\{customer_email\}\}/g, contact?.email || '')
                 .replace(/\{\{customer_phone\}\}/g, contact?.phone || '')
                 .replace(/\{\{pix_key\}\}/g, args.pix_key || '')
-                .replace(/\{\{amount\}\}/g, args.withdrawal_amount ? `R$ ${args.withdrawal_amount.toFixed(2)}` : '')
+                .replace(/\{\{amount\}\}/g, args.withdrawal_amount ? `R$ ${args.withdrawal_amount}` : '')
                 .replace(/\{\{reason\}\}/g, args.description || '')
                 .replace(/\{\{bank\}\}/g, args.bank || '');
               if (!ticketSubject.trim()) ticketSubject = args.subject;
@@ -8771,7 +8787,7 @@ Via: Atendimento Automatizado (IA)`;
 â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 
 **DADOS DO SAQUE:**
-- Valor Solicitado: R$ ${args.withdrawal_amount.toFixed(2)}
+- Valor Solicitado: R$ ${args.withdrawal_amount}
 - Tipo da Chave PIX: ${args.pix_key_type || 'Não especificado'}
 - Chave PIX: ${args.pix_key || 'Não informada'}
 - Confirmação do Cliente: ${args.customer_confirmation ? 'Dados conferidos pelo cliente' : 'Aguardando confirmação'}
@@ -8797,7 +8813,7 @@ Via: Atendimento Automatizado (IA)`;
               '{{customer_email}}': contact?.email || '',
               '{{customer_phone}}': contact?.phone || '',
               '{{pix_key}}': args.pix_key || '',
-              '{{amount}}': args.withdrawal_amount ? `R$ ${args.withdrawal_amount.toFixed(2)}` : '',
+              '{{amount}}': args.withdrawal_amount ? `R$ ${args.withdrawal_amount}` : '',
               '{{reason}}': args.description || '',
               '{{bank}}': args.bank || '',
               '{{subject}}': args.issue_type || args.description || '',
