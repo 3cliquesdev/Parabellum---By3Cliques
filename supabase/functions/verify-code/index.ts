@@ -125,7 +125,7 @@ serve(async (req) => {
       }
 
       // Se chegou aqui, o código digitado nunca existiu ou está incorreto
-      if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'invalid_code', channel: 'whatsapp' }).then(() => {}).catch(() => {});
+      if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'invalid_code', channel: 'whatsapp' } as any).then(() => {});
       return new Response(JSON.stringify({
         success: false,
         error: 'Código inválido. Verifique se digitou corretamente.'
