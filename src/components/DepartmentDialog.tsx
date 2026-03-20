@@ -110,6 +110,8 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
       // Human auto-close
       human_auto_close_minutes: humanAutoCloseMinutesValue,
       human_auto_close_tag_id: humanAutoCloseEnabled && humanAutoCloseTagId ? humanAutoCloseTagId : null,
+      // After-hours behavior
+      after_hours_keep_open: afterHoursKeepOpen,
     };
 
     if (department) {
