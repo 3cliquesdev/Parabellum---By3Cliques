@@ -24,6 +24,7 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
+    const depts = await resolveDepartments(supabase);
     const body: CheckUserStatusRequest = await req.json();
 
     if (!body.email) {
