@@ -820,12 +820,21 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-            // Tag do fluxo ou "9.98 Falta de Interação"
-            const flowCloseTag35 = await getFlowCloseTagId(supabase, conv.id);
-            await supabase.from('conversation_tags').upsert({
-              conversation_id: conv.id,
-              tag_id: flowCloseTag35 || FALTA_INTERACAO_TAG_ID,
-            }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+            // Tag do fluxo ou "9.98 Falta de Interação" (respeitar tags existentes da IA)
+            const { data: existingTags35 } = await supabase
+              .from('conversation_tags')
+              .select('tag_id')
+              .eq('conversation_id', conv.id);
+            
+            if (existingTags35 && existingTags35.length > 0) {
+              console.log(`[Auto-Close] Stage 3.5: Conversa ${conv.id} já tem ${existingTags35.length} tag(s) — mantendo tags existentes`);
+            } else {
+              const flowCloseTag35 = await getFlowCloseTagId(supabase, conv.id);
+              await supabase.from('conversation_tags').upsert({
+                conversation_id: conv.id,
+                tag_id: flowCloseTag35 || FALTA_INTERACAO_TAG_ID,
+              }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+            }
 
             // Enviar via WhatsApp se necessário
             if (conv.channel === 'whatsapp') {
