@@ -217,6 +217,23 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
 
             <Separator className="my-4" />
 
+            {/* After-hours keep open */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="afterHoursKeepOpen">Manter conversa aberta fora do horário</Label>
+                <p className="text-xs text-muted-foreground">
+                  Conversas recebem mensagem de fora do horário mas permanecem na fila para distribuição no próximo dia útil.
+                </p>
+              </div>
+              <Switch
+                id="afterHoursKeepOpen"
+                checked={afterHoursKeepOpen}
+                onCheckedChange={setAfterHoursKeepOpen}
+              />
+            </div>
+
+            <Separator className="my-4" />
+
             {/* Slow Response Alert */}
             <div className="space-y-4">
               <h4 className="text-sm font-medium text-foreground">Alerta e Encerramento Automático</h4>

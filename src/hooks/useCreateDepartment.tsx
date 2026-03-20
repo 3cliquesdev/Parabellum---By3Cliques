@@ -43,6 +43,7 @@ export function useCreateDepartment() {
           slow_response_alert_enabled: params.slow_response_alert_enabled ?? false,
           slow_response_alert_minutes: params.slow_response_alert_minutes ?? null,
           slow_response_alert_tag_id: params.slow_response_alert_tag_id ?? null,
+          after_hours_keep_open: params.after_hours_keep_open ?? false,
         })
         .select()
         .single();

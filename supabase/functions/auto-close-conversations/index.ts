@@ -1048,6 +1048,10 @@ Deno.serve(async (req) => {
             if (closedIds.includes(conv.id)) continue;
 
             try {
+              // Check if department wants to keep conversations open after-hours
+              const deptData = (conv as any).departments;
+              const keepOpen = deptData?.after_hours_keep_open === true;
+
               // Enviar mensagem de encerramento after-hours
               await supabase.from('messages').insert({
                 conversation_id: conv.id,
@@ -1082,26 +1086,35 @@ Deno.serve(async (req) => {
                 }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
               }
 
-              // Fechar conversa
-              await supabase.from('conversations').update({
-                status: 'closed',
-                auto_closed: true,
-                closed_at: new Date().toISOString(),
-                closed_reason: 'after_hours_no_agent',
-                ai_mode: 'disabled',
-                assigned_to: null,
-              }).eq('id', conv.id);
+              if (keepOpen) {
+                // Departamento configurado para manter aberta — NÃO fechar
+                console.log(`[Auto-Close] 🌙 🔓 Dept after_hours_keep_open=true — keeping conversation ${conv.id} OPEN (sent msg + tag only)`);
+              } else {
+                // Fechar conversa
+                await supabase.from('conversations').update({
+                  status: 'closed',
+                  auto_closed: true,
+                  closed_at: new Date().toISOString(),
+                  closed_reason: 'after_hours_no_agent',
+                  ai_mode: 'disabled',
+                  assigned_to: null,
+                }).eq('id', conv.id);
 
-              // Completar dispatch jobs pendentes desta conversa
-              await supabase.from('conversation_dispatch_jobs').update({
-                status: 'completed',
-                last_error: 'closed_after_hours_cleanup',
-                updated_at: new Date().toISOString(),
-              }).eq('conversation_id', conv.id).eq('status', 'pending');
+                // Completar dispatch jobs pendentes desta conversa
+                await supabase.from('conversation_dispatch_jobs').update({
+                  status: 'completed',
+                  last_error: 'closed_after_hours_cleanup',
+                  updated_at: new Date().toISOString(),
+                }).eq('conversation_id', conv.id).eq('status', 'pending');
+
+                closedIds.push(conv.id);
+              }
 
               afterHoursClosedCount++;
-              closedIds.push(conv.id);
-              console.log(`[Auto-Close] 🌙 ✅ Closed after-hours waiting_human conversation ${conv.id}`);
+              console.log(`[Auto-Close] 🌙 ✅ Processed after-hours waiting_human conversation ${conv.id} (keepOpen=${keepOpen})`);
+            } catch (err) {
+              console.error(`[Auto-Close] Error closing after-hours conversation ${conv.id}:`, err);
+            }
             } catch (err) {
               console.error(`[Auto-Close] Error closing after-hours conversation ${conv.id}:`, err);
             }
