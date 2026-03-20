@@ -277,6 +277,9 @@ serve(async (req) => {
       .eq('id', department)
       .single();
 
+    // Resolver branding dinâmico
+    const brand = await resolveBranding(supabaseAdmin, { isEmployee: true });
+
     // Enviar email de boas-vindas com Termo de Responsabilidade
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
