@@ -121,3 +121,23 @@
 ### Deploy rodada 6
 - `ai-autopilot-chat` — Fix 19, 20, 21
 - `generate-ticket-from-conversation` — Fix 21 (department_id_override)
+
+### Auditoria #8F42B1C3 — Correções Aplicadas (rodada 7)
+
+**Fix 22: Auto-close respeita tag do nó do fluxo** ✅
+- Helper `getFlowCloseTagId()` busca `close_tag_id` no nó ativo do fluxo
+- Aplicado em 4 stages: Stage 3, Stage 3a, Stage 3b, Stage 3.5
+- Hierarquia: tag do nó > tag do departamento > "Falta de Interação"
+
+**Fix 23: UI — Campo `close_tag_id` no nó ai_response** ✅
+- Interface `AIResponseNodeData` com `close_tag_id` + `close_tag_name`
+- Badge 🏷️ no nó visual
+- Seletor de tag no `AIResponsePropertiesPanel` (seção "Tag de Encerramento")
+
+**Fix 24: Flow Engine propaga `closeTagId`** ✅
+- Adicionado `closeTagId` em todos os 9 pontos de propagação do `flow_context`
+- Segue o mesmo padrão de `ticketConfig`
+
+### Deploy rodada 7
+- `process-chat-flow` — Fix 24
+- `auto-close-conversations` — Fix 22
