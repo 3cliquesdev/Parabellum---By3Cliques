@@ -6286,9 +6286,21 @@ Posso ajudar em mais alguma coisa?`;
               .from('messages')
               .insert({ conversation_id: conversationId, content: saqueResponse, sender_type: 'user', is_ai_generated: true, channel: responseChannel })
               .select().single();
-            if (responseChannel === 'whatsapp' && contact?.phone) {
-              const { data: wi } = await supabaseClient.from('whatsapp_instances').select('*').eq('status', 'connected').limit(1).maybeSingle();
-              if (wi) await supabaseClient.functions.invoke('send-whatsapp-message', { body: { instance_id: wi.id, phone_number: contact.phone, whatsapp_id: contact.whatsapp_id, message: saqueResponse } });
+            if (responseChannel === 'whatsapp' && contact?.phone && conversation) {
+              try {
+                const whatsappResultSaque = await getWhatsAppInstanceForConversation(
+                  supabaseClient, conversationId, contact, conversation
+                );
+                if (whatsappResultSaque) {
+                  await sendWhatsAppMessage(
+                    supabaseClient, whatsappResultSaque,
+                    contact.phone, saqueResponse,
+                    conversationId, contact.whatsapp_id
+                  );
+                }
+              } catch (sendErr) {
+                console.error('[ai-autopilot-chat] ❌ Saque WhatsApp send failed:', sendErr);
+              }
             }
             return new Response(JSON.stringify({
               response: saqueResponse,
