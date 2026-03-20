@@ -2010,6 +2010,7 @@ serve(async (req) => {
       let contactConsultantName: string | null = null;
       let contactSellerName: string | null = null;
       let contactTagsList: string[] = [];
+      let companyBrandName: string | null = null;
 
       try {
         const enrichPromises: PromiseLike<any>[] = [];
@@ -2059,6 +2060,16 @@ serve(async (req) => {
             .then((r: any) => ({ type: 'tags', data: r.data }))
         );
 
+        // 🏢 Nome da marca da empresa (para evitar alucinação de identidade)
+        enrichPromises.push(
+          supabaseClient
+            .from('email_branding')
+            .select('name')
+            .eq('is_default_customer', true)
+            .maybeSingle()
+            .then((r: any) => ({ type: 'brand', data: r.data }))
+        );
+
         const enrichResults = await Promise.all(enrichPromises);
 
         for (const result of enrichResults) {
@@ -2068,13 +2079,15 @@ serve(async (req) => {
           if (result.type === 'tags' && result.data) {
             contactTagsList = result.data.map((t: any) => t.tags?.name).filter(Boolean);
           }
+          if (result.type === 'brand' && result.data?.name) companyBrandName = result.data.name;
         }
 
         console.log('[ai-autopilot-chat] 🏷️ Contexto enriquecido:', {
           org: contactOrgName,
           consultant: contactConsultantName,
           seller: contactSellerName,
-          tags: contactTagsList
+          tags: contactTagsList,
+          brand: companyBrandName
         });
       } catch (enrichErr) {
         console.error('[ai-autopilot-chat] âš ï¸ Erro ao enriquecer contexto do contato:', enrichErr);
@@ -7365,8 +7378,10 @@ INSTRUÇÁO DE ABERTURA — PRIMEIRA MENSAGEM:
 Esta é sua primeira mensagem nesta conversa. Você DEVE se apresentar de forma natural e calorosa:
 - Diga seu nome: ${persona.name}
 - Seu papel: ${persona.role || 'assistente virtual'}
+${companyBrandName ? `- Empresa: ${companyBrandName}` : ''}
 - Cite brevemente 2 ou 3 coisas que pode ajudar
 - Termine perguntando como pode ajudar hoje
+${companyBrandName ? `⚠️ REGRA ABSOLUTA: O nome da sua empresa é "${companyBrandName}". NÃO invente, altere ou alucine nomes de empresa. Use EXATAMENTE "${companyBrandName}" se precisar mencioná-la.` : '⚠️ NÃO mencione nenhum nome de empresa. Apenas se apresente pelo seu nome e papel.'}
 Faça isso de forma NATURAL e HUMANA — não repita este template literalmente. Adapte ao contexto da mensagem do cliente.` : '';
 
     // 🆕 MULTI-AGENTE: Instrução de continuidade ao receber transferência
@@ -7435,6 +7450,7 @@ Se você NÃO encontrar informação na BASE DE CONHECIMENTO:
 
 ---
 
+${companyBrandName ? `🏢 IDENTIDADE DA EMPRESA: Você trabalha para a empresa "${companyBrandName}". Este é o ÚNICO nome de empresa que você pode usar. NUNCA invente ou alucine outro nome.\n` : '⚠️ Não há nome de empresa configurado. NÃO mencione nenhum nome de empresa.\n'}
 ${persona.system_prompt || `Você é ${persona.name || 'uma assistente virtual'}${persona.role ? `, ${persona.role}` : ''}. Sua missão é AJUDAR o cliente, não se livrar dele.`}
 
 **COMO RESPONDER:**
@@ -7510,7 +7526,7 @@ ${knowledgeContext}${sandboxTrainingContext}${identityWallNote}
 ${contactEmail ? `- Email: ${safeEmail}` : (flow_context ? '- Email: Não identificado (a IA pode ajudar sem email)' : '- Email: NÃO CADASTRADO - SOLICITAR')}
 ${contact.phone ? `- Telefone: ${safePhone}` : ''}
 - CPF: ${maskedCPF}
-${contactOrgName ? `- Organização: ${contactOrgName}` : ''}
+${contactOrgName ? `- Organização do cliente (empresa DELE, NÃO a sua): ${contactOrgName}` : ''}
 ${contactConsultantName ? `- Consultor responsável: ${contactConsultantName}` : ''}
 ${contactSellerName ? `- Vendedor responsável: ${contactSellerName}` : ''}
 ${contactTagsList.length > 0 ? `- Tags: ${contactTagsList.join(', ')}` : ''}
