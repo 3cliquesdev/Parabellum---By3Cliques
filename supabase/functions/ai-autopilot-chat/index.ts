@@ -6574,16 +6574,36 @@ Posso ajudar em mais alguma coisa?`;
         // Fix: Mensagem pós-OTP verifica contexto de saque no histórico
         let directOTPSuccessResponse: string;
         if (otpData?.success) {
+          const saqueRegexDirect = /quero\s+sacar|saque|sacar|carteira|retirar|retirada/i;
           const recentWithdrawal = messageHistory
             .filter((m: any) => m.role === 'user')
             .slice().reverse()
             .slice(0, 6)
-            .find((m: any) => /quero\s+sacar|saque|sacar|carteira|retirar/i.test(m.content));
+            .find((m: any) => saqueRegexDirect.test(m.content));
+          const hasSaqueContextDirect = !!recentWithdrawal || saqueRegexDirect.test(customerMessage);
 
-          if (recentWithdrawal) {
+          // 🆕 FIX #EE1426A1 Fase 1: Usar smartCollectionFields / ticketConfig do fluxo
+          const scEnabledDirect = flow_context?.smartCollectionEnabled;
+          const scFieldsDirect = flow_context?.smartCollectionFields;
+          const tcTemplateDirect = (flow_context as any)?.ticketConfig?.description_template;
+          
+          if (scEnabledDirect && scFieldsDirect && scFieldsDirect.length > 0 && hasSaqueContextDirect) {
+            const fieldLabelsDirect: Record<string, string> = {
+              'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
+              'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
+              'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
+              'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
+              'banco': '🏦 **Banco:** [nome do banco]',
+              'motivo': '📝 **Motivo:** [motivo da solicitação]',
+            };
+            const fieldsTextDirect = scFieldsDirect.map((f: string) => fieldLabelsDirect[f] || `📝 **${f}:** [preencha]`).join('\n');
+            directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsTextDirect}`;
+          } else if (tcTemplateDirect && hasSaqueContextDirect) {
+            directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, preciso dos seguintes dados:\n\n${tcTemplateDirect}`;
+          } else if (hasSaqueContextDirect) {
             directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
           } else {
-            directOTPSuccessResponse = `✅ **Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada.\n\nAgora posso te ajudar com questões financeiras. Como posso te ajudar?`;
+            directOTPSuccessResponse = `✅ **Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada. Como posso te ajudar?`;
           }
         } else {
           directOTPSuccessResponse = `❌ **Código inválido**\n\n${errorMessage}\n\nDigite **"reenviar"** se precisar de um novo código.`;
