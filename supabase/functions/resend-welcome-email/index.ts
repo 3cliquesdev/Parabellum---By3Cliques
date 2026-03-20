@@ -232,27 +232,12 @@ serve(async (req) => {
         </div>
         
         <!-- FOOTER -->
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #1e3a5f;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: ${brand.headerColor};">
           <tr>
             <td align="center" style="padding: 25px;">
-              <table cellpadding="0" cellspacing="0" border="0" align="center">
-                <tr>
-                  <td style="padding: 0 8px;">
-                    <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-                         alt="PARABELLUM" 
-                         width="100"
-                         style="display: block; max-width: 100px; height: auto;" />
-                  </td>
-                  <td style="padding: 0 8px;">
-                    <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-3cliques-email.png?v=2" 
-                         alt="3 CLIQUES" 
-                         width="80"
-                         style="display: block; max-width: 80px; height: auto;" />
-                  </td>
-                </tr>
-              </table>
+              ${brand.footerLogoUrl ? `<img src="${brand.footerLogoUrl}" alt="${brand.brandName}" width="100" style="display: block; max-width: 100px; height: auto; margin: 0 auto 10px;" />` : ''}
               <p style="color: #ffffff; margin: 15px 0 10px 0; font-size: 14px; font-weight: 600;">
-                PARABELLUM by 3Cliques
+                ${brand.brandName}
               </p>
               <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
                 Departamento de Segurança da Informação
