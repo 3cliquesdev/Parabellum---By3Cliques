@@ -25,6 +25,14 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Resolver nome da organização dinamicamente
+    const { data: orgRow } = await supabase
+      .from('organizations')
+      .select('name')
+      .limit(1)
+      .maybeSingle();
+    const ORG_NAME = orgRow?.name || 'Sua Empresa';
+
     // Fetch quote with all related data
     const { data: quote, error: quoteError } = await supabase
       .from('quotes')
