@@ -1,143 +1,152 @@
-## Auditoria #8181F702 — Correções Aplicadas
 
-### 3 Fixes deployados no `ai-autopilot-chat`
+## Plano urgente — Correção do fluxo financeiro (#EE1426A1)
 
-**Fix 1 (Bug B): Bypass Strict RAG para dados estruturados** ✅
-- Linha ~4935: Adicionada detecção `looksLikeStructuredData` (≥3 linhas com "campo:valor")
-- Quando detectado, bypassa `callStrictRAG` (que não tem tools) e vai direto ao LLM principal com `create_ticket`
+### Diagnóstico confirmado
+No caso `ee1426a1-8f7d-4fc0-975b-2997b9b05fd2`, o fluxo quebrou em 4 pontos:
 
-**Fix 2 (Bug C): "valor" removido da regex `commercialTerms`** ✅
-- Linha ~7949: `commercialTerms` agora é `/\b(comprar|contratar|assinar|upgrade|plano|preço)\b/i`
-- "Valor:" nos dados financeiros não dispara mais `FLOW_EXIT:comercial`
+- A conversa entrou no nó financeiro e a apresentação inicial saiu corretamente.
+- Após `Quero sacar` + OTP válido, a resposta foi **genérica**: “Agora posso te ajudar com questões financeiras. Como posso te ajudar?”, em vez de iniciar a coleta.
+- Quando o cliente repetiu `Quero sacar`, a IA caiu em **fallback_phrase_detected** e o flow avançou para `node_escape_financeiro`.
+- A mensagem final saiu com **channel = web_chat** dentro de uma conversa WhatsApp.
+- O fluxo terminou em `chat_flow_states.current_node_id = node_escape_financeiro`, sem ticket criado.
+- O nó `node_ia_financeiro` está configurado com:
+  - `smart_collection_enabled = true`
+  - `ticket_config.department_id = b7149bf4...`
+  - `ticket_config.assigned_to = ce6150bb...`
+  - `fallback_message = "Não consegui resolver por aqui."`
 
-**Fix 3 (Bug B fallback): Ticket determinístico quando LLM vazia + OTP** ✅
-- Linha ~7945: Se `hasRecentOTPVerification` + dados estruturados + LLM retornou vazio → cria ticket via `generate-ticket-from-conversation` diretamente
-- Fallback de último recurso para quando LLM principal também falha
+### Causas raiz
+1. **Resposta pós-OTP ainda está hardcoded**
+   - O bloco de validação OTP em `ai-autopilot-chat` ainda usa resposta fixa.
+   - Ele não usa `ticketConfig.description_template`, nem `smartCollectionFields`, nem força a coleta ao detectar saque.
 
-### Correções adicionais (rodada 2)
+2. **Fallback da IA continua expulsando o cliente do nó financeiro**
+   - Após o segundo `Quero sacar`, a IA caiu em `fallback_phrase_detected`.
+   - O `process-chat-flow` interpretou isso como `ai_handoff_exit` e avançou para o escape node.
+   - Para fluxo financeiro pós-OTP, isso está errado: deveria **repetir/iniciar a coleta**, não mandar para escape/humano.
 
-**Fix 4: `category: 'financial'` → `'financeiro'`** ✅
-- Corrigido para valor válido do enum, garantindo mapeamento correto ao departamento Financeiro
+3. **Canal de mensagem está vazando para `web_chat`**
+   - Existe insert hardcoded com `channel: 'web_chat'` no `process-chat-flow`.
+   - Isso bate com a mensagem errada registrada na conversa.
 
-**Fix 5: Envio WhatsApp no fallback usa canal correto** ✅
-- Substituído query genérica `whatsapp_instances` por `getWhatsAppInstanceForConversation` + `sendWhatsAppMessage`
-- Agora respeita Meta vs Evolution conforme a conversa
+4. **Roteamento/departamento do contexto financeiro ainda não está blindado**
+   - A conversa está em departamento `36ce66cd...` (Suporte), enquanto o nó financeiro define `ticket_config.department_id = b7149bf4...`.
+   - Mesmo antes do ticket, o contexto do atendimento já deveria refletir o destino correto do nó financeiro.
 
-**Fix 6: DIRECT mode do `process-buffered-messages` verifica `skipInitialMessage`** ✅
-- Adicionado check antes de `callPipeline` no modo DIRECT
-- Quando `skipInitialMessage=true`, envia mensagem vazia para disparar saudação proativa
-- Paridade com o CRON mode que já tinha essa verificação
+---
 
-### Auditoria #AFDAE1C6 — Correções Aplicadas (rodada 3)
+## Implementação em fases
 
-**Fix 7: `stateId` no stayOnNode do `process-chat-flow`** ✅
-- Adicionado `stateId: activeState.id` ao JSON de resposta do stayOnNode
-- Permite que o webhook propague `flow_context.stateId` para o autopilot
-- Resolve BUG E: sync OTP para `collected_data` agora funciona
+### Fase 1 — Corrigir o pós-OTP financeiro
+**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
 
-**Fix 8: `category: 'financial'` → `'financeiro'` no guard de saque** ✅
-- Segunda instância (linha 6280) corrigida — era duplicata do Fix 4
-- Ticket de saque agora mapeado corretamente ao departamento Financeiro
+Ajustar o bloco de sucesso do OTP para:
 
-**Fix 9: WhatsApp Evolution → helper unificado no guard de saque** ✅
-- Substituído query `whatsapp_instances` por `getWhatsAppInstanceForConversation` + `sendWhatsAppMessage`
-- Segunda instância corrigida — duplicata do Fix 5
+- detectar `otp_reason === 'withdrawal'` ou intenção de saque no histórico/mensagem atual;
+- usar **o mesmo template do nó** (`flow_context.ticketConfig.description_template`) como resposta pós-OTP;
+- priorizar `smartCollectionEnabled` / `smartCollectionFields` quando presentes;
+- remover a resposta genérica “Como posso te ajudar?” para contexto financeiro pós-OTP.
 
-**Fix 10: Guard pós-OTP para intent de saque** ✅
-- Adicionado guard FORA do bloco `shouldValidateOTP`
-- Quando `hasRecentOTPVerification=true` e histórico contém intent de saque → envia template de coleta PIX
-- Evita resposta genérica "Como posso ajudar?" após OTP verificado
-- Anti-duplicata: verifica se template já foi enviado nos últimos 3 msgs
+**Resultado esperado:** depois do código validado, o cliente já recebe a coleta correta do saque, sem precisar repetir “Quero sacar”.
 
-### Auditoria #EEFFF1DD — Correções Aplicadas (rodada 4)
+---
 
-**Fix 11: Bypass Strict RAG para ações financeiras** ✅
-- `isFinancialBypass = isFinancialAction || isWithdrawalRequest` adicionado à condição do Strict RAG
-- Mensagens como "Quero sacar" não passam mais pelo Strict RAG (que não tem tools)
+### Fase 2 — Impedir regressão para o escape node
+**Arquivos:**
+- `supabase/functions/ai-autopilot-chat/index.ts`
+- `supabase/functions/process-chat-flow/index.ts`
 
-**Fix 12: Guard pós-OTP verifica mensagem atual** ✅
-- `hasSaqueIntent` agora testa `customerMessage` além do `messageHistory`
-- Conversas onde "Quero sacar" é a primeira mensagem real agora são detectadas
+Blindar o cenário:
+- nó financeiro ativo
+- OTP já validado
+- cliente pede saque
+- IA retornou fallback/frase vazia/incerta
 
-**Fix 13: Fallback de saudação no webhook** ✅
-- Se `ai-autopilot-chat` falhar (timeout/erro), webhook envia saudação padrão direto via WhatsApp
-- Fallback em AMBOS os caminhos: `!greetResponse.ok` e `catch` geral
+Nessa condição, o sistema deve:
+- **não** marcar `ai_handoff_exit`;
+- **não** avançar para `node_escape_financeiro`;
+- responder deterministicamente com a coleta do saque;
+- manter o flow em `node_ia_financeiro`.
 
-**Fix 14: Proteção pós-LLM (emergency fallback)** ✅
-- Se LLM retorna vazio sem tool_calls após retry, aplica `flowFallbackMessage || flowObjective || greeting`
-- Cliente NUNCA fica sem resposta
+**Resultado esperado:** “Quero sacar” pós-OTP nunca mais vira “Não consegui resolver por aqui”.
 
-**Fix 15: Prompt de saudação proativa melhorado** ✅
-- Instruções explícitas: apresentar-se, mencionar habilidades, desambiguar dúvida vs ação financeira
-- Removido prompt genérico "Como posso ajudar?"
+---
 
-### Auditoria #4A8BC4A3 — Correções Aplicadas (rodada 5)
+### Fase 3 — Padronizar canal correto nas mensagens do flow
+**Arquivo:** `supabase/functions/process-chat-flow/index.ts`
 
-**Fix 16: TDZ `isWithdrawalRequest` no bypass do Strict RAG** ✅
-- Linha 4950: `isWithdrawalRequest` era referenciada mas só declarada na L5999
-- Substituído por `isWithdrawalEarly` com detecção inline via `WITHDRAWAL_ACTION_PATTERNS`
-- Saudação proativa voltou a funcionar
+Substituir inserts hardcoded de mensagem do fluxo para usar:
+- `conversation.channel` quando existir
+- fallback apenas se realmente não houver canal
 
-**Fix 17: TDZ `conversationMetadata` no guard pós-OTP** ✅
-- Linha 6340: `conversationMetadata` era referenciada mas só declarada na L6411
-- Substituído por `conversation.customer_metadata` (já disponível)
-- Fluxo "Quero sacar" pós-OTP voltou a funcionar
+Também revisar os pontos que combinam:
+- `pendingFallbackMsg`
+- `extraMessages`
+- respostas de escape/transferência
 
-**Fix 18: `channel: 'whatsapp'` no insert legacy do `send-meta-whatsapp`** ✅
-- Linha 450: INSERT não incluía campo `channel`, causando default `web_chat`
-- Mensagens de menu do fluxo agora aparecem corretamente no inbox
+**Resultado esperado:** nenhuma mensagem de conversa WhatsApp será salva como `web_chat`.
 
-**Blindagem: Comentários de zona de segurança** ✅
-- L6001: `isWithdrawalRequest` marcada com "NÃO MOVER PARA CIMA"
-- L6415: `conversationMetadata` marcada com "NÃO MOVER PARA CIMA"
-- Previne regressões TDZ em futuros refactors
+---
 
-### Deploy
-- `ai-autopilot-chat` — Fix 16, 17 + blindagem
-- `send-meta-whatsapp` — Fix 18
+### Fase 4 — Sincronizar departamento/atribuição do contexto financeiro
+**Arquivos:**
+- `supabase/functions/process-chat-flow/index.ts`
+- possivelmente `supabase/functions/ai-autopilot-chat/index.ts`
 
-### Bug A (skipInitialMessage) — Monitoramento
-- Funciona para outras conversas (log 98ab6b41 confirmado)
-- Fix 7 (stateId) melhora diagnóstico
-- Aguardando próximo cenário de menu+batching para validar
+Ao entrar no nó financeiro ou ao confirmar OTP para fluxo financeiro:
+- sincronizar `conversation.department` com o destino do nó/contexto;
+- priorizar `ticketConfig.department_id` quando existir;
+- preservar `ticketConfig.assigned_to` para criação determinística e tool-based.
 
-### Auditoria #3D645F2C — Correções Aplicadas (rodada 6)
+**Resultado esperado:** o atendimento e o ticket passam a seguir o departamento/usuário configurados no nó, não o departamento residual da conversa.
 
-**Fix 19: Guard pós-OTP respeita primeira interação (Bug A)** ✅
-- Adicionado check `isFirstInteraction` (interaction_count ≤ 1) no guard pós-OTP
-- Na primeira interação do nó, guard NÃO intercepta — IA se apresenta naturalmente
-- Template PIX só enviado após IA já ter interagido
+---
 
-**Fix 20: Template de coleta usa ticketConfig do fluxo (Bug B)** ✅
-- Guard pós-OTP agora verifica `flow_context.ticketConfig.description_template`
-- Se disponível, usa o template configurado no dashboard em vez do hardcoded
-- Regex de detecção ampliada: `Chave Pix|Banco` para cobrir novos templates
+## Checklist de validação
+Validar este roteiro após a implementação:
 
-**Fix 21: Ticket determinístico usa ticketConfig (Bug C)** ✅
-- Ticket determinístico (L6288) agora lê `flow_context.ticketConfig`
-- Passa `assigned_to`, `department_id_override`, `subject_template`, `default_priority`, `category`
-- `generate-ticket-from-conversation` aceita `department_id_override` com prioridade sobre mapeamento por categoria
+```text
+Boa noite
+1
+2
+Quero sacar
+[código OTP]
+```
 
-### Deploy rodada 6
-- `ai-autopilot-chat` — Fix 19, 20, 21
-- `generate-ticket-from-conversation` — Fix 21 (department_id_override)
+Esperado:
+1. Saudação da IA financeira
+2. Pedido de OTP
+3. OTP validado
+4. Coleta enviada imediatamente com o template do nó
+5. Se o cliente repetir “Quero sacar”, o sistema continua na coleta e não sai para escape
+6. Mensagens salvas com `channel = whatsapp`
+7. Ticket criado no departamento/usuário configurados no nó
+8. Conversa não cai em `copilot` por fallback indevido
 
-### Auditoria #8F42B1C3 — Correções Aplicadas (rodada 7)
+---
 
-**Fix 22: Auto-close respeita tag do nó do fluxo** ✅
-- Helper `getFlowCloseTagId()` busca `close_tag_id` no nó ativo do fluxo
-- Aplicado em 4 stages: Stage 3, Stage 3a, Stage 3b, Stage 3.5
-- Hierarquia: tag do nó > tag do departamento > "Falta de Interação"
+## Detalhes técnicos
+### Pontos exatos a alterar
+- **`ai-autopilot-chat/index.ts`**
+  - bloco de OTP success que hoje ainda monta resposta genérica pós-validação;
+  - guard de fallback financeiro pós-OTP;
+  - possível reaproveitamento do `ticketConfig.description_template`.
 
-**Fix 23: UI — Campo `close_tag_id` no nó ai_response** ✅
-- Interface `AIResponseNodeData` com `close_tag_id` + `close_tag_name`
-- Badge 🏷️ no nó visual
-- Seletor de tag no `AIResponsePropertiesPanel` (seção "Tag de Encerramento")
+- **`process-chat-flow/index.ts`**
+  - tratamento de `aiExitForced` / `pendingFallbackMsg` em nó `ai_response`;
+  - inserts de mensagens com canal hardcoded;
+  - sync de departamento ao entrar/manter nó financeiro.
 
-**Fix 24: Flow Engine propaga `closeTagId`** ✅
-- Adicionado `closeTagId` em todos os 9 pontos de propagação do `flow_context`
-- Segue o mesmo padrão de `ticketConfig`
+### Critério de sucesso
+O fluxo financeiro precisa obedecer esta sequência sem desvios:
 
-### Deploy rodada 7
-- `process-chat-flow` — Fix 24
-- `auto-close-conversations` — Fix 22
+```text
+Apresentação -> intenção de saque -> OTP -> coleta estruturada -> ticket -> confirmação
+```
+
+Sem:
+- resposta genérica pós-OTP,
+- escape prematuro,
+- handoff indevido,
+- canal `web_chat`,
+- perda de departamento/atribuição.
