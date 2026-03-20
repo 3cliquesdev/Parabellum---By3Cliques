@@ -3647,6 +3647,32 @@ serve(async (req) => {
             console.error('[process-chat-flow] ⚠️ Failed to log cancellation block event:', logErr);
           }
 
+          // 🎫 Auto-criar ticket de cancelamento
+          try {
+            const ticketSubject = `[Auto] Cancelamento - conversa ${conversationId.substring(0, 8)}`;
+            const ticketDesc = `Intenção de cancelamento detectada.\nMensagem: ${(userMessage || '').substring(0, 200)}`;
+            
+            // Buscar contact_id da conversa
+            const { data: convData } = await supabaseClient
+              .from('conversations')
+              .select('contact_id')
+              .eq('id', conversationId)
+              .single();
+
+            await supabaseClient.from('tickets').insert({
+              subject: ticketSubject,
+              description: ticketDesc,
+              priority: 'high',
+              category: 'financeiro',
+              customer_id: convData?.contact_id || null,
+              conversation_id: conversationId,
+              status: 'open',
+            });
+            console.log('[process-chat-flow] ✅ Ticket de cancelamento criado automaticamente');
+          } catch (ticketErr) {
+            console.error('[process-chat-flow] ❌ Auto-ticket cancelamento failed:', ticketErr);
+          }
+
           // delete redundante removido — confiamos no delete centralizado na linha de exit geral
         }
 

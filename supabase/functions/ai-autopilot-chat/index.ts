@@ -10326,18 +10326,26 @@ Conversa: ${conversationId}`;
           customer_metadata: { ...freshMetaAntiLoop, ai_node_fallback_count: 0 }
         }).eq('id', conversationId);
 
-        // 🆕 FIX V14: Auto-ticket para conversas financeiras em anti-loop
+        // 🆕 FIX V14: Auto-ticket para conversas financeiras/cancelamento em anti-loop
         const collectedData = flow_context.collectedData || {};
         const isFinancialNode = (flow_context.node_id || '').toLowerCase().includes('financ') ||
           (collectedData.assunto || '').toLowerCase().includes('financ');
-        if (isFinancialNode) {
-          console.log('[ai-autopilot-chat] 🎫 V14: Auto-ticket financeiro no anti-loop');
+        const isCancellationNode = (flow_context.node_id || '').toLowerCase().includes('cancel') ||
+          (collectedData.assunto || '').toLowerCase().includes('cancel') ||
+          (collectedData.ai_exit_intent === 'cancelamento');
+
+        if (isFinancialNode || isCancellationNode) {
+          const category = isCancellationNode ? 'cancelamento' : 'financeiro';
+          const categoryLabel = isCancellationNode ? 'cancelamento' : 'financeiro';
+          console.log(`[ai-autopilot-chat] 🎫 V14: Auto-ticket ${categoryLabel} no anti-loop`);
           try {
-            const ticketSubject = `[Auto] Solicitação financeira - ${contact.first_name} ${contact.last_name}`.trim();
+            const ticketSubject = isCancellationNode
+              ? `[Auto] Solicitação de cancelamento - ${contact.first_name} ${contact.last_name}`.trim()
+              : `[Auto] Solicitação financeira - ${contact.first_name} ${contact.last_name}`.trim();
             const ticketDescription = [
               `Cliente: ${contact.first_name} ${contact.last_name}`,
               `Produto: ${collectedData.produto || 'N/A'}`,
-              `Assunto: ${collectedData.assunto || 'financeiro'}`,
+              `Assunto: ${collectedData.assunto || categoryLabel}`,
               `Última mensagem: ${customerMessage || 'N/A'}`,
               `Motivo: Anti-loop - IA não conseguiu resolver após ${aiNodeFallbackCount} tentativas`,
             ].join('\n');
@@ -10345,14 +10353,14 @@ Conversa: ${conversationId}`;
               subject: ticketSubject,
               description: ticketDescription,
               priority: 'high',
-              category: 'financeiro',
+              category: category,
               customer_id: contact.id,
               conversation_id: conversationId,
               status: 'open',
             });
-            console.log('[ai-autopilot-chat] ✅ Ticket financeiro criado automaticamente no anti-loop');
+            console.log(`[ai-autopilot-chat] ✅ Ticket ${categoryLabel} criado automaticamente no anti-loop`);
           } catch (ticketErr: any) {
-            console.error('[ai-autopilot-chat] ❌ Falha ao criar ticket no anti-loop:', ticketErr);
+            console.error(`[ai-autopilot-chat] ❌ Falha ao criar ticket ${categoryLabel} no anti-loop:`, ticketErr);
           }
         }
         
