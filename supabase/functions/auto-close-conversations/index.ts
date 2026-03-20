@@ -88,6 +88,39 @@ async function isContactRecentlyActive(
   return false;
 }
 
+/**
+ * Busca close_tag_id configurado no nó de IA ativo da conversa.
+ * Retorna o tag ID do nó ou null se não encontrar.
+ */
+async function getFlowCloseTagId(supabase: any, conversationId: string): Promise<string | null> {
+  try {
+    const { data: flowState } = await supabase
+      .from('chat_flow_states')
+      .select('current_node_id, flow_id')
+      .eq('conversation_id', conversationId)
+      .in('status', ['active', 'waiting_input', 'in_progress'])
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!flowState) return null;
+
+    const { data: flow } = await supabase
+      .from('chat_flows')
+      .select('flow_definition')
+      .eq('id', flowState.flow_id)
+      .single();
+
+    if (!flow?.flow_definition) return null;
+
+    const nodes = (flow.flow_definition as any)?.nodes || [];
+    const node = nodes.find((n: any) => n.id === flowState.current_node_id);
+    return node?.data?.close_tag_id || null;
+  } catch (err) {
+    console.error(`[getFlowCloseTagId] Error for ${conversationId}:`, err);
+    return null;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
