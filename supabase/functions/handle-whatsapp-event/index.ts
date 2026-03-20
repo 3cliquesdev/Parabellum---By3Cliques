@@ -1435,7 +1435,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
                  (aiResponse.reason === 'customer_transfer_intent' || aiResponse.reason === 'global_anti_loop_handoff')) {
                console.log("[handle-whatsapp-event] 🚀 V13: Handoff IMEDIATO (reason=" + aiResponse.reason + ") — pulando flow re-invocation");
                
-               const DEPT_SUPORTE_IMMEDIATE = depts.SUPORTE_ID;
+               const DEPT_SUPORTE_IMMEDIATE = localDepts.SUPORTE_ID;
                const immediateDept = aiResponse.flow_context?.department || DEPT_SUPORTE_IMMEDIATE;
                
                await supabase.from('conversations').update({

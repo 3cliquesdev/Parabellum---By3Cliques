@@ -9056,16 +9056,17 @@ Via: Atendimento Automatizado (IA)`;
               ticketCreatedSuccessfully = true; // 🔒 Marcar sucesso (previne duplicação no fallback)
 
               // 🏷️ Inserir tag_ids do ticket config (se configurado no fluxo)
-              if (tc?.tag_ids?.length > 0 && ticket?.id) {
+              const tcAny = tc as any;
+              if (tcAny?.tag_ids?.length > 0 && ticket?.id) {
                 try {
-                  const tagInserts = tc.tag_ids.map((tid: string) => ({
+                  const tagInserts = tcAny.tag_ids.map((tid: string) => ({
                     ticket_id: ticket.id,
                     tag_id: tid,
                   }));
                   await supabaseClient
                     .from('ticket_tags')
                     .upsert(tagInserts, { onConflict: 'ticket_id,tag_id', ignoreDuplicates: true });
-                  console.log('[ai-autopilot-chat] 🏷️ Tags do fluxo aplicadas ao ticket:', tc.tag_ids.length);
+                  console.log('[ai-autopilot-chat] 🏷️ Tags do fluxo aplicadas ao ticket:', tcAny.tag_ids.length);
                 } catch (tagErr) {
                   console.warn('[ai-autopilot-chat] ⚠️ Erro ao inserir tag_ids no ticket:', tagErr);
                 }

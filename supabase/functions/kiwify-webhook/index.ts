@@ -1198,7 +1198,7 @@ async function handlePaidOrder(
 </p>
 <p style="color: #888; font-size: 13px;">O link expira em 24 horas.</p>
 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-<p style="color: #999; font-size: 12px; text-align: center;">© ${orgName} — Todos os direitos reservados</p>`,
+<p style="color: #999; font-size: 12px; text-align: center;">© Sua Empresa — Todos os direitos reservados</p>`,
           customer_id: contact.id,
           is_customer_email: true,
         }
