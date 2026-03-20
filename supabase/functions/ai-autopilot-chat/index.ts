@@ -4947,7 +4947,9 @@ Responda APENAS: skip ou search`
     
     // 🆕 FIX Bug B (#EEFFF1DD): Bypass Strict RAG para ações financeiras
     // Strict RAG não tem tools (create_ticket) — ações financeiras devem ir direto ao LLM principal
-    const isFinancialBypass = isFinancialAction || isWithdrawalRequest;
+    // ⚠️ ZONA SEGURA: isWithdrawalRequest só existe após L5999 — usar detecção inline aqui
+    const isWithdrawalEarly = WITHDRAWAL_ACTION_PATTERNS.some(p => p.test(customerMessage || ''));
+    const isFinancialBypass = isFinancialAction || isWithdrawalEarly;
     if (isFinancialBypass) {
       console.log('[ai-autopilot-chat] 💰 Ação financeira detectada — BYPASS Strict RAG para LLM principal com tools');
     }
@@ -5996,6 +5998,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     );
     
     // 🔒 SAQUE DE SALDO - operação que EXIGE OTP
+    // ⚠️ NÃO MOVER PARA CIMA — referenciada inline (isWithdrawalEarly) na L4951 para bypass do Strict RAG
     const isWithdrawalRequest = WITHDRAWAL_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     ) || OTP_REQUIRED_KEYWORDS.some(keyword =>
@@ -6337,7 +6340,8 @@ Posso ajudar em mais alguma coisa?`;
       const hasSaqueIntent = historyUserMsgs.some((m: any) => 
         saqueRegex.test(m.content)
       ) || saqueRegex.test(customerMessage);
-      const otp_reason = (conversationMetadata as any)?.otp_reason;
+      // ⚠️ ZONA SEGURA: conversationMetadata só existe após L6411 — usar conversation.customer_metadata
+      const otp_reason = (conversation.customer_metadata as any)?.otp_reason;
       
       if (hasSaqueIntent || otp_reason === 'withdrawal') {
         // Verificar se já recebeu template de coleta (evitar duplicata)
@@ -6408,6 +6412,7 @@ Posso ajudar em mais alguma coisa?`;
     // A validação só ocorre quando houver contexto de OTP pendente.
     const otpDigitsOnly = customerMessage.replace(/\D/g, '');
     const isOTPCode = otpDigitsOnly.length === 6;
+    // ⚠️ NÃO MOVER PARA CIMA — guard pós-OTP (L6341) usa conversation.customer_metadata diretamente
     const conversationMetadata = conversation.customer_metadata || {};
     
     // Verificar se há OTP pendente (flag explícita)
