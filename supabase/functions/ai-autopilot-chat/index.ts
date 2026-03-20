@@ -7846,6 +7846,21 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           }
         }
       },
+      // 🆕 Tool: tag_conversation - Classificação contextual da conversa
+      {
+        type: 'function',
+        function: {
+          name: 'tag_conversation',
+          description: 'Aplica a tag de classificação na conversa baseada no atendimento prestado. Use SEMPRE ANTES de close_conversation. Escolha a tag que melhor representa o motivo do atendimento.',
+          parameters: {
+            type: 'object',
+            properties: {
+              tag_name: { type: 'string', description: 'Nome EXATO da tag a aplicar (ex: "5.01 Informações sobre entrega", "1.01 Duvidas gerais", "6.05 Saque do saldo")' }
+            },
+            required: ['tag_name']
+          }
+        }
+      },
       // 🆕 Tool: close_conversation - Encerramento autônomo com confirmação do cliente
       {
         type: 'function',
