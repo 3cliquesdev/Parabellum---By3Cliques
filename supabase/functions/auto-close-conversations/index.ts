@@ -403,17 +403,26 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-           // 6. Adicionar tag do fluxo ou "9.98 Falta de Interação"
-          const flowCloseTag3 = await getFlowCloseTagId(supabase, conversation.id);
-          await supabase
+           // 6. Adicionar tag do fluxo ou "9.98 Falta de Interação" (respeitar tags existentes da IA)
+          const { data: existingTags2 } = await supabase
             .from('conversation_tags')
-            .upsert({
-              conversation_id: conversation.id,
-              tag_id: flowCloseTag3 || FALTA_INTERACAO_TAG_ID,
-            }, {
-              onConflict: 'conversation_id,tag_id',
-              ignoreDuplicates: true
-            });
+            .select('tag_id')
+            .eq('conversation_id', conversation.id);
+          
+          if (existingTags2 && existingTags2.length > 0) {
+            console.log(`[Auto-Close] Stage 2: Conversa ${conversation.id} já tem ${existingTags2.length} tag(s) — mantendo tags existentes`);
+          } else {
+            const flowCloseTag3 = await getFlowCloseTagId(supabase, conversation.id);
+            await supabase
+              .from('conversation_tags')
+              .upsert({
+                conversation_id: conversation.id,
+                tag_id: flowCloseTag3 || FALTA_INTERACAO_TAG_ID,
+              }, {
+                onConflict: 'conversation_id,tag_id',
+                ignoreDuplicates: true
+              });
+          }
 
           // 7. Enviar CSAT ANTES de fechar (se configurado)
           if (dept.send_rating_on_close) {
