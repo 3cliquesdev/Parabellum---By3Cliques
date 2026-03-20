@@ -6331,9 +6331,12 @@ Posso ajudar em mais alguma coisa?`;
       const historyUserMsgs = messageHistory
         .filter((m: any) => m.role === 'user')
         .slice().reverse().slice(0, 8);
+      // 🆕 FIX Bug C (#EEFFF1DD): Verificar intent de saque TAMBÉM na mensagem atual
+      // Em conversas novas, "Quero sacar" pode ser a primeira mensagem real
+      const saqueRegex = /quero\s+sacar|saque|sacar|carteira|retirar|retirada/i;
       const hasSaqueIntent = historyUserMsgs.some((m: any) => 
-        /quero\s+sacar|saque|sacar|carteira|retirar|retirada/i.test(m.content)
-      );
+        saqueRegex.test(m.content)
+      ) || saqueRegex.test(customerMessage);
       const otp_reason = (conversationMetadata as any)?.otp_reason;
       
       if (hasSaqueIntent || otp_reason === 'withdrawal') {
