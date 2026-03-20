@@ -1564,7 +1564,7 @@ interface AutopilotChatRequest {
 }
 
 serve(async (req) => {
-  console.log('[ai-autopilot-chat] BUILD-V3 2026-03-18');
+  console.log('[ai-autopilot-chat] BUILD-V4 2026-03-20');
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -1958,7 +1958,7 @@ serve(async (req) => {
         .select(`
           *,
           contacts!inner(
-            id, first_name, last_name, email, phone, whatsapp_id, company, status, document, kiwify_validated, kiwify_validated_at, organization_id, consultant_id, assigned_to, ai_summary
+            id, first_name, last_name, email, phone, whatsapp_id, company, status, document, kiwify_validated, kiwify_validated_at, organization_id, consultant_id, assigned_to
           )
         `)
         .eq('id', conversationId)
@@ -7398,11 +7398,8 @@ Apresente-se e dê continuidade de forma natural. Exemplo de referência (NÃO c
 "Olá! Aqui é [seu nome], da [seu setor]. Vou dar continuidade ao seu atendimento! Vi que você precisava de ajuda com [assunto]. [pergunta relevante para seu contexto]"
 Adapte ao seu papel e ao contexto. Seja caloroso e demonstre que você JÁ SABE o assunto — o cliente não precisa repetir.` : '';
 
-    // 🧠 Memória persistente: resumo de conversas anteriores do contato
-    const contactAiSummary = contact?.ai_summary;
-    const contactMemoryBlock = contactAiSummary
-      ? `\n\n**🧠 MEMÓRIA DO CLIENTE (conversas anteriores):**\n${contactAiSummary}\n\nUse este contexto para ser mais assertivo e personalizado. Não pergunte o que já sabe sobre o cliente.\n`
-      : '';
+    // 🧠 Memória persistente: desativado (coluna ai_summary não existe ainda)
+    const contactMemoryBlock = '';
 
     // FIX 2: Injetar agent_context (intent da triagem + contexto acumulado) no system prompt
     const agentContextBlock = flowContextPrompt
