@@ -11,6 +11,79 @@ interface CloseConversationRequest {
   sendCsat: boolean;
 }
 
+// 🧠 Gera e persiste resumo de IA no contato após encerramento da conversa
+async function generateAndSaveContactSummary(
+  supabase: ReturnType<typeof createClient>,
+  conversationId: string,
+  contactId: string
+): Promise<void> {
+  try {
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!openaiApiKey) {
+      console.warn("[close-conversation] OPENAI_API_KEY não configurada — ai_summary não gerado");
+      return;
+    }
+
+    // Buscar últimas 20 mensagens da conversa
+    const { data: messages } = await supabase
+      .from("messages")
+      .select("content, sender_type, created_at")
+      .eq("conversation_id", conversationId)
+      .neq("sender_type", "system")
+      .order("created_at", { ascending: true })
+      .limit(20);
+
+    if (!messages?.length) return;
+
+    // Buscar resumo anterior do contato
+    const { data: contactData } = await supabase
+      .from("contacts")
+      .select("ai_summary, first_name, last_name")
+      .eq("id", contactId)
+      .single();
+
+    const previousSummary = contactData?.ai_summary || "";
+    const contactName = `${contactData?.first_name || ""} ${contactData?.last_name || ""}`.trim();
+
+    const conversationText = messages
+      .map(m => `${m.sender_type === "contact" ? "Cliente" : "Atendente/IA"}: ${m.content}`)
+      .join("\n");
+
+    const prompt = previousSummary
+      ? `Você é um assistente de CRM. Atualize o resumo do cliente "${contactName}" combinando o resumo anterior com a nova conversa. Máximo 3 frases cobrindo: produto/segmento do cliente, últimas solicitações e status, padrão de comportamento.\n\nResumo anterior:\n${previousSummary}\n\nNova conversa:\n${conversationText}\n\nResumo atualizado:`
+      : `Você é um assistente de CRM. Crie um resumo do cliente "${contactName}" com base nesta conversa. Máximo 3 frases cobrindo: produto/segmento do cliente, solicitações feitas e status, padrão de comportamento.\n\nConversa:\n${conversationText}\n\nResumo:`;
+
+    const llmResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${openaiApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 200,
+        temperature: 0.3,
+      }),
+    });
+
+    if (!llmResponse.ok) {
+      console.error("[close-conversation] LLM error ao gerar ai_summary:", await llmResponse.text());
+      return;
+    }
+
+    const llmData = await llmResponse.json();
+    const summary = llmData.choices?.[0]?.message?.content?.trim();
+    if (!summary) return;
+
+    await supabase
+      .from("contacts")
+      .update({ ai_summary: summary, ai_summary_updated_at: new Date().toISOString() })
+      .eq("id", contactId);
+
+    console.log(`[close-conversation] 🧠 ai_summary atualizado para contato ${contactId}`);
+  } catch (err) {
+    console.error("[close-conversation] Erro ao gerar ai_summary:", err);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -406,6 +479,13 @@ _Responda apenas com o número._`;
 
     if (messageError) {
       console.error(`[close-conversation] Failed to insert system message: ${messageError.message}`);
+    }
+
+    // 🧠 Gerar resumo de IA e persistir no contato (assíncrono, não bloqueia resposta)
+    if (conversation.contact_id) {
+      EdgeRuntime.waitUntil(
+        generateAndSaveContactSummary(supabase, conversationId, conversation.contact_id)
+      );
     }
 
     console.log(`[close-conversation] Completed successfully`);
