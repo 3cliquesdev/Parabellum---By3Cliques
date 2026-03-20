@@ -8797,7 +8797,7 @@ Via: Atendimento Automatizado (IA)`;
               '{{customer_email}}': contact?.email || '',
               '{{customer_phone}}': contact?.phone || '',
               '{{pix_key}}': args.pix_key || '',
-              '{{amount}}': args.withdrawal_amount ? `R$ ${args.withdrawal_amount.toFixed(2)}` : '',
+              '{{amount}}': args.withdrawal_amount ? `R$ ${args.withdrawal_amount}` : '',
               '{{reason}}': args.description || '',
               '{{bank}}': args.bank || '',
               '{{subject}}': args.issue_type || args.description || '',
