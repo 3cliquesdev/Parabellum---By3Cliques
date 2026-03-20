@@ -218,8 +218,8 @@ const userEmail = user.email;
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-2">
           <img 
-            src={logoLight} 
-            alt="Logo" 
+            src={setupLogo} 
+            alt={crmBranding?.name || "Logo"} 
             className="h-16 w-auto mx-auto mb-4 object-contain" 
           />
           <CardTitle className="text-2xl">Primeiro Acesso - Validação de Segurança</CardTitle>
