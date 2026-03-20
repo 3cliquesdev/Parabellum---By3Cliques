@@ -3448,6 +3448,21 @@ serve(async (req) => {
            (forbidFinancial && msgLower.length > 0 && isFinancialAction && !isFinancialInfo));
         if (otpVerifiedInFlow && (isFinancialAction || forceFinancialExit)) {
           console.log('[process-chat-flow] 🔓 V16.2 Bug36: OTP verificado — financialIntentMatch SUPRIMIDO, mantendo no nó AI para coleta');
+          
+          // 🆕 FIX #EE1426A1 Fase 4: Sincronizar departamento do ticketConfig quando OTP verificado
+          const nodeTicketConfig = currentNode.data?.ticket_config;
+          if (nodeTicketConfig?.department_id) {
+            try {
+              const deptUpdate: Record<string, any> = { department: nodeTicketConfig.department_id };
+              if (nodeTicketConfig.assigned_to) {
+                deptUpdate.assigned_to = nodeTicketConfig.assigned_to;
+              }
+              await supabaseClient.from('conversations').update(deptUpdate).eq('id', conversationId);
+              console.log(`[process-chat-flow] 🏢 FIX#EE1426A1: Dept/assigned sincronizado do ticketConfig: dept=${nodeTicketConfig.department_id} assigned=${nodeTicketConfig.assigned_to || 'none'}`);
+            } catch (deptSyncErr) {
+              console.error('[process-chat-flow] ⚠️ Erro ao sincronizar departamento do ticketConfig:', deptSyncErr);
+            }
+          }
         }
         if (forceFinancialExit) {
           console.log('[process-chat-flow] 🔒 forceFinancialExit=true recebido do webhook, forçando exit do nó AI');
