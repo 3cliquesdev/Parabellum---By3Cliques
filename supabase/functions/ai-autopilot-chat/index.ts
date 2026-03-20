@@ -2115,8 +2115,16 @@ serve(async (req) => {
         // 1. Há estado awaiting_otp E
         // 2. A última mensagem da IA NÃO foi pedindo número de pedido/rastreio
         // 3. A última mensagem da IA FOI sobre OTP/verificação
-        const shouldTreatAsOTP = (hasAwaitingOTP || hasRecentOTPPending) && 
-                                  !!contact?.email && 
+        // 🔄 Se cliente pediu reenvio explícito (sem dígitos), não tratar como OTP
+        const isResendRequest = /\breenviar\b/i.test(customerMessage) && otpDigitsOnly.length === 0;
+        if (isResendRequest) {
+          console.log('[ai-autopilot-chat] 🔄 "reenviar" detectado — passando para LLM chamar resend_otp');
+        }
+
+        // 🛡️ SÓ INTERCEPTAR COMO OTP SE não for reenvio
+        const shouldTreatAsOTP = !isResendRequest &&
+                                  (hasAwaitingOTP || hasRecentOTPPending) &&
+                                  !!contact?.email &&
                                   !lastAIAskedForOrder &&
                                   (lastAIAskedForOTP || hasAwaitingOTP);
         
@@ -2194,45 +2202,9 @@ serve(async (req) => {
               const errorMessage = otpData?.error || 'O código não é válido. Verifique e tente novamente.';
               const contactName = `${contact.first_name || ''} ${contact.last_name || ''}`.trim();
 
-              // 🆕 FIX #EE1426A1 Fase 1: Usar smartCollectionFields / ticketConfig do fluxo em vez de resposta genérica
-              let otpResponse: string;
               if (otpData?.success) {
-                const scEnabled = flow_context?.smartCollectionEnabled;
-                const scFields = flow_context?.smartCollectionFields;
-                const tcTemplate = (flow_context as any)?.ticketConfig?.description_template;
-                const saqueRegexPriority = /quero\s+sacar|saque|sacar|carteira|retirar|retirada/i;
-                const hasSaqueContextPriority = saqueRegexPriority.test(customerMessage) || 
-                  messageHistory?.filter((m: any) => m.role === 'user').slice().reverse().slice(0, 6).some((m: any) => saqueRegexPriority.test(m.content));
-                
-                // 🆕 FIX #672F64F7: Prioridade invertida — description_template PRIMEIRO, depois smartCollection
-                if (tcTemplate && hasSaqueContextPriority) {
-                  otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${tcTemplate}`;
-                } else if (scEnabled && scFields && scFields.length > 0 && hasSaqueContextPriority) {
-                  const fieldLabels: Record<string, string> = {
-                    'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
-                    'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
-                    'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
-                    'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
-                    'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-                    'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
-                    'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
-                    'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
-                    'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-                    'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
-                  };
-                  const fieldsText = scFields.map((f: string) => fieldLabels[f] || `📝 **${f}:** [preencha]`).join('\n');
-                  otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsText}`;
-                } else if (hasSaqueContextPriority) {
-                  otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
-                } else {
-                  otpResponse = `✅ **Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada. Como posso te ajudar?`;
-                }
-              } else {
-                otpResponse = `**Código inválido**\n\n${errorMessage}\n\nDigite **"reenviar"** se precisar de um novo código.`;
-              }
-
-              if (otpData?.success) {
-                // 🆕 V5-A: Refetch metadata fresco para não sobrescrever flags incrementais
+                // ✅ OTP validado — NÃO retornar early com template hardcoded.
+                // Limpar flags e deixar o LLM usar o system prompt da persona configurada.
                 const { data: freshOtpPriorityConv } = await supabaseClient
                   .from('conversations')
                   .select('customer_metadata')
@@ -2251,47 +2223,22 @@ serve(async (req) => {
                     }
                   })
                   .eq('id', conversationId);
+
+                // Sinalizar ao fluxo principal que OTP foi validado agora
+                (conversation as any)._otpJustValidated = true;
+                console.log('[ai-autopilot-chat] ✅ OTP validado (bloco priority) — continuando para LLM com persona system prompt');
+                // NÃO retornar — continua para o LLM abaixo
+              } else {
+                const otpErrorResponse = `**Código inválido**\n\n${errorMessage}\n\nDigite **"reenviar"** se precisar de um novo código.`;
+                const { data: savedErrMsg } = await supabaseClient
+                  .from('messages')
+                  .insert({ conversation_id: conversationId, content: otpErrorResponse, sender_type: 'user', is_ai_generated: true, channel: channelToUse })
+                  .select().single();
+                return new Response(JSON.stringify({
+                  response: otpErrorResponse, messageId: savedErrMsg?.id, otpValidated: false,
+                  debug: { reason: 'otp_invalid_priority', bypassed_ai: true }
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
               }
-
-              const { data: savedMsg } = await supabaseClient
-                .from('messages')
-                .insert({
-                  conversation_id: conversationId,
-                  content: otpResponse,
-                  sender_type: 'user',
-                  is_ai_generated: true,
-                  channel: channelToUse
-                })
-                .select()
-                .single();
-
-              if (channelToUse === 'whatsapp' && contact?.phone) {
-                const whatsappResult = await getWhatsAppInstanceForConversation(
-                  supabaseClient,
-                  conversationId,
-                  conversation.whatsapp_instance_id,
-                  conversation
-                );
-                if (whatsappResult) {
-                  await sendWhatsAppMessage(
-                    supabaseClient,
-                    whatsappResult,
-                    contact.phone,
-                    otpResponse,
-                    conversationId,
-                    contact.whatsapp_id
-                  );
-                }
-              }
-
-              return new Response(JSON.stringify({
-                response: otpResponse,
-                messageId: savedMsg?.id,
-                otpValidated: otpData?.success || false,
-                debug: { reason: 'otp_priority_validation_bypass', otp_success: otpData?.success, bypassed_ai: true }
-              }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-              });
             } catch (err) {
               console.error('[ai-autopilot-chat] ❌ Erro ao validar OTP (prioridade):', err);
               // Se falhar, segue o fluxo normal (mas não é esperado)
@@ -6402,54 +6349,11 @@ Posso ajudar em mais alguma coisa?`;
         const isFirstInteraction = aiInteractions <= 0;
         
         if (!recentCollectionMsg && !isFirstInteraction) {
-          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE INTENT DETECTED — enviando template de coleta PIX', {
+          // NÃO retornar template hardcoded — deixar LLM usar o system prompt da persona
+          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE — sinalizando para LLM continuar com persona system prompt', {
             aiInteractions, isFirstInteraction, hasSaqueIntent, otp_reason
           });
-          
-          // 🆕 FIX #672F64F7 Parte A: description_template tem prioridade sobre smart collection
-          const tcTemplate = (flow_context as any)?.ticketConfig?.description_template;
-          const scEnabledGuard = flow_context?.smartCollectionEnabled;
-          const scFieldsGuard = flow_context?.smartCollectionFields;
-          let pixCollectResponse: string;
-          if (tcTemplate) {
-            pixCollectResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${tcTemplate}`;
-          } else if (scEnabledGuard && scFieldsGuard && scFieldsGuard.length > 0) {
-            const fieldLabelsGuard: Record<string, string> = {
-              'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
-              'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
-              'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
-              'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
-              'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-              'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
-              'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
-              'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
-              'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-              'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
-            };
-            const fieldsTextGuard = scFieldsGuard.map((f: string) => fieldLabelsGuard[f] || `📝 **${f}:** [preencha]`).join('\n');
-            pixCollectResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsTextGuard}`;
-          } else {
-            pixCollectResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
-          }
-          
-          const { data: savedMsgPix } = await supabaseClient.from('messages').insert({
-            conversation_id: conversationId, content: pixCollectResponse,
-            sender_type: 'user', is_ai_generated: true, channel: responseChannel
-          }).select().single();
-          
-          if (responseChannel === 'whatsapp' && contact?.phone && conversation) {
-            try {
-              const wrPix = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, contact, conversation);
-              if (wrPix) await sendWhatsAppMessage(supabaseClient, wrPix, contact.phone, pixCollectResponse, conversationId, contact.whatsapp_id);
-            } catch (sendErr) {
-              console.error('[ai-autopilot-chat] ❌ Post-OTP PIX WhatsApp send failed:', sendErr);
-            }
-          }
-          
-          return new Response(JSON.stringify({
-            response: pixCollectResponse, messageId: savedMsgPix?.id,
-            debug: { reason: 'post_otp_saque_intent_collect_pix' }
-          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          (conversation as any)._otpJustValidated = true;
         } else if (isFirstInteraction) {
           console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE — primeira interação, deixando IA se apresentar', {
             aiInteractions, hasSaqueIntent
@@ -6695,7 +6599,13 @@ Posso ajudar em mais alguma coisa?`;
           }
         }
         
-        // Salvar mensagem no banco
+        if (otpData?.success) {
+          // OTP validado — NÃO retornar early, deixar LLM usar persona system prompt
+          (conversation as any)._otpJustValidated = true;
+          console.log('[ai-autopilot-chat] ✅ OTP validado (bloco direct) — continuando para LLM com persona system prompt');
+          // continua para o LLM abaixo
+        } else {
+        // Salvar mensagem de erro no banco
         const { data: savedMsg } = await supabaseClient
           .from('messages')
           .insert({
@@ -6707,16 +6617,16 @@ Posso ajudar em mais alguma coisa?`;
           })
           .select()
           .single();
-        
+
         // Enviar via WhatsApp se necessário (Meta ou Evolution)
         if (responseChannel === 'whatsapp' && contact?.phone) {
           const whatsappResult = await getWhatsAppInstanceForConversation(
-            supabaseClient, 
-            conversationId, 
+            supabaseClient,
+            conversationId,
             conversation.whatsapp_instance_id,
             conversation
           );
-          
+
           if (whatsappResult) {
             await sendWhatsAppMessage(
               supabaseClient,
@@ -6728,27 +6638,28 @@ Posso ajudar em mais alguma coisa?`;
             );
           }
         }
-        
-        console.log('[ai-autopilot-chat] âœ… OTP AUTO-VALIDATION COMPLETE:', {
-          otp_success: otpData?.success,
-          error_reason: otpData?.success ? null : errorMessage,
+
+        console.log('[ai-autopilot-chat] ✅ OTP AUTO-VALIDATION COMPLETE (error):', {
+          otp_success: false,
+          error_reason: errorMessage,
           response_sent: true
         });
-        
-        // âš¡ RETURN EARLY - OTP validado, não chamar IA
+
+        // RETURN EARLY apenas para erro de OTP
         return new Response(JSON.stringify({
           response: directOTPSuccessResponse,
           messageId: savedMsg?.id,
-          otpValidated: otpData?.success || false,
-          debug: { 
+          otpValidated: false,
+          debug: {
             reason: 'auto_otp_validation_bypass',
-            otp_success: otpData?.success,
-            error_detail: otpData?.success ? null : errorMessage,
+            otp_success: false,
+            error_detail: errorMessage,
             bypassed_ai: true
           }
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
+        }
         
       } catch (error) {
         console.error('[ai-autopilot-chat] ❌ Erro ao validar OTP automaticamente:', error);
