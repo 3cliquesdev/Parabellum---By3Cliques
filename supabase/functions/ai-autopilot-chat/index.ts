@@ -2204,20 +2204,24 @@ serve(async (req) => {
                 const hasSaqueContextPriority = saqueRegexPriority.test(customerMessage) || 
                   messageHistory?.filter((m: any) => m.role === 'user').slice().reverse().slice(0, 6).some((m: any) => saqueRegexPriority.test(m.content));
                 
-                if (scEnabled && scFields && scFields.length > 0 && hasSaqueContextPriority) {
-                  // Usar campos do Smart Collection configurados no nó
+                // 🆕 FIX #672F64F7: Prioridade invertida — description_template PRIMEIRO, depois smartCollection
+                if (tcTemplate && hasSaqueContextPriority) {
+                  otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${tcTemplate}`;
+                } else if (scEnabled && scFields && scFields.length > 0 && hasSaqueContextPriority) {
                   const fieldLabels: Record<string, string> = {
+                    'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
+                    'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
+                    'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
+                    'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
+                    'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
                     'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
                     'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
                     'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
                     'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-                    'banco': '🏦 **Banco:** [nome do banco]',
-                    'motivo': '📝 **Motivo:** [motivo da solicitação]',
+                    'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
                   };
                   const fieldsText = scFields.map((f: string) => fieldLabels[f] || `📝 **${f}:** [preencha]`).join('\n');
                   otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsText}`;
-                } else if (tcTemplate && hasSaqueContextPriority) {
-                  otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, preciso dos seguintes dados:\n\n${tcTemplate}`;
                 } else if (hasSaqueContextPriority) {
                   otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
                 } else {
