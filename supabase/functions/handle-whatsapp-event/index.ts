@@ -190,6 +190,8 @@ serve(async (req) => {
       }
     );
 
+    const depts = await resolveDepartments(supabase);
+
     const body = JSON.parse(rawBody);
     console.log('[handle-whatsapp-event] 🔥 Raw payload:', JSON.stringify(body, null, 2));
     
