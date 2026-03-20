@@ -10034,19 +10034,24 @@ Conversa: ${conversationId}`;
           const scFieldsFb = flow_context?.smartCollectionFields;
           const scEnabledFb = flow_context?.smartCollectionEnabled;
           let pixResponseFb: string;
-          if (scEnabledFb && scFieldsFb && scFieldsFb.length > 0) {
+          // 🆕 FIX #672F64F7: description_template PRIMEIRO, depois smartCollection
+          if (tcTemplateFb) {
+            pixResponseFb = `✅ **Identidade confirmada!**\n\n${tcTemplateFb}`;
+          } else if (scEnabledFb && scFieldsFb && scFieldsFb.length > 0) {
             const fieldLabelsFb: Record<string, string> = {
+              'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
+              'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
+              'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
+              'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
+              'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
               'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
               'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
               'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
               'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-              'banco': '🏦 **Banco:** [nome do banco]',
-              'motivo': '📝 **Motivo:** [motivo da solicitação]',
+              'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
             };
             const fieldsTextFb = scFieldsFb.map((f: string) => fieldLabelsFb[f] || `📝 **${f}:** [preencha]`).join('\n');
             pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, me envie os dados abaixo:\n\n${fieldsTextFb}`;
-          } else if (tcTemplateFb) {
-            pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, preciso dos seguintes dados:\n\n${tcTemplateFb}`;
           } else {
             pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
           }
