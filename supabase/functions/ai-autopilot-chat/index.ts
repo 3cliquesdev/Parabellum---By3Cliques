@@ -4937,7 +4937,7 @@ Responda APENAS: skip ou search`
     }
     
     // 🆕 CORREÇNÃO: Cliente validado vai para SUPORTE, não Comercial
-    const SUPORTE_DEPT_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+    const SUPORTE_DEPT_ID = DEPT_SUPORTE_ID; // Alias para compatibilidade local
     if (isValidatedCustomer) {
       const { data: currentConv } = await supabaseClient
         .from('conversations')
