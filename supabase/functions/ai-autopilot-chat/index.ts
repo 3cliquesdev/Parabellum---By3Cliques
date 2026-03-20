@@ -4947,7 +4947,9 @@ Responda APENAS: skip ou search`
     
     // 🆕 FIX Bug B (#EEFFF1DD): Bypass Strict RAG para ações financeiras
     // Strict RAG não tem tools (create_ticket) — ações financeiras devem ir direto ao LLM principal
-    const isFinancialBypass = isFinancialAction || isWithdrawalRequest;
+    // ⚠️ ZONA SEGURA: isWithdrawalRequest só existe após L5999 — usar detecção inline aqui
+    const isWithdrawalEarly = WITHDRAWAL_ACTION_PATTERNS.some(p => p.test(customerMessage || ''));
+    const isFinancialBypass = isFinancialAction || isWithdrawalEarly;
     if (isFinancialBypass) {
       console.log('[ai-autopilot-chat] 💰 Ação financeira detectada — BYPASS Strict RAG para LLM principal com tools');
     }
