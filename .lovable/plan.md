@@ -1,89 +1,79 @@
 
 
-# Auditoria 100% Final — ChatFlow Soberano
+# Auditoria 100% — UUIDs Hardcoded em TODAS as Edge Functions
 
-## Estado Atual (Conquistas Anteriores)
-- ✅ `persona.system_prompt` injetado dinamicamente
-- ✅ `buildCollectionMessage` é fonte única de templates
-- ✅ "Cérebro financeiro" removido, delegado ao fluxo/KB
-- ✅ Menu A/B eliminado, cancelamento genérico
-- ✅ Email subject dinâmico via `persona.name`
-- ✅ `TRANSFER_LABELS` busca departamento do banco
-- ✅ Comentários Kiwify neutralizados
+## Resumo da Situação
 
-## Problemas AINDA Encontrados
+O `ai-autopilot-chat` já está **95% limpo**: persona dinâmica, templates via fluxo, SLAs genéricos, email subject dinâmico, TRANSFER_LABELS dinâmico. Os UUIDs de departamento nele são centralizados numa única query no início do handler.
 
-### 🔴 P1 — 48 ocorrências de UUIDs de departamento hardcoded
-O código repete `DEPT_COMERCIAL_ID = 'f446e202-...'` e `DEPT_SUPORTE_ID = '36ce66cd-...'` em **12+ locais distintos** (L1868, L2654, L3917, L4928, L5633, L8535, L9268, L9948, L10949...).
+**O problema restante é sistêmico**: 6 outras edge functions ainda têm UUIDs de departamento hardcoded (82 ocorrências em 8 arquivos). Isso quebra a soberania do ChatFlow — se alguém renomear/trocar departamentos no dashboard, o roteamento falha silenciosamente.
 
-Se a organização renomear ou trocar departamentos, nenhum desses roteamentos acompanha. O fluxo visual já define departamento de destino via `flow_context.department`, mas o código **ignora isso** nos fallbacks sem fluxo e força UUIDs fixos.
+## Arquivos com UUIDs Hardcoded
 
-**Solução:** Resolver os IDs uma única vez no início do handler via query `departments` (por nome), com fallback ao UUID atual. Usar variáveis centralizadas em todo o arquivo.
+| Arquivo | Ocorrências | Criticidade |
+|---------|-------------|-------------|
+| `process-chat-flow/index.ts` | `INTENT_DEPT_MAP` com 10 UUIDs (L3811-3823) | **ALTA** — roteamento de intenções |
+| `meta-whatsapp-webhook/index.ts` | 5 locais com fallback UUIDs (L945, L1561, L1929, L2008, L2245) | **ALTA** — webhook principal |
+| `handle-whatsapp-event/index.ts` | 2 locais (L959-960, L1434) | **ALTA** — webhook Evolution |
+| `check-user-status/index.ts` | 2 constantes (L11-12) | MÉDIA — edge function auxiliar |
+| `route-conversation/index.ts` | 1 fallback (L277) | MÉDIA — roteamento |
+| `run-email-backfill/index.ts` | referências residuais | BAIXA |
 
-### 🔴 P2 — Regra de negócio "conta de terceiros" no fallback de saque (L1196)
-```
-IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu CPF. 
-Não é possível transferir para conta de terceiros.
-```
-Essa é uma regra de negócio específica embutida no fallback. Deve vir do template do banco (`saque_sucesso`) ou ser removida do fallback genérico.
+## Plano de Correção
 
-### 🟡 P3 — Variáveis `isKiwifyValidated` e campos `kiwify_validated` (funcional)
-São nomes de variáveis/colunas do schema real. Renomear quebraria o banco. **Não alterar** — apenas documentar como "legacy naming".
+### Correção 1 — Módulo compartilhado `_shared/department-resolver.ts`
 
-### 🟡 P4 — `allowed_sources: 'kiwify'` na interface (funcional)
-Tipo literal na interface `FlowContext`. Renomear quebraria contratos. **Não alterar**.
-
----
-
-## Plano de Correção (2 correções)
-
-### Correção 1 — Centralizar resolução de departamentos (eliminar 48 UUIDs)
-
-No início do handler principal (após carregar a conversa), fazer UMA query para resolver departamentos por nome:
+Criar um helper reutilizável que faz UMA query e cacheia os departamentos por nome:
 
 ```typescript
-// Resolver departamentos dinamicamente (1 query, usado em todo o handler)
-const { data: deptRows } = await supabaseClient
-  .from('departments')
-  .select('id, name')
-  .in('name', ['Comercial - Nacional', 'Suporte']);
-
-const deptMap = new Map((deptRows || []).map((d: any) => [d.name, d.id]));
-const DEPT_COMERCIAL_ID = deptMap.get('Comercial - Nacional') || 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-const DEPT_SUPORTE_ID = deptMap.get('Suporte') || '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+// supabase/functions/_shared/department-resolver.ts
+export async function resolveDepartments(supabaseClient: any) {
+  const { data } = await supabaseClient
+    .from('departments')
+    .select('id, name');
+  
+  const byName = new Map<string, string>();
+  const bySlug = new Map<string, string>();
+  for (const d of (data || [])) {
+    byName.set(d.name, d.id);
+    // slug: "Comercial - Nacional" → "comercial"
+    const slug = d.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().split(/[\s\-\/]+/)[0];
+    if (!bySlug.has(slug)) bySlug.set(slug, d.id);
+  }
+  return { byName, bySlug };
+}
 ```
 
-Depois, remover todas as 12+ declarações locais de `DEPT_COMERCIAL_ID` / `DEPT_SUPORTE_ID` / `SUPORTE_DEPT_ID` espalhadas pelo arquivo e usar as variáveis centralizadas.
+### Correção 2 — `process-chat-flow`: INTENT_DEPT_MAP dinâmico
 
-Adicionalmente, nos pontos de fallback sem fluxo (L8535, L9268, L10949), substituir o UUID inline por `DEPT_SUPORTE_ID`.
+Substituir o mapa fixo de 10 UUIDs por resolução via `bySlug` com fallback aos UUIDs atuais. A query é feita uma vez no início do handler.
 
-### Correção 2 — Remover regra de negócio do fallback de saque (L1196)
+### Correção 3 — `meta-whatsapp-webhook`: 5 fallbacks centralizados
 
-Substituir:
-```
-IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu CPF. 
-Não é possível transferir para conta de terceiros.
-```
-Por:
-```
-Acompanhe o status pelo protocolo acima.
-```
-A regra sobre titularidade PIX deve estar no template `saque_sucesso` do banco ou na KB — não no código.
+Substituir os 5 `DEPT_SUPORTE_FALLBACK` / `DEPT_COMERCIAL_ID` locais por uma resolução centralizada no início do handler.
 
----
+### Correção 4 — `handle-whatsapp-event`: mesmo padrão
 
-## Arquivos Afetados
+Centralizar os 2 locais com UUIDs no início do handler.
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `ai-autopilot-chat/index.ts` | +1 query centralizada no início, -12 declarações locais de UUID, ~48 referências atualizadas |
-| | L1196: remover regra de negócio do fallback |
+### Correção 5 — `check-user-status`: resolver por nome
 
-**Estimativa:** ~60 linhas alteradas (maioria remoção de duplicatas), 0 funcionalidade removida
+Substituir as constantes fixas por query dinâmica (função pequena, 1 query).
+
+### Correção 6 — `route-conversation`: fallback dinâmico
+
+Substituir o UUID fixo de fallback por resolução do departamento "Suporte" por nome.
+
+## Estimativa
+
+- 1 novo arquivo: `_shared/department-resolver.ts` (~25 linhas)
+- 6 edge functions editadas: ~20 linhas cada (substituir UUIDs por variáveis resolvidas)
+- 0 funcionalidade removida — todos os UUIDs atuais permanecem como fallback
+- Deploy de 6 functions
 
 ## O que NÃO alterar
 - `kiwify_events`, `kiwify_validated` — schema real do banco
-- `allowed_sources: 'kiwify'` — tipo de interface, renomear quebraria contratos
-- `isKiwifyValidated` — variável funcional mapeada à coluna real
-- Queries a `kiwify_events` — infraestrutura CRM legítima
+- `allowed_sources: 'kiwify'` — tipo de interface
+- Frontend (`src/`) — já está limpo (0 UUIDs hardcoded)
 
