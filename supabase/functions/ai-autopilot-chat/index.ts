@@ -6486,7 +6486,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       });
     }
     
-    if (shouldValidateOTP) {
+    if (shouldValidateOTP && !(conversation as any)._otpJustValidated) {
       console.log('[ai-autopilot-chat] 🔒 DECISION POINT: AUTO_OTP_VALIDATION', {
         detected_otp_code: true,
         contact_has_email: contactHasEmail,
