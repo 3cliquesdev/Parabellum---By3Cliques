@@ -934,7 +934,7 @@ async function sendEmailReport(
             ? `<img src="${logoUrl}" alt="${brandName}" style="max-height:40px;max-width:200px;margin-bottom:8px;" />`
             : ''
           }
-          <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;">Report Diário CRM 3Cliques</h1>
+          <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;">Report Diário ${brandName}</h1>
           <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">Relatório ${dateStr} ${periodStr || ''}</p>
         </td></tr>
 
