@@ -16,6 +16,8 @@ import { User, Session } from "@supabase/supabase-js";
 type Step = "send_code" | "verify_otp" | "set_password";
 
 export default function SetupPassword() {
+  const { data: crmBranding } = useCRMBranding();
+  const setupLogo = crmBranding?.logo_url || logoLightFallback;
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
