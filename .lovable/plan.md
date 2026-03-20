@@ -1,102 +1,89 @@
 
 
-# Auditoria 100% — Tornar ChatFlow Soberano no `ai-autopilot-chat`
+# Auditoria 100% Final — ChatFlow Soberano
 
-## Status Atual (o que JÁ funciona)
-- ✅ `persona.system_prompt` injetado (L7174)
-- ✅ `buildCollectionMessage` é fonte única de templates de coleta
+## Estado Atual (Conquistas Anteriores)
+- ✅ `persona.system_prompt` injetado dinamicamente
+- ✅ `buildCollectionMessage` é fonte única de templates
 - ✅ "Cérebro financeiro" removido, delegado ao fluxo/KB
-- ✅ Menu A/B hardcoded eliminado
-- ✅ SLA parametrizado via `sla_text`/`team_name` no system prompt
-- ✅ `TRANSFER_LABELS` busca departamento do banco com fallback estático
-- ✅ Cancelamento no `identityWallNote` genérico (sem Kiwify)
+- ✅ Menu A/B eliminado, cancelamento genérico
+- ✅ Email subject dinâmico via `persona.name`
+- ✅ `TRANSFER_LABELS` busca departamento do banco
+- ✅ Comentários Kiwify neutralizados
+
+## Problemas AINDA Encontrados
+
+### 🔴 P1 — 48 ocorrências de UUIDs de departamento hardcoded
+O código repete `DEPT_COMERCIAL_ID = 'f446e202-...'` e `DEPT_SUPORTE_ID = '36ce66cd-...'` em **12+ locais distintos** (L1868, L2654, L3917, L4928, L5633, L8535, L9268, L9948, L10949...).
+
+Se a organização renomear ou trocar departamentos, nenhum desses roteamentos acompanha. O fluxo visual já define departamento de destino via `flow_context.department`, mas o código **ignora isso** nos fallbacks sem fluxo e força UUIDs fixos.
+
+**Solução:** Resolver os IDs uma única vez no início do handler via query `departments` (por nome), com fallback ao UUID atual. Usar variáveis centralizadas em todo o arquivo.
+
+### 🔴 P2 — Regra de negócio "conta de terceiros" no fallback de saque (L1196)
+```
+IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu CPF. 
+Não é possível transferir para conta de terceiros.
+```
+Essa é uma regra de negócio específica embutida no fallback. Deve vir do template do banco (`saque_sucesso`) ou ser removida do fallback genérico.
+
+### 🟡 P3 — Variáveis `isKiwifyValidated` e campos `kiwify_validated` (funcional)
+São nomes de variáveis/colunas do schema real. Renomear quebraria o banco. **Não alterar** — apenas documentar como "legacy naming".
+
+### 🟡 P4 — `allowed_sources: 'kiwify'` na interface (funcional)
+Tipo literal na interface `FlowContext`. Renomear quebraria contratos. **Não alterar**.
 
 ---
 
-## Problemas AINDA Encontrados (181 referências "Kiwify" + vendor-specific)
+## Plano de Correção (2 correções)
 
-### 🔴 P1 — Email subject hardcoded "Seu Armazém Drop" (L10467)
-```
-subject: `Re: ${conversation.subject || 'Seu Armazém Drop - Resposta do Suporte'}`
-```
-**Impacto:** Todo email enviado sem subject mostra nome de outro cliente. Deve usar `persona.name` ou nome da organização.
+### Correção 1 — Centralizar resolução de departamentos (eliminar 48 UUIDs)
 
-### 🔴 P2 — Comentários e logs referenciam "Kiwify" como vendor fixo (30+ locais)
-- L1117: `// Devolução de pedido Kiwify`
-- L1131: `// Kiwify`
-- L2929: `// Sempre validar pela base Kiwify`
-- L2932: `validando phone+email+CPF contra base Kiwify`
-- L3036: `Nenhuma compra Kiwify encontrada`
-- L3045: `kiwify_validated=true`
-- L3048: `BUSCAR PRODUTOS KIWIFY DO CONTATO`
-- L6033: `CANCELAMENTO DE ASSINATURA - Sem OTP (processo Kiwify)`
-- L6053: `Cancelamento - Sem OTP, processo Kiwify`
-- L6667: `Cancelamento Kiwify -> Sem OTP`
-**Impacto:** Confusão em debugging. Devem ser neutros ("validação de compra", "provedor de eventos").
+No início do handler principal (após carregar a conversa), fazer UMA query para resolver departamentos por nome:
 
-### 🔴 P3 — Internal note do ticket com regras de negócio fixas (L8784-8792)
-```
-**REGRAS (conforme SLA configurado):**
-- Destino: APENAS conta do titular (CPF do cliente)
-- PIX de terceiros: CANCELAR solicitação
-**CHECKLIST FINANCEIRO:**
-- [ ] Verificar saldo disponível
-- [ ] Confirmar titularidade da chave PIX
-```
-**Impacto:** Regras de PIX/titular são específicas do negócio. Devem vir do `ticketConfig.description_template` (já implementado em L8829-8831, mas o fallback L8773-8792 ainda injeta regras fixas).
-
-### 🟡 P4 — `kiwify_events` table queries infraestruturais (L2929-3100)
-~170 linhas que consultam `kiwify_events` para validação de compra. Isso é **infraestrutura de CRM** (a tabela existe no banco), não é prompt. Os dados são legítimos, mas os **comentários** devem ser neutros.
-
-### 🟡 P5 — `allowed_sources` inclui `'kiwify'` como tipo (L291, L301, L1282)
-O tipo literal `'kiwify'` está na interface `FlowContext.allowed_sources`. Funcional (a tabela existe), mas o nome acopla ao vendor.
-
----
-
-## Plano de Correção (4 correções)
-
-### Correção 1 — Email subject dinâmico (L10467)
-Substituir `'Seu Armazém Drop - Resposta do Suporte'` por:
 ```typescript
-subject: `Re: ${conversation.subject || `${persona?.name || 'Suporte'} - Resposta`}`
+// Resolver departamentos dinamicamente (1 query, usado em todo o handler)
+const { data: deptRows } = await supabaseClient
+  .from('departments')
+  .select('id, name')
+  .in('name', ['Comercial - Nacional', 'Suporte']);
+
+const deptMap = new Map((deptRows || []).map((d: any) => [d.name, d.id]));
+const DEPT_COMERCIAL_ID = deptMap.get('Comercial - Nacional') || 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+const DEPT_SUPORTE_ID = deptMap.get('Suporte') || '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
 ```
 
-### Correção 2 — Neutralizar comentários/logs vendor-specific (~30 locais)
-Substituir todos os comentários que referenciam "Kiwify" por termos genéricos:
-- `// Validar pela base Kiwify` → `// Validar compra via eventos de pagamento`
-- `// processo Kiwify` → `// processo de cancelamento (via KB)`
-- `Nenhuma compra Kiwify encontrada` → `Nenhum evento de compra encontrado`
-- Manter os nomes das tabelas (`kiwify_events`, `kiwify_validated`) intactos — são schema real.
+Depois, remover todas as 12+ declarações locais de `DEPT_COMERCIAL_ID` / `DEPT_SUPORTE_ID` / `SUPORTE_DEPT_ID` espalhadas pelo arquivo e usar as variáveis centralizadas.
 
-### Correção 3 — Internal note do ticket: delegar ao template (L8773-8792)
-O bloco de "enriquecimento específico para SAQUE" injeta regras fixas de PIX. Deve respeitar o `description_template` do nó:
-- Se `ticketConfig.description_template` existe → usar apenas ele (já implementado em L8829)
-- Se não existe → manter o fallback genérico MAS sem regras de negócio fixas (remover "APENAS conta do titular", "PIX de terceiros: CANCELAR", checklist)
+Adicionalmente, nos pontos de fallback sem fluxo (L8535, L9268, L10949), substituir o UUID inline por `DEPT_SUPORTE_ID`.
 
-### Correção 4 — Fallback do saque note simplificado
-Substituir L8784-8792 por:
+### Correção 2 — Remover regra de negócio do fallback de saque (L1196)
+
+Substituir:
 ```
-**DADOS DO SAQUE:**
-- Valor: R$ ${args.withdrawal_amount}
-- Chave PIX: ${args.pix_key || 'Não informada'} (${args.pix_key_type || 'tipo não especificado'})
-- Confirmação: ${args.customer_confirmation ? 'Sim' : 'Pendente'}
+IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu CPF. 
+Não é possível transferir para conta de terceiros.
 ```
-Sem regras de negócio — essas devem estar no template do dashboard ou na KB.
+Por:
+```
+Acompanhe o status pelo protocolo acima.
+```
+A regra sobre titularidade PIX deve estar no template `saque_sucesso` do banco ou na KB — não no código.
 
 ---
 
 ## Arquivos Afetados
 
-| Arquivo | Linhas | Alteração |
-|---------|--------|-----------|
-| `ai-autopilot-chat/index.ts` | L10467 | Email subject dinâmico |
-| | L1117, L1131, L2929-3045, L6033, L6053, L6667 | Neutralizar ~30 comentários/logs |
-| | L8773-8792 | Simplificar internal note (remover regras fixas) |
+| Arquivo | Alteração |
+|---------|-----------|
+| `ai-autopilot-chat/index.ts` | +1 query centralizada no início, -12 declarações locais de UUID, ~48 referências atualizadas |
+| | L1196: remover regra de negócio do fallback |
 
-**Estimativa:** ~40 linhas alteradas (maioria comentários), 0 funcionalidade removida
+**Estimativa:** ~60 linhas alteradas (maioria remoção de duplicatas), 0 funcionalidade removida
 
 ## O que NÃO alterar
-- Queries a `kiwify_events` — são infraestrutura real do banco
-- Campos `kiwify_validated` — são colunas reais do schema
-- `allowed_sources: 'kiwify'` — tipo legítimo da interface (renomear quebraria contratos)
+- `kiwify_events`, `kiwify_validated` — schema real do banco
+- `allowed_sources: 'kiwify'` — tipo de interface, renomear quebraria contratos
+- `isKiwifyValidated` — variável funcional mapeada à coluna real
+- Queries a `kiwify_events` — infraestrutura CRM legítima
 
