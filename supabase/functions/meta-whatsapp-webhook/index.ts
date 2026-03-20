@@ -1559,7 +1559,7 @@ serve(async (req) => {
                         
                         // 🛒 TRAVA COMERCIAL: commercialBlocked
                         if (autopilotData?.commercialBlocked) {
-                          const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+                          const DEPT_COMERCIAL_ID = depts.COMERCIAL_ID;
                           
                           if (autopilotData?.hasFlowContext) {
                             console.log("[meta-whatsapp-webhook] 🛒 commercialBlocked + hasFlowContext → re-invocando process-chat-flow com forceCommercialExit");
