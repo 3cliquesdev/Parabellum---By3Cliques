@@ -10,9 +10,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Target } from "lucide-react";
 import { z } from "zod";
+import { useCRMBranding } from "@/hooks/useCRMBranding";
 
-// Use public folder for LCP optimization - makes image discoverable in initial HTML
-const logoLight = "/logo-parabellum-light.png";
+const logoFallback = "/logo-parabellum-light.png";
 const authSchema = z.object({
   email: z.string().email({
     message: "E-mail inválido"
