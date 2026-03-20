@@ -1,15 +1,12 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveDepartments } from "../_shared/department-resolver.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// Department IDs
-const COMERCIAL_DEPT_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-const SUPORTE_DEPT_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
 
 interface CheckUserStatusRequest {
   email: string;
@@ -27,6 +24,7 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
+    const depts = await resolveDepartments(supabase);
     const body: CheckUserStatusRequest = await req.json();
 
     if (!body.email) {
@@ -55,14 +53,14 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           exists: false,
-          recommended_department_id: COMERCIAL_DEPT_ID, // Leads novos vão para Comercial
+          recommended_department_id: depts.COMERCIAL_ID, // Leads novos vão para Comercial
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Cliente existe - determinar departamento recomendado
-    let recommendedDepartmentId = SUPORTE_DEPT_ID;
+    let recommendedDepartmentId = depts.SUPORTE_ID;
 
     // Se tem consultor vinculado, buscar o departamento dele
     if (contact.consultant_id) {

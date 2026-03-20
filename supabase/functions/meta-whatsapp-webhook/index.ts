@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/ai-config-cache.ts";
+import { resolveDepartments } from "../_shared/department-resolver.ts";
 
 // ============================================
 // 📦 MESSAGE BATCHING HELPERS
@@ -268,6 +269,8 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
       );
+
+      const depts = await resolveDepartments(supabase);
 
       for (const entry of payload.entry) {
         for (const change of entry.changes) {
@@ -944,7 +947,7 @@ serve(async (req) => {
                   };
                   
                   // 🆕 Fallback: se flow não retornou departmentId, usar Suporte
-                  const DEPT_SUPORTE_FALLBACK = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+                  const DEPT_SUPORTE_FALLBACK = depts.SUPORTE_ID;
                   updateData.department = flowData.departmentId || DEPT_SUPORTE_FALLBACK;
 
                   // ═══════════════════════════════════════════════════════════════
@@ -1558,7 +1561,7 @@ serve(async (req) => {
                         
                         // 🛒 TRAVA COMERCIAL: commercialBlocked
                         if (autopilotData?.commercialBlocked) {
-                          const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+                          const DEPT_COMERCIAL_ID = depts.COMERCIAL_ID;
                           
                           if (autopilotData?.hasFlowContext) {
                             console.log("[meta-whatsapp-webhook] 🛒 commercialBlocked + hasFlowContext → re-invocando process-chat-flow com forceCommercialExit");
@@ -1926,7 +1929,7 @@ serve(async (req) => {
                            flowExitHandledByConversation.add(conversation.id);
                            console.log("[meta-whatsapp-webhook] 🚀 V13: Handoff IMEDIATO (reason=" + autopilotData.reason + ") — pulando flow re-invocation");
                            
-                           const DEPT_SUPORTE_IMMEDIATE = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+                           const DEPT_SUPORTE_IMMEDIATE = depts.SUPORTE_ID;
                            const immediateDept = autopilotData.flow_context?.department || (conversation as any).department || DEPT_SUPORTE_IMMEDIATE;
                            
                            await supabase.from('conversations').update({
@@ -2005,7 +2008,7 @@ serve(async (req) => {
                               }
                               
                               // Transfer handling — 🔧 BUG 2 FIX: Adicionar preferred transfer (paridade com CASO 2)
-                              const DEPT_SUPORTE_FALLBACK_CV = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+                              const DEPT_SUPORTE_FALLBACK_CV = depts.SUPORTE_ID;
                               const cvTransferDept = cvFlowResult.departmentId || cvFlowResult.department;
                               if (cvFlowResult.transfer === true || cvFlowResult.action === 'transfer') {
                                 const cvDeptToUse = cvTransferDept || DEPT_SUPORTE_FALLBACK_CV;
@@ -2242,7 +2245,7 @@ serve(async (req) => {
                               }
                               
                               // 🔧 BUG 2+3 FIX: transfer com lógica completa (consultant + preferred) como CASO 2
-                              const DEPT_SUPORTE_FALLBACK_AIX = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+                              const DEPT_SUPORTE_FALLBACK_AIX = depts.SUPORTE_ID;
                               const transferDept = flowResult.departmentId || flowResult.department;
                               if (flowResult.transfer === true || flowResult.action === 'transfer') {
                                 const deptToUse = transferDept || DEPT_SUPORTE_FALLBACK_AIX;

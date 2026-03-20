@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/ai-config-cache.ts";
+import { resolveDepartments } from "../_shared/department-resolver.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -188,6 +189,8 @@ serve(async (req) => {
         auth: { persistSession: false },
       }
     );
+
+    const depts = await resolveDepartments(supabase);
 
     const body = JSON.parse(rawBody);
     console.log('[handle-whatsapp-event] 🔥 Raw payload:', JSON.stringify(body, null, 2));
@@ -956,8 +959,8 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
   // Telefone existe = Cliente = Suporte
   // Telefone novo = Lead = Comercial
   // ============================================================
-  const SUPORTE_DEPT_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
-  const COMERCIAL_DEPT_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+  const SUPORTE_DEPT_ID = depts.SUPORTE_ID;
+  const COMERCIAL_DEPT_ID = depts.COMERCIAL_ID;
 
   // isKnownCustomer já foi definido lá em cima baseado no telefone existir no banco
   let targetDepartmentId = isKnownCustomer ? SUPORTE_DEPT_ID : COMERCIAL_DEPT_ID;
@@ -1431,7 +1434,7 @@ async function handleMessageUpsert(supabase: any, payload: EvolutionWebhook, ins
                  (aiResponse.reason === 'customer_transfer_intent' || aiResponse.reason === 'global_anti_loop_handoff')) {
                console.log("[handle-whatsapp-event] 🚀 V13: Handoff IMEDIATO (reason=" + aiResponse.reason + ") — pulando flow re-invocation");
                
-               const DEPT_SUPORTE_IMMEDIATE = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+               const DEPT_SUPORTE_IMMEDIATE = depts.SUPORTE_ID;
                const immediateDept = aiResponse.flow_context?.department || DEPT_SUPORTE_IMMEDIATE;
                
                await supabase.from('conversations').update({

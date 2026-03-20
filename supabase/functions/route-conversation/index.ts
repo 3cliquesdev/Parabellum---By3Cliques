@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveDepartments } from "../_shared/department-resolver.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -91,6 +92,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    const depts = await resolveDepartments(supabase);
     const { conversationId, priority = 0, department_id, targetDepartmentId, aiAnalysis } = await req.json() as RouteConversationRequest;
 
     console.log(`[route-conversation] 🔄 Processing conversation: ${conversationId}`);
@@ -274,7 +276,7 @@ serve(async (req) => {
 
     // 🆕 FALLBACK: Se após todas as tentativas de resolução ainda não tem departamento, usar Suporte
     if (!resolvedDepartmentId) {
-      const FALLBACK_DEPT_SUPORTE = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      const FALLBACK_DEPT_SUPORTE = depts.SUPORTE_ID;
       console.log(`[route-conversation] ⚠️ No department resolved — applying Suporte fallback`);
       
       const { error: fallbackUpdateError } = await supabase

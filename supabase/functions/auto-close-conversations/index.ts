@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getBusinessHoursInfo } from "../_shared/business-hours.ts";
+import { resolveDepartments } from "../_shared/department-resolver.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -134,6 +135,7 @@ Deno.serve(async (req) => {
     )
 
     console.log('[Auto-Close] Starting...');
+    const depts = await resolveDepartments(supabase);
 
     // Buscar horário de atendimento uma vez para usar nas mensagens
     const businessHoursInfo = await getBusinessHoursInfo(supabase);
@@ -527,14 +529,7 @@ Deno.serve(async (req) => {
               const cd = activeFlowState.collected_data as Record<string, any>;
               const exitIntent = cd.ai_exit_intent;
               if (exitIntent) {
-                const INTENT_DEPT_MAP: Record<string, string> = {
-                  'comercial': 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c',
-                  'internacional': '68195a0f-1f9e-406b-b714-c889b4145f60',
-                  'comercial_internacional': '68195a0f-1f9e-406b-b714-c889b4145f60',
-                  'financeiro': 'af3c75a9-2e3f-49f1-8e0b-7fb3f4b5ee45',
-                  'saque': 'af3c75a9-2e3f-49f1-8e0b-7fb3f4b5ee45',
-                  'cancelamento': 'b7149bf4-1356-4ca5-bc9a-8caacf7b6e80',
-                };
+                const INTENT_DEPT_MAP = depts.INTENT_MAP;
                 const transferDeptId = INTENT_DEPT_MAP[exitIntent];
                 if (transferDeptId) {
                   console.log(`[Auto-Close] 🔄 Safety net: conv ${conv.id} tem ai_exit_intent="${exitIntent}" → transferindo para dept ${transferDeptId} em vez de fechar`);
@@ -664,14 +659,7 @@ Deno.serve(async (req) => {
               const cd = activeFlowState.collected_data as Record<string, any>;
               const exitIntent = cd.ai_exit_intent;
               if (exitIntent) {
-                const INTENT_DEPT_MAP: Record<string, string> = {
-                  'comercial': 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c',
-                  'internacional': '68195a0f-1f9e-406b-b714-c889b4145f60',
-                  'comercial_internacional': '68195a0f-1f9e-406b-b714-c889b4145f60',
-                  'financeiro': 'af3c75a9-2e3f-49f1-8e0b-7fb3f4b5ee45',
-                  'saque': 'af3c75a9-2e3f-49f1-8e0b-7fb3f4b5ee45',
-                  'cancelamento': 'b7149bf4-1356-4ca5-bc9a-8caacf7b6e80',
-                };
+                const INTENT_DEPT_MAP = depts.INTENT_MAP;
                 const transferDeptId = INTENT_DEPT_MAP[exitIntent];
                 if (transferDeptId) {
                   console.log(`[Auto-Close] 🔄 No-dept safety net: conv ${conv.id} tem ai_exit_intent="${exitIntent}" → transferindo para dept ${transferDeptId}`);
