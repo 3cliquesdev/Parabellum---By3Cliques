@@ -386,9 +386,9 @@ serve(async (req) => {
 
     try {
       const emailPayload: any = {
-        from: '3Cliques <contato@mail.3cliques.net>',
+        from: `${brand.fromName} <${brand.fromEmail}>`,
         to: [email],
-        subject: 'Acesso Concedido - Termo de Responsabilidade',
+        subject: `Acesso Concedido - ${brand.brandName}`,
         html: emailHtml,
       };
       

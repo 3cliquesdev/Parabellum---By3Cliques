@@ -252,9 +252,9 @@ serve(async (req) => {
     `;
 
     const { data: emailData, error: emailError } = await resend.emails.send({
-      from: '3Cliques <contato@mail.3cliques.net>',
+      from: `${brand.fromName} <${brand.fromEmail}>`,
       to: [email!],
-      subject: 'Acesso Concedido - Termo de Responsabilidade',
+      subject: `Acesso Concedido - ${brand.brandName}`,
       html: emailHtml,
     });
 

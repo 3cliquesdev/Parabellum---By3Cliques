@@ -735,13 +735,13 @@ async function sendEmailReport(
     branding = brandingRes.data;
   } catch {}
 
-  const brandName = branding?.name || 'Parabellum by 3Cliques';
-  const fromName = sender?.from_name || brandName || 'Parabellum by 3Cliques';
-  const fromEmail = sender?.from_email || 'contato@mail.3cliques.net';
+  const brandName = branding?.name || sender?.from_name || 'Sua Empresa';
+  const fromName = sender?.from_name || brandName;
+  const fromEmail = sender?.from_email || 'contato@example.com';
   const headerColor = branding?.header_color || '#0f172a';
   const headerColorEnd = headerColor + 'dd';
   const logoUrl = branding?.logo_url;
-  const footerText = branding?.footer_text || 'Parabellum by 3Cliques • Gerado automaticamente';
+  const footerText = branding?.footer_text || `${brandName} • Gerado automaticamente`;
   const footerLogoUrl = branding?.footer_logo_url;
 
   const aiRate = metrics.totalConvs > 0 ? Math.round((metrics.closedByAI / metrics.totalConvs) * 100) : 0;
