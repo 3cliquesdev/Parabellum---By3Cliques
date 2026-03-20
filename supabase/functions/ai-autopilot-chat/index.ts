@@ -7567,31 +7567,47 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
 ` : '';
 
     // 🆕 MULTI-AGENTE: Instrução de apresentação na primeira mensagem
-    const onboardingInstruction = isFirstAIMessage && persona?.name ? `
+    // Se é transferência, a apresentação já está no transferContinuityInstruction — não duplicar
+    const onboardingInstruction = (isFirstAIMessage && !isReceivingTransfer && persona?.name) ? `
 
 INSTRUÇÁO DE ABERTURA — PRIMEIRA MENSAGEM:
 Esta é sua primeira mensagem nesta conversa. Você DEVE se apresentar de forma natural e calorosa:
 - Diga seu nome: ${persona.name}
 - Seu papel: ${persona.role || 'assistente virtual'}
 ${companyBrandName ? `- Empresa: ${companyBrandName}` : ''}
-- Cite brevemente 2 ou 3 coisas que pode ajudar
-- Termine perguntando como pode ajudar hoje
+- Cite brevemente 2 ou 3 especialidades / formas de ajudar
+- Reconheça o que o cliente disse e pergunte como pode ajudar
 ${companyBrandName ? `⚠️ REGRA ABSOLUTA: O nome da sua empresa é "${companyBrandName}". NÃO invente, altere ou alucine nomes de empresa. Use EXATAMENTE "${companyBrandName}" se precisar mencioná-la.` : '⚠️ NÃO mencione nenhum nome de empresa. Apenas se apresente pelo seu nome e papel.'}
 Faça isso de forma NATURAL e HUMANA — não repita este template literalmente. Adapte ao contexto da mensagem do cliente.` : '';
 
     // 🆕 MULTI-AGENTE: Instrução de continuidade ao receber transferência
+    const recentHistoryForTransfer = isReceivingTransfer && messageHistory.length > 0
+      ? messageHistory.slice(-10).map((m: any) =>
+          `${m.role === 'user' ? '👤 Cliente' : '🤖 IA'}: ${(m.content || '').slice(0, 250)}`
+        ).join('\n')
+      : '';
+    const collectedDataEntries = Object.entries(lastTransferMeta?.collected_data || {})
+      .filter(([k, v]) => !k.startsWith('__') && v)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ');
+
     const transferContinuityInstruction = isReceivingTransfer && lastTransferMeta ? `
 
-CONTEXTO DE TRANSFERÊNCIA RECEBIDA:
-Você acaba de receber esta conversa transferida de: ${lastTransferMeta.from_persona_name || 'outro agente IA'}.
-Motivo da transferência: ${lastTransferMeta.reason_label || lastTransferMeta.to_intent || 'encaminhamento interno'}
-Último assunto do cliente: "${(lastTransferMeta.last_topic || '').substring(0, 150)}"
-${Object.keys(lastTransferMeta.collected_data || {}).filter(k => !k.startsWith('__') && lastTransferMeta.collected_data[k]).length > 0 ? `Dados já coletados: ${Object.keys(lastTransferMeta.collected_data).filter(k => !k.startsWith('__') && lastTransferMeta.collected_data[k]).map(k => `${k}: ${lastTransferMeta.collected_data[k]}`).join(', ')}` : ''}
+⚡ TRANSFERÊNCIA RECEBIDA — LEIA ANTES DE RESPONDER:
+Você acaba de receber esta conversa de: ${lastTransferMeta.from_persona_name || 'outro agente IA'}.
+Motivo: ${lastTransferMeta.reason_label || lastTransferMeta.to_intent || 'encaminhamento interno'}
+${collectedDataEntries ? `\nDADOS JÁ COLETADOS (NÃO PERGUNTE NOVAMENTE):\n${collectedDataEntries}` : ''}
+${recentHistoryForTransfer ? `\nHISTÓRICO DA CONVERSA (NÃO PERGUNTE O QUE JÁ ESTÁ AQUI):\n${recentHistoryForTransfer}` : ''}
 
-AÇÁO OBRIGATÓRIA NA SUA PRIMEIRA RESPOSTA:
-Apresente-se e dê continuidade de forma natural. Exemplo de referência (NÃO copie literalmente):
-"Olá! Aqui é [seu nome], da [seu setor]. Vou dar continuidade ao seu atendimento! Vi que você precisava de ajuda com [assunto]. [pergunta relevante para seu contexto]"
-Adapte ao seu papel e ao contexto. Seja caloroso e demonstre que você JÁ SABE o assunto — o cliente não precisa repetir.` : '';
+REGRAS OBRIGATÓRIAS:
+1. APRESENTE-SE com seu nome e sua especialidade na primeira resposta
+2. RECONHEÇA o contexto naturalmente: "Vi que você ${lastTransferMeta.reason_label ? `precisa de ajuda com ${lastTransferMeta.reason_label.toLowerCase()}` : 'foi encaminhado para mim'}..."
+3. NUNCA pergunte algo que já está no histórico ou nos dados coletados acima
+4. JÁ PROSSIGA para ajudar — o cliente não deve repetir nada
+5. Seja caloroso e profissional — mostre que você está PREPARADO para atender
+
+Exemplo de abertura (adapte, NÃO copie):
+"Olá [nome do cliente]! Aqui é [seu nome], especialista em [sua área]. Vi que você [contexto do assunto]. Pode deixar comigo, vou resolver isso agora! [próxima pergunta relevante que ainda falta]"` : '';
 
     // 🧠 Memória persistente: desativado (coluna ai_summary não existe ainda)
     const contactMemoryBlock = '';
@@ -9970,7 +9986,7 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
 
           } catch (error) {
             console.error('[ai-autopilot-chat] ❌ Erro ao executar handoff manual:', error);
-            assistantMessage = 'Vou transferir você para um atendente humano. Por favor, aguarde um momento.';
+            assistantMessage = 'Entendido! Vou chamar um atendente humano para continuar te ajudando agora. Um instantinho! 👋';
           }
         }
         // TOOL: tag_conversation - Classificação contextual da conversa
@@ -10477,10 +10493,27 @@ Conversa: ${conversationId}`;
           } catch (_e) { /* fallback ao mapa estático */ }
           const visibleMessage = assistantMessage.replace(/\[\[FLOW_EXIT(?::[a-zA-Z_]+)?\]\]/gi, '').trim();
 
-          if (visibleMessage.length < 20) {
-            assistantMessage = 'Entendido! Vou te encaminhar agora para a ' + transferLabel + '. Um momento, ja te transfiro!';
+          // 🆕 Mensagens de saída profissionais por destino
+          const TRANSFER_EXIT_MESSAGES: Record<string, string> = {
+            cancelamento: `Entendido! Vou te conectar agora com nossa equipe especializada em cancelamento, que vai cuidar disso com toda atenção. Um momento! 🔄`,
+            financeiro:   `Certo! Vou te encaminhar para o time financeiro que vai resolver isso com você. Um instante! 💰`,
+            saque:        `Perfeito! Vou te passar para nossa equipe de saques que vai te ajudar agora. 🏦`,
+            comercial:    `Ótimo! Vou te conectar com um consultor do time comercial para te ajudar com isso. ✨`,
+            consultor:    `Entendido! Vou chamar seu consultor agora. Só um momento! 👤`,
+            suporte:      `Vou acionar nossa equipe de suporte técnico. Já vem! 🛠️`,
+            internacional:`Perfeito! Vou te conectar com nossa equipe internacional. Um instante! 🌍`,
+            pedidos:      `Certo! Vou chamar o time de pedidos que tem todas as informações. Um segundo! 📦`,
+            devolucao:    `Entendido! Vou te conectar com o time de devoluções. Eles vão te ajudar rapidinho! 🔙`,
+          };
+          const exitMsg = TRANSFER_EXIT_MESSAGES[exitDestination];
+
+          if (exitMsg) {
+            // Destino mapeado: usar mensagem profissional padronizada
+            assistantMessage = exitMsg;
+          } else if (visibleMessage.length < 20) {
+            assistantMessage = 'Vou te encaminhar agora para o time responsável. Um momento! 🔄';
           } else if (!visibleMessage.match(/transfer|encaminh|conect|setor|equipe|aguard/i)) {
-            assistantMessage = visibleMessage + ' Vou te encaminhar para a ' + transferLabel + ' agora!';
+            assistantMessage = visibleMessage + ' Vou te encaminhar para o time responsável agora!';
           } else {
             assistantMessage = visibleMessage;
           }
