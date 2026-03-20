@@ -7378,8 +7378,10 @@ INSTRUÇÁO DE ABERTURA — PRIMEIRA MENSAGEM:
 Esta é sua primeira mensagem nesta conversa. Você DEVE se apresentar de forma natural e calorosa:
 - Diga seu nome: ${persona.name}
 - Seu papel: ${persona.role || 'assistente virtual'}
+${companyBrandName ? `- Empresa: ${companyBrandName}` : ''}
 - Cite brevemente 2 ou 3 coisas que pode ajudar
 - Termine perguntando como pode ajudar hoje
+${companyBrandName ? `⚠️ REGRA ABSOLUTA: O nome da sua empresa é "${companyBrandName}". NÃO invente, altere ou alucine nomes de empresa. Use EXATAMENTE "${companyBrandName}" se precisar mencioná-la.` : '⚠️ NÃO mencione nenhum nome de empresa. Apenas se apresente pelo seu nome e papel.'}
 Faça isso de forma NATURAL e HUMANA — não repita este template literalmente. Adapte ao contexto da mensagem do cliente.` : '';
 
     // 🆕 MULTI-AGENTE: Instrução de continuidade ao receber transferência
