@@ -38,6 +38,9 @@ interface AIResponseNodeData {
   forbid_internacional?: boolean;
   // 🆕 OTP inline
   require_otp_for_financial?: boolean;
+  // 🆕 Tag de encerramento do nó
+  close_tag_id?: string;
+  close_tag_name?: string;
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
@@ -350,6 +353,13 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
           <Badge variant="default" className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-cyan-600/90">
             <Globe className="h-2.5 w-2.5" />
             Internacional
+          </Badge>
+        )}
+
+        {/* Badge de Tag de Encerramento */}
+        {data.close_tag_name && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 gap-0.5 border-rose-500/50 text-rose-600">
+            🏷️ {data.close_tag_name.slice(0, 15)}
           </Badge>
         )}
 

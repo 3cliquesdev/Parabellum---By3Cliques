@@ -88,6 +88,39 @@ async function isContactRecentlyActive(
   return false;
 }
 
+/**
+ * Busca close_tag_id configurado no nó de IA ativo da conversa.
+ * Retorna o tag ID do nó ou null se não encontrar.
+ */
+async function getFlowCloseTagId(supabase: any, conversationId: string): Promise<string | null> {
+  try {
+    const { data: flowState } = await supabase
+      .from('chat_flow_states')
+      .select('current_node_id, flow_id')
+      .eq('conversation_id', conversationId)
+      .in('status', ['active', 'waiting_input', 'in_progress'])
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!flowState) return null;
+
+    const { data: flow } = await supabase
+      .from('chat_flows')
+      .select('flow_definition')
+      .eq('id', flowState.flow_id)
+      .single();
+
+    if (!flow?.flow_definition) return null;
+
+    const nodes = (flow.flow_definition as any)?.nodes || [];
+    const node = nodes.find((n: any) => n.id === flowState.current_node_id);
+    return node?.data?.close_tag_id || null;
+  } catch (err) {
+    console.error(`[getFlowCloseTagId] Error for ${conversationId}:`, err);
+    return null;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -360,12 +393,13 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-           // 6. Adicionar a tag "9.98 Falta de Interação"
+           // 6. Adicionar tag do fluxo ou "9.98 Falta de Interação"
+          const flowCloseTag3 = await getFlowCloseTagId(supabase, conversation.id);
           await supabase
             .from('conversation_tags')
             .upsert({
               conversation_id: conversation.id,
-              tag_id: FALTA_INTERACAO_TAG_ID,
+              tag_id: flowCloseTag3 || FALTA_INTERACAO_TAG_ID,
             }, {
               onConflict: 'conversation_id,tag_id',
               ignoreDuplicates: true
@@ -529,8 +563,9 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-            // Tag configurada pelo departamento ou fallback padrão
-            const aiTagId = dept.ai_auto_close_tag_id || FALTA_INTERACAO_TAG_ID;
+            // Tag do fluxo → departamento → fallback padrão
+            const flowCloseTag3a = await getFlowCloseTagId(supabase, conv.id);
+            const aiTagId = flowCloseTag3a || dept.ai_auto_close_tag_id || FALTA_INTERACAO_TAG_ID;
             await supabase.from('conversation_tags').upsert({
               conversation_id: conv.id,
               tag_id: aiTagId,
@@ -664,10 +699,11 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-            // Tag "9.98 Falta de Interação"
+            // Tag do fluxo ou "9.98 Falta de Interação"
+            const flowCloseTag3b = await getFlowCloseTagId(supabase, conv.id);
             await supabase.from('conversation_tags').upsert({
               conversation_id: conv.id,
-              tag_id: FALTA_INTERACAO_TAG_ID,
+              tag_id: flowCloseTag3b || FALTA_INTERACAO_TAG_ID,
             }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
 
             // Enviar via WhatsApp se necessário (sem CSAT - não há departamento)
@@ -761,10 +797,11 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-            // Tag "9.98 Falta de Interação"
+            // Tag do fluxo ou "9.98 Falta de Interação"
+            const flowCloseTag35 = await getFlowCloseTagId(supabase, conv.id);
             await supabase.from('conversation_tags').upsert({
               conversation_id: conv.id,
-              tag_id: FALTA_INTERACAO_TAG_ID,
+              tag_id: flowCloseTag35 || FALTA_INTERACAO_TAG_ID,
             }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
 
             // Enviar via WhatsApp se necessário

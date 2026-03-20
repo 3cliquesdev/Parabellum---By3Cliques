@@ -5,11 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Sparkles, AlertTriangle, GraduationCap, Ticket, Info } from "lucide-react";
+import { Bot, Sparkles, AlertTriangle, GraduationCap, Ticket, Info, Tag } from "lucide-react";
 import { usePersonas } from "@/hooks/usePersonas";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTicketCategories } from "@/hooks/useTicketCategories";
 import { useSupportAgents } from "@/hooks/useSupportAgents";
+import { useTags } from "@/hooks/useTags";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -386,6 +387,11 @@ export function AIResponsePropertiesPanel({
 
       <Separator />
 
+      {/* Seção: Tag de Encerramento */}
+      <CloseTagSection selectedNode={selectedNode} updateNodeData={updateNodeData} />
+
+      <Separator />
+
       {/* Seção: Contexto Adicional */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
@@ -436,6 +442,67 @@ export function AIResponsePropertiesPanel({
           O que a IA diz quando não tem a informação
         </p>
       </div>
+    </div>
+  );
+}
+
+function CloseTagSection({ selectedNode, updateNodeData }: { selectedNode: Node; updateNodeData: (field: string, value: any) => void }) {
+  const { data: tags = [] } = useTags();
+
+  const handleTagChange = (tagId: string) => {
+    if (tagId === "none") {
+      updateNodeData("close_tag_id", null);
+      updateNodeData("close_tag_name", null);
+    } else {
+      const tag = tags.find((t: any) => t.id === tagId);
+      updateNodeData("close_tag_id", tagId);
+      updateNodeData("close_tag_name", tag?.name || null);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Tag className="h-4 w-4 text-rose-500" />
+        <Label className="text-xs font-semibold uppercase tracking-wide">
+          Tag de Encerramento
+        </Label>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-xs">
+              <p className="text-xs">
+                Quando a conversa for encerrada por inatividade enquanto estiver neste nó, esta tag será aplicada em vez de "Falta de Interação".
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+      <Select
+        value={selectedNode.data.close_tag_id || "none"}
+        onValueChange={handleTagChange}
+      >
+        <SelectTrigger className="text-sm h-9">
+          <SelectValue placeholder="Nenhuma (padrão)" />
+        </SelectTrigger>
+        <SelectContent position="popper" side="bottom" sideOffset={4} className="z-[100] max-h-[200px] overflow-y-auto bg-popover text-popover-foreground shadow-lg border">
+          <SelectItem value="none">
+            <span className="text-muted-foreground">Nenhuma (usa "Falta de Interação")</span>
+          </SelectItem>
+          {tags.map((tag: any) => (
+            <SelectItem key={tag.id} value={tag.id}>
+              🏷️ {tag.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {selectedNode.data.close_tag_name && (
+        <p className="text-[10px] text-rose-600 dark:text-rose-400 bg-rose-500/10 p-2 rounded">
+          🏷️ Tag "{selectedNode.data.close_tag_name}" será aplicada ao encerrar por inatividade neste nó
+        </p>
+      )}
     </div>
   );
 }
