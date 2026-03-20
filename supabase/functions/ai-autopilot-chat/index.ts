@@ -6030,7 +6030,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // DETECCAO DE TIPO DE SOLICITACAO FINANCEIRA
     // 1. SAQUE DE SALDO - Exige OTP
     // 2. REEMBOLSO DE PEDIDO - Exige OTP (acao que gera ticket)
-    // 3. CANCELAMENTO DE ASSINATURA - Sem OTP (processo Kiwify)
+    // 3. CANCELAMENTO DE ASSINATURA - Sem OTP (processo via KB)
     // Duvidas informativas - SEM OTP, IA responde normalmente
     
     const isFinancialRequest = FINANCIAL_BARRIER_KEYWORDS.some(keyword =>
