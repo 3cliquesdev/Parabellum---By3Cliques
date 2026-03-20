@@ -115,7 +115,7 @@ function SenderDialog({ open, onOpenChange, sender }: SenderDialogProps) {
               id="from_name"
               value={formData.from_name}
               onChange={(e) => setFormData({ ...formData, from_name: e.target.value })}
-              placeholder="Ex: Seu Armazém Drop Suporte"
+              placeholder="Ex: Suporte"
             />
           </div>
 
