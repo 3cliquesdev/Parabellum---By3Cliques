@@ -100,3 +100,24 @@
 - Funciona para outras conversas (log 98ab6b41 confirmado)
 - Fix 7 (stateId) melhora diagnóstico
 - Aguardando próximo cenário de menu+batching para validar
+
+### Auditoria #3D645F2C — Correções Aplicadas (rodada 6)
+
+**Fix 19: Guard pós-OTP respeita primeira interação (Bug A)** ✅
+- Adicionado check `isFirstInteraction` (interaction_count ≤ 1) no guard pós-OTP
+- Na primeira interação do nó, guard NÃO intercepta — IA se apresenta naturalmente
+- Template PIX só enviado após IA já ter interagido
+
+**Fix 20: Template de coleta usa ticketConfig do fluxo (Bug B)** ✅
+- Guard pós-OTP agora verifica `flow_context.ticketConfig.description_template`
+- Se disponível, usa o template configurado no dashboard em vez do hardcoded
+- Regex de detecção ampliada: `Chave Pix|Banco` para cobrir novos templates
+
+**Fix 21: Ticket determinístico usa ticketConfig (Bug C)** ✅
+- Ticket determinístico (L6288) agora lê `flow_context.ticketConfig`
+- Passa `assigned_to`, `department_id_override`, `subject_template`, `default_priority`, `category`
+- `generate-ticket-from-conversation` aceita `department_id_override` com prioridade sobre mapeamento por categoria
+
+### Deploy rodada 6
+- `ai-autopilot-chat` — Fix 19, 20, 21
+- `generate-ticket-from-conversation` — Fix 21 (department_id_override)
