@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { OnboardingProgressBar } from "./OnboardingProgress";
 import { RefreshCw, RotateCcw, Loader2 } from "lucide-react";
+import { useCRMBranding } from "@/hooks/useCRMBranding";
 import {
   AlertDialog,
   AlertDialogAction,
