@@ -1246,7 +1246,13 @@ function buildCollectionMessage(
     const resolved = tc.description_template
       .replace(/\{\{customer_name\}\}/g, contactName || '')
       .replace(/\{\{customer_email\}\}/g, contactEmail || '')
-      .replace(/\{\{customer_phone\}\}/g, contactPhone || '');
+      .replace(/\{\{customer_phone\}\}/g, contactPhone || '')
+      // 🆕 FIX: Substituir placeholders de dados do saque por labels amigáveis para o cliente
+      .replace(/\{\{pix_key\}\}/g, '[informe sua chave pix]')
+      .replace(/\{\{bank\}\}/g, '[nome do banco]')
+      .replace(/\{\{reason\}\}/g, '[motivo da solicitação]')
+      .replace(/\{\{amount\}\}/g, '[valor ou "valor total da carteira"]')
+      .replace(/\{\{pix_key_type\}\}/g, '[tipo da chave: CPF / Email / Telefone / Aleatória]');
     if (format === 'plain') return resolved;
     return `${prefix}\n\nOlá ${contactName}! ${resolved}`;
   }
@@ -6325,10 +6331,24 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
             } }
           );
           if (!ticketError) {
-            const ticketId = ticketData?.ticket?.id?.slice(0, 8)?.toUpperCase() || '';
+            // 🆕 FIX Bug 3: usar ticket_number (TK-2026-xxxxx) em vez de UUID truncado
+            const ticketId = ticketData?.ticket?.ticket_number ||
+              ticketData?.ticket?.id?.slice(0, 8)?.toUpperCase() || '';
             const slaText = (tc as any)?.sla_text || 'em breve';
             const teamName = (tc as any)?.team_name || 'Nossa equipe';
             const saqueResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação. ${teamName} vai processar ${slaText}.\n\nPosso te ajudar com mais alguma coisa?`;
+
+            // 🆕 FIX Bug 2: persistir saque_ticket_created na path determinística
+            try {
+              const currentMeta = (conversation.customer_metadata as any) || {};
+              await supabaseClient.from('conversations').update({
+                customer_metadata: { ...currentMeta, saque_ticket_created: true }
+              }).eq('id', conversationId);
+              console.log('[ai-autopilot-chat] ✅ saque_ticket_created salvo (path determinística)');
+            } catch (flagErr) {
+              console.error('[ai-autopilot-chat] ⚠️ Erro ao salvar saque_ticket_created:', flagErr);
+            }
+
             const { data: savedMsg } = await supabaseClient
               .from('messages')
               .insert({ conversation_id: conversationId, content: saqueResponse, sender_type: 'user', is_ai_generated: true, channel: responseChannel })
@@ -8981,9 +9001,13 @@ ${otpCollectionMsg}
                 .replace(/\{\{bank\}\}/g, args.bank || '');
               if (!ticketSubject.trim()) ticketSubject = args.subject;
             }
-            if (!ticketSubject) {
-              ticketSubject = args.order_id 
-                ? `${(args.issue_type || '').toUpperCase()} - Pedido ${args.order_id}` 
+            // 🆕 FIX Bug 4: Resolver placeholders no subject caso LLM tenha copiado o template
+            if (ticketSubject && /\{\{/.test(ticketSubject)) {
+              ticketSubject = resolveTemplate(ticketSubject);
+            }
+            if (!ticketSubject || /\{\{/.test(ticketSubject)) {
+              ticketSubject = args.order_id
+                ? `${(args.issue_type || '').toUpperCase()} - Pedido ${args.order_id}`
                 : `${(args.issue_type || '').toUpperCase()} - ${(args.description || '').substring(0, 50)}`;
             }
 
