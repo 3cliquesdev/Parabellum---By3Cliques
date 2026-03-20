@@ -1517,7 +1517,7 @@ serve(async (req) => {
     const isProactiveGreeting = (!customerMessage || (typeof customerMessage === 'string' && customerMessage.trim() === '')) && !!flow_context;
     if (!customerMessage || typeof customerMessage !== 'string' || customerMessage.trim() === '') {
       if (isProactiveGreeting) {
-        customerMessage = '[SYSTEM: O cliente acabou de chegar neste atendimento pelo menu. Apresente-se brevemente e pergunte como pode ajudar.]';
+        customerMessage = `[SYSTEM: O cliente acabou de chegar neste atendimento pelo menu (${flow_context?.node_id || 'departamento selecionado'}). Apresente-se brevemente, mencione suas habilidades no escopo deste atendimento. Se for um tema financeiro, pergunte se é uma dúvida ou se precisa de uma ação (saque, reembolso, etc). Se o cliente indicar ação financeira, informe que precisará verificar a identidade. NUNCA responda apenas "Como posso ajudar?" — sempre se apresente primeiro.]`;
         console.log('[ai-autopilot-chat] 🎯 Saudacao proativa ativada via flow_context (skipInitialMessage)');
       } else {
         console.error('[ai-autopilot-chat] ❌ BAD_REQUEST: customerMessage ausente ou vazio');
@@ -4945,7 +4945,14 @@ Responda APENAS: skip ou search`
       console.log('[ai-autopilot-chat] 🔓 OTP verificado + dados estruturados — forçando LLM principal com tools');
     }
     
-    if (isStrictRAGMode && !isOperationalTopic && !isGreetingBypass && !looksLikeStructuredData && OPENAI_API_KEY && knowledgeArticles.length > 0) {
+    // 🆕 FIX Bug B (#EEFFF1DD): Bypass Strict RAG para ações financeiras
+    // Strict RAG não tem tools (create_ticket) — ações financeiras devem ir direto ao LLM principal
+    const isFinancialBypass = isFinancialAction || isWithdrawalRequest;
+    if (isFinancialBypass) {
+      console.log('[ai-autopilot-chat] 💰 Ação financeira detectada — BYPASS Strict RAG para LLM principal com tools');
+    }
+
+    if (isStrictRAGMode && !isOperationalTopic && !isGreetingBypass && !looksLikeStructuredData && !isFinancialBypass && OPENAI_API_KEY && knowledgeArticles.length > 0) {
       console.log('[ai-autopilot-chat] 🎯 STRICT RAG MODE ATIVO - Usando GPT-5 exclusivo');
       
       const strictResult = await callStrictRAG(
@@ -6324,9 +6331,12 @@ Posso ajudar em mais alguma coisa?`;
       const historyUserMsgs = messageHistory
         .filter((m: any) => m.role === 'user')
         .slice().reverse().slice(0, 8);
+      // 🆕 FIX Bug C (#EEFFF1DD): Verificar intent de saque TAMBÉM na mensagem atual
+      // Em conversas novas, "Quero sacar" pode ser a primeira mensagem real
+      const saqueRegex = /quero\s+sacar|saque|sacar|carteira|retirar|retirada/i;
       const hasSaqueIntent = historyUserMsgs.some((m: any) => 
-        /quero\s+sacar|saque|sacar|carteira|retirar|retirada/i.test(m.content)
-      );
+        saqueRegex.test(m.content)
+      ) || saqueRegex.test(customerMessage);
       const otp_reason = (conversationMetadata as any)?.otp_reason;
       
       if (hasSaqueIntent || otp_reason === 'withdrawal') {
@@ -8077,8 +8087,14 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }
     }
 
+    // 🆕 FIX Bug D (#EEFFF1DD): Proteção pós-LLM — NUNCA retornar silenciosamente
+    // Se LLM retornou vazio e sem tool_calls, forçar uma resposta contextual
     if (!rawAIContent && !toolCalls.length) {
-      console.error('[ai-autopilot-chat] ❌ AI returned empty content after all retries, no tool calls');
+      console.error('[ai-autopilot-chat] ❌ AI returned empty content after all retries, no tool calls — applying emergency fallback');
+      const emergencyFallback = flowFallbackMessage || flowObjective 
+        || (persona?.name ? `Olá! Sou ${persona.name}, sua assistente virtual. Como posso te ajudar hoje?` : 'Como posso te ajudar hoje?');
+      rawAIContent = emergencyFallback;
+      console.log('[ai-autopilot-chat] 🆘 Emergency fallback aplicado:', emergencyFallback.substring(0, 80));
     }
 
     // 🔧 FIX 3: Guard de resposta vazia — normalizar antes de usar
