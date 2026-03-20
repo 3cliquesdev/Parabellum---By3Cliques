@@ -3045,7 +3045,7 @@ serve(async (req) => {
       console.log('[ai-autopilot-chat] ✅ Contato já validado (compra verificada), pulando triagem');
     }
 
-    // 🆕 BUSCAR PRODUTOS KIWIFY DO CONTATO (para injetar no contexto da IA)
+    // 🆕 BUSCAR PRODUTOS DO CONTATO via eventos de compra (para injetar no contexto da IA)
     let customerProducts: string[] = [];
     try {
       const phoneForProducts = contact.phone || contact.whatsapp_id || '';
