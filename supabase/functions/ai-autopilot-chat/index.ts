@@ -6929,9 +6929,31 @@ O cliente quer cancelar a assinatura Kiwify.
     }
     
     if (!identityWallNote) {
-      identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.
+      const otpJustValidated = (conversation as any)._otpJustValidated;
+      const collectionTemplate = flow_context?.ticketConfig?.description_template;
+
+      if (otpJustValidated && collectionTemplate) {
+        const resolvedTemplate = collectionTemplate
+          .replace(/\{\{customer_name\}\}/g, contactName || '')
+          .replace(/\{\{customer_email\}\}/g, contact?.email || '')
+          .replace(/\{\{customer_phone\}\}/g, contact?.phone || '');
+
+        identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — COLETA DE DADOS:**
+Olá ${contactName}! Sua identidade foi verificada com sucesso.
+
+Agora envie ao cliente EXATAMENTE esta mensagem de coleta de dados (sem alterar):
+
+---
+${resolvedTemplate}
+---
+
+Após receber todos os dados, use \`create_ticket\` com issue_type="saque".`;
+        console.log('[ai-autopilot-chat] 📋 identityWallNote: usando description_template do chatflow para coleta pós-OTP');
+      } else {
+        identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.
 
 ${isRecentlyVerified && !hasRecentOTPVerification ? '**⚠️ CLIENTE RECÉM-VERIFICADO:** Esta é a primeira mensagem pós-verificação. Não fazer handoff automático. Seja acolhedor e pergunte "Como posso te ajudar?".' : ''}`;
+      }
     }
     
     // 🐛BUG: Confirmar que priorityInstruction está sendo gerada
@@ -9075,6 +9097,41 @@ Via: Atendimento Automatizado (IA)`;
                 .from('conversations')
                 .update({ related_ticket_id: ticket.id })
                 .eq('id', conversationId);
+
+              // Para tickets de saque: adicionar tag + encerrar conversa
+              if (args.issue_type === 'saque' && ticket?.id) {
+                try {
+                  const { data: saqueTag } = await supabaseClient
+                    .from('tags')
+                    .select('id')
+                    .ilike('name', '%saque%saldo%')
+                    .maybeSingle();
+
+                  if (saqueTag?.id) {
+                    await supabaseClient
+                      .from('conversation_tags')
+                      .upsert(
+                        { conversation_id: conversationId, tag_id: saqueTag.id },
+                        { onConflict: 'conversation_id,tag_id' }
+                      );
+                    console.log('[ai-autopilot-chat] 🏷️ Tag saque adicionada à conversa');
+                  } else {
+                    console.warn('[ai-autopilot-chat] ⚠️ Tag "saque de saldo" não encontrada no banco');
+                  }
+                } catch (tagErr) {
+                  console.error('[ai-autopilot-chat] ⚠️ Erro ao adicionar tag saque:', tagErr);
+                }
+
+                try {
+                  await supabaseClient
+                    .from('conversations')
+                    .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+                    .eq('id', conversationId);
+                  console.log('[ai-autopilot-chat] ✅ Conversa encerrada após ticket de saque');
+                } catch (closeErr) {
+                  console.error('[ai-autopilot-chat] ⚠️ Erro ao encerrar conversa:', closeErr);
+                }
+              }
 
               // FASE 5: Mensagem específica para SAQUE com dados coletados
               const withdrawalData = args.issue_type === 'saque' && args.withdrawal_amount ? {
