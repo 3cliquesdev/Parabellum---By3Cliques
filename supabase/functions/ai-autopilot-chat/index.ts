@@ -1878,7 +1878,7 @@ serve(async (req) => {
       console.warn('[ai-autopilot-chat] 🛒 TRAVA COMERCIAL (ENTRADA): Intenção comercial detectada, bloqueando IA:', customerMessage.substring(0, 80));
       
       const commercialMsg = 'Á“timo! Vou te conectar com nosso time comercial para te ajudar com isso.';
-      const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
+      // Usa DEPT_COMERCIAL_ID centralizado (resolvido no início do handler)
       
       const hasFlowContext = !!(flow_context);
       
