@@ -387,6 +387,11 @@ export function AIResponsePropertiesPanel({
 
       <Separator />
 
+      {/* Seção: Tag de Encerramento */}
+      <CloseTagSection selectedNode={selectedNode} updateNodeData={updateNodeData} />
+
+      <Separator />
+
       {/* Seção: Contexto Adicional */}
       <div className="space-y-2">
         <div className="flex items-center gap-2">
