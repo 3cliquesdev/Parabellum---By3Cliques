@@ -2060,6 +2060,16 @@ serve(async (req) => {
             .then((r: any) => ({ type: 'tags', data: r.data }))
         );
 
+        // 🏢 Nome da marca da empresa (para evitar alucinação de identidade)
+        enrichPromises.push(
+          supabaseClient
+            .from('email_branding')
+            .select('name')
+            .eq('is_default_customer', true)
+            .maybeSingle()
+            .then((r: any) => ({ type: 'brand', data: r.data }))
+        );
+
         const enrichResults = await Promise.all(enrichPromises);
 
         for (const result of enrichResults) {
