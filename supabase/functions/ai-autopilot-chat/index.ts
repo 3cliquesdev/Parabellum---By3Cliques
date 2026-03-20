@@ -6390,10 +6390,10 @@ Posso ajudar em mais alguma coisa?`;
           .slice().reverse().slice(0, 3)
           .some((m: any) => /chave\s*PIX|Nome\s*completo.*Tipo.*PIX|Chave Pix|Banco/i.test(m.content));
         
-        // 🆕 FIX Bug A (#3D645F2C): NÃO enviar template na primeira interação do nó
-        // IA deve se apresentar primeiro, mesmo com OTP prévio
+        // 🆕 FIX #57AA2190: Relaxar condição de primeira interação — se a mensagem ATUAL é saque,
+        // enviar coleta mesmo se for a segunda interação (a IA já se apresentou na 1ª)
         const aiInteractions = (conversation.customer_metadata as any)?.__ai?.interaction_count || 0;
-        const isFirstInteraction = aiInteractions <= 1;
+        const isFirstInteraction = aiInteractions <= 0; // Apenas bloquear se é literalmente a msg 0 (apresentação)
         
         if (!recentCollectionMsg && !isFirstInteraction) {
           console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE INTENT DETECTED — enviando template de coleta PIX', {
