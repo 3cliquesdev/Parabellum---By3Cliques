@@ -6106,7 +6106,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       .limit(1)
       .single();
 
-    const hasRecentOTPVerification = !!recentVerification;
+    const hasRecentOTPVerification = !!recentVerification || flow_context?.otpVerified === true;
 
     // 🆕 FIX #1E0A32FC: Sync OTP verification to chat_flow_states when hasRecentOTPVerification
     // This ensures process-chat-flow sees __ai_otp_verified even when the OTP was validated in a previous cycle
