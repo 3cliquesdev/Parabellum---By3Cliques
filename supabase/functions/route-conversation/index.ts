@@ -276,7 +276,7 @@ serve(async (req) => {
 
     // 🆕 FALLBACK: Se após todas as tentativas de resolução ainda não tem departamento, usar Suporte
     if (!resolvedDepartmentId) {
-      const FALLBACK_DEPT_SUPORTE = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      const FALLBACK_DEPT_SUPORTE = depts.SUPORTE_ID;
       console.log(`[route-conversation] ⚠️ No department resolved — applying Suporte fallback`);
       
       const { error: fallbackUpdateError } = await supabase
