@@ -65,6 +65,12 @@ export function AITelemetryContent() {
     events, transferEvents, closeEvents, isLoading, isError, refetch,
     kpis, transferKpis, transferBreakdown, typeBreakdown, hourlyData, lastUpdated
   } = useAIDecisionTelemetry(24);
+  const { data: departments } = useDepartments();
+  const deptMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    departments?.forEach(d => { map[d.id] = d.name; });
+    return map;
+  }, [departments]);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortAsc, setSortAsc] = useState(false);
   const [, setTick] = useState(0);
