@@ -6079,79 +6079,9 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // Responde imediatamente com a resposta padrao Kiwify
     // SEM passar pelo sistema de confianca, SEM pedir email
     // ============================================================
+    // Cancelamento agora é tratado pelo fluxo visual + KB (removido bypass hardcoded)
     if (isCancellationRequest) {
-      console.log('[ai-autopilot-chat] CANCELAMENTO DETECTADO - Bypass direto para resposta Kiwify');
-      
-      const cancellationResponse = `Entendi! O cancelamento de cursos/assinaturas é feito diretamente pela plataforma Kiwify.
-
-📌 Você tem *7 dias de garantia* a partir da compra para solicitar reembolso.
-
-🔗 *Acesse aqui para cancelar:* https://reembolso.kiwify.com.br/login
-
-Use o mesmo email da compra para fazer login e solicitar o reembolso.
-
-Posso ajudar em mais alguma coisa?`;
-      
-      // Salvar mensagem
-      const { data: cancellationMsgData } = await supabaseClient
-        .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          content: cancellationResponse,
-          sender_type: 'user',
-          is_ai_generated: true,
-          channel: responseChannel
-        })
-        .select('id')
-        .single();
-      
-      // Atualizar last_message_at
-      await supabaseClient
-        .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', conversationId);
-      
-      // Enviar via WhatsApp se necessário
-      if (responseChannel === 'whatsapp' && contact?.phone && cancellationMsgData) {
-        const whatsappResult = await getWhatsAppInstanceForConversation(
-          supabaseClient, 
-          conversationId, 
-          conversation.whatsapp_instance_id,
-          conversation
-        );
-        
-        if (whatsappResult) {
-          await sendWhatsAppMessage(
-            supabaseClient,
-            whatsappResult,
-            contact.phone,
-            cancellationResponse,
-            conversationId,
-            contact.whatsapp_id
-          );
-        }
-      }
-      
-      // Log de qualidade
-      await supabaseClient.from('ai_quality_logs').insert({
-        conversation_id: conversationId,
-        contact_id: contact.id,
-        customer_message: customerMessage,
-        ai_response: cancellationResponse,
-        action_taken: 'direct_cancellation_bypass',
-        confidence_score: 1,
-        articles_count: 0
-      });
-      
-      return new Response(JSON.stringify({
-        status: 'success',
-        message: cancellationResponse,
-        type: 'direct_cancellation_response',
-        bypassed_ai: true,
-        reason: 'Cancelamento de assinatura detectado - resposta direta sem necessidade de identificação'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      console.log('[ai-autopilot-chat] CANCELAMENTO DETECTADO - delegando para fluxo/KB (sem bypass hardcoded)');
     }
 
     // Verificar se tem verificação OTP recente (1 HORA para operações financeiras)
@@ -6342,7 +6272,9 @@ Posso ajudar em mais alguma coisa?`;
           );
           if (!ticketError) {
             const ticketId = ticketData?.ticket?.id?.slice(0, 8)?.toUpperCase() || '';
-            const saqueResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação de saque. Nossa equipe financeira vai processar o PIX em até **7 dias úteis**.\n\nPosso te ajudar com mais alguma coisa?`;
+            const slaText = (tc as any)?.sla_text || 'em breve';
+            const teamName = (tc as any)?.team_name || 'Nossa equipe';
+            const saqueResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação. ${teamName} vai processar ${slaText}.\n\nPosso te ajudar com mais alguma coisa?`;
             const { data: savedMsg } = await supabaseClient
               .from('messages')
               .insert({ conversation_id: conversationId, content: saqueResponse, sender_type: 'user', is_ai_generated: true, channel: responseChannel })
@@ -7238,8 +7170,7 @@ Se você NÃO encontrar informação na BASE DE CONHECIMENTO:
 
 ---
 
-Você é a Lais, assistente virtual inteligente da Parabellum / 3Cliques.
-Sua missão é AJUDAR o cliente, não se livrar dele.
+${persona.system_prompt || `Você é ${persona.name || 'uma assistente virtual'}${persona.role ? `, ${persona.role}` : ''}. Sua missão é AJUDAR o cliente, não se livrar dele.`}
 
 **COMO RESPONDER:**
 
@@ -7266,164 +7197,13 @@ Sua missão é AJUDAR o cliente, não se livrar dele.
 
 ---
 
-**CÉREBRO FINANCEIRO - FLUXOGRAMA OBRIGATÓRIO:**
-
-QUANDO cliente mencionar "reembolso", "cancelamento", "saque", "devolver dinheiro":
-
-**PASSO 1: IDENTIFICAR O TIPO DE PEDIDO**
-Pergunte ao cliente de forma clara e direta:
-"Entendi que você quer resolver uma questão financeira. Para te ajudar corretamente, preciso saber:
-
-Você quer:
-**A)** Cancelar sua assinatura/curso (comprado na Kiwify)?
-**B)** Sacar o saldo da sua carteira (Seu Armazém Drop)?"
-
-→ AGUARDE a resposta do cliente antes de prosseguir
-
----
-
-**CENÁRIO A: CANCELAMENTO KIWIFY (Assinatura/Curso)**
-
-1. **RETENÇÁO BREVE** (opcional):
-   "Posso saber o motivo? Talvez eu consiga te ajudar antes de você cancelar."
-
-2. **SE CLIENTE INSISTIR EM CANCELAR:**
-   - ❌ NÃO CRIE TICKET
-   - Informe que o cancelamento é feito direto na plataforma:
-   
-   "Entendi! O cancelamento de cursos/assinaturas é feito diretamente pela plataforma Kiwify.
-   
-   📌 Você tem **7 dias de garantia** a partir da compra para solicitar reembolso.
-   
-   🔗 **Acesse aqui para cancelar:** https://reembolso.kiwify.com.br/login
-   
-   Use o mesmo email da compra para fazer login e solicitar o reembolso.
-   
-   Posso ajudar em mais alguma coisa?"
-
-3. **ENCERRE O ASSUNTO** - Não crie ticket, não transfira para humano
-
----
-
-**CENÁRIO B: SAQUE DE SALDO (Carteira Interna - Seu Armazém Drop)**
-
-${canShowFinancialData 
-  ? `Cliente VERIFICADO via OTP - Pode prosseguir com saque
-     CPF cadastrado: ${maskedCPF}
-     
-     ATENÇÁO: Use EXATAMENTE o CPF fornecido acima: "${maskedCPF}"
-     NUNCA escreva "Não cadastrado" se o CPF foi fornecido.`
-  : !canAccessFinancialData
-    ? `BLOQUEIO: Esta IA NÃO tem permissão para acessar dados financeiros.
-       → Transfira para um agente humano imediatamente com: request_human_agent
-       → Motivo: "Solicitação de dados financeiros requer assistência humana"`
-    : `BLOQUEIO: Cliente NÃO verificou identidade via OTP nesta sessão.
-       → NÃO mostre CPF ou Nome completo
-       → NÃO permita criar ticket de saque
-       → Informe: "Para sua segurança, preciso verificar sua identidade primeiro. Qual seu email de compra?"`}
-
-**SE CLIENTE VERIFICADO via OTP, seguir passos:**
-
-    1. **CONFIRMAÇÁO OBRIGATÓRIA DE DADOS:**
-   Apresente os dados do cliente e peça confirmação:
-   
-   "Vou confirmar seus dados para o saque:
-   
-   **Nome:** ${canAccessCustomerData ? contactName : '[Dados Protegidos]'}
-   **CPF:** ${maskedCPF}
-   
-   **Regra de Segurança:** O saque só pode ser feito via PIX para uma chave vinculada a este CPF cadastrado. Não é possível enviar para conta de terceiros.
-   
-   Os dados estão corretos?"
-
-2. **SE CLIENTE CONFIRMAR (SIM):**
-   - Envie a mensagem estruturada pedindo TODOS os dados de uma vez:
-   
-   "${structuredCollectionMessage}"
-   
-   - SE o cliente responder com todos os dados preenchidos, crie o ticket com create_ticket.
-   - SE faltar algum dado, peça apenas o que falta de forma amigável.
-   - Responda: "Solicitação registrada! Protocolo: #[ID]. O financeiro vai processar em até 7 dias úteis."
-
-3. **SE CLIENTE DISSER NÃO (dados incorretos):**
-   - Execute a tool request_human_agent com:
-     - reason: "dados_financeiros_incorretos"
-     - internal_note: "Cliente informou que dados cadastrais (Nome/CPF) estão incorretos durante solicitação de saque. Requer correção manual."
-   - A ferramenta vai responder automaticamente e transferir para um atendente.
-
----
-
-**CENÁRIO C: REEMBOLSO/DEVOLUÇÃO (Produto Errado, Defeito, Troca)**
-
-Quando cliente mencionar "envio errado", "produto errado", "veio diferente", "veio outra cor", "veio errado", "defeito", "quebrado", "danificado", "trocar", "quero trocar", "quero devolver":
-
-**PASSO 1: PERGUNTAR TIPO DE RESOLUÇÁO PRIMEIRO**
-"Entendi que houve um problema com seu pedido. Você prefere:
-
-**A)** Reembolso do valor pago?
-**B)** Reenvio do produto correto?
-**C)** Troca por outro item?"
-
-→ AGUARDE resposta antes de prosseguir
-
-**PASSO 2: COLETAR DADOS DO PROBLEMA**
-Após cliente escolher A, B ou C:
-
-"Para resolver, preciso de algumas informações:
-
-1️⃣ **Número do pedido:** (ex: #12345 ou código de rastreio)
-2️⃣ **Qual produto veio errado/com defeito?** (nome ou descrição)
-3️⃣ **O que você esperava receber?** (ou qual era o correto)"
-
-→ AGUARDE respostas antes de prosseguir
-
-**PASSO 3: SOLICITAR EVIDÊNCIAS**
-"Para agilizar a análise da equipe, você consegue enviar uma foto do produto que recebeu? 📷
-
-Isso ajuda muito a resolver mais rápido!"
-
-→ AGUARDE cliente enviar foto OU dizer que não consegue
-
-**PASSO 4: CRIAR TICKET COM DADOS COMPLETOS**
-SOMENTE após coletar TODOS os dados acima (tipo de resolução, número pedido, problema, produto esperado), execute create_ticket com:
-- issue_type: "reembolso" ou "troca" ou "devolucao" (conforme opção escolhida)
-- subject: "[Tipo] Pedido #[NÚMERO] - [Resumo do problema]"
-- description: Incluir TODOS os dados coletados:
-  • Número do pedido
-  • Produto recebido (errado/com defeito)
-  • Produto esperado (correto)
-  • Resolução desejada (reembolso/troca/reenvio)
-  • Se foto foi enviada (sim/não)
-- order_id: [NÚMERO DO PEDIDO se fornecido]
-
-**EXEMPLO DE TICKET BEM PREENCHIDO:**
-subject: "Reembolso Pedido #12345 - Cor Errada"
-description: "Cliente Maria recebeu camiseta preta quando pediu branca.
-Pedido: #12345
-Produto recebido: Camiseta preta M
-Produto esperado: Camiseta branca M  
-Foto enviada: Sim
-Resolução desejada: Reembolso integral"
-
-**REGRAS DO CENÁRIO C:**
-- NUNCA crie ticket sem saber tipo de resolução (A, B ou C)
-- NUNCA crie ticket sem número do pedido (se cliente não souber, pergunte: "Qual email usou na compra? Vou buscar para você.")
-- NUNCA crie ticket sem saber o que veio errado vs o que era esperado
-- SEMPRE peça foto para evidência (mas prossiga se cliente não puder enviar)
-- Se cliente mencionar "envio errado" mas já escolheu resolução, pule direto para PASSO 2
-
----
-
-**REGRAS CRÍTICAS GERAIS:**
-- NUNCA crie ticket para cancelamento Kiwify (é self-service)
-- NUNCA fale de valores com cliente não identificado
-- NUNCA pule a confirmação de dados
-- SEMPRE pergunte qual tipo (A, B ou C) antes de prosseguir em saques e reembolsos
-- SEMPRE mostre os dados e peça confirmação para saque
-- SEMPRE envie o link da Kiwify para cancelamentos
-- SEMPRE colete dados completos antes de criar ticket de reembolso/devolução
-
----
+**SOLICITAÇÕES FINANCEIRAS:**
+Quando o cliente solicitar uma ação financeira (saque, reembolso, cancelamento, devolução, troca):
+1. Se OTP verificado → use o template de coleta configurado no fluxo (já injetado acima em "📋 DADOS A COLETAR")
+2. Se não verificado → peça verificação de identidade primeiro (email → OTP)
+3. Para dúvidas informativas (ex: "como funciona o reembolso?") → consulte a base de conhecimento
+4. NÃO invente cenários, menus A/B, ou procedimentos — siga APENAS o que está configurado no fluxo e na KB
+5. Para cancelamento de assinatura/curso → consulte a base de conhecimento para instruções específicas da empresa
 
 **REGRAS DE EXTRAÇÃO TOLERANTE (OBRIGATÓRIO):**
 - Se o cliente usar labels diferentes ("Pix email", "chave email", "email pix" etc.) → interpretar como chave PIX pelo CONTEXTO, não pelo label exato.
@@ -7431,13 +7211,17 @@ Resolução desejada: Reembolso integral"
 - Após coleta de dados para saque/reembolso: NUNCA responder "Não consegui resolver" — SEMPRE chamar create_ticket com os dados que tem.
 - Se faltar apenas 1 campo, pergunte. Se tem todos os dados (PIX + valor + confirmação), CRIE O TICKET imediatamente.
 
-**EXEMPLOS DE EXTRAÇÃO VÁLIDA:**
-1. Cliente envia: "Nome: João Silva / Pix email: joao@email.com / Valor: todo valor da carteira"
-   → pix_key="joao@email.com", pix_key_type="email", withdrawal_amount="todo valor da carteira" ✅
-2. Cliente envia: "Chave: 123.456.789-00 / quero sacar tudo"
-   → pix_key="123.456.789-00", pix_key_type="cpf", withdrawal_amount="tudo" ✅
-3. Cliente envia: "pix telefone 11999887766 valor 200 reais"
-   → pix_key="11999887766", pix_key_type="telefone", withdrawal_amount="200" ✅
+**REEMBOLSO/DEVOLUÇÃO/TROCA:**
+Quando cliente mencionar produto errado, defeito, troca ou devolução:
+1. Pergunte o tipo de resolução desejada (reembolso, troca, reenvio)
+2. Colete: número do pedido, descrição do problema, produto esperado
+3. Peça foto como evidência (opcional)
+4. Crie ticket SOMENTE após coletar dados suficientes
+
+**REGRAS CRÍTICAS:**
+- NUNCA fale de valores com cliente não identificado
+- NUNCA pule a confirmação de dados em operações financeiras
+- SEMPRE colete dados completos antes de criar ticket
 
 ---
 
@@ -8094,7 +7878,9 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           );
           if (!ticketError && ticketData?.ticket?.id) {
             const ticketId = ticketData.ticket.id.slice(0, 8).toUpperCase();
-            const fallbackResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação. Nossa equipe financeira vai processar em até **7 dias úteis**.\n\nPosso te ajudar com mais alguma coisa?`;
+            const fallbackSlaText = (flow_context as any)?.ticketConfig?.sla_text || 'em breve';
+            const fallbackTeamName = (flow_context as any)?.ticketConfig?.team_name || 'Nossa equipe';
+            const fallbackResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação. ${fallbackTeamName} vai processar ${fallbackSlaText}.\n\nPosso te ajudar com mais alguma coisa?`;
             const { data: savedMsg } = await supabaseClient
               .from('messages')
               .insert({ conversation_id: conversationId, content: fallbackResponse, sender_type: 'user', is_ai_generated: true, channel: responseChannel })
@@ -8839,12 +8625,8 @@ ${otpCollectionMsg}
 
 ⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
               } else {
-                // No clear intent — fallback to A/B question
-                assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}!
-
-Agora posso te ajudar com operações financeiras. Você quer:
-**A)** Cancelar sua assinatura/curso (comprado na Kiwify)?
-**B)** Sacar o saldo da sua carteira (Seu Armazém Drop)?`;
+                // No clear intent — generic prompt (delegating to flow/KB)
+                assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅\n\nComo posso te ajudar?`;
               }
               
               // Log interaction
