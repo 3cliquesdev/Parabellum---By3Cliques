@@ -41,6 +41,7 @@ import { AdvancedTab } from "@/components/analytics/AdvancedTab";
 // AI Telemetry (absorbed into dashboard)
 import { AITelemetryContent } from "@/pages/AITelemetry";
 import { SaqueTelemetryContent } from "@/pages/SaqueTelemetry";
+import { AIResolutionContent } from "@/pages/AIResolution";
 
 export default function Dashboard() {
   const [searchParams] = useSearchParams();
@@ -49,7 +50,7 @@ export default function Dashboard() {
   // Deep-link: /?tab=sales ou /?tab=vendas
   const tabParam = searchParams.get("tab");
   const TAB_ALIAS: Record<string, string> = { vendas: "sales" };
-  const VALID_TABS = ["overview", "sales", "support", "financial", "operations", "churn", "performance", "advanced", "ai-telemetry", "saque-telemetry"];
+  const VALID_TABS = ["overview", "sales", "support", "financial", "operations", "churn", "performance", "advanced", "ai-telemetry", "saque-telemetry", "ai-resolution"];
   const resolvedTab = TAB_ALIAS[tabParam || ""] || tabParam || "";
   const initialTab = VALID_TABS.includes(resolvedTab) ? resolvedTab : "overview";
   const { role, loading } = useUserRole();
@@ -196,6 +197,10 @@ export default function Dashboard() {
               <Activity className="h-4 w-4" />
               Saque & OTP
             </TabsTrigger>
+            <TabsTrigger value="ai-resolution" className="gap-2">
+              <Activity className="h-4 w-4" />
+              Resolução IA
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="overview">
@@ -236,6 +241,10 @@ export default function Dashboard() {
 
           <TabsContent value="saque-telemetry">
             <SaqueTelemetryContent />
+          </TabsContent>
+
+          <TabsContent value="ai-resolution">
+            <AIResolutionContent />
           </TabsContent>
         </Tabs>
         

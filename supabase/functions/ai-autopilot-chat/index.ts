@@ -2043,7 +2043,7 @@ serve(async (req) => {
           console.log('[ai-autopilot-chat] 🏁 ACK pós-saque: encerrando conversa');
           await supabaseClient
             .from('conversations')
-            .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+            .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: 'ai' })
             .eq('id', conversationId);
           // 📊 TELEMETRIA: conversa encerrada após ACK do cliente
           await logSaqueStep(supabaseClient, {
@@ -3003,10 +3003,11 @@ serve(async (req) => {
                 department: DEPT_COMERCIAL_ID,
                 ai_mode: 'waiting_human',
                 handoff_executed_at: handoffTimestamp,
-                needs_human_review: true
+                needs_human_review: true,
+                resolved_by: 'human_handoff',
               })
               .eq('id', conversationId);
-            
+
             // Rotear para agente comercial
             await supabaseClient.functions.invoke('route-conversation', {
               body: { conversationId, department_id: DEPT_COMERCIAL_ID }
@@ -3329,13 +3330,14 @@ serve(async (req) => {
           // 1. Mudar modo para waiting_human (NÃO copilot!) e marcar timestamp
           await supabaseClient
             .from('conversations')
-            .update({ 
+            .update({
               ai_mode: 'waiting_human', // 🆕 waiting_human para ficar na fila
               handoff_executed_at: handoffTimestamp, // 🆕 Anti-race-condition flag
-              needs_human_review: true
+              needs_human_review: true,
+              resolved_by: 'human_handoff',
             })
             .eq('id', conversationId);
-          
+
           console.log('[CACHE] âœ… Handoff executado com timestamp:', handoffTimestamp);
           
           // 2. Rotear para agente humano
@@ -3694,6 +3696,7 @@ serve(async (req) => {
               handoff_executed_at: handoffTimestamp,
               needs_human_review: true,
               department: flowResult.departmentId,
+              resolved_by: 'human_handoff',
             };
 
             if (consultantId) {
@@ -5218,18 +5221,19 @@ Responda APENAS: skip ou search`
         const handoffTimestamp = new Date().toISOString();
         await supabaseClient
           .from('conversations')
-          .update({ 
+          .update({
             ai_mode: 'waiting_human',
             handoff_executed_at: handoffTimestamp,
-            needs_human_review: true
+            needs_human_review: true,
+            resolved_by: 'human_handoff',
           })
           .eq('id', conversationId);
-        
+
         // Rotear para agente humano
         await supabaseClient.functions.invoke('route-conversation', {
           body: { conversationId }
         });
-        
+
         // Finalizar flow state ativo (se existir)
         try {
           const { data: activeFS } = await supabaseClient
@@ -6024,14 +6028,15 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       const handoffTimestamp = new Date().toISOString();
       await supabaseClient
         .from('conversations')
-        .update({ 
+        .update({
           ai_mode: 'waiting_human',
           last_message_at: handoffTimestamp,
           handoff_executed_at: handoffTimestamp,
-          department: handoffDepartment
+          department: handoffDepartment,
+          resolved_by: 'human_handoff',
         })
         .eq('id', conversationId);
-      
+
       console.log('[ai-autopilot-chat] âœ… Handoff marcado com timestamp:', handoffTimestamp);
       
       // Rotear para agente COM DEPARTAMENTO EXPLÁCITO
@@ -10578,11 +10583,12 @@ Conversa: ${conversationId}`;
       // 1. MUDAR O MODO para waiting_human (NÃO copilot!) e marcar timestamp + departamento
       await supabaseClient
         .from('conversations')
-        .update({ 
+        .update({
           ai_mode: 'waiting_human', // 🆕 waiting_human para ficar na fila até agente responder
           handoff_executed_at: handoffTimestamp, // 🆕 Anti-race-condition flag
           needs_human_review: true,
           department: handoffDepartment, // 🆕 Definir departamento correto (Comercial para leads)
+          resolved_by: 'human_handoff',
         })
         .eq('id', conversationId);
       
