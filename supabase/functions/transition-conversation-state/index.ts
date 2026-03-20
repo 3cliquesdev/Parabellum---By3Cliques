@@ -83,7 +83,8 @@ serve(async (req) => {
       case 'handoff_to_human':
         updateData.ai_mode = 'waiting_human';
         updateData.assigned_to = null;
-        if (!conv.department && effectiveDept) updateData.department = effectiveDept;
+        if (departmentId) updateData.department = departmentId;
+        else if (!conv.department && effectiveDept) updateData.department = effectiveDept;
         shouldCreateDispatch = true;
         break;
 
