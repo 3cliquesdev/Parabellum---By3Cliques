@@ -796,6 +796,7 @@ serve(async (req) => {
     );
 
     const body = await req.json();
+    const depts = await resolveDepartments(supabaseClient);
     const { conversationId, flowId, manualTrigger, contractViolation, violationReason, activateTransfer, bypassActiveCheck, inactivityTimeout, forceFinancialExit, forceCommercialExit, forceCancellationExit, forceAIExit, intentData } = body;
     const userMessage = body.userMessage || body.customerMessage;
     
