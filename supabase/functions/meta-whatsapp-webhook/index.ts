@@ -1233,8 +1233,8 @@ serve(async (req) => {
                     console.error("[meta-whatsapp-webhook] ❌ Proactive greeting exception:", greetErr);
                     // 🆕 FIX Bug A (#EEFFF1DD): Fallback também no catch geral
                     try {
-                      const { data: _orgRow2 } = await supabase.from('organizations').select('name').limit(1).maybeSingle();
-                      const _orgName2 = _orgRow2?.name || 'nossa equipe';
+                      const { data: _brandRow2 } = await supabase.from('email_branding').select('name').eq('is_default_customer', true).maybeSingle();
+                      const _orgName2 = _brandRow2?.name || 'nossa equipe';
                       const fallbackGreeting = `Olá! Sou a assistente virtual da ${_orgName2}. Como posso te ajudar? 😊`;
                       await supabase.from('messages').insert({
                         conversation_id: conversation.id, content: fallbackGreeting,
