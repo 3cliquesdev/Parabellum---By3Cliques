@@ -9933,6 +9933,53 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
             assistantMessage = 'Vou transferir você para um atendente humano. Por favor, aguarde um momento.';
           }
         }
+        // TOOL: tag_conversation - Classificação contextual da conversa
+        else if (toolCall.function.name === 'tag_conversation') {
+          try {
+            const args = safeParseToolArgs(toolCall.function.arguments);
+            console.log('[ai-autopilot-chat] 🏷️ tag_conversation chamado:', args);
+            
+            const tagName = (args.tag_name || '').trim();
+            if (!tagName) {
+              console.warn('[ai-autopilot-chat] ⚠️ tag_conversation: tag_name vazio');
+            } else {
+              // Buscar tag pelo nome (busca flexível)
+              const { data: tagRow } = await supabaseClient
+                .from('tags')
+                .select('id, name')
+                .ilike('name', tagName)
+                .maybeSingle();
+              
+              if (tagRow) {
+                // Upsert em conversation_tags
+                const { error: insertErr } = await supabaseClient
+                  .from('conversation_tags')
+                  .upsert(
+                    { conversation_id: conversationId, tag_id: tagRow.id },
+                    { onConflict: 'conversation_id,tag_id' }
+                  );
+                if (insertErr) {
+                  console.error('[ai-autopilot-chat] ❌ Erro ao inserir conversation_tag:', insertErr);
+                } else {
+                  console.log(`[ai-autopilot-chat] ✅ Tag "${tagRow.name}" aplicada na conversa`);
+                }
+                
+                // Proteger tag contra remoção automática
+                await supabaseClient
+                  .from('protected_conversation_tags')
+                  .upsert(
+                    { conversation_id: conversationId, tag_id: tagRow.id },
+                    { onConflict: 'conversation_id,tag_id' }
+                  );
+              } else {
+                console.warn(`[ai-autopilot-chat] ⚠️ Tag "${tagName}" não encontrada no banco`);
+              }
+            }
+            // Não altera assistantMessage — tag é operação silenciosa
+          } catch (error) {
+            console.error('[ai-autopilot-chat] ❌ Erro em tag_conversation:', error);
+          }
+        }
         // TOOL: close_conversation - Encerramento autônomo com confirmação
         else if (toolCall.function.name === 'close_conversation') {
           try {
