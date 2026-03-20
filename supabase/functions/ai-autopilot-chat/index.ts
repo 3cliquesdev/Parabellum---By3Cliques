@@ -6277,7 +6277,7 @@ Posso ajudar em mais alguma coisa?`;
         try {
           const { data: ticketData, error: ticketError } = await supabaseClient.functions.invoke(
             'generate-ticket-from-conversation',
-            { body: { conversation_id: conversationId, subject: `Solicitação de saque - ${contactName}`, priority: 'high', category: 'financial' } }
+            { body: { conversation_id: conversationId, subject: `Solicitação de saque - ${contactName}`, priority: 'high', category: 'financeiro' } }
           );
           if (!ticketError) {
             const ticketId = ticketData?.ticket?.id?.slice(0, 8)?.toUpperCase() || '';
