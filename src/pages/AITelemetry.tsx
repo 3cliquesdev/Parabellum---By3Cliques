@@ -17,6 +17,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { useDepartments } from "@/hooks/useDepartments";
 
 const REASON_COLORS: Record<string, string> = {
   zero_confidence_cautious: "#ef4444",
@@ -64,6 +65,12 @@ export function AITelemetryContent() {
     events, transferEvents, closeEvents, isLoading, isError, refetch,
     kpis, transferKpis, transferBreakdown, typeBreakdown, hourlyData, lastUpdated
   } = useAIDecisionTelemetry(24);
+  const { data: departments } = useDepartments();
+  const deptMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    departments?.forEach(d => { map[d.id] = d.name; });
+    return map;
+  }, [departments]);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortAsc, setSortAsc] = useState(false);
   const [, setTick] = useState(0);
@@ -589,10 +596,12 @@ export function AITelemetryContent() {
                     <TableBody>
                       {transferEvents.slice(0, 50).map((evt) => {
                         const json = evt.output_json as any;
-                        const fromDept = json?.from_dept || "—";
-                        const toDept = json?.to_dept || "—";
-                        const isDeptChange = fromDept !== "—" && toDept !== "—" && fromDept !== toDept;
-                        const isSameDept = fromDept !== "—" && toDept !== "—" && fromDept === toDept;
+                        const fromDeptId = json?.from_dept || null;
+                        const toDeptId = json?.to_dept || null;
+                        const fromDept = fromDeptId ? (deptMap[fromDeptId] || fromDeptId.substring(0, 8) + "…") : "—";
+                        const toDept = toDeptId ? (deptMap[toDeptId] || toDeptId.substring(0, 8) + "…") : "—";
+                        const isDeptChange = fromDeptId && toDeptId && fromDeptId !== toDeptId;
+                        const isSameDept = fromDeptId && toDeptId && fromDeptId === toDeptId;
                         const label = TRANSITION_LABELS[evt.event_type] || evt.event_type.replace("state_transition_", "");
 
                         return (
@@ -619,11 +628,11 @@ export function AITelemetryContent() {
                                 {label}
                               </span>
                             </TableCell>
-                            <TableCell className="text-xs truncate max-w-[120px]" title={fromDept}>
-                              {fromDept === "—" ? <span className="text-muted-foreground">—</span> : fromDept.substring(0, 8) + "…"}
+                            <TableCell className="text-xs truncate max-w-[120px]" title={fromDeptId || "—"}>
+                              {fromDept === "—" ? <span className="text-muted-foreground">—</span> : fromDept}
                             </TableCell>
-                            <TableCell className="text-xs truncate max-w-[120px]" title={toDept}>
-                              {toDept === "—" ? <span className="text-muted-foreground">—</span> : toDept.substring(0, 8) + "…"}
+                            <TableCell className="text-xs truncate max-w-[120px]" title={toDeptId || "—"}>
+                              {toDept === "—" ? <span className="text-muted-foreground">—</span> : toDept}
                             </TableCell>
                             <TableCell>
                               {isDeptChange ? (
