@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Sparkles, AlertTriangle, GraduationCap, Ticket, Info } from "lucide-react";
+import { Bot, Sparkles, AlertTriangle, GraduationCap, Ticket, Info, Tag } from "lucide-react";
 import { usePersonas } from "@/hooks/usePersonas";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTicketCategories } from "@/hooks/useTicketCategories";
