@@ -91,6 +91,9 @@ export function AppSidebar() {
   const { data: slaAlerts = [] } = useSLAAlerts();
   const { data: myPendingCounts } = useMyPendingCounts();
   const { theme } = useTheme();
+  const { data: crmBranding } = useCRMBranding();
+  const sidebarLogo = crmBranding?.logo_url || (theme === "dark" ? logoLightFallback : logoDarkFallback);
+  const sidebarAlt = crmBranding?.name || "Logo";
 
   // ============= PREFETCH STRATEGY =============
   // Prefetch BOTH module chunks AND data on hover for instant navigation
