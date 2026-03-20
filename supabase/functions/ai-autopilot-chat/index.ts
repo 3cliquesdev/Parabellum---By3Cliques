@@ -6339,7 +6339,8 @@ Posso ajudar em mais alguma coisa?`;
       const hasSaqueIntent = historyUserMsgs.some((m: any) => 
         saqueRegex.test(m.content)
       ) || saqueRegex.test(customerMessage);
-      const otp_reason = (conversationMetadata as any)?.otp_reason;
+      // ⚠️ ZONA SEGURA: conversationMetadata só existe após L6411 — usar conversation.customer_metadata
+      const otp_reason = (conversation.customer_metadata as any)?.otp_reason;
       
       if (hasSaqueIntent || otp_reason === 'withdrawal') {
         // Verificar se já recebeu template de coleta (evitar duplicata)

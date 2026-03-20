@@ -451,6 +451,7 @@ serve(async (req) => {
         conversation_id: body.conversation_id,
         content: messageContent,
         sender_type: "user",
+        channel: "whatsapp", // 🆕 FIX #4A8BC4A3: Evita default 'web_chat' — mensagens aparecem no inbox
         external_id: messageId,
         provider_message_id: messageId, // 🆕 Também salvar no campo novo
         metadata: {
