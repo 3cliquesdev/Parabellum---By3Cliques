@@ -6412,7 +6412,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           isFirstInteraction,
           hasSaqueIntent,
           otp_reason,
-          post_otp_response_mode: hasDescTemplateGuard ? 'template' : (flow_context?.smartCollectionFields?.length > 0 ? 'smart_fields' : 'generic'),
+          post_otp_response_mode: hasDescTemplateGuard ? 'template' : ((flow_context?.smartCollectionFields?.length ?? 0) > 0 ? 'smart_fields' : 'generic'),
         });
         
         // 🆕 FIX #8F42B1C3: Quando OTP verificado + saque intent, SEMPRE ativar _otpJustValidated
