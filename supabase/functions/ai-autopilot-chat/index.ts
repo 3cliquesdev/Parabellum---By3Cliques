@@ -10464,7 +10464,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           body: {
             to: contact.email,
             to_name: `${contact.first_name} ${contact.last_name}`.trim(),
-            subject: `Re: ${conversation.subject || 'Seu Armazém Drop - Resposta do Suporte'}`,
+            subject: `Re: ${conversation.subject || `${persona?.name || 'Suporte'} - Resposta`}`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #2563EB;">Olá, ${contact.first_name}!</h2>
