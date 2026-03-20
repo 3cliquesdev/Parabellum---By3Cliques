@@ -25,6 +25,14 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Resolver nome da organização dinamicamente
+    const { data: orgRow } = await supabase
+      .from('organizations')
+      .select('name')
+      .limit(1)
+      .maybeSingle();
+    const ORG_NAME = orgRow?.name || 'Sua Empresa';
+
     // Fetch quote with all related data
     const { data: quote, error: quoteError } = await supabase
       .from('quotes')
@@ -90,7 +98,7 @@ serve(async (req) => {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 650px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-          <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">Seu Armazém Drop</h1>
+          <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">${ORG_NAME}</h1>
         </div>
         <div style="background: #2563EB; color: white; padding: 20px; text-align: center;">
           <h1 style="margin: 0; font-size: 24px;">Nova Proposta Comercial</h1>
@@ -169,7 +177,7 @@ serve(async (req) => {
           <tr>
             <td align="center" style="padding: 25px;">
               <p style="color: #ffffff; margin: 0 0 10px 0; font-size: 24px; font-weight: bold;">
-                Seu Armazém Drop
+                ${ORG_NAME}
               </p>
               <p style="color: #94a3b8; margin: 0 0 5px 0; font-size: 12px;">
                 Equipe Comercial

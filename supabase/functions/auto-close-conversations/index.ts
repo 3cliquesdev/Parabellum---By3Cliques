@@ -7,11 +7,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Tag ID para "9.04 Desistência da conversa" (mantido para uso futuro)
-const DESISTENCIA_TAG_ID = 'aa44b48d-c8bf-4def-ac9f-4caa8d9bfea9';
-
-// Tag ID para "9.98 Falta de Interação"
-const FALTA_INTERACAO_TAG_ID = '3eb75d67-c027-4c41-bdc6-8ebc414e2eb1';
+// Fallbacks legados (usados apenas se query falhar)
+const LEGACY_DESISTENCIA_TAG_ID = 'aa44b48d-c8bf-4def-ac9f-4caa8d9bfea9';
+const LEGACY_FALTA_INTERACAO_TAG_ID = '3eb75d67-c027-4c41-bdc6-8ebc414e2eb1';
 
 /**
  * Gera mensagem de encerramento por inatividade com horário de atendimento dinâmico.
@@ -136,6 +134,16 @@ Deno.serve(async (req) => {
 
     console.log('[Auto-Close] Starting...');
     const depts = await resolveDepartments(supabase);
+
+    // Resolver tags por nome (dinâmico) com fallback legado
+    const { data: tagRows } = await supabase
+      .from('tags')
+      .select('id, name')
+      .in('name', ['9.04 Desistência da conversa', '9.98 Falta de Interação']);
+    const tagMap = new Map((tagRows || []).map((t: any) => [t.name.trim(), t.id]));
+    const DESISTENCIA_TAG_ID = tagMap.get('9.04 Desistência da conversa') || LEGACY_DESISTENCIA_TAG_ID;
+    const FALTA_INTERACAO_TAG_ID = tagMap.get('9.98 Falta de Interação') || LEGACY_FALTA_INTERACAO_TAG_ID;
+    console.log(`[Auto-Close] Tags resolvidas: Desistência=${DESISTENCIA_TAG_ID}, FaltaInteração=${FALTA_INTERACAO_TAG_ID}`);
 
     // Buscar horário de atendimento uma vez para usar nas mensagens
     const businessHoursInfo = await getBusinessHoursInfo(supabase);

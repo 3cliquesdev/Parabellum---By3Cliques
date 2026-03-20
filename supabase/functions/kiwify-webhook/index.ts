@@ -445,6 +445,10 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
+    // Resolver nome da organização dinamicamente
+    const { data: _orgRow } = await supabase.from('organizations').select('name').limit(1).maybeSingle();
+    const orgName = _orgRow?.name || 'Sua Empresa';
+
     // Read body as text for signature verification
     const bodyText = await req.text();
     
@@ -1194,7 +1198,7 @@ async function handlePaidOrder(
 </p>
 <p style="color: #888; font-size: 13px;">O link expira em 24 horas.</p>
 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-<p style="color: #999; font-size: 12px; text-align: center;">© Seu Armazém Drop — Todos os direitos reservados</p>`,
+<p style="color: #999; font-size: 12px; text-align: center;">© ${orgName} — Todos os direitos reservados</p>`,
           customer_id: contact.id,
           is_customer_email: true,
         }

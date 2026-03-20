@@ -333,6 +333,11 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
     .gte('created_at', since)
     .lt('created_at', until);
 
+  // Resolver pipeline "Recuperação" por nome (dinâmico)
+  const { data: _recPipeline } = await supabase
+    .from('pipelines').select('id').eq('name', 'Recuperação - Nacional').maybeSingle();
+  const RECUPERACAO_PIPELINE_ID = _recPipeline?.id || '00000000-0000-0000-0000-000000000001';
+
   // Classificação de origem — Hierarquia: assigned_to → recorrência → parceiro → formulário → canal → orgânico → kiwify → fallback
   const classifyOrigin = (deal: any): string => {
     // REGRA PRINCIPAL: vendedor atribuído = SEMPRE comercial (docs/architecture/sales-channel-attribution-rules.md)
@@ -364,7 +369,7 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
     if (source === 'kiwify_novo_cliente') return 'kiwify:novo_cliente';
 
     // Recuperação
-    if (deal.pipeline_id === '00000000-0000-0000-0000-000000000001') return 'recuperacao';
+    if (deal.pipeline_id === RECUPERACAO_PIPELINE_ID) return 'recuperacao';
 
     return 'direto';
   };

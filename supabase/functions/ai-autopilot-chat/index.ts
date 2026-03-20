@@ -8323,10 +8323,15 @@ Por favor, digite o código que você recebeu para confirmar sua identidade.`;
             
             const emailInformado = pendingEmail || 'não informado';
             
-            // âœ… CRIAR DEAL COM DADOS DO LEAD (contact_id = NULL)
+            // ✅ CRIAR DEAL COM DADOS DO LEAD (contact_id = NULL)
             let dealId: string | null = null;
-            const PIPELINE_VENDAS_ID = '00000000-0000-0000-0000-000000000001';
-            const STAGE_LEAD_ID = '11111111-1111-1111-1111-111111111111';
+            // Resolver pipeline e stage por nome (dinâmico)
+            const { data: _pipeline } = await supabaseClient
+              .from('pipelines').select('id').eq('name', 'Recuperação - Nacional').maybeSingle();
+            const PIPELINE_VENDAS_ID = _pipeline?.id || '00000000-0000-0000-0000-000000000001';
+            const { data: _stage } = await supabaseClient
+              .from('stages').select('id').eq('name', 'Oportunidade').eq('pipeline_id', PIPELINE_VENDAS_ID).maybeSingle();
+            const STAGE_LEAD_ID = _stage?.id || '11111111-1111-1111-1111-111111111111';
             
             const { data: deal, error: dealError } = await supabaseClient
               .from('deals')
