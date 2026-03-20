@@ -60,7 +60,7 @@ serve(async (req) => {
     }
 
     // Cliente existe - determinar departamento recomendado
-    let recommendedDepartmentId = SUPORTE_DEPT_ID;
+    let recommendedDepartmentId = depts.SUPORTE_ID;
 
     // Se tem consultor vinculado, buscar o departamento dele
     if (contact.consultant_id) {
