@@ -38,6 +38,9 @@ interface AIResponseNodeData {
   forbid_internacional?: boolean;
   // 🆕 OTP inline
   require_otp_for_financial?: boolean;
+  // 🆕 Tag de encerramento do nó
+  close_tag_id?: string;
+  close_tag_name?: string;
 }
 
 export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNodeData>) => {
