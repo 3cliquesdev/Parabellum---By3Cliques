@@ -162,7 +162,7 @@ export default function Auth() {
         <div className="w-full max-w-md space-y-8">
           {/* Mobile Logo */}
           <div className="lg:hidden mb-8 text-center">
-            <img src={logoLight} alt="PARABELLUM" width={308} height={168} className="h-24 w-auto mx-auto mb-4" loading="eager" fetchPriority="high" decoding="async" />
+            <img src={brandLogo} alt={brandName} width={308} height={168} className="h-24 w-auto mx-auto mb-4" loading="eager" fetchPriority="high" decoding="async" />
           </div>
 
           {/* Header */}
