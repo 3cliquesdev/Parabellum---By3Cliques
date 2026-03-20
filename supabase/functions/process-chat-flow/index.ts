@@ -3410,8 +3410,18 @@ serve(async (req) => {
         // Defense: if collectedData doesn't have the flag, check DB for recent email verification
         if (!otpVerifiedInFlow && conversationId) {
           try {
-            const otpContactId = activeContactData?.id;
-            if (!otpContactId) throw new Error('No activeContactData.id available for OTP check');
+            // 🆕 FIX #57AA2190: Fallback robusto para contact_id — usar activeContactData OU buscar da conversa
+            let otpContactId = activeContactData?.id;
+            if (!otpContactId) {
+              const { data: convForOtp } = await supabaseClient
+                .from('conversations')
+                .select('contact_id')
+                .eq('id', conversationId)
+                .maybeSingle();
+              otpContactId = convForOtp?.contact_id;
+              console.log('[process-chat-flow] 🔄 FIX#57AA2190: activeContactData null, fallback contact_id from conversation:', otpContactId);
+            }
+            if (!otpContactId) throw new Error('No contact_id available for OTP check');
             const contactForOtp = await supabaseClient
               .from('contacts')
               .select('email')
