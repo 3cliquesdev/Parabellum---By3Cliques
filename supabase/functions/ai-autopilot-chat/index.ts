@@ -9991,6 +9991,52 @@ Conversa: ${conversationId}`;
 
       // 🆕 FIX: Se flow_context existe, sinalizar flowExit para avançar ao escape node com opções
       if (flow_context) {
+        // 🆕 FIX #57AA2190: Se OTP verificado + saque detectado, enviar template de coleta PIX em vez de flowExit
+        // Isso evita que o fallback da RAG (0 artigos) ejete o cliente do nó financeiro
+        const saqueRegexFallback = /quero\s+sacar|saque|sacar|carteira|retirar|retirada/i;
+        const hasSaqueInFallback = saqueRegexFallback.test(customerMessage) || 
+          messageHistory?.filter((m: any) => m.role === 'user').slice().reverse().slice(0, 6).some((m: any) => saqueRegexFallback.test(m.content));
+        
+        if (hasRecentOTPVerification && hasSaqueInFallback) {
+          console.log('[ai-autopilot-chat] 🛡️ FIX#57AA2190: FALLBACK BLOQUEADO — OTP verificado + saque detectado → enviando coleta PIX em vez de flowExit');
+          const tcTemplateFb = (flow_context as any)?.ticketConfig?.description_template;
+          const scFieldsFb = flow_context?.smartCollectionFields;
+          const scEnabledFb = flow_context?.smartCollectionEnabled;
+          let pixResponseFb: string;
+          if (scEnabledFb && scFieldsFb && scFieldsFb.length > 0) {
+            const fieldLabelsFb: Record<string, string> = {
+              'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
+              'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
+              'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
+              'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
+              'banco': '🏦 **Banco:** [nome do banco]',
+              'motivo': '📝 **Motivo:** [motivo da solicitação]',
+            };
+            const fieldsTextFb = scFieldsFb.map((f: string) => fieldLabelsFb[f] || `📝 **${f}:** [preencha]`).join('\n');
+            pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, me envie os dados abaixo:\n\n${fieldsTextFb}`;
+          } else if (tcTemplateFb) {
+            pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, preciso dos seguintes dados:\n\n${tcTemplateFb}`;
+          } else {
+            pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
+          }
+          const { data: savedMsgFb } = await supabaseClient.from('messages').insert({
+            conversation_id: conversationId, content: pixResponseFb,
+            sender_type: 'user', is_ai_generated: true, channel: responseChannel
+          }).select().single();
+          if (responseChannel === 'whatsapp' && contact?.phone && conversation) {
+            try {
+              const wrFb = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, contact, conversation);
+              if (wrFb) await sendWhatsAppMessage(supabaseClient, wrFb, contact.phone, pixResponseFb, conversationId, contact.whatsapp_id);
+            } catch (sendErrFb) {
+              console.error('[ai-autopilot-chat] ❌ FIX#57AA2190 WhatsApp send failed:', sendErrFb);
+            }
+          }
+          return new Response(JSON.stringify({
+            response: pixResponseFb, messageId: savedMsgFb?.id,
+            debug: { reason: 'fallback_blocked_otp_verified_saque_collect_pix' }
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
         // Verificar se tem [[FLOW_EXIT]] — se sim, tratar como transferência intencional
         const hasIntentionalExitPre = /\[\[FLOW_EXIT(:[a-zA-Z_]+)?\]\]/.test(assistantMessage);
         if (!hasIntentionalExitPre) {
