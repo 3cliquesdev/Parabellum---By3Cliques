@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { resolveBranding } from "../_shared/branding-resolver.ts";
 
 // Resend helper (inline to avoid CDN issues)
 class Resend {
