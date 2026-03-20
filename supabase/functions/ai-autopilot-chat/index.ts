@@ -7878,7 +7878,9 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
           );
           if (!ticketError && ticketData?.ticket?.id) {
             const ticketId = ticketData.ticket.id.slice(0, 8).toUpperCase();
-            const fallbackResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação. Nossa equipe financeira vai processar em até **7 dias úteis**.\n\nPosso te ajudar com mais alguma coisa?`;
+            const fallbackSlaText = (flow_context as any)?.ticketConfig?.sla_text || 'em breve';
+            const fallbackTeamName = (flow_context as any)?.ticketConfig?.team_name || 'Nossa equipe';
+            const fallbackResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação. ${fallbackTeamName} vai processar ${fallbackSlaText}.\n\nPosso te ajudar com mais alguma coisa?`;
             const { data: savedMsg } = await supabaseClient
               .from('messages')
               .insert({ conversation_id: conversationId, content: fallbackResponse, sender_type: 'user', is_ai_generated: true, channel: responseChannel })
