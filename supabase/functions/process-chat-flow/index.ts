@@ -151,12 +151,19 @@ function buildAllowedSources(nodeData: any): string[] {
 }
 
 // ============================================================
-// 🆕 MATCHER ESTRITO PARA ask_options (Contrato v2.3)
+// 🆕 MATCHER ESTRITO PARA ask_options (Contrato v2.4 - strip emojis)
 // ============================================================
 interface AskOption {
   label: string;
   value?: string;
   id?: string;
+}
+
+// Remove emojis e símbolos especiais de labels para matching flexível
+function stripEmojis(text: string): string {
+  return text
+    .replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{1F900}-\u{1F9FF}]|[\u{200D}]|[\u{20E3}]|[\u{E0020}-\u{E007F}]|[↩↪⬆⬇⬅➡🔄♻️✅❌⚠️💬📞📧🔔🔒🔑👤👥💰📦🎯🛒📋✉️🏠🆕⭐🔥💡📌📎🔗📲💳🏷️🧾📊📈📉🗂️🗃️⏰⏳🔴🟢🟡🔵⚡🎉🎁💎🏆🥇🥈🥉]/gu, '')
+    .trim();
 }
 
 function matchAskOption(
@@ -171,27 +178,29 @@ function matchAskOption(
     return options[index - 1];
   }
 
-  // 2️⃣ Texto exato da opção (label ou value) - case-insensitive
-  const exactMatch = options.find(opt =>
-    opt.label.toLowerCase() === normalized ||
-    (opt.value && opt.value.toLowerCase() === normalized)
-  );
+  // 2️⃣ Texto exato da opção (label ou value) - case-insensitive + strip emojis
+  const exactMatch = options.find(opt => {
+    const labelClean = stripEmojis(opt.label).toLowerCase();
+    return opt.label.toLowerCase() === normalized ||
+      labelClean === normalized ||
+      (opt.value && opt.value.toLowerCase() === normalized);
+  });
   if (exactMatch) return exactMatch;
 
-  // 3️⃣ Resposta começa com o label da opção
-  // Ex: "Não sou cliente" → match "Não"
+  // 3️⃣ Resposta começa com o label da opção (com e sem emoji)
   const startsWithMatch = options.find(opt => {
     const label = opt.label.toLowerCase();
-    return normalized.startsWith(label + ' ') || normalized.startsWith(label + ',') || normalized.startsWith(label + '.');
+    const labelClean = stripEmojis(opt.label).toLowerCase();
+    return normalized.startsWith(label + ' ') || normalized.startsWith(label + ',') || normalized.startsWith(label + '.') ||
+      normalized.startsWith(labelClean + ' ') || normalized.startsWith(labelClean + ',') || normalized.startsWith(labelClean + '.');
   });
   if (startsWithMatch) return startsWithMatch;
 
-  // 4️⃣ Label contido na resposta como palavra (somente se unambíguo)
-  // Ex: "eu quero sim" → match "Sim" (mas só se 1 opção bate)
+  // 4️⃣ Label contido na resposta como palavra (somente se unambíguo) - strip emojis
   const containsMatches = options.filter(opt => {
-    const label = opt.label.toLowerCase();
-    if (label.length < 2) return false; // Evita match de labels muito curtos
-    const regex = new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    const labelClean = stripEmojis(opt.label).toLowerCase();
+    if (labelClean.length < 2) return false;
+    const regex = new RegExp(`\\b${labelClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
     return regex.test(normalized);
   });
   if (containsMatches.length === 1) return containsMatches[0];
