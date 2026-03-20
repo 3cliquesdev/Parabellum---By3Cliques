@@ -1,38 +1,44 @@
 
 
-# Fix: IA Ainda Usando "HidraPure" — Duas Causas Raiz
+# Fix: Regressão na Conversa #3D2C2A77 — Coluna Inexistente
 
-## Diagnóstico Completo
+## Causa Raiz
 
-A mensagem "Sou a assistente virtual da HidraPure" **não vem da LLM**. Vem de um **fallback hardcoded** no `meta-whatsapp-webhook` que dispara quando a saudação proativa via autopilot falha.
+O `ai-autopilot-chat` está crashando com erro **`column contacts_1.ai_summary does not exist`** na query de busca da conversa (linha 1961). Como a query falha, retorna 404 e a IA **não consegue processar nenhuma mensagem** — nem OTP, nem coleta de dados, nem geração de ticket.
 
-**Evidência nos logs:**
-- `meta-whatsapp-webhook` → "✅ Fallback greeting enviado direto via WhatsApp" (09:43 hoje)
-- O fallback faz `organizations.select('name').limit(1)` → retorna "HidraPure" (2ª organização no banco)
-- `ai-autopilot-chat` → BUILD-V3 2026-03-18 (deploy antigo, fix do brand NÃO foi deployado)
+Evidência nos logs:
+```
+09:49:05 ERROR column contacts_1.ai_summary does not exist
+09:49:05 INFO  ⏱️ Latência total: 128ms | Status: 404
+09:48:30 ERROR column contacts_1.ai_summary does not exist  
+09:48:30 INFO  ⏱️ Latência total: 795ms | Status: 404
+```
+
+A coluna `ai_summary` **não existe** na tabela `contacts` — foi referenciada no código mas nunca criada via migration.
 
 ## Correções
 
-### 1. `meta-whatsapp-webhook/index.ts` — Fallback greeting (CAUSA PRINCIPAL)
+### 1. Remover `ai_summary` da query de contatos (linha 1961)
 
-Duas ocorrências idênticas (linhas ~1212 e ~1236) que buscam `organizations.name`. Trocar ambas para buscar de `email_branding` com `is_default_customer = true`:
+Remover a referência à coluna inexistente na query `.select()`:
 
 ```typescript
-// ANTES (ERRADO):
-const { data: _orgRow } = await supabase.from('organizations').select('name').limit(1).maybeSingle();
-const _orgName = _orgRow?.name || 'nossa equipe';
+// ANTES:
+contacts!inner(id, first_name, ..., ai_summary)
 
-// DEPOIS (CORRETO):
-const { data: _brandRow } = await supabase.from('email_branding').select('name').eq('is_default_customer', true).maybeSingle();
-const _brandName = _brandRow?.name || 'nossa equipe';
+// DEPOIS:
+contacts!inner(id, first_name, ..., assigned_to)
 ```
 
-### 2. Deploy de AMBAS as funções
+### 2. Neutralizar uso de `ai_summary` no prompt (linha 7402)
 
-- `ai-autopilot-chat` — contém o fix do brand name no system prompt (feito anteriormente mas nunca deployado)
-- `meta-whatsapp-webhook` — com o fallback corrigido
+Remover ou comentar o bloco que injeta `contact?.ai_summary` no system prompt (linhas 7401-7405), já que a coluna não existe.
+
+### 3. Atualizar build version e redeployar
+
+Mudar `BUILD-V3 2026-03-18` → `BUILD-V4 2026-03-20` para confirmar que o deploy realmente tomou efeito (linha 1567).
 
 ### Resultado Esperado
 
-O fallback greeting passará a usar "3Cliques | CRM" (valor em `email_branding`) em vez de "HidraPure" (organização-cliente). E mesmo que o autopilot responda, o system prompt já terá o brand name correto.
+A query volta a funcionar → a IA recebe o contexto da conversa → OTP, coleta de dados e geração de ticket voltam a operar normalmente.
 
