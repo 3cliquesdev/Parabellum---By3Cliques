@@ -2079,13 +2079,15 @@ serve(async (req) => {
           if (result.type === 'tags' && result.data) {
             contactTagsList = result.data.map((t: any) => t.tags?.name).filter(Boolean);
           }
+          if (result.type === 'brand' && result.data?.name) companyBrandName = result.data.name;
         }
 
         console.log('[ai-autopilot-chat] 🏷️ Contexto enriquecido:', {
           org: contactOrgName,
           consultant: contactConsultantName,
           seller: contactSellerName,
-          tags: contactTagsList
+          tags: contactTagsList,
+          brand: companyBrandName
         });
       } catch (enrichErr) {
         console.error('[ai-autopilot-chat] âš ï¸ Erro ao enriquecer contexto do contato:', enrichErr);
