@@ -6925,9 +6925,26 @@ O cliente quer cancelar sua assinatura/curso.
       const nodeObjective = flow_context?.objective;
 
       if (otpJustValidated && (flow_context?.ticketConfig?.description_template || flow_context?.smartCollectionFields?.length > 0)) {
+        const hasDescTemplateWall = !!(flow_context as any)?.ticketConfig?.description_template;
         
-        if (nodeObjective) {
-          // 🎯 O nó tem objective configurado — respeitar a estratégia do administrador
+        if (hasDescTemplateWall) {
+          // 🎫 Template do IA Response é soberano — enviar verbatim (tudo de uma vez)
+          const resolvedMsgTemplate = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
+          
+          identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — COLETA DE DADOS:**
+Olá ${contactName}! Sua identidade foi verificada com sucesso.
+
+Agora envie ao cliente EXATAMENTE esta mensagem de coleta de dados (sem alterar):
+
+${resolvedMsgTemplate}
+
+**REGRAS:**
+- Envie a mensagem acima EXATAMENTE como está
+- NÃO pergunte um campo por vez — envie TUDO de uma vez
+- Após o cliente responder com todos os dados, use \`create_ticket\``;
+          console.log('[ai-autopilot-chat] 🎫 identityWallNote: description_template soberano — envia verbatim');
+        } else if (nodeObjective) {
+          // 🎯 Sem template mas com objective — campo a campo
           const fieldsReference = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
           
           identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — SEGUIR OBJECTIVE DO NÓ:**
