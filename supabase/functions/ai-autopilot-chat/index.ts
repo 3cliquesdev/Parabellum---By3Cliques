@@ -6279,6 +6279,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
               category: tc?.category || 'financeiro',
               assigned_to: tc?.assigned_to || undefined,
               department_id_override: tc?.department_id || undefined,
+              tag_ids: tc?.tag_ids || undefined,
             } }
           );
           if (!ticketError) {
@@ -6517,8 +6518,13 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
 
           // Usar helper centralizado — fluxo como fonte única de verdade
           const nodeObjectiveDirect = flow_context?.objective;
-          if (hasSaqueContextDirect && nodeObjectiveDirect) {
-            // 🎯 Fluxo soberano: não enviar template literal, LLM segue o objective
+          const hasDescTemplateDirect = !!(flow_context as any)?.ticketConfig?.description_template;
+          if (hasSaqueContextDirect && hasDescTemplateDirect) {
+            // 🎫 Template do IA Response é soberano — envia verbatim (tudo de uma vez)
+            directOTPSuccessResponse = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone);
+            console.log('[ai-autopilot-chat] 🎫 directOTPSuccessResponse: description_template soberano — envia verbatim');
+          } else if (hasSaqueContextDirect && nodeObjectiveDirect) {
+            // 🎯 Sem template mas com objective — LLM segue o objective (campo a campo)
             directOTPSuccessResponse = `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`;
             console.log('[ai-autopilot-chat] 🎯 directOTPSuccessResponse: respeitando objective do nó (não envia template literal)');
           } else if (hasSaqueContextDirect) {
@@ -6920,9 +6926,26 @@ O cliente quer cancelar sua assinatura/curso.
       const nodeObjective = flow_context?.objective;
 
       if (otpJustValidated && (flow_context?.ticketConfig?.description_template || flow_context?.smartCollectionFields?.length > 0)) {
+        const hasDescTemplateWall = !!(flow_context as any)?.ticketConfig?.description_template;
         
-        if (nodeObjective) {
-          // 🎯 O nó tem objective configurado — respeitar a estratégia do administrador
+        if (hasDescTemplateWall) {
+          // 🎫 Template do IA Response é soberano — enviar verbatim (tudo de uma vez)
+          const resolvedMsgTemplate = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
+          
+          identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — COLETA DE DADOS:**
+Olá ${contactName}! Sua identidade foi verificada com sucesso.
+
+Agora envie ao cliente EXATAMENTE esta mensagem de coleta de dados (sem alterar):
+
+${resolvedMsgTemplate}
+
+**REGRAS:**
+- Envie a mensagem acima EXATAMENTE como está
+- NÃO pergunte um campo por vez — envie TUDO de uma vez
+- Após o cliente responder com todos os dados, use \`create_ticket\``;
+          console.log('[ai-autopilot-chat] 🎫 identityWallNote: description_template soberano — envia verbatim');
+        } else if (nodeObjective) {
+          // 🎯 Sem template mas com objective — campo a campo
           const fieldsReference = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
           
           identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — SEGUIR OBJECTIVE DO NÓ:**
@@ -7070,7 +7093,28 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
     }
 
     const nodeObjectiveForOTP = flow_context?.objective;
-    const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? (nodeObjectiveForOTP ? `
+    const hasDescTemplateForOTP = !!(flow_context as any)?.ticketConfig?.description_template;
+    const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? (hasDescTemplateForOTP ? `
+
+✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
+${originalIntentLabel ? `
+🎯 INTENÇÃO ORIGINAL DO CLIENTE: O cliente JÁ informou que deseja realizar um **${originalIntentLabel}**.
+NÃO pergunte novamente o que ele quer fazer. NÃO ofereça menu A/B. Prossiga DIRETAMENTE com a coleta de dados para ${originalIntentLabel}.
+` : ''}
+🎫 TEMPLATE DO ADMINISTRADOR (PRIORIDADE MÁXIMA — ENVIE VERBATIM):
+
+ENVIE EXATAMENTE esta mensagem estruturada para o cliente (adapte apenas o tom):
+
+"${structuredCollectionMessage}"
+
+REGRAS PÓS-OTP:
+- Peça TODOS os campos faltantes numa ÚNICA mensagem usando o formato estruturado acima.
+- NÃO pergunte um campo por vez. Envie a lista completa de uma só vez.
+- NÃO busque na base de conhecimento para pedidos de saque/reembolso — sua ação é COLETAR dados.
+- NÃO emita [[FLOW_EXIT]]. Permaneça no nó até coletar TODOS os campos necessários.
+- Após o cliente responder com todos os dados, confirme e crie o ticket com create_ticket.
+- NÃO peça verificação adicional — o OTP já foi validado.
+` : nodeObjectiveForOTP ? `
 
 ✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
 ${originalIntentLabel ? `
@@ -8681,15 +8725,20 @@ Para liberar operações financeiras como saque, preciso transferir você para u
 
               // Build smart collection fields
               // 🆕 REFATORADO: Usa buildCollectionMessage como fonte única de verdade
-              const nodeObjectiveOTPHandler = flow_context?.objective;
+          const nodeObjectiveOTPHandler = flow_context?.objective;
+              const hasDescTemplateOTPHandler = !!(flow_context as any)?.ticketConfig?.description_template;
               const otpCollectionMsg = buildCollectionMessage(flow_context, verifiedContact.first_name, contact?.email, contact?.phone, {
                 prefix: '',
                 intent: detectedIntent ? `seu ${detectedIntent}` : 'sua solicitação',
                 format: 'plain'
               });
 
-              if (detectedIntent && nodeObjectiveOTPHandler) {
-                // 🎯 Fluxo soberano: intent detectada + objective configurado → confirmação curta, LLM segue objective
+              if (detectedIntent && hasDescTemplateOTPHandler) {
+                // 🎫 Template do IA Response é soberano — enviar verbatim (tudo de uma vez)
+                assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅\n\nEntendi que você quer realizar um **${detectedIntent}**. Para dar andamento, preciso dos seguintes dados:\n\n${otpCollectionMsg}\n\n⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
+                console.log('[ai-autopilot-chat] 🎫 OTP handler: description_template soberano — envia verbatim');
+              } else if (detectedIntent && nodeObjectiveOTPHandler) {
+                // 🎯 Sem template mas com objective — confirmação curta, LLM segue objective
                 assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅\n\nEntendi que você quer realizar um **${detectedIntent}**. Vou dar continuidade ao seu atendimento.`;
                 console.log('[ai-autopilot-chat] 🎯 OTP handler: respeitando objective do nó (não envia template literal)');
               } else if (detectedIntent) {
@@ -8925,6 +8974,22 @@ Via: Atendimento Automatizado (IA)`;
               console.log('[ai-autopilot-chat] âœ… Ticket criado com sucesso:', ticket.id);
               
               ticketCreatedSuccessfully = true; // 🔒 Marcar sucesso (previne duplicação no fallback)
+
+              // 🏷️ Inserir tag_ids do ticket config (se configurado no fluxo)
+              if (tc?.tag_ids?.length > 0 && ticket?.id) {
+                try {
+                  const tagInserts = tc.tag_ids.map((tid: string) => ({
+                    ticket_id: ticket.id,
+                    tag_id: tid,
+                  }));
+                  await supabaseClient
+                    .from('ticket_tags')
+                    .upsert(tagInserts, { onConflict: 'ticket_id,tag_id', ignoreDuplicates: true });
+                  console.log('[ai-autopilot-chat] 🏷️ Tags do fluxo aplicadas ao ticket:', tc.tag_ids.length);
+                } catch (tagErr) {
+                  console.warn('[ai-autopilot-chat] ⚠️ Erro ao inserir tag_ids no ticket:', tagErr);
+                }
+              }
               
               // âœ… ENVIAR EMAIL DE CONFIRMAÇÃO
               try {
@@ -9868,9 +9933,12 @@ Conversa: ${conversationId}`;
         if (hasRecentOTPVerification && hasSaqueInFallback) {
           console.log('[ai-autopilot-chat] 🛡️ FIX#57AA2190: FALLBACK BLOQUEADO — OTP verificado + saque detectado');
           const nodeObjectiveFbBlocker = flow_context?.objective;
-          const pixResponseFb = nodeObjectiveFbBlocker
-            ? `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`
-            : buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone);
+          const hasDescTemplateFbBlocker = !!(flow_context as any)?.ticketConfig?.description_template;
+          const pixResponseFb = hasDescTemplateFbBlocker
+            ? buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone)
+            : (nodeObjectiveFbBlocker
+              ? `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`
+              : buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone));
           const { data: savedMsgFb } = await supabaseClient.from('messages').insert({
             conversation_id: conversationId, content: pixResponseFb,
             sender_type: 'user', is_ai_generated: true, channel: responseChannel
