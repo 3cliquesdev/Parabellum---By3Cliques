@@ -6162,6 +6162,22 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       console.log('[ai-autopilot-chat] 🧪 Sandbox training: fonte desabilitada nas configurações');
     }
     
+    // 🏷️ FASE 1.5: Carregar tags disponíveis para classificação contextual pela IA
+    let availableTagsContext = '';
+    try {
+      const { data: availTags } = await supabaseClient
+        .from('tags')
+        .select('name')
+        .in('category', ['conversation', 'ticket'])
+        .order('name', { ascending: true });
+      if (availTags && availTags.length > 0) {
+        availableTagsContext = `\n\n**🏷️ TAGS DISPONÍVEIS PARA CLASSIFICAÇÃO:**\nUse tag_conversation com o nome EXATO de uma das tags abaixo para classificar o atendimento antes de encerrar:\n${availTags.map(t => `- ${t.name}`).join('\n')}`;
+        console.log(`[ai-autopilot-chat] 🏷️ ${availTags.length} tags carregadas para contexto`);
+      }
+    } catch (tagLoadErr) {
+      console.error('[ai-autopilot-chat] ⚠️ Erro ao carregar tags:', tagLoadErr);
+    }
+
     // FASE 2: Preparar contexto financeiro (CPF mascarado)
     const contactCPF = contact.document || ''; // CPF completo
     const maskedCPF = contactCPF.length >= 4 ? `***.***.***-${contactCPF.slice(-2)}` : 'Não cadastrado';
@@ -7666,10 +7682,11 @@ Quando cliente mencionar produto errado, defeito, troca ou devolução:
 - verify_otp_code: Valide códigos OTP de 6 dígitos
 - request_human_agent: Transfira para atendente humano quando: 1) Cliente disser que dados estão INCORRETOS, 2) Cliente pedir explicitamente atendente humano, 3) Situação muito complexa que você não consegue resolver.
 - check_tracking: Consulta rastreio de pedidos. Use quando cliente perguntar sobre entrega ou status de envio.
-- close_conversation: Encerre SOMENTE quando o cliente indicar CLARAMENTE que não tem mais dúvidas (ex: "era só isso", "não tenho mais dúvidas", "é isso", "pode encerrar"). NÃO interprete agradecimentos ("obrigado", "valeu", "muito obrigado") como sinal de encerramento — agradecer é educação, não significa que acabou. SEMPRE pergunte antes (customer_confirmed=false). Só use customer_confirmed=true após cliente confirmar "sim". Se cliente disser "não" ou tiver mais dúvidas, continue normalmente.
+- tag_conversation: SEMPRE use ANTES de close_conversation para classificar o atendimento. Escolha a tag que melhor descreve o assunto tratado. Exemplos: Cliente perguntou sobre entrega → "5.01 Informações sobre entrega", dúvidas gerais → "1.01 Duvidas gerais", saque → "6.05 Saque do saldo", cancelamento → "7.01 Cancelamento de assinatura". Use o nome EXATO da tag conforme listado.
+- close_conversation: Encerre SOMENTE quando o cliente indicar CLARAMENTE que não tem mais dúvidas (ex: "era só isso", "não tenho mais dúvidas", "é isso", "pode encerrar"). NÃO interprete agradecimentos ("obrigado", "valeu", "muito obrigado") como sinal de encerramento — agradecer é educação, não significa que acabou. SEMPRE pergunte antes (customer_confirmed=false). Só use customer_confirmed=true após cliente confirmar "sim". Se cliente disser "não" ou tiver mais dúvidas, continue normalmente. IMPORTANTE: SEMPRE chame tag_conversation ANTES de close_conversation.
 - classify_and_resolve_ticket: Após encerrar conversa (close_conversation confirmado), classifique e registre a resolução. Use a categoria mais adequada do enum. Escreva summary curto e resolution_notes objetivo.
 
-${knowledgeContext}${sandboxTrainingContext}${identityWallNote}
+${knowledgeContext}${sandboxTrainingContext}${identityWallNote}${availableTagsContext}
 
 **Contexto do Cliente:**
 - Nome: ${contactName}${contactCompany}
@@ -7842,6 +7859,21 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
               }
             },
             required: ['reason']
+          }
+        }
+      },
+      // 🆕 Tool: tag_conversation - Classificação contextual da conversa
+      {
+        type: 'function',
+        function: {
+          name: 'tag_conversation',
+          description: 'Aplica a tag de classificação na conversa baseada no atendimento prestado. Use SEMPRE ANTES de close_conversation. Escolha a tag que melhor representa o motivo do atendimento.',
+          parameters: {
+            type: 'object',
+            properties: {
+              tag_name: { type: 'string', description: 'Nome EXATO da tag a aplicar (ex: "5.01 Informações sobre entrega", "1.01 Duvidas gerais", "6.05 Saque do saldo")' }
+            },
+            required: ['tag_name']
           }
         }
       },
@@ -9915,6 +9947,53 @@ Por favor, volte a consultar no **fim do dia** ou amanhã pela manhã para verif
           } catch (error) {
             console.error('[ai-autopilot-chat] ❌ Erro ao executar handoff manual:', error);
             assistantMessage = 'Vou transferir você para um atendente humano. Por favor, aguarde um momento.';
+          }
+        }
+        // TOOL: tag_conversation - Classificação contextual da conversa
+        else if (toolCall.function.name === 'tag_conversation') {
+          try {
+            const args = safeParseToolArgs(toolCall.function.arguments);
+            console.log('[ai-autopilot-chat] 🏷️ tag_conversation chamado:', args);
+            
+            const tagName = (args.tag_name || '').trim();
+            if (!tagName) {
+              console.warn('[ai-autopilot-chat] ⚠️ tag_conversation: tag_name vazio');
+            } else {
+              // Buscar tag pelo nome (busca flexível)
+              const { data: tagRow } = await supabaseClient
+                .from('tags')
+                .select('id, name')
+                .ilike('name', tagName)
+                .maybeSingle();
+              
+              if (tagRow) {
+                // Upsert em conversation_tags
+                const { error: insertErr } = await supabaseClient
+                  .from('conversation_tags')
+                  .upsert(
+                    { conversation_id: conversationId, tag_id: tagRow.id },
+                    { onConflict: 'conversation_id,tag_id' }
+                  );
+                if (insertErr) {
+                  console.error('[ai-autopilot-chat] ❌ Erro ao inserir conversation_tag:', insertErr);
+                } else {
+                  console.log(`[ai-autopilot-chat] ✅ Tag "${tagRow.name}" aplicada na conversa`);
+                }
+                
+                // Proteger tag contra remoção automática
+                await supabaseClient
+                  .from('protected_conversation_tags')
+                  .upsert(
+                    { conversation_id: conversationId, tag_id: tagRow.id },
+                    { onConflict: 'conversation_id,tag_id' }
+                  );
+              } else {
+                console.warn(`[ai-autopilot-chat] ⚠️ Tag "${tagName}" não encontrada no banco`);
+              }
+            }
+            // Não altera assistantMessage — tag é operação silenciosa
+          } catch (error) {
+            console.error('[ai-autopilot-chat] ❌ Erro em tag_conversation:', error);
           }
         }
         // TOOL: close_conversation - Encerramento autônomo com confirmação
