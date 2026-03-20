@@ -3939,6 +3939,7 @@ serve(async (req) => {
               forbidSupport: currentNode.data?.forbid_support ?? false,
               forbidConsultant: currentNode.data?.forbid_consultant ?? false,
               ticketConfig: currentNode.data?.ticket_config || null,
+              closeTagId: currentNode.data?.close_tag_id || null,
               otpVerified: collectedData.__ai_otp_verified === true,
               smartCollectionEnabled: currentNode.data?.smart_collection_enabled ?? false,
               smartCollectionFields: currentNode.data?.smart_collection_fields || [],
