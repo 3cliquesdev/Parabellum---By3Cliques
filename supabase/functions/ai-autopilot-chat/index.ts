@@ -9001,10 +9001,7 @@ ${otpCollectionMsg}
                 .replace(/\{\{bank\}\}/g, args.bank || '');
               if (!ticketSubject.trim()) ticketSubject = args.subject;
             }
-            // 🆕 FIX Bug 4: Resolver placeholders no subject caso LLM tenha copiado o template
-            if (ticketSubject && /\{\{/.test(ticketSubject)) {
-              ticketSubject = resolveTemplate(ticketSubject);
-            }
+            // 🆕 FIX Bug 4: Resolver placeholders no subject — deferred until resolveTemplate is defined below
             if (!ticketSubject || /\{\{/.test(ticketSubject)) {
               ticketSubject = args.order_id
                 ? `${(args.issue_type || '').toUpperCase()} - Pedido ${args.order_id}`
