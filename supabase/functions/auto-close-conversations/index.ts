@@ -1082,7 +1082,7 @@ Deno.serve(async (req) => {
                 // Fallback: usar tag "Falta de Interação"
                 await supabase.from('conversation_tags').upsert({
                   conversation_id: conv.id,
-                  tag_id: FALTA_INTERACAO_TAG_ID,
+                  tag_id: LEGACY_FALTA_INTERACAO_TAG_ID,
                 }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
               }
 
