@@ -1115,9 +1115,6 @@ Deno.serve(async (req) => {
             } catch (err) {
               console.error(`[Auto-Close] Error closing after-hours conversation ${conv.id}:`, err);
             }
-            } catch (err) {
-              console.error(`[Auto-Close] Error closing after-hours conversation ${conv.id}:`, err);
-            }
           }
         } else {
           console.log('[Auto-Close] 🌙 No waiting_human conversations to close after-hours');
