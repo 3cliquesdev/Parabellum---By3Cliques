@@ -6664,7 +6664,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // OTP PARA ACOES FINANCEIRAS (SAQUE, REEMBOLSO, ESTORNO)
     // ============================================================
     // - Cliente pede SAQUE/REEMBOLSO/ESTORNO -> OTP para seguranca
-    // - Cancelamento Kiwify -> Sem OTP
+    // - Cancelamento de assinatura -> Sem OTP
     // - Duvida informativa -> Sem OTP
     // ============================================================
     if (contactHasEmail && isFinancialActionRequest && !hasRecentOTPVerification) {
