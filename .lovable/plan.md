@@ -1,36 +1,48 @@
 
 
-## Diagnóstico Confirmado
+## Auditoria: Fix de `withdrawal_amount` — Status Atual
 
-O código **ainda não foi alterado**. `withdrawal_amount` continua como `type: 'number'` (linha 7351) e não há instruções no prompt para aceitar texto livre como "todo saldo da carteira".
+### O que JÁ foi aplicado corretamente
+1. **Schema da tool `create_ticket`** (linha 7366-7368): `withdrawal_amount` mudou de `number` para `string` ✅
+2. **Regras de Extração Tolerante** (linhas 7271-7283): Prompt com exemplos e instrução anti-desistência ✅
+3. **Referências `.replace()`** (linhas 8748, 8790, 8816): Usam `args.withdrawal_amount` diretamente como string ✅
 
-## Plano de Correção — 3 edições no `ai-autopilot-chat/index.ts` + deploy
+### BUG REMANESCENTE — Vai crashar em produção
 
-### 1. Mudar `withdrawal_amount` de `number` para `string` (linha 7350-7353)
+**Linhas 1171 e 1182** na função `createTicketSuccessMessage()` ainda chamam `.toFixed(2)` no `withdrawalData.amount`, que agora é string:
 
 ```typescript
-withdrawal_amount: {
-  type: 'string',
-  description: '[APENAS PARA SAQUE] Valor solicitado pelo cliente. Pode ser numérico ("150.00") ou texto livre ("todo saldo", "tudo", "valor total da carteira"). Aceite QUALQUER formato que o cliente usar.'
-},
+// Linha 1171 — VAI CRASHAR com "todo saldo da carteira".toFixed(2)
+valor: withdrawalData.amount.toFixed(2),
+
+// Linha 1182 — MESMO BUG
+Valor Solicitado: R$ ${withdrawalData.amount.toFixed(2)}
 ```
 
-### 2. Atualizar referências que usam `.toFixed(2)` (linhas 8732, 8774, 8800)
+Quando o cliente enviar "todo saldo da carteira", o ticket será criado com sucesso, mas a **mensagem de confirmação vai dar erro de runtime** (`TypeError: toFixed is not a function`), resultando em erro 500 e o cliente não receberá confirmação.
 
-Como agora é string, substituir `args.withdrawal_amount.toFixed(2)` por `args.withdrawal_amount` diretamente (sem `.toFixed()`), pois pode ser "todo saldo da carteira".
+### Plano de Correção
 
-### 3. Adicionar instrução anti-desistência no prompt pós-OTP
+**1 edição em `supabase/functions/ai-autopilot-chat/index.ts`**
 
-Na seção de regras pós-OTP, adicionar:
+Substituir `.toFixed(2)` por lógica que detecta se é numérico:
 
-- Se o cliente usar labels diferentes ("Pix email" → interpretar como chave PIX), extrair pelo contexto
-- Se "Valor" for texto livre ("todo saldo", "tudo", "valor total"), usar como `withdrawal_amount` diretamente — NÃO exigir número
-- NUNCA responder "Não consegui resolver" após coleta de dados — SEMPRE criar o ticket com o que tem
+```typescript
+// Helper inline: se for número, formata; se for texto, usa direto
+const formatAmount = (val: any) => {
+  const num = parseFloat(val);
+  return isNaN(num) ? String(val) : num.toFixed(2);
+};
+```
 
-### 4. Deploy da Edge Function
+Aplicar nas linhas 1171 e 1182:
+- `valor: formatAmount(withdrawalData.amount)` 
+- `Valor Solicitado: R$ ${formatAmount(withdrawalData.amount)}`
 
-Após as edições, deploy do `ai-autopilot-chat`.
+**2. Deploy da Edge Function**
 
-### Arquivos modificados
-- `supabase/functions/ai-autopilot-chat/index.ts` — 3 edições pontuais
+### Resultado
+- Valor numérico ("150") → exibe "R$ 150.00"
+- Valor texto ("todo saldo da carteira") → exibe "R$ todo saldo da carteira"
+- Zero crashes, ticket + confirmação funcionam 100%
 
