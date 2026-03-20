@@ -9076,6 +9076,10 @@ Via: Atendimento Automatizado (IA)`;
             if (ticketDescription && /\{\{/.test(ticketDescription)) {
               ticketDescription = resolveTemplate(ticketDescription);
             }
+            // 🆕 FIX Bug 4 (deferred): Resolver placeholders no subject agora que resolveTemplate existe
+            if (ticketSubject && /\{\{/.test(ticketSubject)) {
+              ticketSubject = resolveTemplate(ticketSubject);
+            }
             if (tc?.description_template) {
               const templatedDesc = resolveTemplate(tc.description_template);
               if (templatedDesc.trim()) ticketDescription = templatedDesc;

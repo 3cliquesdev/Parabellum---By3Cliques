@@ -40,12 +40,12 @@ async function generateAndSaveContactSummary(
       .from("contacts")
       .select("ai_summary, first_name, last_name")
       .eq("id", contactId)
-      .single();
+      .single() as { data: { ai_summary: string | null; first_name: string; last_name: string } | null };
 
     const previousSummary = contactData?.ai_summary || "";
     const contactName = `${contactData?.first_name || ""} ${contactData?.last_name || ""}`.trim();
 
-    const conversationText = messages
+    const conversationText = (messages as { sender_type: string; content: string }[])
       .map(m => `${m.sender_type === "contact" ? "Cliente" : "Atendente/IA"}: ${m.content}`)
       .join("\n");
 
