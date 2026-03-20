@@ -6079,79 +6079,9 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // Responde imediatamente com a resposta padrao Kiwify
     // SEM passar pelo sistema de confianca, SEM pedir email
     // ============================================================
+    // Cancelamento agora é tratado pelo fluxo visual + KB (removido bypass hardcoded)
     if (isCancellationRequest) {
-      console.log('[ai-autopilot-chat] CANCELAMENTO DETECTADO - Bypass direto para resposta Kiwify');
-      
-      const cancellationResponse = `Entendi! O cancelamento de cursos/assinaturas é feito diretamente pela plataforma Kiwify.
-
-📌 Você tem *7 dias de garantia* a partir da compra para solicitar reembolso.
-
-🔗 *Acesse aqui para cancelar:* https://reembolso.kiwify.com.br/login
-
-Use o mesmo email da compra para fazer login e solicitar o reembolso.
-
-Posso ajudar em mais alguma coisa?`;
-      
-      // Salvar mensagem
-      const { data: cancellationMsgData } = await supabaseClient
-        .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          content: cancellationResponse,
-          sender_type: 'user',
-          is_ai_generated: true,
-          channel: responseChannel
-        })
-        .select('id')
-        .single();
-      
-      // Atualizar last_message_at
-      await supabaseClient
-        .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', conversationId);
-      
-      // Enviar via WhatsApp se necessário
-      if (responseChannel === 'whatsapp' && contact?.phone && cancellationMsgData) {
-        const whatsappResult = await getWhatsAppInstanceForConversation(
-          supabaseClient, 
-          conversationId, 
-          conversation.whatsapp_instance_id,
-          conversation
-        );
-        
-        if (whatsappResult) {
-          await sendWhatsAppMessage(
-            supabaseClient,
-            whatsappResult,
-            contact.phone,
-            cancellationResponse,
-            conversationId,
-            contact.whatsapp_id
-          );
-        }
-      }
-      
-      // Log de qualidade
-      await supabaseClient.from('ai_quality_logs').insert({
-        conversation_id: conversationId,
-        contact_id: contact.id,
-        customer_message: customerMessage,
-        ai_response: cancellationResponse,
-        action_taken: 'direct_cancellation_bypass',
-        confidence_score: 1,
-        articles_count: 0
-      });
-      
-      return new Response(JSON.stringify({
-        status: 'success',
-        message: cancellationResponse,
-        type: 'direct_cancellation_response',
-        bypassed_ai: true,
-        reason: 'Cancelamento de assinatura detectado - resposta direta sem necessidade de identificação'
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      console.log('[ai-autopilot-chat] CANCELAMENTO DETECTADO - delegando para fluxo/KB (sem bypass hardcoded)');
     }
 
     // Verificar se tem verificação OTP recente (1 HORA para operações financeiras)
