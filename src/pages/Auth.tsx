@@ -38,6 +38,9 @@ export default function Auth() {
     role,
     loading: roleLoading
   } = useUserRole();
+  const { data: crmBranding } = useCRMBranding();
+  const brandName = crmBranding?.name || "CRM";
+  const brandLogo = crmBranding?.logo_url || logoFallback;
 
   // Redirect based on role after authentication
   useEffect(() => {
