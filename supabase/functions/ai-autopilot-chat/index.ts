@@ -2204,20 +2204,24 @@ serve(async (req) => {
                 const hasSaqueContextPriority = saqueRegexPriority.test(customerMessage) || 
                   messageHistory?.filter((m: any) => m.role === 'user').slice().reverse().slice(0, 6).some((m: any) => saqueRegexPriority.test(m.content));
                 
-                if (scEnabled && scFields && scFields.length > 0 && hasSaqueContextPriority) {
-                  // Usar campos do Smart Collection configurados no nó
+                // 🆕 FIX #672F64F7: Prioridade invertida — description_template PRIMEIRO, depois smartCollection
+                if (tcTemplate && hasSaqueContextPriority) {
+                  otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${tcTemplate}`;
+                } else if (scEnabled && scFields && scFields.length > 0 && hasSaqueContextPriority) {
                   const fieldLabels: Record<string, string> = {
+                    'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
+                    'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
+                    'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
+                    'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
+                    'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
                     'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
                     'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
                     'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
                     'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-                    'banco': '🏦 **Banco:** [nome do banco]',
-                    'motivo': '📝 **Motivo:** [motivo da solicitação]',
+                    'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
                   };
                   const fieldsText = scFields.map((f: string) => fieldLabels[f] || `📝 **${f}:** [preencha]`).join('\n');
                   otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsText}`;
-                } else if (tcTemplate && hasSaqueContextPriority) {
-                  otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, preciso dos seguintes dados:\n\n${tcTemplate}`;
                 } else if (hasSaqueContextPriority) {
                   otpResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
                 } else {
@@ -6392,19 +6396,41 @@ Posso ajudar em mais alguma coisa?`;
         
         // 🆕 FIX #57AA2190: Relaxar condição de primeira interação — se a mensagem ATUAL é saque,
         // enviar coleta mesmo se for a segunda interação (a IA já se apresentou na 1ª)
-        const aiInteractions = (conversation.customer_metadata as any)?.__ai?.interaction_count || 0;
-        const isFirstInteraction = aiInteractions <= 0; // Apenas bloquear se é literalmente a msg 0 (apresentação)
+        // 🆕 FIX #672F64F7 Parte C: Ler interaction_count também de flow_context.collectedData.__ai
+        const aiInteractions = (conversation.customer_metadata as any)?.__ai?.interaction_count || 
+          (flow_context as any)?.collectedData?.__ai?.interaction_count || 0;
+        const isFirstInteraction = aiInteractions <= 0;
         
         if (!recentCollectionMsg && !isFirstInteraction) {
           console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE INTENT DETECTED — enviando template de coleta PIX', {
             aiInteractions, isFirstInteraction, hasSaqueIntent, otp_reason
           });
           
-          // 🆕 FIX Bug B (#3D645F2C): Usar template do ticketConfig quando disponível
+          // 🆕 FIX #672F64F7 Parte A: description_template tem prioridade sobre smart collection
           const tcTemplate = (flow_context as any)?.ticketConfig?.description_template;
-          const pixCollectResponse = tcTemplate
-            ? `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, preciso dos seguintes dados:\n\n${tcTemplate}`
-            : `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
+          const scEnabledGuard = flow_context?.smartCollectionEnabled;
+          const scFieldsGuard = flow_context?.smartCollectionFields;
+          let pixCollectResponse: string;
+          if (tcTemplate) {
+            pixCollectResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${tcTemplate}`;
+          } else if (scEnabledGuard && scFieldsGuard && scFieldsGuard.length > 0) {
+            const fieldLabelsGuard: Record<string, string> = {
+              'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
+              'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
+              'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
+              'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
+              'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
+              'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
+              'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
+              'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
+              'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
+              'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
+            };
+            const fieldsTextGuard = scFieldsGuard.map((f: string) => fieldLabelsGuard[f] || `📝 **${f}:** [preencha]`).join('\n');
+            pixCollectResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsTextGuard}`;
+          } else {
+            pixCollectResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
+          }
           
           const { data: savedMsgPix } = await supabaseClient.from('messages').insert({
             conversation_id: conversationId, content: pixCollectResponse,
@@ -6587,19 +6613,24 @@ Posso ajudar em mais alguma coisa?`;
           const scFieldsDirect = flow_context?.smartCollectionFields;
           const tcTemplateDirect = (flow_context as any)?.ticketConfig?.description_template;
           
-          if (scEnabledDirect && scFieldsDirect && scFieldsDirect.length > 0 && hasSaqueContextDirect) {
+          // 🆕 FIX #672F64F7: description_template PRIMEIRO, depois smartCollection
+          if (tcTemplateDirect && hasSaqueContextDirect) {
+            directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${tcTemplateDirect}`;
+          } else if (scEnabledDirect && scFieldsDirect && scFieldsDirect.length > 0 && hasSaqueContextDirect) {
             const fieldLabelsDirect: Record<string, string> = {
+              'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
+              'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
+              'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
+              'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
+              'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
               'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
               'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
               'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
               'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-              'banco': '🏦 **Banco:** [nome do banco]',
-              'motivo': '📝 **Motivo:** [motivo da solicitação]',
+              'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
             };
             const fieldsTextDirect = scFieldsDirect.map((f: string) => fieldLabelsDirect[f] || `📝 **${f}:** [preencha]`).join('\n');
             directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsTextDirect}`;
-          } else if (tcTemplateDirect && hasSaqueContextDirect) {
-            directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, preciso dos seguintes dados:\n\n${tcTemplateDirect}`;
           } else if (hasSaqueContextDirect) {
             directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
           } else {
@@ -10003,19 +10034,24 @@ Conversa: ${conversationId}`;
           const scFieldsFb = flow_context?.smartCollectionFields;
           const scEnabledFb = flow_context?.smartCollectionEnabled;
           let pixResponseFb: string;
-          if (scEnabledFb && scFieldsFb && scFieldsFb.length > 0) {
+          // 🆕 FIX #672F64F7: description_template PRIMEIRO, depois smartCollection
+          if (tcTemplateFb) {
+            pixResponseFb = `✅ **Identidade confirmada!**\n\n${tcTemplateFb}`;
+          } else if (scEnabledFb && scFieldsFb && scFieldsFb.length > 0) {
             const fieldLabelsFb: Record<string, string> = {
+              'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
+              'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
+              'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
+              'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
+              'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
               'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
               'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
               'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
               'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-              'banco': '🏦 **Banco:** [nome do banco]',
-              'motivo': '📝 **Motivo:** [motivo da solicitação]',
+              'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
             };
             const fieldsTextFb = scFieldsFb.map((f: string) => fieldLabelsFb[f] || `📝 **${f}:** [preencha]`).join('\n');
             pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, me envie os dados abaixo:\n\n${fieldsTextFb}`;
-          } else if (tcTemplateFb) {
-            pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, preciso dos seguintes dados:\n\n${tcTemplateFb}`;
           } else {
             pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
           }
