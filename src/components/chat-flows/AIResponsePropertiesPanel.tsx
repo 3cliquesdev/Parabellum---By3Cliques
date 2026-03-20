@@ -10,6 +10,7 @@ import { usePersonas } from "@/hooks/usePersonas";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useTicketCategories } from "@/hooks/useTicketCategories";
 import { useSupportAgents } from "@/hooks/useSupportAgents";
+import { useTags } from "@/hooks/useTags";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
