@@ -2968,7 +2968,7 @@ serve(async (req) => {
                   supabaseClient.from('contacts').update(updatePayload).eq('id', contact.id).then(() => {
                     supabaseClient.from('interactions').insert({
                       customer_id: contact.id, type: 'internal_note',
-                      content: `âœ… Cliente identificado via autopilot inline Kiwify. Produtos: ${products.join(', ')}`,
+                      content: `âœ… Cliente identificado via validação de compra inline. Produtos: ${products.join(', ')}`,
                       channel: 'system',
                     });
                   });
@@ -3098,7 +3098,7 @@ serve(async (req) => {
         }
       }
     } catch (prodErr) {
-      console.warn('[ai-autopilot-chat] âš ï¸ Erro ao buscar produtos Kiwify (não crítico):', prodErr);
+      console.warn('[ai-autopilot-chat] âš ï¸ Erro ao buscar produtos do contato (não crítico):', prodErr);
     }
 
     // FASE 1: Verificar se deve pular cache para experiência personalizada
@@ -4838,7 +4838,7 @@ Responda APENAS: skip ou search`
       } // Fechamento do else de canAccessKnowledgeBase
     }
 
-    // 5. FASE 1: Identity Wall - Verificar se contato tem email OU é cliente Kiwify validado
+    // 5. FASE 1: Identity Wall - Verificar se contato tem email OU é cliente validado (compra verificada)
     const contactEmail = customer_context?.email || contact.email;
     const contactHasEmail = !!contactEmail;
     const contactName = customer_context?.name || `${contact.first_name} ${contact.last_name}`.trim();
@@ -4893,7 +4893,7 @@ Responda APENAS: skip ou search`
       personaToneInstruction = '\n\nTom: Entusiasmado e consultivo. Este é um lead quente com alta pontuação. Seja proativo em ajudar e guiar.';
     }
     
-    // 🆕 CORREÇNÃO: Cliente é "conhecido" se tem email OU se foi validado via Kiwify OU se está na base como customer
+    // 🆕 CORREÇNÃO: Cliente é "conhecido" se tem email OU se foi validado via eventos de compra OU se está na base como customer
     const isKiwifyValidated = contact.kiwify_validated === true;
     const isCustomerInDatabase = contact.status === 'customer';
     // 🆕 Cliente identificado pelo telefone (webhook já verificou que existe no banco)
@@ -6005,7 +6005,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     // 🔒 DEFINIÇÁ•ES UNIFICADAS DE CLIENTE (evita inconsistências)
     // ============================================================
     // âœ… CORREÇNÃO: Cliente verificado = tem email cadastrado (independente de status)
-    // Status é atualizado automaticamente pelo webhook Kiwify quando há compra
+    // Status é atualizado automaticamente pelo webhook de pagamento quando há compra
     const isContactVerified = !!contact.email;
     const hasCompleteCadastro = !!contactCPF; // CPF cadastrado
     const canAccessFinancialFeatures = isContactVerified && hasCompleteCadastro;
@@ -6076,7 +6076,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
 
     // ============================================================
     // BYPASS DIRETO: CANCELAMENTO DE ASSINATURA
-    // Responde imediatamente com a resposta padrao Kiwify
+    // Responde imediatamente com a resposta padrao de cancelamento
     // SEM passar pelo sistema de confianca, SEM pedir email
     // ============================================================
     // Cancelamento agora é tratado pelo fluxo visual + KB (removido bypass hardcoded)
