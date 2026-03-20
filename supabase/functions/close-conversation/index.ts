@@ -40,12 +40,12 @@ async function generateAndSaveContactSummary(
       .from("contacts")
       .select("ai_summary, first_name, last_name")
       .eq("id", contactId)
-      .single();
+      .single() as { data: { ai_summary: string | null; first_name: string; last_name: string } | null };
 
     const previousSummary = contactData?.ai_summary || "";
     const contactName = `${contactData?.first_name || ""} ${contactData?.last_name || ""}`.trim();
 
-    const conversationText = messages
+    const conversationText = (messages as { sender_type: string; content: string }[])
       .map(m => `${m.sender_type === "contact" ? "Cliente" : "Atendente/IA"}: ${m.content}`)
       .join("\n");
 
@@ -73,7 +73,7 @@ async function generateAndSaveContactSummary(
     const summary = llmData.choices?.[0]?.message?.content?.trim();
     if (!summary) return;
 
-    await supabase
+    await (supabase as any)
       .from("contacts")
       .update({ ai_summary: summary, ai_summary_updated_at: new Date().toISOString() })
       .eq("id", contactId);
@@ -483,9 +483,9 @@ _Responda apenas com o número._`;
 
     // 🧠 Gerar resumo de IA e persistir no contato (assíncrono, não bloqueia resposta)
     if (conversation.contact_id) {
-      EdgeRuntime.waitUntil(
-        generateAndSaveContactSummary(supabase, conversationId, conversation.contact_id)
-      );
+      // Fire-and-forget: generate summary without blocking response
+      generateAndSaveContactSummary(supabase, conversationId, conversation.contact_id)
+        .catch(err => console.error("[close-conversation] ai_summary background error:", err));
     }
 
     console.log(`[close-conversation] Completed successfully`);

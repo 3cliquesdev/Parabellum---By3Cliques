@@ -9001,10 +9001,7 @@ ${otpCollectionMsg}
                 .replace(/\{\{bank\}\}/g, args.bank || '');
               if (!ticketSubject.trim()) ticketSubject = args.subject;
             }
-            // 🆕 FIX Bug 4: Resolver placeholders no subject caso LLM tenha copiado o template
-            if (ticketSubject && /\{\{/.test(ticketSubject)) {
-              ticketSubject = resolveTemplate(ticketSubject);
-            }
+            // 🆕 FIX Bug 4: Resolver placeholders no subject — deferred until resolveTemplate is defined below
             if (!ticketSubject || /\{\{/.test(ticketSubject)) {
               ticketSubject = args.order_id
                 ? `${(args.issue_type || '').toUpperCase()} - Pedido ${args.order_id}`
@@ -9078,6 +9075,10 @@ Via: Atendimento Automatizado (IA)`;
             // 🆕 FIX: Resolver placeholders no args.description caso LLM copie o template literalmente
             if (ticketDescription && /\{\{/.test(ticketDescription)) {
               ticketDescription = resolveTemplate(ticketDescription);
+            }
+            // 🆕 FIX Bug 4 (deferred): Resolver placeholders no subject agora que resolveTemplate existe
+            if (ticketSubject && /\{\{/.test(ticketSubject)) {
+              ticketSubject = resolveTemplate(ticketSubject);
             }
             if (tc?.description_template) {
               const templatedDesc = resolveTemplate(tc.description_template);
