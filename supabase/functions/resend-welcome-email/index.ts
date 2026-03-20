@@ -200,7 +200,7 @@ serve(async (req) => {
           </h3>
           
           <p style="color: #475569; line-height: 1.6; margin-bottom: 15px;">
-            Ao utilizar suas credenciais, você declara ciência das seguintes normas de segurança da informação da PARABELLUM | 3Cliques:
+            Ao utilizar suas credenciais, você declara ciência das seguintes normas de segurança da informação da ${brand.brandName}:
           </p>
           
           <div style="margin: 20px 0;">
