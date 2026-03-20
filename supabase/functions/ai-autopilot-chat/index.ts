@@ -8087,8 +8087,14 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }
     }
 
+    // 🆕 FIX Bug D (#EEFFF1DD): Proteção pós-LLM — NUNCA retornar silenciosamente
+    // Se LLM retornou vazio e sem tool_calls, forçar uma resposta contextual
     if (!rawAIContent && !toolCalls.length) {
-      console.error('[ai-autopilot-chat] ❌ AI returned empty content after all retries, no tool calls');
+      console.error('[ai-autopilot-chat] ❌ AI returned empty content after all retries, no tool calls — applying emergency fallback');
+      const emergencyFallback = flowFallbackMessage || flowObjective 
+        || (persona?.name ? `Olá! Sou ${persona.name}, sua assistente virtual. Como posso te ajudar hoje?` : 'Como posso te ajudar hoje?');
+      rawAIContent = emergencyFallback;
+      console.log('[ai-autopilot-chat] 🆘 Emergency fallback aplicado:', emergencyFallback.substring(0, 80));
     }
 
     // 🔧 FIX 3: Guard de resposta vazia — normalizar antes de usar

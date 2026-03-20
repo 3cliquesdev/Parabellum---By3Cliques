@@ -1201,12 +1201,47 @@ serve(async (req) => {
                       }
                     );
                     if (!greetResponse.ok) {
-                      console.error("[meta-whatsapp-webhook] ❌ Proactive greeting error:", await greetResponse.text());
+                      const errText = await greetResponse.text();
+                      console.error("[meta-whatsapp-webhook] ❌ Proactive greeting error:", errText);
+                      // 🆕 FIX Bug A (#EEFFF1DD): Fallback — enviar saudação padrão direto via WhatsApp
+                      try {
+                        const fallbackGreeting = "Olá! Sou a assistente virtual da 3Cliques. Posso te ajudar com informações financeiras, saques, reembolsos e dúvidas gerais. Como posso te ajudar? 😊";
+                        await supabase.from('messages').insert({
+                          conversation_id: conversation.id, content: fallbackGreeting,
+                          sender_type: 'user', is_ai_generated: true, channel: 'whatsapp'
+                        });
+                        const sendUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-meta-whatsapp`;
+                        await fetch(sendUrl, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+                          body: JSON.stringify({ instance_id: instance.id, phone_number: fromNumber, message: fallbackGreeting, conversation_id: conversation.id, is_bot_message: true })
+                        });
+                        console.log("[meta-whatsapp-webhook] ✅ Fallback greeting enviado direto via WhatsApp");
+                      } catch (fbErr) {
+                        console.error("[meta-whatsapp-webhook] ❌ Fallback greeting also failed:", fbErr);
+                      }
                     } else {
                       console.log("[meta-whatsapp-webhook] ✅ Saudação proativa enviada via skipInitialMessage");
                     }
                   } catch (greetErr) {
                     console.error("[meta-whatsapp-webhook] ❌ Proactive greeting exception:", greetErr);
+                    // 🆕 FIX Bug A (#EEFFF1DD): Fallback também no catch geral
+                    try {
+                      const fallbackGreeting = "Olá! Sou a assistente virtual da 3Cliques. Posso te ajudar com informações financeiras, saques, reembolsos e dúvidas gerais. Como posso te ajudar? 😊";
+                      await supabase.from('messages').insert({
+                        conversation_id: conversation.id, content: fallbackGreeting,
+                        sender_type: 'user', is_ai_generated: true, channel: 'whatsapp'
+                      });
+                      const sendUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-meta-whatsapp`;
+                      await fetch(sendUrl, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+                        body: JSON.stringify({ instance_id: instance.id, phone_number: fromNumber, message: fallbackGreeting, conversation_id: conversation.id, is_bot_message: true })
+                      });
+                      console.log("[meta-whatsapp-webhook] ✅ Fallback greeting (catch) enviado direto via WhatsApp");
+                    } catch (fbErr2) {
+                      console.error("[meta-whatsapp-webhook] ❌ Fallback greeting (catch) also failed:", fbErr2);
+                    }
                   }
                   continue;
                 }
