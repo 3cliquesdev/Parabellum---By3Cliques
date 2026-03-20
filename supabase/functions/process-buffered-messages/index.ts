@@ -314,6 +314,24 @@ serve(async (req) => {
 
     const effectiveInstanceId = instanceId || conversation.whatsapp_meta_instance_id;
 
+    // 🆕 FIX: Check skipInitialMessage in DIRECT mode (same as CRON mode)
+    if ((originalFlowData as any)?.skipInitialMessage === true) {
+      console.log(`[process-buffered-messages] ⏭️ DIRECT mode: skipInitialMessage=true → saudação proativa (msg vazia)`);
+      await callPipeline(supabase, {
+        conversationId,
+        concatenatedMessage: "",
+        contactId,
+        instanceId: effectiveInstanceId,
+        fromNumber,
+        flowContext,
+        flowData: originalFlowData,
+      });
+      return new Response(
+        JSON.stringify({ status: "processed", reason: "skip_initial_message_greeting" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     await callPipeline(supabase, {
       conversationId,
       concatenatedMessage,
