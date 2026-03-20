@@ -6385,6 +6385,44 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
               console.error('[ai-autopilot-chat] ⚠️ Erro ao salvar saque_ticket_created:', flagErr);
             }
 
+            // 🏷️ Adicionar tag "Saque do saldo" à conversa (para auto-close usar tag correta)
+            try {
+              // Primeiro tentar tag_ids do fluxo
+              const flowTagIds: string[] = tc?.tag_ids || [];
+              const tagIdsToApply: string[] = [...flowTagIds];
+
+              // Se não tem tag_ids no fluxo, buscar tag de saque pelo nome
+              if (tagIdsToApply.length === 0) {
+                const { data: saqueTag } = await supabaseClient
+                  .from('tags')
+                  .select('id')
+                  .or('name.ilike.%saque%saldo%,name.ilike.%6.05%')
+                  .maybeSingle();
+                if (saqueTag?.id) tagIdsToApply.push(saqueTag.id);
+              }
+
+              for (const tagId of tagIdsToApply) {
+                await supabaseClient
+                  .from('conversation_tags')
+                  .upsert(
+                    { conversation_id: conversationId, tag_id: tagId },
+                    { onConflict: 'conversation_id,tag_id' }
+                  );
+                // Proteger tag contra remoção acidental
+                await supabaseClient
+                  .from('protected_conversation_tags')
+                  .upsert(
+                    { conversation_id: conversationId, tag_id: tagId },
+                    { onConflict: 'conversation_id,tag_id' }
+                  );
+              }
+              if (tagIdsToApply.length > 0) {
+                console.log('[ai-autopilot-chat] 🏷️ Tag(s) saque adicionada(s) à conversa (path determinística):', tagIdsToApply);
+              }
+            } catch (tagErr) {
+              console.warn('[ai-autopilot-chat] ⚠️ Erro ao adicionar tag saque à conversa:', tagErr);
+            }
+
             const { data: savedMsg } = await supabaseClient
               .from('messages')
               .insert({ conversation_id: conversationId, content: saqueResponse, sender_type: 'user', is_ai_generated: true, channel: responseChannel })
