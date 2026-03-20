@@ -7953,7 +7953,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
         try {
           const { data: ticketData, error: ticketError } = await supabaseClient.functions.invoke(
             'generate-ticket-from-conversation',
-            { body: { conversation_id: conversationId, subject: `Solicitação financeira - ${contactName}`, priority: 'high', category: 'financial' } }
+            { body: { conversation_id: conversationId, subject: `Solicitação financeira - ${contactName}`, priority: 'high', category: 'financeiro' } }
           );
           if (!ticketError && ticketData?.ticket?.id) {
             const ticketId = ticketData.ticket.id.slice(0, 8).toUpperCase();
