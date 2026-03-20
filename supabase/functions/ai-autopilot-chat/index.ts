@@ -8732,8 +8732,12 @@ Para liberar operações financeiras como saque, preciso transferir você para u
                 format: 'plain'
               });
 
-              if (detectedIntent && nodeObjectiveOTPHandler) {
-                // 🎯 Fluxo soberano: intent detectada + objective configurado → confirmação curta, LLM segue objective
+              if (detectedIntent && hasDescTemplateOTPHandler) {
+                // 🎫 Template do IA Response é soberano — enviar verbatim (tudo de uma vez)
+                assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅\n\nEntendi que você quer realizar um **${detectedIntent}**. Para dar andamento, preciso dos seguintes dados:\n\n${otpCollectionMsg}\n\n⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
+                console.log('[ai-autopilot-chat] 🎫 OTP handler: description_template soberano — envia verbatim');
+              } else if (detectedIntent && nodeObjectiveOTPHandler) {
+                // 🎯 Sem template mas com objective — confirmação curta, LLM segue objective
                 assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅\n\nEntendi que você quer realizar um **${detectedIntent}**. Vou dar continuidade ao seu atendimento.`;
                 console.log('[ai-autopilot-chat] 🎯 OTP handler: respeitando objective do nó (não envia template literal)');
               } else if (detectedIntent) {
