@@ -17,6 +17,7 @@ interface CreateDepartmentParams {
   slow_response_alert_enabled?: boolean;
   slow_response_alert_minutes?: number | null;
   slow_response_alert_tag_id?: string | null;
+  after_hours_keep_open?: boolean;
 }
 
 export function useCreateDepartment() {

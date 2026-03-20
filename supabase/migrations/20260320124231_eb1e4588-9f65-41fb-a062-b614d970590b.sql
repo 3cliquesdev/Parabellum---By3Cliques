@@ -1,0 +1,1 @@
+ALTER TABLE public.departments ADD COLUMN IF NOT EXISTS after_hours_keep_open BOOLEAN DEFAULT false;

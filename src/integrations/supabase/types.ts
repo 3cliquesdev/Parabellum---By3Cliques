@@ -3214,6 +3214,7 @@ export type Database = {
       }
       departments: {
         Row: {
+          after_hours_keep_open: boolean | null
           ai_auto_close_minutes: number | null
           ai_auto_close_tag_id: string | null
           auto_close_enabled: boolean | null
@@ -3235,6 +3236,7 @@ export type Database = {
           whatsapp_number: string | null
         }
         Insert: {
+          after_hours_keep_open?: boolean | null
           ai_auto_close_minutes?: number | null
           ai_auto_close_tag_id?: string | null
           auto_close_enabled?: boolean | null
@@ -3256,6 +3258,7 @@ export type Database = {
           whatsapp_number?: string | null
         }
         Update: {
+          after_hours_keep_open?: boolean | null
           ai_auto_close_minutes?: number | null
           ai_auto_close_tag_id?: string | null
           auto_close_enabled?: boolean | null

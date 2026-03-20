@@ -1034,7 +1034,7 @@ Deno.serve(async (req) => {
 
         const { data: waitingConvos, error: waitingErr } = await supabase
           .from('conversations')
-          .select('id, contact_id, last_message_at, ai_mode, channel, department, whatsapp_instance_id, whatsapp_meta_instance_id, whatsapp_provider')
+          .select('id, contact_id, last_message_at, ai_mode, channel, department, whatsapp_instance_id, whatsapp_meta_instance_id, whatsapp_provider, departments:department(after_hours_keep_open)')
           .eq('status', 'open')
           .eq('ai_mode', 'waiting_human')
           .lt('last_message_at', afterHoursThreshold);
