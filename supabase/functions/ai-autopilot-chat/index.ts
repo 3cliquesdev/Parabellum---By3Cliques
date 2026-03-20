@@ -6412,7 +6412,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           isFirstInteraction,
           hasSaqueIntent,
           otp_reason,
-          post_otp_response_mode: hasDescTemplateGuard ? 'template' : (flow_context?.smartCollectionFields?.length > 0 ? 'smart_fields' : 'generic'),
+          post_otp_response_mode: hasDescTemplateGuard ? 'template' : ((flow_context?.smartCollectionFields?.length ?? 0) > 0 ? 'smart_fields' : 'generic'),
         });
         
         // 🆕 FIX #8F42B1C3: Quando OTP verificado + saque intent, SEMPRE ativar _otpJustValidated
@@ -7005,7 +7005,7 @@ Olá ${contactName}! Sua identidade foi verificada com sucesso.
 - Pedir dados de chave PIX nova — o cliente JÁ TEM um saque pendente com erro
 - Tratar como nova solicitação de saque
 - Pedir OTP novamente`;
-      } else if (otpJustValidated && (flow_context?.ticketConfig?.description_template || flow_context?.smartCollectionFields?.length > 0)) {
+      } else if (otpJustValidated && (flow_context?.ticketConfig?.description_template || (flow_context?.smartCollectionFields?.length ?? 0) > 0)) {
         const hasDescTemplateWall = !!(flow_context as any)?.ticketConfig?.description_template;
         
         if (hasDescTemplateWall) {
@@ -9056,16 +9056,17 @@ Via: Atendimento Automatizado (IA)`;
               ticketCreatedSuccessfully = true; // 🔒 Marcar sucesso (previne duplicação no fallback)
 
               // 🏷️ Inserir tag_ids do ticket config (se configurado no fluxo)
-              if (tc?.tag_ids?.length > 0 && ticket?.id) {
+              const tcAny = tc as any;
+              if (tcAny?.tag_ids?.length > 0 && ticket?.id) {
                 try {
-                  const tagInserts = tc.tag_ids.map((tid: string) => ({
+                  const tagInserts = tcAny.tag_ids.map((tid: string) => ({
                     ticket_id: ticket.id,
                     tag_id: tid,
                   }));
                   await supabaseClient
                     .from('ticket_tags')
                     .upsert(tagInserts, { onConflict: 'ticket_id,tag_id', ignoreDuplicates: true });
-                  console.log('[ai-autopilot-chat] 🏷️ Tags do fluxo aplicadas ao ticket:', tc.tag_ids.length);
+                  console.log('[ai-autopilot-chat] 🏷️ Tags do fluxo aplicadas ao ticket:', tcAny.tag_ids.length);
                 } catch (tagErr) {
                   console.warn('[ai-autopilot-chat] ⚠️ Erro ao inserir tag_ids no ticket:', tagErr);
                 }
