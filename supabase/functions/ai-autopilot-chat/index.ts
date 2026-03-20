@@ -6162,6 +6162,22 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       console.log('[ai-autopilot-chat] 🧪 Sandbox training: fonte desabilitada nas configurações');
     }
     
+    // 🏷️ FASE 1.5: Carregar tags disponíveis para classificação contextual pela IA
+    let availableTagsContext = '';
+    try {
+      const { data: availTags } = await supabaseClient
+        .from('tags')
+        .select('name')
+        .in('category', ['conversation', 'ticket'])
+        .order('name', { ascending: true });
+      if (availTags && availTags.length > 0) {
+        availableTagsContext = `\n\n**🏷️ TAGS DISPONÍVEIS PARA CLASSIFICAÇÃO:**\nUse tag_conversation com o nome EXATO de uma das tags abaixo para classificar o atendimento antes de encerrar:\n${availTags.map(t => `- ${t.name}`).join('\n')}`;
+        console.log(`[ai-autopilot-chat] 🏷️ ${availTags.length} tags carregadas para contexto`);
+      }
+    } catch (tagLoadErr) {
+      console.error('[ai-autopilot-chat] ⚠️ Erro ao carregar tags:', tagLoadErr);
+    }
+
     // FASE 2: Preparar contexto financeiro (CPF mascarado)
     const contactCPF = contact.document || ''; // CPF completo
     const maskedCPF = contactCPF.length >= 4 ? `***.***.***-${contactCPF.slice(-2)}` : 'Não cadastrado';
