@@ -8471,6 +8471,56 @@ export type Database = {
           },
         ]
       }
+      saque_operation_logs: {
+        Row: {
+          amount: string | null
+          contact_id: string | null
+          conversation_id: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          pix_key_type: string | null
+          status: string
+          step: string
+          ticket_id: string | null
+        }
+        Insert: {
+          amount?: string | null
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          pix_key_type?: string | null
+          status?: string
+          step: string
+          ticket_id?: string | null
+        }
+        Update: {
+          amount?: string | null
+          contact_id?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          pix_key_type?: string | null
+          status?: string
+          step?: string
+          ticket_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saque_operation_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_deal_filters: {
         Row: {
           created_at: string | null
