@@ -2006,7 +2006,7 @@ serve(async (req) => {
                               }
                               
                               // Transfer handling — 🔧 BUG 2 FIX: Adicionar preferred transfer (paridade com CASO 2)
-                              const DEPT_SUPORTE_FALLBACK_CV = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+                              const DEPT_SUPORTE_FALLBACK_CV = depts.SUPORTE_ID;
                               const cvTransferDept = cvFlowResult.departmentId || cvFlowResult.department;
                               if (cvFlowResult.transfer === true || cvFlowResult.action === 'transfer') {
                                 const cvDeptToUse = cvTransferDept || DEPT_SUPORTE_FALLBACK_CV;
