@@ -7526,7 +7526,7 @@ ${knowledgeContext}${sandboxTrainingContext}${identityWallNote}
 ${contactEmail ? `- Email: ${safeEmail}` : (flow_context ? '- Email: Não identificado (a IA pode ajudar sem email)' : '- Email: NÃO CADASTRADO - SOLICITAR')}
 ${contact.phone ? `- Telefone: ${safePhone}` : ''}
 - CPF: ${maskedCPF}
-${contactOrgName ? `- Organização: ${contactOrgName}` : ''}
+${contactOrgName ? `- Organização do cliente (empresa DELE, NÃO a sua): ${contactOrgName}` : ''}
 ${contactConsultantName ? `- Consultor responsável: ${contactConsultantName}` : ''}
 ${contactSellerName ? `- Vendedor responsável: ${contactSellerName}` : ''}
 ${contactTagsList.length > 0 ? `- Tags: ${contactTagsList.join(', ')}` : ''}
