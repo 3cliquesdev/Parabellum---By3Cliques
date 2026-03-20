@@ -6285,9 +6285,20 @@ Posso ajudar em mais alguma coisa?`;
           has_pix: hasPIXKey, has_value: hasValueIndicator, has_name: hasName, bypassing_ai: true
         });
         try {
+          // 🆕 FIX Bug C (#3D645F2C): Usar ticketConfig do fluxo para department_id e assigned_to
+          const tc = (flow_context as any)?.ticketConfig;
           const { data: ticketData, error: ticketError } = await supabaseClient.functions.invoke(
             'generate-ticket-from-conversation',
-            { body: { conversation_id: conversationId, subject: `Solicitação de saque - ${contactName}`, priority: 'high', category: 'financeiro' } }
+            { body: { 
+              conversation_id: conversationId, 
+              subject: tc?.subject_template 
+                ? tc.subject_template.replace(/\{\{customer_name\}\}/gi, contactName || 'Cliente')
+                : `Solicitação de saque - ${contactName}`, 
+              priority: tc?.default_priority || 'high', 
+              category: tc?.category || 'financeiro',
+              assigned_to: tc?.assigned_to || undefined,
+              department_id_override: tc?.department_id || undefined,
+            } }
           );
           if (!ticketError) {
             const ticketId = ticketData?.ticket?.id?.slice(0, 8)?.toUpperCase() || '';
@@ -6348,11 +6359,23 @@ Posso ajudar em mais alguma coisa?`;
         const recentCollectionMsg = messageHistory
           .filter((m: any) => m.role === 'assistant')
           .slice().reverse().slice(0, 3)
-          .some((m: any) => /chave\s*PIX|Nome\s*completo.*Tipo.*PIX/i.test(m.content));
+          .some((m: any) => /chave\s*PIX|Nome\s*completo.*Tipo.*PIX|Chave Pix|Banco/i.test(m.content));
         
-        if (!recentCollectionMsg) {
-          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE INTENT DETECTED — enviando template de coleta PIX');
-          const pixCollectResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
+        // 🆕 FIX Bug A (#3D645F2C): NÃO enviar template na primeira interação do nó
+        // IA deve se apresentar primeiro, mesmo com OTP prévio
+        const aiInteractions = (conversation.customer_metadata as any)?.__ai?.interaction_count || 0;
+        const isFirstInteraction = aiInteractions <= 1;
+        
+        if (!recentCollectionMsg && !isFirstInteraction) {
+          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE INTENT DETECTED — enviando template de coleta PIX', {
+            aiInteractions, isFirstInteraction, hasSaqueIntent, otp_reason
+          });
+          
+          // 🆕 FIX Bug B (#3D645F2C): Usar template do ticketConfig quando disponível
+          const tcTemplate = (flow_context as any)?.ticketConfig?.description_template;
+          const pixCollectResponse = tcTemplate
+            ? `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, preciso dos seguintes dados:\n\n${tcTemplate}`
+            : `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
           
           const { data: savedMsgPix } = await supabaseClient.from('messages').insert({
             conversation_id: conversationId, content: pixCollectResponse,
@@ -6372,6 +6395,11 @@ Posso ajudar em mais alguma coisa?`;
             response: pixCollectResponse, messageId: savedMsgPix?.id,
             debug: { reason: 'post_otp_saque_intent_collect_pix' }
           }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        } else if (isFirstInteraction) {
+          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE — primeira interação, deixando IA se apresentar', {
+            aiInteractions, hasSaqueIntent
+          });
+          // Não interceptar — deixar cair no fluxo normal para IA se apresentar
         }
       }
     }
