@@ -6279,6 +6279,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
               category: tc?.category || 'financeiro',
               assigned_to: tc?.assigned_to || undefined,
               department_id_override: tc?.department_id || undefined,
+              tag_ids: tc?.tag_ids || undefined,
             } }
           );
           if (!ticketError) {
