@@ -595,13 +595,13 @@ async function collectSalesMetrics(supabase: any, since: string, until: string) 
   };
 }
 
-async function generateAIAnalysis(metrics: any, salesMetrics: any, dateStr: string, openaiKey: string): Promise<string> {
+async function generateAIAnalysis(metrics: any, salesMetrics: any, dateStr: string, openaiKey: string, brandName: string = 'CRM'): Promise<string> {
   const aiRate = metrics.totalConvs > 0 ? ((metrics.closedByAI / metrics.totalConvs) * 100).toFixed(1) : '0';
   const escRate = metrics.totalConvs > 0 ? ((metrics.escalatedToHuman / metrics.totalConvs) * 100).toFixed(1) : '0';
 
   const channelBreakdown = Object.entries(metrics.channelCounts ?? {}).map(([ch, cnt]) => `${ch}: ${cnt}`).join(', ') || 'N/A';
 
-  const prompt = `Voce e o analista executivo da Parabellum. Sua funcao e gerar um relatorio de diagnostico DIRETO e ACIONAVEL. Nao seja gentil — seja preciso e honesto.
+  const prompt = `Voce e o analista executivo da ${brandName}. Sua funcao e gerar um relatorio de diagnostico DIRETO e ACIONAVEL. Nao seja gentil — seja preciso e honesto.
 
 Este relatorio e DIARIO. Foque no que aconteceu HOJE e como melhorar AMANHA.
 
