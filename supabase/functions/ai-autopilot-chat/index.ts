@@ -3042,7 +3042,7 @@ serve(async (req) => {
         console.warn('[ai-autopilot-chat] âš ï¸ Erro na triagem silenciosa (não crítico):', kiwifyErr);
       }
     } else {
-      console.log('[ai-autopilot-chat] âœ… Contato já validado (kiwify_validated=true), pulando triagem');
+      console.log('[ai-autopilot-chat] ✅ Contato já validado (compra verificada), pulando triagem');
     }
 
     // 🆕 BUSCAR PRODUTOS KIWIFY DO CONTATO (para injetar no contexto da IA)
