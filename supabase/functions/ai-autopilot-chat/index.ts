@@ -8781,7 +8781,7 @@ Via: Atendimento Automatizado (IA)`;
 - Chave PIX: ${args.pix_key || 'Não informada'}
 - Confirmação do Cliente: ${args.customer_confirmation ? 'Dados conferidos pelo cliente' : 'Aguardando confirmação'}
 
-**REGRAS (até 7 dias úteis):**
+**REGRAS (conforme SLA configurado):**
 - Destino: APENAS conta do titular (CPF do cliente)
 - PIX de terceiros: CANCELAR solicitação
 
