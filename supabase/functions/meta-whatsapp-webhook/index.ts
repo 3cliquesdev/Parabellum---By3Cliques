@@ -270,6 +270,8 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
       );
 
+      const depts = await resolveDepartments(supabase);
+
       for (const entry of payload.entry) {
         for (const change of entry.changes) {
           if (change.field !== "messages") continue;
