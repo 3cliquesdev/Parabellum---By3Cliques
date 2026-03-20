@@ -8771,7 +8771,7 @@ Via: Atendimento Automatizado (IA)`;
 â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 
 **DADOS DO SAQUE:**
-- Valor Solicitado: R$ ${args.withdrawal_amount.toFixed(2)}
+- Valor Solicitado: R$ ${args.withdrawal_amount}
 - Tipo da Chave PIX: ${args.pix_key_type || 'Não especificado'}
 - Chave PIX: ${args.pix_key || 'Não informada'}
 - Confirmação do Cliente: ${args.customer_confirmation ? 'Dados conferidos pelo cliente' : 'Aguardando confirmação'}
