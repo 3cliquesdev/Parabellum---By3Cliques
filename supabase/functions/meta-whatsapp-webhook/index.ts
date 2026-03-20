@@ -1230,6 +1230,7 @@ serve(async (req) => {
                         flowData: {
                           useAI: flowData.useAI,
                           aiNodeActive: flowData.aiNodeActive,
+                          skipInitialMessage: (flowData as any).skipInitialMessage || false,
                           flowId: flowData.flowId,
                           nodeId: flowData.nodeId,
                           allowedSources: (flowData as any).allowedSources,
