@@ -6412,6 +6412,7 @@ Posso ajudar em mais alguma coisa?`;
     // A validação só ocorre quando houver contexto de OTP pendente.
     const otpDigitsOnly = customerMessage.replace(/\D/g, '');
     const isOTPCode = otpDigitsOnly.length === 6;
+    // ⚠️ NÃO MOVER PARA CIMA — guard pós-OTP (L6341) usa conversation.customer_metadata diretamente
     const conversationMetadata = conversation.customer_metadata || {};
     
     // Verificar se há OTP pendente (flag explícita)
