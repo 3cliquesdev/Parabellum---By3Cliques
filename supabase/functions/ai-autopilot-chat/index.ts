@@ -6613,19 +6613,24 @@ Posso ajudar em mais alguma coisa?`;
           const scFieldsDirect = flow_context?.smartCollectionFields;
           const tcTemplateDirect = (flow_context as any)?.ticketConfig?.description_template;
           
-          if (scEnabledDirect && scFieldsDirect && scFieldsDirect.length > 0 && hasSaqueContextDirect) {
+          // 🆕 FIX #672F64F7: description_template PRIMEIRO, depois smartCollection
+          if (tcTemplateDirect && hasSaqueContextDirect) {
+            directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${tcTemplateDirect}`;
+          } else if (scEnabledDirect && scFieldsDirect && scFieldsDirect.length > 0 && hasSaqueContextDirect) {
             const fieldLabelsDirect: Record<string, string> = {
+              'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
+              'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
+              'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
+              'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
+              'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
               'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
               'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
               'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
               'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-              'banco': '🏦 **Banco:** [nome do banco]',
-              'motivo': '📝 **Motivo:** [motivo da solicitação]',
+              'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
             };
             const fieldsTextDirect = scFieldsDirect.map((f: string) => fieldLabelsDirect[f] || `📝 **${f}:** [preencha]`).join('\n');
             directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsTextDirect}`;
-          } else if (tcTemplateDirect && hasSaqueContextDirect) {
-            directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, preciso dos seguintes dados:\n\n${tcTemplateDirect}`;
           } else if (hasSaqueContextDirect) {
             directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
           } else {
