@@ -6354,18 +6354,61 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         
         // 🆕 FIX #5F0529BA: Se description_template existe, o template É a apresentação proativa
         // — ignorar isFirstInteraction e ativar _otpJustValidated imediatamente
-        const hasDescTemplateGuard = !!(flow_context as any)?.ticketConfig?.description_template;
+        let hasDescTemplateGuard = !!(flow_context as any)?.ticketConfig?.description_template;
         
-        if (!recentCollectionMsg && (hasDescTemplateGuard || !isFirstInteraction)) {
-          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE — sinalizando para LLM continuar com persona system prompt', {
+        // 🆕 FIX #8F42B1C3: Fallback defensivo — se ticketConfig faltou na propagação (bug do buffer),
+        // reconstruir a partir do chat_flow_states → flow_definition do nó atual
+        if (!hasDescTemplateGuard && flow_context?.stateId) {
+          try {
+            const { data: flowStateForTC } = await supabaseClient
+              .from('chat_flow_states')
+              .select('flow_id, current_node_id')
+              .eq('id', flow_context.stateId)
+              .maybeSingle();
+            if (flowStateForTC) {
+              const { data: flowForTC } = await supabaseClient
+                .from('chat_flows')
+                .select('flow_definition')
+                .eq('id', flowStateForTC.flow_id)
+                .maybeSingle();
+              if (flowForTC?.flow_definition) {
+                const nodes = (flowForTC.flow_definition as any).nodes || [];
+                const currentNodeDef = nodes.find((n: any) => n.id === flowStateForTC.current_node_id);
+                if (currentNodeDef?.data?.ticket_config?.description_template) {
+                  console.log('[ai-autopilot-chat] 🔧 FIX#8F42B1C3: ticketConfig reconstruído do flow_definition (buffer estava incompleto)');
+                  (flow_context as any).ticketConfig = currentNodeDef.data.ticket_config;
+                  hasDescTemplateGuard = true;
+                  // Também reconstruir smartCollection se faltou
+                  if (!flow_context.smartCollectionFields?.length && currentNodeDef.data.smart_collection_fields?.length) {
+                    (flow_context as any).smartCollectionEnabled = currentNodeDef.data.smart_collection_enabled ?? false;
+                    (flow_context as any).smartCollectionFields = currentNodeDef.data.smart_collection_fields;
+                  }
+                }
+              }
+            }
+          } catch (tcFallbackErr) {
+            console.warn('[ai-autopilot-chat] ⚠️ FIX#8F42B1C3: Fallback ticketConfig reconstruction failed:', tcFallbackErr);
+          }
+        }
+
+        console.log('[ai-autopilot-chat] 📊 POST-OTP CONTEXT:', {
+          hasDescTemplateGuard,
+          hasTicketConfig: !!(flow_context as any)?.ticketConfig,
+          hasSmartFields: (flow_context?.smartCollectionFields?.length || 0) > 0,
+          aiInteractions,
+          isFirstInteraction,
+          hasSaqueIntent,
+          otp_reason,
+          post_otp_response_mode: hasDescTemplateGuard ? 'template' : (flow_context?.smartCollectionFields?.length > 0 ? 'smart_fields' : 'generic'),
+        });
+        
+        // 🆕 FIX #8F42B1C3: Quando OTP verificado + saque intent, SEMPRE ativar _otpJustValidated
+        // Mesmo em primeira interação — a coleta de dados PIX É a resposta correta, não "apresentação"
+        if (!recentCollectionMsg && (hasDescTemplateGuard || !isFirstInteraction || hasSaqueIntent)) {
+          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE — sinalizando para LLM continuar com coleta', {
             aiInteractions, isFirstInteraction, hasSaqueIntent, otp_reason, hasDescTemplateGuard
           });
           (conversation as any)._otpJustValidated = true;
-        } else if (isFirstInteraction && !hasDescTemplateGuard) {
-          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE — primeira interação sem template, deixando IA se apresentar', {
-            aiInteractions, hasSaqueIntent
-          });
-          // Não interceptar — deixar cair no fluxo normal para IA se apresentar
         }
       }
     }
