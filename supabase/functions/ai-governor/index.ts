@@ -1358,7 +1358,7 @@ serve(async (req) => {
 
     const optionalSections = [tagsSummary, ticketsSummary].filter(Boolean).join('\n\n');
 
-    const fullMessage = `*Report Diario CRM 3Cliques — Relatorio ${dateStr} ${periodStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${newSalesSummary}\n\n${recurrenceSummary}\n\n${salesResume}\n\n${pipelineSummaryToday}\n${channelsSummarySection}\n\n${teamTodaySummary}${optionalSections ? '\n\n' + optionalSections : ''}\n\n${'─'.repeat(30)}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_Parabellum by 3Cliques — ${now.toLocaleTimeString('pt-BR')}_`;
+    const fullMessage = `*Report Diario ${brandNameForReport} — Relatorio ${dateStr} ${periodStr}*\n${'─'.repeat(30)}\n\n${inboxSummary}\n\n${newSalesSummary}\n\n${recurrenceSummary}\n\n${salesResume}\n\n${pipelineSummaryToday}\n${channelsSummarySection}\n\n${teamTodaySummary}${optionalSections ? '\n\n' + optionalSections : ''}\n\n${'─'.repeat(30)}\n\n${monthSummary}\n\n${teamMonthSummary}${(salesMetrics.alerts ?? []).length > 0 ? `\n\n⚠️ *Alertas:*\n${(salesMetrics.alerts ?? []).join('\n')}` : ''}\n\n${'─'.repeat(30)}\n\n${aiAnalysis}\n\n${'─'.repeat(30)}\n_${brandNameForReport} — ${now.toLocaleTimeString('pt-BR')}_`;
 
     const { data: savedReport } = await supabase.from('ai_governor_reports').insert({
       date: since.toISOString().split('T')[0],

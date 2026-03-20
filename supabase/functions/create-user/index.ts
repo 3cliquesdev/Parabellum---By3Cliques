@@ -314,7 +314,7 @@ serve(async (req) => {
           </div>
           
           <div style="text-align: center; margin: 25px 0;">
-            <a href="https://parabellum.work/auth" 
+            <a href="${siteUrl}/auth" 
                style="display: inline-block; background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); 
                       color: white; text-decoration: none; padding: 15px 40px; border-radius: 8px; 
                       font-weight: 600; font-size: 16px;">

@@ -216,7 +216,7 @@ const userEmail = user.email;
         <CardHeader className="text-center space-y-2">
           <img 
             src={logoLight} 
-            alt="Seu Armazém Drop" 
+            alt="Logo" 
             className="h-16 w-auto mx-auto mb-4 object-contain" 
           />
           <CardTitle className="text-2xl">Primeiro Acesso - Validação de Segurança</CardTitle>
