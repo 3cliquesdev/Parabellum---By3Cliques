@@ -53,7 +53,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           exists: false,
-          recommended_department_id: COMERCIAL_DEPT_ID, // Leads novos vão para Comercial
+          recommended_department_id: depts.COMERCIAL_ID, // Leads novos vão para Comercial
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
