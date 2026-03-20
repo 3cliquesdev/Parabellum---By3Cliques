@@ -8031,8 +8031,14 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }
     } else if (isFinancialActionRequest && hasRecentOTPVerification) {
       // 🆕 FIX: OTP JÁ verificado — iniciar coleta de dados financeiros (PIX/banco)
-      console.log('[ai-autopilot-chat] ✅ OTP já verificado, fallback inicia coleta de dados financeiros');
-      assistantMessage = `Sua identidade já foi verificada com sucesso! ✅\n\n${structuredCollectionMessage}`;
+      const nodeObjectiveFallback = flow_context?.objective;
+      if (nodeObjectiveFallback) {
+        console.log('[ai-autopilot-chat] ✅ OTP já verificado, fallback respeitando objective do nó');
+        assistantMessage = `Sua identidade já foi verificada com sucesso! ✅ Vou dar continuidade ao seu atendimento.`;
+      } else {
+        console.log('[ai-autopilot-chat] ✅ OTP já verificado, fallback inicia coleta de dados financeiros');
+        assistantMessage = `Sua identidade já foi verificada com sucesso! ✅\n\n${structuredCollectionMessage}`;
+      }
     } else if (isFinancialRequest) {
       // 🆕 FIX Resíduo 4: Resposta contextualizada em vez de genérica
       assistantMessage = 'Entendi sua situação financeira. Vou verificar o que está acontecendo. Pode me informar o e-mail utilizado na compra para que eu localize seus dados?';
