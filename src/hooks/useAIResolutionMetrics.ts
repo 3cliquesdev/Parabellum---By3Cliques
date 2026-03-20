@@ -40,7 +40,7 @@ export function useAIResolutionMetrics(daysBack = 30) {
   const { data: metrics, isLoading: metricsLoading, isError: metricsError, refetch: refetchMetrics } = useQuery({
     queryKey: ["ai-resolution-metrics", daysBack],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_ai_resolution_metrics", {
+      const { data, error } = await (supabase.rpc as any)("get_ai_resolution_metrics", {
         p_start_date: startDate,
         p_end_date: endDate,
       });
