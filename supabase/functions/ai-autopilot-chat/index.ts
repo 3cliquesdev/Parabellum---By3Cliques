@@ -8729,7 +8729,7 @@ Agora posso te ajudar com operações financeiras. Você quer:
                 .replace(/\{\{customer_email\}\}/g, contact?.email || '')
                 .replace(/\{\{customer_phone\}\}/g, contact?.phone || '')
                 .replace(/\{\{pix_key\}\}/g, args.pix_key || '')
-                .replace(/\{\{amount\}\}/g, args.withdrawal_amount ? `R$ ${args.withdrawal_amount.toFixed(2)}` : '')
+                .replace(/\{\{amount\}\}/g, args.withdrawal_amount ? `R$ ${args.withdrawal_amount}` : '')
                 .replace(/\{\{reason\}\}/g, args.description || '')
                 .replace(/\{\{bank\}\}/g, args.bank || '');
               if (!ticketSubject.trim()) ticketSubject = args.subject;
