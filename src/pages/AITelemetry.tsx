@@ -17,6 +17,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { useDepartments } from "@/hooks/useDepartments";
 
 const REASON_COLORS: Record<string, string> = {
   zero_confidence_cautious: "#ef4444",
