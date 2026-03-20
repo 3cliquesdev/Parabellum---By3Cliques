@@ -1213,6 +1213,52 @@ IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu
 }
 
 // ============================================================
+// 🎯 HELPER: Mensagem de coleta de dados — fluxo como fonte única de verdade
+// Prioridade: description_template do nó > smartCollectionFields > hardcoded default
+// ============================================================
+function buildCollectionMessage(
+  flowContext: any,
+  contactName: string,
+  contactEmail?: string,
+  contactPhone?: string
+): string {
+  const tc = flowContext?.ticketConfig;
+
+  if (tc?.description_template) {
+    const resolved = tc.description_template
+      .replace(/\{\{customer_name\}\}/g, contactName || '')
+      .replace(/\{\{customer_email\}\}/g, contactEmail || '')
+      .replace(/\{\{customer_phone\}\}/g, contactPhone || '');
+    return `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${resolved}`;
+  }
+
+  const fields = flowContext?.smartCollectionFields;
+  if (flowContext?.smartCollectionEnabled && fields && fields.length > 0) {
+    const fieldLabels: Record<string, string> = {
+      'name': '📋 **Nome completo:** [seu nome]',
+      'email': '📧 **E-mail:** [seu e-mail]',
+      'phone': '📱 **Telefone:** [seu telefone]',
+      'cpf': '🪪 **CPF:** [seu CPF]',
+      'address': '📍 **Endereço:** [seu endereço]',
+      'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
+      'bank': '🏦 **Banco:** [nome do banco]',
+      'reason': '📝 **Motivo:** [motivo da solicitação]',
+      'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
+      'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
+      'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
+      'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
+      'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
+      'banco': '🏦 **Banco:** [nome do banco]',
+      'motivo': '📝 **Motivo:** [motivo da solicitação]',
+    };
+    const fieldsText = fields.map((f: string) => fieldLabels[f] || `📝 **${f}:** [preencha]`).join('\n');
+    return `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsText}`;
+  }
+
+  return `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
+}
+
+// ============================================================
 // 🆕 CONTRATO ANTI-ALUCINAÇÃO: flow_context obrigatório
 // ============================================================
 interface FlowContext {
@@ -6512,31 +6558,9 @@ Posso ajudar em mais alguma coisa?`;
             .find((m: any) => saqueRegexDirect.test(m.content));
           const hasSaqueContextDirect = !!recentWithdrawal || saqueRegexDirect.test(customerMessage);
 
-          // 🆕 FIX #EE1426A1 Fase 1: Usar smartCollectionFields / ticketConfig do fluxo
-          const scEnabledDirect = flow_context?.smartCollectionEnabled;
-          const scFieldsDirect = flow_context?.smartCollectionFields;
-          const tcTemplateDirect = (flow_context as any)?.ticketConfig?.description_template;
-          
-          // 🆕 FIX #672F64F7: description_template PRIMEIRO, depois smartCollection
-          if (tcTemplateDirect && hasSaqueContextDirect) {
-            directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${tcTemplateDirect}`;
-          } else if (scEnabledDirect && scFieldsDirect && scFieldsDirect.length > 0 && hasSaqueContextDirect) {
-            const fieldLabelsDirect: Record<string, string> = {
-              'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
-              'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
-              'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
-              'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
-              'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-              'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
-              'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
-              'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
-              'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-              'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
-            };
-            const fieldsTextDirect = scFieldsDirect.map((f: string) => fieldLabelsDirect[f] || `📝 **${f}:** [preencha]`).join('\n');
-            directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsTextDirect}`;
-          } else if (hasSaqueContextDirect) {
-            directOTPSuccessResponse = `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
+          // Usar helper centralizado — fluxo como fonte única de verdade
+          if (hasSaqueContextDirect) {
+            directOTPSuccessResponse = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone);
           } else {
             directOTPSuccessResponse = `✅ **Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada. Como posso te ajudar?`;
           }
@@ -9998,31 +10022,8 @@ Conversa: ${conversationId}`;
         
         if (hasRecentOTPVerification && hasSaqueInFallback) {
           console.log('[ai-autopilot-chat] 🛡️ FIX#57AA2190: FALLBACK BLOQUEADO — OTP verificado + saque detectado → enviando coleta PIX em vez de flowExit');
-          const tcTemplateFb = (flow_context as any)?.ticketConfig?.description_template;
-          const scFieldsFb = flow_context?.smartCollectionFields;
-          const scEnabledFb = flow_context?.smartCollectionEnabled;
-          let pixResponseFb: string;
-          // 🆕 FIX #672F64F7: description_template PRIMEIRO, depois smartCollection
-          if (tcTemplateFb) {
-            pixResponseFb = `✅ **Identidade confirmada!**\n\n${tcTemplateFb}`;
-          } else if (scEnabledFb && scFieldsFb && scFieldsFb.length > 0) {
-            const fieldLabelsFb: Record<string, string> = {
-              'name': '📋 **Nome completo:** [seu nome]', 'email': '📧 **E-mail:** [seu e-mail]',
-              'phone': '📱 **Telefone:** [seu telefone]', 'cpf': '🪪 **CPF:** [seu CPF]',
-              'address': '📍 **Endereço:** [seu endereço]', 'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
-              'bank': '🏦 **Banco:** [nome do banco]', 'reason': '📝 **Motivo:** [motivo da solicitação]',
-              'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-              'nome_completo': '📋 **Nome completo:** [seu nome conforme cadastro]',
-              'tipo_chave_pix': '🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]',
-              'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
-              'valor': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
-              'banco': '🏦 **Banco:** [nome do banco]', 'motivo': '📝 **Motivo:** [motivo da solicitação]',
-            };
-            const fieldsTextFb = scFieldsFb.map((f: string) => fieldLabelsFb[f] || `📝 **${f}:** [preencha]`).join('\n');
-            pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, me envie os dados abaixo:\n\n${fieldsTextFb}`;
-          } else {
-            pixResponseFb = `✅ **Identidade confirmada!**\n\nPara processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
-          }
+          // Usar helper centralizado — fluxo como fonte única de verdade
+          const pixResponseFb = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone);
           const { data: savedMsgFb } = await supabaseClient.from('messages').insert({
             conversation_id: conversationId, content: pixResponseFb,
             sender_type: 'user', is_ai_generated: true, channel: responseChannel
