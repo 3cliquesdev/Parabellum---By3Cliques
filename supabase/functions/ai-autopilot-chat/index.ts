@@ -4932,7 +4932,20 @@ Responda APENAS: skip ou search`
       console.log('[ai-autopilot-chat] 📦 Tema operacional (pedidos/tracking) detectado - BYPASS do Strict RAG para usar CRM/Tracking');
     }
     
-    if (isStrictRAGMode && !isOperationalTopic && !isGreetingBypass && OPENAI_API_KEY && knowledgeArticles.length > 0) {
+    // 🆕 FIX Bug B: Detectar dados estruturados (Nome:, PIX:, Banco:, etc.) para bypass do Strict RAG
+    // Strict RAG não tem tools (create_ticket) — dados estruturados pós-OTP devem ir direto ao LLM principal
+    const looksLikeStructuredData = /\b(nome|pix|banco|motivo|valor|chave)\s*:/i.test(customerMessage)
+      && customerMessage.split('\n').filter(l => l.includes(':')).length >= 3;
+    const otpVerifiedEarly = !!(flow_context?.otpVerified);
+    
+    if (looksLikeStructuredData) {
+      console.log('[ai-autopilot-chat] 📋 Dados estruturados detectados (campo:valor x3+) — BYPASS Strict RAG');
+    }
+    if (otpVerifiedEarly && looksLikeStructuredData) {
+      console.log('[ai-autopilot-chat] 🔓 OTP verificado + dados estruturados — forçando LLM principal com tools');
+    }
+    
+    if (isStrictRAGMode && !isOperationalTopic && !isGreetingBypass && !looksLikeStructuredData && OPENAI_API_KEY && knowledgeArticles.length > 0) {
       console.log('[ai-autopilot-chat] 🎯 STRICT RAG MODE ATIVO - Usando GPT-5 exclusivo');
       
       const strictResult = await callStrictRAG(
