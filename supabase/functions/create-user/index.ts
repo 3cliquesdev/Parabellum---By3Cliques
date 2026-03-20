@@ -360,7 +360,7 @@ serve(async (req) => {
           
           <p style="color: #475569; line-height: 1.6; margin-top: 25px;">
             Atenciosamente,<br>
-            <strong style="color: #1e3a5f;">Departamento de Segurança PARABELLUM</strong>
+            <strong style="color: #1e3a5f;">Departamento de Segurança ${brand.brandName}</strong>
           </p>
         </div>
         
