@@ -92,7 +92,8 @@ serve(async (req) => {
         if (!agentId) throw new Error('agentId obrigatório para assign_agent');
         updateData.ai_mode = 'copilot';
         updateData.assigned_to = agentId;
-        if (!conv.department && effectiveDept) updateData.department = effectiveDept;
+        if (departmentId) updateData.department = departmentId;
+        else if (!conv.department && effectiveDept) updateData.department = effectiveDept;
         shouldCloseDispatch = true;
         break;
 
