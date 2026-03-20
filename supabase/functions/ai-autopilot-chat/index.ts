@@ -8781,15 +8781,7 @@ Via: Atendimento Automatizado (IA)`;
 - Chave PIX: ${args.pix_key || 'Não informada'}
 - Confirmação do Cliente: ${args.customer_confirmation ? 'Dados conferidos pelo cliente' : 'Aguardando confirmação'}
 
-**REGRAS (conforme SLA configurado):**
-- Destino: APENAS conta do titular (CPF do cliente)
-- PIX de terceiros: CANCELAR solicitação
-
-**CHECKLIST FINANCEIRO:**
-- [ ] Verificar saldo disponível
-- [ ] Confirmar titularidade da chave PIX
-- [ ] Processar transferência
-- [ ] Notificar cliente`;
+**Observação:** Consultar regras de saque e checklist financeiro conforme configurado no painel.`;
             }
 
             // 🆕 Descrição: usar template do nó se configurado
