@@ -483,9 +483,9 @@ _Responda apenas com o número._`;
 
     // 🧠 Gerar resumo de IA e persistir no contato (assíncrono, não bloqueia resposta)
     if (conversation.contact_id) {
-      EdgeRuntime.waitUntil(
-        generateAndSaveContactSummary(supabase, conversationId, conversation.contact_id)
-      );
+      // Fire-and-forget: generate summary without blocking response
+      generateAndSaveContactSummary(supabase, conversationId, conversation.contact_id)
+        .catch(err => console.error("[close-conversation] ai_summary background error:", err));
     }
 
     console.log(`[close-conversation] Completed successfully`);
