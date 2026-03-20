@@ -1114,7 +1114,7 @@ const WITHDRAWAL_ACTION_PATTERNS = [
   /\d+\s+dias?\s+(que\s+)?(solicitei|pedi)\s+(o\s+)?saque/i, // "9 dias que solicitei o saque"
 ];
 
-// 🆕 Padrões de REEMBOLSO DE PEDIDO (COM OTP) - Devolução de pedido Kiwify
+// 🆕 Padrões de REEMBOLSO DE PEDIDO (COM OTP) - Devolução de pedido
 // Reembolso agora exige OTP como ação financeira — mesma segurança do saque
 const REFUND_ACTION_PATTERNS = [
   /quero\s+reembolso/i,                               // "quero reembolso"
