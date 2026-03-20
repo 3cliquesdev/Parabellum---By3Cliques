@@ -17,7 +17,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { email, code } = await req.json();
+    const { email, code, conversation_id, otp_reason } = await req.json();
 
     if (!email || !code) {
       return new Response(JSON.stringify({ 
@@ -71,9 +71,10 @@ serve(async (req) => {
         
         // Verificar se já foi usado
         if (codeInfo.verified) {
-          return new Response(JSON.stringify({ 
+          if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'invalid_code', channel: 'whatsapp' }).then(() => {}).catch(() => {});
+          return new Response(JSON.stringify({
             success: false,
-            error: 'Este código já foi utilizado. Verifique seu email para o código mais recente.' 
+            error: 'Este código já foi utilizado. Verifique seu email para o código mais recente.'
           }), {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -82,9 +83,10 @@ serve(async (req) => {
 
         // Verificar se expirou
         if (new Date(codeInfo.expires_at) < new Date()) {
-          return new Response(JSON.stringify({ 
+          if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'expired', channel: 'whatsapp' }).then(() => {}).catch(() => {});
+          return new Response(JSON.stringify({
             success: false,
-            error: 'Este código expirou. Verifique seu email para o código mais recente que enviamos.' 
+            error: 'Este código expirou. Verifique seu email para o código mais recente que enviamos.'
           }), {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -93,9 +95,10 @@ serve(async (req) => {
 
         // Verificar se excedeu tentativas
         if (codeInfo.attempts >= 3) {
-          return new Response(JSON.stringify({ 
+          if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'max_attempts', channel: 'whatsapp' }).then(() => {}).catch(() => {});
+          return new Response(JSON.stringify({
             success: false,
-            error: 'Máximo de tentativas excedido. Solicite um novo código.' 
+            error: 'Máximo de tentativas excedido. Solicite um novo código.'
           }), {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -122,9 +125,10 @@ serve(async (req) => {
       }
 
       // Se chegou aqui, o código digitado nunca existiu ou está incorreto
-      return new Response(JSON.stringify({ 
+      if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'invalid_code', channel: 'whatsapp' }).then(() => {}).catch(() => {});
+      return new Response(JSON.stringify({
         success: false,
-        error: 'Código inválido. Verifique se digitou corretamente.' 
+        error: 'Código inválido. Verifique se digitou corretamente.'
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -148,7 +152,18 @@ serve(async (req) => {
 
     console.log('[verify-code] ✅ Código verificado com sucesso');
 
-    return new Response(JSON.stringify({ 
+    // 📊 TELEMETRIA: OTP verificado com sucesso
+    if (conversation_id) {
+      supabase.from('otp_verification_audit').insert({
+        conversation_id,
+        contact_id: contact?.id ?? null,
+        otp_reason: otp_reason ?? null,
+        result: 'success',
+        channel: 'whatsapp',
+      }).then(() => {}).catch(() => {});
+    }
+
+    return new Response(JSON.stringify({
       success: true,
       contact_id: contact?.id || null
     }), {

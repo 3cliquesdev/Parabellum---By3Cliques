@@ -10,6 +10,65 @@ const corsHeaders = {
 };
 
 // ============================================================
+// 📊 TELEMETRIA: helpers para auditoria de saque e OTP
+// ============================================================
+async function logSaqueStep(
+  client: ReturnType<typeof createClient>,
+  opts: {
+    conversationId: string;
+    contactId?: string | null;
+    ticketId?: string | null;
+    step: 'intent_detected' | 'otp_sent' | 'otp_validated' | 'data_collected' | 'ticket_created' | 'conversation_closed' | 'problem_reported';
+    status: 'success' | 'failure' | 'pending';
+    pixKeyType?: string | null;
+    amount?: string | null;
+    errorMessage?: string | null;
+    metadata?: Record<string, unknown>;
+  }
+) {
+  try {
+    await client.from('saque_operation_logs').insert({
+      conversation_id: opts.conversationId,
+      contact_id: opts.contactId ?? null,
+      ticket_id: opts.ticketId ?? null,
+      step: opts.step,
+      status: opts.status,
+      pix_key_type: opts.pixKeyType ?? null,
+      amount: opts.amount ?? null,
+      error_message: opts.errorMessage ?? null,
+      metadata: opts.metadata ?? {},
+    });
+  } catch (e) {
+    console.error('[telemetria] ⚠️ Erro ao inserir saque_operation_logs:', e);
+  }
+}
+
+async function logOtpAudit(
+  client: ReturnType<typeof createClient>,
+  opts: {
+    conversationId: string;
+    contactId?: string | null;
+    otpReason?: string | null;
+    result: 'code_sent' | 'success' | 'invalid_code' | 'expired' | 'rate_limited' | 'max_attempts';
+    attemptNumber?: number;
+    channel?: string;
+  }
+) {
+  try {
+    await client.from('otp_verification_audit').insert({
+      conversation_id: opts.conversationId,
+      contact_id: opts.contactId ?? null,
+      otp_reason: opts.otpReason ?? null,
+      result: opts.result,
+      attempt_number: opts.attemptNumber ?? 1,
+      channel: opts.channel ?? 'whatsapp',
+    });
+  } catch (e) {
+    console.error('[telemetria] ⚠️ Erro ao inserir otp_verification_audit:', e);
+  }
+}
+
+// ============================================================
 // 🆕 INTERFACE DE CONFIGURAÇÁO RAG DINÂMICA
 // Lido do banco system_configurations
 // ============================================================
@@ -1986,6 +2045,12 @@ serve(async (req) => {
             .from('conversations')
             .update({ status: 'resolved', resolved_at: new Date().toISOString() })
             .eq('id', conversationId);
+          // 📊 TELEMETRIA: conversa encerrada após ACK do cliente
+          await logSaqueStep(supabaseClient, {
+            conversationId, contactId: contact?.id,
+            step: 'conversation_closed', status: 'success',
+            metadata: { trigger: 'ack_post_saque' },
+          });
           const ackMsg = 'Perfeito! Qualquer dúvida é só chamar. Até mais! 😊';
           await supabaseClient.from('messages').insert({
             conversation_id: conversationId,
@@ -2352,7 +2417,12 @@ serve(async (req) => {
             // Contexto é realmente OTP E tem 6 dígitos - validar
             try {
               const { data: otpData, error: otpError } = await supabaseClient.functions.invoke('verify-code', {
-                body: { email: contact.email, code: otpDigitsOnly }
+                body: {
+                  email: contact.email,
+                  code: otpDigitsOnly,
+                  conversation_id: conversationId,
+                  otp_reason: (conversationMetadata as any)?.otp_reason ?? 'withdrawal',
+                }
               });
               if (otpError) throw otpError;
 
@@ -6433,6 +6503,14 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
               console.warn('[ai-autopilot-chat] ⚠️ Erro ao adicionar tag saque à conversa:', tagErr);
             }
 
+            // 📊 TELEMETRIA: ticket de saque criado (path determinística)
+            await logSaqueStep(supabaseClient, {
+              conversationId, contactId: contact?.id,
+              ticketId: ticketData?.ticket?.id ?? null,
+              step: 'ticket_created', status: 'success',
+              metadata: { ticket_number: ticketData?.ticket?.ticket_number, path: 'deterministic' },
+            });
+
             const { data: savedMsg } = await supabaseClient
               .from('messages')
               .insert({ conversation_id: conversationId, content: saqueResponse, sender_type: 'user', is_ai_generated: true, channel: responseChannel })
@@ -6687,9 +6765,11 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       
       try {
         const { data: otpData, error: otpError } = await supabaseClient.functions.invoke('verify-code', {
-          body: { 
+          body: {
             email: contactEmail,
-            code: otpDigitsOnly
+            code: otpDigitsOnly,
+            conversation_id: conversationId,
+            otp_reason: (conversationMetadata as any)?.otp_reason ?? 'withdrawal',
           }
         });
         
@@ -6789,8 +6869,24 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           // OTP validado — NÃO retornar early, deixar LLM usar persona system prompt
           (conversation as any)._otpJustValidated = true;
           console.log('[ai-autopilot-chat] ✅ OTP validado (bloco direct) — continuando para LLM com persona system prompt');
+          // 📊 TELEMETRIA: OTP validado com sucesso
+          await logOtpAudit(supabaseClient, {
+            conversationId, contactId: contact?.id,
+            otpReason: (conversationMetadata as any)?.otp_reason ?? 'withdrawal',
+            result: 'success', channel: responseChannel,
+          });
+          await logSaqueStep(supabaseClient, {
+            conversationId, contactId: contact?.id,
+            step: 'otp_validated', status: 'success',
+          });
           // continua para o LLM abaixo
         } else {
+          // 📊 TELEMETRIA: OTP inválido
+          await logOtpAudit(supabaseClient, {
+            conversationId, contactId: contact?.id,
+            otpReason: (conversationMetadata as any)?.otp_reason ?? 'withdrawal',
+            result: 'invalid_code', channel: responseChannel,
+          });
         // Salvar mensagem de erro no banco
         const { data: savedMsg } = await supabaseClient
           .from('messages')
@@ -6915,7 +7011,18 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
         await supabaseClient.functions.invoke('send-verification-code', {
           body: { email: contactEmail, type: 'customer' }
         });
-        
+
+        // 📊 TELEMETRIA: registrar intent de saque e envio de OTP
+        await logSaqueStep(supabaseClient, {
+          conversationId, contactId: contact?.id,
+          step: 'intent_detected', status: 'success',
+        });
+        await logOtpAudit(supabaseClient, {
+          conversationId, contactId: contact?.id,
+          otpReason: isWithdrawalRequest ? 'withdrawal' : 'financial_action',
+          result: 'code_sent', channel: responseChannel,
+        });
+
         // 🔒 MARCAR OTP PENDENTE NA METADATA (para validação contextual)
         const otpExpiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
         await supabaseClient
@@ -9299,6 +9406,15 @@ Via: Atendimento Automatizado (IA)`;
                 } catch (flagErr) {
                   console.error('[ai-autopilot-chat] ⚠️ Erro ao persistir flag saque_ticket_created:', flagErr);
                 }
+
+                // 📊 TELEMETRIA: ticket de saque criado (path LLM tool call)
+                await logSaqueStep(supabaseClient, {
+                  conversationId, contactId: contact?.id,
+                  ticketId: ticket?.id ?? null,
+                  step: 'ticket_created', status: 'success',
+                  amount: args.withdrawal_amount ?? null,
+                  metadata: { ticket_number: ticket?.ticket_number, path: 'llm_tool' },
+                });
               }
 
               // FASE 5: Mensagem específica para SAQUE com dados coletados
