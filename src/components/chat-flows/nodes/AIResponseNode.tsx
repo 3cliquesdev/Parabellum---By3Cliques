@@ -356,6 +356,13 @@ export const AIResponseNode = memo(({ data, selected }: NodeProps<AIResponseNode
           </Badge>
         )}
 
+        {/* Badge de Tag de Encerramento */}
+        {data.close_tag_name && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 gap-0.5 border-rose-500/50 text-rose-600">
+            🏷️ {data.close_tag_name.slice(0, 15)}
+          </Badge>
+        )}
+
         {/* Badge de fallback configurado */}
         {data.fallback_message && (
           <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 opacity-60">
