@@ -1188,7 +1188,7 @@ async function createTicketSuccessMessage(
 Protocolo: #${formattedId}
 Valor Solicitado: R$ ${formattedAmount}
 ${withdrawalData.cpf_last4 ? `CPF (final): ...${withdrawalData.cpf_last4}` : ''}
-Prazo: até 7 dias úteis
+Prazo: conforme prazo informado
 
 Você receberá um email confirmando a abertura do chamado.
 Quando o saque for processado, você será notificado por email também.
