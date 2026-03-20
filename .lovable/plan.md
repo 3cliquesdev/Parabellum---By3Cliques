@@ -1,102 +1,127 @@
-## Auditoria #8181F702 — Correções Aplicadas
 
-### 3 Fixes deployados no `ai-autopilot-chat`
 
-**Fix 1 (Bug B): Bypass Strict RAG para dados estruturados** ✅
-- Linha ~4935: Adicionada detecção `looksLikeStructuredData` (≥3 linhas com "campo:valor")
-- Quando detectado, bypassa `callStrictRAG` (que não tem tools) e vai direto ao LLM principal com `create_ticket`
+## Auditoria #3D645F2C — 4 Bugs Identificados
 
-**Fix 2 (Bug C): "valor" removido da regex `commercialTerms`** ✅
-- Linha ~7949: `commercialTerms` agora é `/\b(comprar|contratar|assinar|upgrade|plano|preço)\b/i`
-- "Valor:" nos dados financeiros não dispara mais `FLOW_EXIT:comercial`
+### Linha do Tempo
 
-**Fix 3 (Bug B fallback): Ticket determinístico quando LLM vazia + OTP** ✅
-- Linha ~7945: Se `hasRecentOTPVerification` + dados estruturados + LLM retornou vazio → cria ticket via `generate-ticket-from-conversation` diretamente
-- Fallback de último recurso para quando LLM principal também falha
+| Hora | Evento | Status |
+|------|--------|--------|
+| 01:59:57 | "Boa tarde" → Menu produtos | OK |
+| 02:00:24 | "1" → Menu assuntos | OK |
+| 02:00:51 | "2" (Financeiro) → **Sem apresentação da IA** → Template PIX hardcoded direto | BUG A+B |
+| 02:01:41 | Dados PIX enviados → Ticket criado | BUG C+D |
+| 02:10:07 | Auto-close | Consequência |
 
-### Correções adicionais (rodada 2)
+---
 
-**Fix 4: `category: 'financial'` → `'financeiro'`** ✅
-- Corrigido para valor válido do enum, garantindo mapeamento correto ao departamento Financeiro
+### Bug A — IA não se apresentou (CRÍTICO)
 
-**Fix 5: Envio WhatsApp no fallback usa canal correto** ✅
-- Substituído query genérica `whatsapp_instances` por `getWhatsAppInstanceForConversation` + `sendWhatsAppMessage`
-- Agora respeita Meta vs Evolution conforme a conversa
+O contato tinha OTP verificado de uma conversa ANTERIOR (01:03:16). Ao entrar no nó Financeiro, o guard pós-OTP (L6333-6377) detectou `hasRecentOTPVerification=true` + `hasSaqueIntent=true` (do "2" = financeiro no histórico) e **saltou direto para o template PIX hardcoded**, sem nunca dar chance à IA de se apresentar.
 
-**Fix 6: DIRECT mode do `process-buffered-messages` verifica `skipInitialMessage`** ✅
-- Adicionado check antes de `callPipeline` no modo DIRECT
-- Quando `skipInitialMessage=true`, envia mensagem vazia para disparar saudação proativa
-- Paridade com o CRON mode que já tinha essa verificação
+**Fix**: O guard pós-OTP deve verificar se é a **primeira interação no nó** (interaction_count === 0 ou 1). Se for, deve deixar a IA se apresentar primeiro. O template PIX só deve ser enviado se a IA já interagiu pelo menos uma vez.
 
-### Auditoria #AFDAE1C6 — Correções Aplicadas (rodada 3)
+### Bug B — Template de coleta é hardcoded, não respeita o do fluxo (MÉDIO)
 
-**Fix 7: `stateId` no stayOnNode do `process-chat-flow`** ✅
-- Adicionado `stateId: activeState.id` ao JSON de resposta do stayOnNode
-- Permite que o webhook propague `flow_context.stateId` para o autopilot
-- Resolve BUG E: sync OTP para `collected_data` agora funciona
+O template PIX no guard (L6355) é uma string fixa:
+```
+📋 Nome completo: [seu nome]
+🔑 Tipo da chave PIX: [CPF/Email/etc]
+🔐 Chave PIX: [sua chave]
+💰 Valor: [R$ X,XX]
+```
 
-**Fix 8: `category: 'financial'` → `'financeiro'` no guard de saque** ✅
-- Segunda instância (linha 6280) corrigida — era duplicata do Fix 4
-- Ticket de saque agora mapeado corretamente ao departamento Financeiro
+Mas o `node_ia_financeiro` tem um `ticket_config.description_template` diferente:
+```
+Nome: {{customer_name}}
+Chave Pix: {{pix_key}}
+Banco: {{bank}}
+Motivo: {{reason}}
+Valor: {{amount}}
+```
 
-**Fix 9: WhatsApp Evolution → helper unificado no guard de saque** ✅
-- Substituído query `whatsapp_instances` por `getWhatsAppInstanceForConversation` + `sendWhatsAppMessage`
-- Segunda instância corrigida — duplicata do Fix 5
+**Fix**: O guard deve usar o `description_template` do `flow_context.ticketConfig` quando disponível, em vez do template hardcoded.
 
-**Fix 10: Guard pós-OTP para intent de saque** ✅
-- Adicionado guard FORA do bloco `shouldValidateOTP`
-- Quando `hasRecentOTPVerification=true` e histórico contém intent de saque → envia template de coleta PIX
-- Evita resposta genérica "Como posso ajudar?" após OTP verificado
-- Anti-duplicata: verifica se template já foi enviado nos últimos 3 msgs
+### Bug C — Ticket não respeita department_id e assigned_to do fluxo (CRÍTICO)
 
-### Auditoria #EEFFF1DD — Correções Aplicadas (rodada 4)
+O ticket determinístico (L6288-6290) chama `generate-ticket-from-conversation` com apenas `{ conversation_id, subject, priority, category: 'financeiro' }`. O edge function mapeia `financeiro` → departamento "Financeiro" (af3c75a9).
 
-**Fix 11: Bypass Strict RAG para ações financeiras** ✅
-- `isFinancialBypass = isFinancialAction || isWithdrawalRequest` adicionado à condição do Strict RAG
-- Mensagens como "Quero sacar" não passam mais pelo Strict RAG (que não tem tools)
+Porém, o `node_ia_financeiro.ticket_config` define:
+- `department_id: b7149bf4` (Customer Success)
+- `assigned_to: ce6150bb` (Marco Cruz)
 
-**Fix 12: Guard pós-OTP verifica mensagem atual** ✅
-- `hasSaqueIntent` agora testa `customerMessage` além do `messageHistory`
-- Conversas onde "Quero sacar" é a primeira mensagem real agora são detectadas
+O caminho determinístico **ignora completamente** o `ticketConfig` do fluxo.
 
-**Fix 13: Fallback de saudação no webhook** ✅
-- Se `ai-autopilot-chat` falhar (timeout/erro), webhook envia saudação padrão direto via WhatsApp
-- Fallback em AMBOS os caminhos: `!greetResponse.ok` e `catch` geral
+**Fix**: Passar `department_id` e `assigned_to` do `flow_context.ticketConfig` ao `generate-ticket-from-conversation`.
 
-**Fix 14: Proteção pós-LLM (emergency fallback)** ✅
-- Se LLM retorna vazio sem tool_calls após retry, aplica `flowFallbackMessage || flowObjective || greeting`
-- Cliente NUNCA fica sem resposta
+### Bug D — Mensagens de auto-close com channel web_chat (MENOR)
 
-**Fix 15: Prompt de saudação proativa melhorado** ✅
-- Instruções explícitas: apresentar-se, mencionar habilidades, desambiguar dúvida vs ação financeira
-- Removido prompt genérico "Como posso ajudar?"
+As 2 últimas mensagens (encerramento + avaliação) ainda estão com `channel: web_chat` em vez de `whatsapp`. O Fix 18 anterior corrigiu o path de envio de menus, mas o `auto-close-conversations` edge function provavelmente tem o mesmo problema.
 
-### Auditoria #4A8BC4A3 — Correções Aplicadas (rodada 5)
+---
 
-**Fix 16: TDZ `isWithdrawalRequest` no bypass do Strict RAG** ✅
-- Linha 4950: `isWithdrawalRequest` era referenciada mas só declarada na L5999
-- Substituído por `isWithdrawalEarly` com detecção inline via `WITHDRAWAL_ACTION_PATTERNS`
-- Saudação proativa voltou a funcionar
+### Plano de Correção — 3 edições
 
-**Fix 17: TDZ `conversationMetadata` no guard pós-OTP** ✅
-- Linha 6340: `conversationMetadata` era referenciada mas só declarada na L6411
-- Substituído por `conversation.customer_metadata` (já disponível)
-- Fluxo "Quero sacar" pós-OTP voltou a funcionar
+**Edição 1: `ai-autopilot-chat/index.ts` L6333-6377 — Guard pós-OTP respeita primeira interação**
 
-**Fix 18: `channel: 'whatsapp'` no insert legacy do `send-meta-whatsapp`** ✅
-- Linha 450: INSERT não incluía campo `channel`, causando default `web_chat`
-- Mensagens de menu do fluxo agora aparecem corretamente no inbox
+Antes de enviar o template PIX, verificar `interaction_count`. Se for a primeira chamada no nó (saudação proativa ou primeira mensagem), NÃO enviar template — deixar a IA se apresentar naturalmente.
 
-**Blindagem: Comentários de zona de segurança** ✅
-- L6001: `isWithdrawalRequest` marcada com "NÃO MOVER PARA CIMA"
-- L6415: `conversationMetadata` marcada com "NÃO MOVER PARA CIMA"
-- Previne regressões TDZ em futuros refactors
+```typescript
+if (hasRecentOTPVerification) {
+  // ... (detecção de hasSaqueIntent mantida)
+  
+  // 🆕 NÃO enviar template na primeira interação — IA deve se apresentar
+  const aiInteractions = (conversation.customer_metadata as any)?.__ai?.interaction_count || 0;
+  const isFirstInteraction = aiInteractions <= 1;
+  
+  if (hasSaqueIntent && !recentCollectionMsg && !isFirstInteraction) {
+    // Usar template do ticketConfig se disponível
+    const tcTemplate = flow_context?.ticketConfig?.description_template;
+    const pixCollectResponse = tcTemplate 
+      ? `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${tcTemplate}`
+      : `✅ **Identidade confirmada!**\n\n... (template padrão)`;
+    // ... enviar
+  }
+}
+```
+
+**Edição 2: `ai-autopilot-chat/index.ts` L6288-6290 — Ticket determinístico usa ticketConfig**
+
+Passar `assigned_to` e fazer override do `department_id` via ticketConfig do fluxo:
+
+```typescript
+const tc = flow_context?.ticketConfig;
+const { data: ticketData } = await supabaseClient.functions.invoke(
+  'generate-ticket-from-conversation',
+  { body: { 
+    conversation_id: conversationId, 
+    subject: tc?.subject_template 
+      ? resolveBasicTemplate(tc.subject_template, customerMessage, contactName) 
+      : `Solicitação de saque - ${contactName}`,
+    priority: tc?.default_priority || 'high', 
+    category: tc?.category || 'financeiro',
+    assigned_to: tc?.assigned_to || undefined,
+    department_id_override: tc?.department_id || undefined,
+  }}
+);
+```
+
+E no `generate-ticket-from-conversation/index.ts`, aceitar `department_id_override` para sobrescrever o mapeamento automático por categoria.
+
+**Edição 3: `generate-ticket-from-conversation/index.ts` — Aceitar department_id_override**
+
+Adicionar campo opcional `department_id_override` na interface e usá-lo com prioridade sobre o mapeamento por categoria:
+
+```typescript
+const departmentId = department_id_override || dept?.id || null;
+```
 
 ### Deploy
-- `ai-autopilot-chat` — Fix 16, 17 + blindagem
-- `send-meta-whatsapp` — Fix 18
+- `ai-autopilot-chat`
+- `generate-ticket-from-conversation`
 
-### Bug A (skipInitialMessage) — Monitoramento
-- Funciona para outras conversas (log 98ab6b41 confirmado)
-- Fix 7 (stateId) melhora diagnóstico
-- Aguardando próximo cenário de menu+batching para validar
+### Resultado Esperado
+1. IA se apresenta na primeira interação do nó (mesmo com OTP prévio)
+2. Template de coleta usa o formato configurado no fluxo
+3. Ticket é atribuído a Marco Cruz no departamento Customer Success (conforme ticketConfig)
+4. Fluxo completo: Apresentação → Coleta → Ticket → Confirmação
+
