@@ -7942,11 +7942,47 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }
     }
 
-    // 🆕 FIX C: Se AINDA vazio + intent financeiro + flow_context â†’ FLOW_EXIT:financeiro
+    // 🆕 FIX C (upgraded): Se AINDA vazio + flow_context → detectar intent ou fallback financeiro
     if (!rawAIContent && !toolCalls.length && flow_context) {
+      // 🆕 FIX Bug B/C: GUARD — Se OTP verificado + dados estruturados, NÃO sair do fluxo
+      const looksLikeStructuredDataFallback = /\b(nome|pix|banco|motivo|valor|chave)\s*:/i.test(customerMessage)
+        && customerMessage.split('\n').filter(l => l.includes(':')).length >= 3;
+      
+      if (hasRecentOTPVerification && looksLikeStructuredDataFallback) {
+        console.log('[ai-autopilot-chat] 🆘 LLM vazia + OTP verificado + dados estruturados → forçando create_ticket determinístico');
+        try {
+          const { data: ticketData, error: ticketError } = await supabaseClient.functions.invoke(
+            'generate-ticket-from-conversation',
+            { body: { conversation_id: conversationId, subject: `Solicitação financeira - ${contactName}`, priority: 'high', category: 'financial' } }
+          );
+          if (!ticketError && ticketData?.ticket?.id) {
+            const ticketId = ticketData.ticket.id.slice(0, 8).toUpperCase();
+            const fallbackResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação. Nossa equipe financeira vai processar em até **7 dias úteis**.\n\nPosso te ajudar com mais alguma coisa?`;
+            const { data: savedMsg } = await supabaseClient
+              .from('messages')
+              .insert({ conversation_id: conversationId, content: fallbackResponse, sender_type: 'user', is_ai_generated: true, channel: responseChannel })
+              .select().single();
+            if (responseChannel === 'whatsapp' && contact?.phone) {
+              const { data: wi } = await supabaseClient.from('whatsapp_instances').select('*').eq('status', 'connected').limit(1).maybeSingle();
+              if (wi) await supabaseClient.functions.invoke('send-whatsapp-message', { body: { instance_id: wi.id, phone_number: contact.phone, whatsapp_id: contact.whatsapp_id, message: fallbackResponse } });
+            }
+            return new Response(JSON.stringify({
+              response: fallbackResponse,
+              messageId: savedMsg?.id,
+              ticketCreated: true,
+              ticketId,
+              debug: { reason: 'llm_empty_otp_verified_structured_data_fallback' },
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+        } catch (fallbackTicketErr) {
+          console.error('[ai-autopilot-chat] ❌ Fallback create_ticket falhou:', fallbackTicketErr);
+        }
+      }
+
       const financialTerms = /\b(saque|sacar|reembolso|estorno|devolução|dinheiro|pix|saldo|transferir|transferência|retirar|retirada)\b/i;
       const cancellationTerms = /\b(cancelar|cancelamento|cancela|desistir|desistência)\b/i;
-      const commercialTerms = /\b(comprar|contratar|assinar|upgrade|plano|preço|valor)\b/i;
+      // 🆕 FIX Bug C: "valor" REMOVIDO — causa false positive em dados financeiros estruturados
+      const commercialTerms = /\b(comprar|contratar|assinar|upgrade|plano|preço)\b/i;
 
       let autoExitIntent: string | null = null;
       if (financialTerms.test(customerMessage) && flowForbidFinancial) {
@@ -7958,7 +7994,7 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }
 
       if (autoExitIntent) {
-        console.log(`[ai-autopilot-chat] 🎯 Fallback vazio + intent ${autoExitIntent} â†’ FLOW_EXIT:${autoExitIntent}`);
+        console.log(`[ai-autopilot-chat] 🎯 Fallback vazio + intent ${autoExitIntent} → FLOW_EXIT:${autoExitIntent}`);
         return new Response(JSON.stringify({
           flowExit: true,
           reason: `ai_empty_response_${autoExitIntent}_intent`,
