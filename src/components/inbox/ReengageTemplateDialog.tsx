@@ -198,7 +198,8 @@ export function ReengageTemplateDialog({
     }
   };
 
-  const canSend = selectedTemplate && !sendMutation.isPending;
+  const isAlreadyOpen = conversation.status === "open";
+  const canSend = selectedTemplate && !sendMutation.isPending && !isAlreadyOpen;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
