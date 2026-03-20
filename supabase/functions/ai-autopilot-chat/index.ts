@@ -7238,8 +7238,7 @@ Se você NÃO encontrar informação na BASE DE CONHECIMENTO:
 
 ---
 
-Você é a Lais, assistente virtual inteligente da Parabellum / 3Cliques.
-Sua missão é AJUDAR o cliente, não se livrar dele.
+${persona.system_prompt || `Você é ${persona.name || 'uma assistente virtual'}${persona.role ? `, ${persona.role}` : ''}. Sua missão é AJUDAR o cliente, não se livrar dele.`}
 
 **COMO RESPONDER:**
 
