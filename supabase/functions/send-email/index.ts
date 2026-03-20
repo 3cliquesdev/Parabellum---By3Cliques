@@ -106,13 +106,14 @@ serve(async (req) => {
         console.log(`[send-email] Using default ${is_customer_email ? 'customer' : 'employee'} branding:`, data.name);
       }
     }
-    // Valores de fallback caso não encontre branding
-    const brandName = branding?.name || '3Cliques';
-    const headerColor = branding?.header_color || '#1e3a5f';
-    const primaryColor = branding?.primary_color || '#2c5282';
-    const footerText = branding?.footer_text || `${brandName} - Equipe de Suporte`;
-    const logoUrl = branding?.logo_url;
-    const footerLogoUrl = branding?.footer_logo_url;
+    // Resolver branding genérico como fallback final
+    const _brand = await resolveBranding(supabase, { isEmployee: !is_customer_email });
+    const brandName = branding?.name || _brand.brandName;
+    const headerColor = branding?.header_color || _brand.headerColor;
+    const primaryColor = branding?.primary_color || _brand.primaryColor;
+    const footerText = branding?.footer_text || _brand.footerText;
+    const logoUrl = branding?.logo_url || _brand.logoUrl;
+    const footerLogoUrl = branding?.footer_logo_url || _brand.footerLogoUrl;
 
     console.log('[send-email] Branding applied:', { brandName, headerColor, hasLogo: !!logoUrl });
 
