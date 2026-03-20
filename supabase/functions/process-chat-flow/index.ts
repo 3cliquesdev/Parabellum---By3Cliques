@@ -1380,7 +1380,7 @@ serve(async (req) => {
           content: `🧪 ─── TESTE DE FLUXO INICIADO ───\nFluxo: "${flow.name}"${draftLabel}`,
           sender_type: 'system',
           is_ai_generated: false,
-          channel: 'web_chat',
+          channel: conversation?.channel || 'web_chat',
           status: 'sent'
         });
         console.log('[process-chat-flow] 🧪 System separator message inserted');
