@@ -6517,8 +6517,13 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
 
           // Usar helper centralizado — fluxo como fonte única de verdade
           const nodeObjectiveDirect = flow_context?.objective;
-          if (hasSaqueContextDirect && nodeObjectiveDirect) {
-            // 🎯 Fluxo soberano: não enviar template literal, LLM segue o objective
+          const hasDescTemplateDirect = !!(flow_context as any)?.ticketConfig?.description_template;
+          if (hasSaqueContextDirect && hasDescTemplateDirect) {
+            // 🎫 Template do IA Response é soberano — envia verbatim (tudo de uma vez)
+            directOTPSuccessResponse = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone);
+            console.log('[ai-autopilot-chat] 🎫 directOTPSuccessResponse: description_template soberano — envia verbatim');
+          } else if (hasSaqueContextDirect && nodeObjectiveDirect) {
+            // 🎯 Sem template mas com objective — LLM segue o objective (campo a campo)
             directOTPSuccessResponse = `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`;
             console.log('[ai-autopilot-chat] 🎯 directOTPSuccessResponse: respeitando objective do nó (não envia template literal)');
           } else if (hasSaqueContextDirect) {
