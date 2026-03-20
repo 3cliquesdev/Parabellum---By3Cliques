@@ -699,10 +699,11 @@ Deno.serve(async (req) => {
               sender_type: 'user',
             });
 
-            // Tag "9.98 Falta de Interação"
+            // Tag do fluxo ou "9.98 Falta de Interação"
+            const flowCloseTag3b = await getFlowCloseTagId(supabase, conv.id);
             await supabase.from('conversation_tags').upsert({
               conversation_id: conv.id,
-              tag_id: FALTA_INTERACAO_TAG_ID,
+              tag_id: flowCloseTag3b || FALTA_INTERACAO_TAG_ID,
             }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
 
             // Enviar via WhatsApp se necessário (sem CSAT - não há departamento)
