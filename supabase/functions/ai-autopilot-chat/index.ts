@@ -5998,6 +5998,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
     );
     
     // 🔒 SAQUE DE SALDO - operação que EXIGE OTP
+    // ⚠️ NÃO MOVER PARA CIMA — referenciada inline (isWithdrawalEarly) na L4951 para bypass do Strict RAG
     const isWithdrawalRequest = WITHDRAWAL_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     ) || OTP_REQUIRED_KEYWORDS.some(keyword =>
