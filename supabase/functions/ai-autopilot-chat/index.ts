@@ -1970,6 +1970,35 @@ serve(async (req) => {
       contact = conversation.contacts as any;
       department = conversation.department || null;
 
+      // 🆕 FIX: ACK pós-saque — encerrar conversa se cliente agradece após ticket de saque criado
+      {
+        const ackPatternsPost = /^(ok|oks|okay|certo|entendi|entendido|certo!|ok!|tudo bem|tá bom|tá|ta|sim|não|nao|obrigad[ao]|vlw|valeu|blz|beleza|show|perfeito|ótimo|otimo|claro|pode ser|combinado|fechado|tudo certo|👍|✅|😊|🙏)[\s!.]*$/i;
+        const saqueTicketCreated = (conversation.customer_metadata as any)?.saque_ticket_created === true;
+        if (ackPatternsPost.test(customerMessage.trim()) && saqueTicketCreated) {
+          console.log('[ai-autopilot-chat] 🏁 ACK pós-saque: encerrando conversa');
+          await supabaseClient
+            .from('conversations')
+            .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+            .eq('id', conversationId);
+          const ackMsg = 'Perfeito! Qualquer dúvida é só chamar. Até mais! 😊';
+          await supabaseClient.from('messages').insert({
+            conversation_id: conversationId,
+            content: ackMsg,
+            sender_type: 'user',
+            is_ai_generated: true,
+            channel: responseChannel,
+          });
+          if (contact?.phone) {
+            const wpResult = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, contact, conversation);
+            if (wpResult) await sendWhatsAppMessage(supabaseClient, wpResult, contact.phone, ackMsg, conversationId, contact.whatsapp_id);
+          }
+          return new Response(JSON.stringify({ response: ackMsg, source: 'ack_saque_close' }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
       // 🆕 ENRIQUECIMENTO DE CONTEXTO: Buscar organização, consultor, vendedor e tags do contato
       let contactOrgName: string | null = null;
       let contactConsultantName: string | null = null;
@@ -6350,8 +6379,10 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       ) || saqueRegex.test(customerMessage);
       // ⚠️ ZONA SEGURA: conversationMetadata só existe após L6411 — usar conversation.customer_metadata
       const otp_reason = (conversation.customer_metadata as any)?.otp_reason;
-      
-      if (hasSaqueIntent || otp_reason === 'withdrawal') {
+      // 🆕 FIX: Não reativar coleta se ticket de saque já foi criado nesta conversa
+      const saqueAlreadyDone = (conversation.customer_metadata as any)?.saque_ticket_created === true;
+
+      if ((hasSaqueIntent || otp_reason === 'withdrawal') && !saqueAlreadyDone) {
         // Verificar se já recebeu template de coleta (evitar duplicata)
         const recentCollectionMsg = messageHistory
           .filter((m: any) => m.role === 'assistant')
@@ -9014,6 +9045,10 @@ Via: Atendimento Automatizado (IA)`;
             };
             
             let ticketDescription = args.description;
+            // 🆕 FIX: Resolver placeholders no args.description caso LLM copie o template literalmente
+            if (ticketDescription && /\{\{/.test(ticketDescription)) {
+              ticketDescription = resolveTemplate(ticketDescription);
+            }
             if (tc?.description_template) {
               const templatedDesc = resolveTemplate(tc.description_template);
               if (templatedDesc.trim()) ticketDescription = templatedDesc;
@@ -9113,13 +9148,14 @@ Via: Atendimento Automatizado (IA)`;
                 .update({ related_ticket_id: ticket.id })
                 .eq('id', conversationId);
 
-              // Para tickets de saque: adicionar tag + encerrar conversa
+              // Para tickets de saque: adicionar tag + persistir flag + aguardar ACK para encerrar
               if (args.issue_type === 'saque' && ticket?.id) {
+                // 🆕 FIX Bug 3: Buscar tag "6.05 Saque do saldo" por múltiplos padrões
                 try {
                   const { data: saqueTag } = await supabaseClient
                     .from('tags')
                     .select('id')
-                    .ilike('name', '%saque%saldo%')
+                    .or('name.ilike.%saque%saldo%,name.ilike.%6.05%')
                     .maybeSingle();
 
                   if (saqueTag?.id) {
@@ -9131,20 +9167,22 @@ Via: Atendimento Automatizado (IA)`;
                       );
                     console.log('[ai-autopilot-chat] 🏷️ Tag saque adicionada à conversa');
                   } else {
-                    console.warn('[ai-autopilot-chat] ⚠️ Tag "saque de saldo" não encontrada no banco');
+                    console.warn('[ai-autopilot-chat] ⚠️ Tag "6.05 Saque do saldo" não encontrada no banco');
                   }
                 } catch (tagErr) {
                   console.error('[ai-autopilot-chat] ⚠️ Erro ao adicionar tag saque:', tagErr);
                 }
 
+                // 🆕 FIX Bug 2A: Persistir flag para evitar duplicidade e permitir auto-close por ACK
                 try {
+                  const currentMeta = (conversation.customer_metadata as any) || {};
                   await supabaseClient
                     .from('conversations')
-                    .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+                    .update({ customer_metadata: { ...currentMeta, saque_ticket_created: true } })
                     .eq('id', conversationId);
-                  console.log('[ai-autopilot-chat] ✅ Conversa encerrada após ticket de saque');
-                } catch (closeErr) {
-                  console.error('[ai-autopilot-chat] ⚠️ Erro ao encerrar conversa:', closeErr);
+                  console.log('[ai-autopilot-chat] ✅ Flag saque_ticket_created persistida — conversa aguarda ACK do cliente');
+                } catch (flagErr) {
+                  console.error('[ai-autopilot-chat] ⚠️ Erro ao persistir flag saque_ticket_created:', flagErr);
                 }
               }
 
