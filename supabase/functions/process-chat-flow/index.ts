@@ -1380,7 +1380,7 @@ serve(async (req) => {
           content: `🧪 ─── TESTE DE FLUXO INICIADO ───\nFluxo: "${flow.name}"${draftLabel}`,
           sender_type: 'system',
           is_ai_generated: false,
-          channel: conversation?.channel || 'web_chat',
+          channel: 'web_chat',
           status: 'sent'
         });
         console.log('[process-chat-flow] 🧪 System separator message inserted');
@@ -4982,8 +4982,9 @@ serve(async (req) => {
           const preMsgs = [...extraMessages].filter(Boolean).join('\n\n');
           if (preMsgs) {
             try {
-              // 🆕 FIX #EE1426A1 Fase 3: Usar canal da conversa em vez de hardcoded web_chat
-              const transferChannel = conversation?.channel || convForDelivery?.channel || 'web_chat';
+              // 🆕 FIX #EE1426A1 Fase 3: Usar canal da conversa
+              const { data: convForChannel } = await supabaseClient.from('conversations').select('channel').eq('id', conversationId).single();
+              const transferChannel = convForChannel?.channel || 'web_chat';
               await supabaseClient.from('messages').insert({
                 conversation_id: conversationId, content: preMsgs,
                 sender_type: 'user', is_ai_generated: true, is_internal: false, status: 'sent', channel: transferChannel,
