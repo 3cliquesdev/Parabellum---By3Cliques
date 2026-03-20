@@ -6516,7 +6516,12 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           const hasSaqueContextDirect = !!recentWithdrawal || saqueRegexDirect.test(customerMessage);
 
           // Usar helper centralizado — fluxo como fonte única de verdade
-          if (hasSaqueContextDirect) {
+          const nodeObjectiveDirect = flow_context?.objective;
+          if (hasSaqueContextDirect && nodeObjectiveDirect) {
+            // 🎯 Fluxo soberano: não enviar template literal, LLM segue o objective
+            directOTPSuccessResponse = `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`;
+            console.log('[ai-autopilot-chat] 🎯 directOTPSuccessResponse: respeitando objective do nó (não envia template literal)');
+          } else if (hasSaqueContextDirect) {
             directOTPSuccessResponse = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone);
           } else {
             directOTPSuccessResponse = `✅ **Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada. Como posso te ajudar?`;
