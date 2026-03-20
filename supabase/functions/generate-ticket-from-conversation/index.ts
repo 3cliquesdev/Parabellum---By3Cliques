@@ -190,22 +190,29 @@ Deno.serve(async (req) => {
         console.log('⏰ SLA: Default - 24 hours');
     }
 
-    // 5. Map category to department
-    const categoryToDept: Record<string, string> = {
-      financeiro: 'Financeiro',
-      tecnico: 'Suporte Sistema',
-      bug: 'Suporte',
-    };
-    const deptName = categoryToDept[category];
+    // 5. Map category to department (with override support)
     let departmentId: string | null = null;
-    if (deptName) {
-      const { data: dept } = await supabase
-        .from('departments')
-        .select('id')
-        .ilike('name', deptName)
-        .maybeSingle();
-      departmentId = dept?.id ?? null;
-      console.log(`🏢 Category "${category}" → Department "${deptName}" → ID: ${departmentId}`);
+    
+    if (department_id_override) {
+      // 🆕 FIX Bug C (#3D645F2C): ticketConfig do fluxo tem prioridade sobre mapeamento automático
+      departmentId = department_id_override;
+      console.log(`🏢 Department override from flow ticketConfig: ${departmentId}`);
+    } else {
+      const categoryToDept: Record<string, string> = {
+        financeiro: 'Financeiro',
+        tecnico: 'Suporte Sistema',
+        bug: 'Suporte',
+      };
+      const deptName = categoryToDept[category];
+      if (deptName) {
+        const { data: dept } = await supabase
+          .from('departments')
+          .select('id')
+          .ilike('name', deptName)
+          .maybeSingle();
+        departmentId = dept?.id ?? null;
+        console.log(`🏢 Category "${category}" → Department "${deptName}" → ID: ${departmentId}`);
+      }
     }
 
     // 6. Combine description with message snapshot
