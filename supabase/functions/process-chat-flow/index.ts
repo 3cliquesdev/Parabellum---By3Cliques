@@ -4721,6 +4721,7 @@ serve(async (req) => {
             forbidSupport: nextNode.data?.forbid_support ?? false,
             forbidConsultant: nextNode.data?.forbid_consultant ?? false,
             ticketConfig: nextNode.data?.ticket_config || null,
+            closeTagId: nextNode.data?.close_tag_id || null,
             otpVerified: collectedData?.__ai_otp_verified === true,
             smartCollectionEnabled: nextNode.data?.smart_collection_enabled ?? false,
             smartCollectionFields: nextNode.data?.smart_collection_fields || [],
