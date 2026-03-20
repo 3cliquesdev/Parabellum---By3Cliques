@@ -281,6 +281,13 @@ export function ReengageTemplateDialog({
           </div>
         )}
 
+        {isAlreadyOpen && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm text-warning">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Conversa já está aberta. Não é necessário reengajar.
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
@@ -289,7 +296,12 @@ export function ReengageTemplateDialog({
             onClick={() => sendMutation.mutate()}
             disabled={!canSend}
           >
-            {sendMutation.isPending ? "Enviando..." : "Enviar Template"}
+            {sendMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Enviando...
+              </>
+            ) : "Enviar Template"}
           </Button>
         </DialogFooter>
       </DialogContent>
