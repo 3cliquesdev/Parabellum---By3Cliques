@@ -181,7 +181,7 @@ serve(async (req) => {
           </p>
           
           <p style="color: #475569; line-height: 1.6; margin-bottom: 25px;">
-            Bem-vindo à operação. Seu acesso à plataforma PARABELLUM | 3Cliques foi concedido.
+            Bem-vindo à operação. Seu acesso à plataforma ${brand.brandName} foi concedido.
           </p>
           
           <p style="color: #1e3a5f; font-weight: 600; margin-bottom: 10px;">
