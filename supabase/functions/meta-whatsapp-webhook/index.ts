@@ -945,7 +945,7 @@ serve(async (req) => {
                   };
                   
                   // 🆕 Fallback: se flow não retornou departmentId, usar Suporte
-                  const DEPT_SUPORTE_FALLBACK = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+                  const DEPT_SUPORTE_FALLBACK = depts.SUPORTE_ID;
                   updateData.department = flowData.departmentId || DEPT_SUPORTE_FALLBACK;
 
                   // ═══════════════════════════════════════════════════════════════
