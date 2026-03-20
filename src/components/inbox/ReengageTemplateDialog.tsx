@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -16,15 +17,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, FileText, AlertTriangle } from "lucide-react";
+import { Send, FileText, AlertTriangle, Loader2 } from "lucide-react";
 
 interface ReengageTemplateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  conversationStatus?: string;
   conversation: {
     id: string;
     contact_id: string | null;
     channel: string;
+    status?: string;
     whatsapp_instance_id: string | null;
     whatsapp_meta_instance_id?: string | null;
     contacts: {
