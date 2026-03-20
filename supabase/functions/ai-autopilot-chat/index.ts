@@ -2257,6 +2257,29 @@ serve(async (req) => {
           lastAIAskedForOTP
         });
 
+        // 🆕 BUG 6 FIX: OTP pendente mas cliente mandou mensagem sem dígitos (ex: "quero sacar")
+        // Sem este guard, a mensagem cai no fluxo normal e pode travar/matar a conversa
+        if (hasAwaitingOTP && !isResendRequest && otpDigitsOnly.length === 0) {
+          const channelToUse = (conversation.channel as string) || responseChannel;
+          const otpReminderMsg = `⏳ Ainda aguardamos o código de verificação!\n\nDigite os **6 dígitos** enviados para o seu email para continuar.\n\nCaso não tenha recebido, responda **"reenviar"** para solicitar um novo código.`;
+          const { data: savedOtpReminder } = await supabaseClient
+            .from('messages')
+            .insert({ conversation_id: conversationId, content: otpReminderMsg, sender_type: 'user', is_ai_generated: true, channel: channelToUse })
+            .select().single();
+          if (channelToUse === 'whatsapp' && contact?.phone) {
+            try {
+              const wpRes = await getWhatsAppInstanceForConversation(supabaseClient, conversationId, contact, conversation);
+              if (wpRes) await sendWhatsAppMessage(supabaseClient, wpRes, contact.phone, otpReminderMsg, conversationId, contact.whatsapp_id);
+            } catch (e) { console.error('[ai-autopilot-chat] ⚠️ OTP reminder WA send failed:', e); }
+          }
+          console.log('[ai-autopilot-chat] 🔒 OTP pendente: mensagem não-OTP redirecionada para lembrete');
+          return new Response(JSON.stringify({
+            response: otpReminderMsg,
+            messageId: savedOtpReminder?.id,
+            debug: { reason: 'awaiting_otp_reminder', bypassed_ai: true }
+          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
         if (shouldTreatAsOTP && otpDigitsOnly.length > 0 && otpDigitsOnly.length !== 0) {
           // SOMENTE processar como OTP se realmente é contexto de OTP
           // E se o cliente mandou exatamente 6 dígitos
