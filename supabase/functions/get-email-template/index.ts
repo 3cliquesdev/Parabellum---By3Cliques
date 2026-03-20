@@ -148,9 +148,10 @@ serve(async (req) => {
       sender = data;
     }
 
-    // Fallback sender values
-    const fromName = sender?.from_name || "3Cliques";
-    const fromEmail = sender?.from_email || "contato@mail.3cliques.net";
+    // Fallback sender values via branding resolver
+    const _brand = await resolveBranding(supabase, { isEmployee: !is_customer_email });
+    const fromName = sender?.from_name || _brand.fromName;
+    const fromEmail = sender?.from_email || _brand.fromEmail;
 
     // 4. Build HTML
     const headerColor = branding?.header_color || "#1e3a5f";
