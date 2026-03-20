@@ -8822,17 +8822,12 @@ Para liberar operações financeiras como saque, preciso transferir você para u
               console.log('[ai-autopilot-chat] 🎯 Detected intent from history:', detectedIntent);
 
               // Build smart collection fields
-              const FIELD_LABELS_OTP: Record<string, string> = {
-                name: 'Nome', email: 'Email', phone: 'Telefone',
-                cpf: 'CPF', pix_key: 'Chave PIX', bank: 'Banco',
-                reason: 'Motivo', amount: 'Valor', address: 'Endereço'
-              };
-              const otpCollectionFields = flow_context?.smartCollectionFields && flow_context.smartCollectionFields.length > 0
-                ? flow_context.smartCollectionFields
-                : ['pix_key', 'bank', 'reason', 'amount'];
-              const otpFieldList = otpCollectionFields
-                .map((f: string) => `${FIELD_LABELS_OTP[f] || f}:`)
-                .join('\n');
+              // 🆕 REFATORADO: Usa buildCollectionMessage como fonte única de verdade
+              const otpCollectionMsg = buildCollectionMessage(flow_context, verifiedContact.first_name, contact?.email, contact?.phone, {
+                prefix: '',
+                intent: detectedIntent ? `seu ${detectedIntent}` : 'sua solicitação',
+                format: 'plain'
+              });
 
               if (detectedIntent) {
                 // Intent detected — skip A/B question, go straight to data collection
@@ -8840,7 +8835,7 @@ Para liberar operações financeiras como saque, preciso transferir você para u
 
 Entendi que você quer realizar um **${detectedIntent}**. Para dar andamento, preciso dos seguintes dados:
 
-${otpFieldList}
+${otpCollectionMsg}
 
 ⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
               } else {
