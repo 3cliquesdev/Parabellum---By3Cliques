@@ -1,22 +1,56 @@
 
 
-# Resolver nomes de departamentos na tabela de Transições
+# Auto-criação de ticket para cancelamento
 
 ## Problema
-A tabela de "Transições Recentes" mostra UUIDs brutos (ex: `36ce66cd...`) nas colunas "Dept Origem" e "Dept Destino" em vez dos nomes legíveis dos departamentos.
+Quando a IA detecta intenção de cancelamento e faz o handoff, **nenhum ticket é criado automaticamente**. Hoje, apenas o fluxo financeiro em anti-loop cria ticket automático (linhas 10329-10357 de `ai-autopilot-chat`).
 
 ## Solução
-Buscar a lista de departamentos do banco e mapear os UUIDs para nomes na tabela.
+Estender a lógica de auto-ticket para cobrir cancelamentos em dois pontos:
 
-### Alterações
+### 1. `ai-autopilot-chat/index.ts` — Anti-loop (paridade com financeiro)
+Na seção de anti-loop (linha ~10333), adicionar detecção de nó de cancelamento:
+```typescript
+const isCancellationNode = (flow_context.node_id || '').toLowerCase().includes('cancel') ||
+  (collectedData.assunto || '').toLowerCase().includes('cancel') ||
+  (collectedData.ai_exit_intent === 'cancelamento');
 
-**`src/pages/AITelemetry.tsx`**:
-1. Adicionar uma query para carregar departamentos: `supabase.from("departments").select("id, name")`
-2. Criar um mapa `Record<string, string>` de `id → name`
-3. Nas linhas 592-593, resolver os nomes:
-   - `fromDept` → `deptMap[json?.from_dept] || json?.from_dept || "—"`
-   - `toDept` → `deptMap[json?.to_dept] || json?.to_dept || "—"`
-4. Exibir UUID truncado como tooltip para referência, nome legível como texto principal
+if (isFinancialNode || isCancellationNode) {
+  const category = isCancellationNode ? 'cancelamento' : 'financeiro';
+  const ticketSubject = isCancellationNode
+    ? `[Auto] Solicitação de cancelamento - ${contact.first_name} ${contact.last_name}`
+    : `[Auto] Solicitação financeira - ${contact.first_name} ${contact.last_name}`;
+  // ... resto igual, com category dinâmico
+}
+```
 
-Isso usa o mesmo padrão já existente em `InboxTimeReport.tsx` e `FormAutomationsPanel.tsx`.
+### 2. `process-chat-flow/index.ts` — Exit por intenção de cancelamento
+Na seção onde `cancellationIntentMatch` dispara o exit (linha ~3626), adicionar criação automática de ticket:
+```typescript
+if (cancellationIntentMatch) {
+  // ... log ai_blocked_cancellation existente ...
+  
+  // Auto-criar ticket de cancelamento
+  try {
+    await createFlowTicket({
+      subject: `[Auto] Cancelamento - conversa ${conversationId.substring(0,8)}`,
+      description: `Intenção de cancelamento detectada.\nMensagem: ${(userMessage || '').substring(0, 200)}`,
+      priority: 'high',
+      category: 'cancelamento',
+      conversationId,
+      nodeId: currentNode.id,
+      departmentId: depts.INTENT_MAP?.cancelamento || null,
+    });
+  } catch (e) { console.error('Auto-ticket cancelamento failed:', e); }
+}
+```
+
+### Arquivos alterados
+
+| Arquivo | Alteração |
+|---|---|
+| `supabase/functions/ai-autopilot-chat/index.ts` | Auto-ticket cancelamento no anti-loop |
+| `supabase/functions/process-chat-flow/index.ts` | Auto-ticket no exit por `cancellationIntentMatch` |
+
+Deploy: `ai-autopilot-chat`, `process-chat-flow`
 
