@@ -141,3 +141,32 @@
 ### Deploy rodada 7
 - `process-chat-flow` — Fix 24
 - `auto-close-conversations` — Fix 22
+
+### Auditoria #EE1426A1 — Correções Aplicadas (rodada 8)
+
+**Fix 25: Pós-OTP usa smartCollectionFields/ticketConfig** ✅
+- Ambos os blocos de OTP success (prioridade L2197 e direto L6547) agora usam:
+  1. `smartCollectionFields` do nó (prioridade máxima)
+  2. `ticketConfig.description_template` (fallback)
+  3. Template hardcoded padrão (último recurso)
+- Resposta genérica "Como posso te ajudar?" eliminada para contexto financeiro
+
+**Fix 26: aiExitForced bloqueado quando OTP verificado** ✅
+- Quando `forceAIExit=true` mas `otpVerifiedInFlow=true`, o exit é SUPRIMIDO
+- Conversa permanece no nó financeiro para coleta de dados
+- "Quero sacar" pós-OTP não dispara mais `fallback_phrase_detected` → escape
+
+**Fix 27: Canal correto nas mensagens do flow** ✅
+- L1383: `channel: 'web_chat'` → `conversation?.channel || 'web_chat'`
+- L4955: `channel: 'web_chat'` → `conversation?.channel || convForDelivery?.channel || 'web_chat'`
+- Mensagens WhatsApp não são mais salvas como `web_chat`
+
+**Fix 28: Sync departamento do ticketConfig pós-OTP** ✅
+- Quando OTP verificado + intent financeiro suprimido, sincroniza:
+  - `conversation.department` → `ticketConfig.department_id`
+  - `conversation.assigned_to` → `ticketConfig.assigned_to`
+- Ticket e atendimento seguem o departamento configurado no nó
+
+### Deploy rodada 8
+- `ai-autopilot-chat` — Fix 25
+- `process-chat-flow` — Fix 26, 27, 28
