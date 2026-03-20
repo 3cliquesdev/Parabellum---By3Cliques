@@ -9844,13 +9844,18 @@ Conversa: ${conversationId}`;
           console.log('[ai-autopilot-chat] Destino do exit:', exitDestination || 'padrao');
 
           // MULTI-AGENTE: Garantir mensagem de transferência adequada
-          const TRANSFER_LABELS: { [key: string]: string } = {
+          // Buscar nome do departamento dinamicamente do banco
+          const TRANSFER_LABELS_FALLBACK: { [key: string]: string } = {
             financeiro: 'equipe financeira', cancelamento: 'equipe de retencao',
             comercial: 'equipe comercial', consultor: 'seu consultor',
             suporte: 'equipe de suporte', internacional: 'equipe internacional',
             pedidos: 'equipe de pedidos', devolucao: 'equipe de devoluções', saque: 'equipe financeira',
           };
-          const transferLabel = TRANSFER_LABELS[exitDestination] || 'equipe responsavel';
+          let transferLabel = TRANSFER_LABELS_FALLBACK[exitDestination] || 'equipe responsavel';
+          try {
+            const { data: deptData } = await supabaseClient.from('departments').select('name').ilike('name', `%${exitDestination}%`).limit(1).maybeSingle();
+            if (deptData?.name) transferLabel = deptData.name;
+          } catch (_e) { /* fallback ao mapa estático */ }
           const visibleMessage = assistantMessage.replace(/\[\[FLOW_EXIT(?::[a-zA-Z_]+)?\]\]/gi, '').trim();
 
           if (visibleMessage.length < 20) {
