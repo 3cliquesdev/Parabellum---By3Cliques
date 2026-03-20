@@ -1,6 +1,3 @@
-
-
-
 ## Auditoria #8181F702 — Correções Aplicadas
 
 ### 3 Fixes deployados no `ai-autopilot-chat`
@@ -51,6 +48,28 @@
 - Quando `hasRecentOTPVerification=true` e histórico contém intent de saque → envia template de coleta PIX
 - Evita resposta genérica "Como posso ajudar?" após OTP verificado
 - Anti-duplicata: verifica se template já foi enviado nos últimos 3 msgs
+
+### Auditoria #EEFFF1DD — Correções Aplicadas (rodada 4)
+
+**Fix 11: Bypass Strict RAG para ações financeiras** ✅
+- `isFinancialBypass = isFinancialAction || isWithdrawalRequest` adicionado à condição do Strict RAG
+- Mensagens como "Quero sacar" não passam mais pelo Strict RAG (que não tem tools)
+
+**Fix 12: Guard pós-OTP verifica mensagem atual** ✅
+- `hasSaqueIntent` agora testa `customerMessage` além do `messageHistory`
+- Conversas onde "Quero sacar" é a primeira mensagem real agora são detectadas
+
+**Fix 13: Fallback de saudação no webhook** ✅
+- Se `ai-autopilot-chat` falhar (timeout/erro), webhook envia saudação padrão direto via WhatsApp
+- Fallback em AMBOS os caminhos: `!greetResponse.ok` e `catch` geral
+
+**Fix 14: Proteção pós-LLM (emergency fallback)** ✅
+- Se LLM retorna vazio sem tool_calls após retry, aplica `flowFallbackMessage || flowObjective || greeting`
+- Cliente NUNCA fica sem resposta
+
+**Fix 15: Prompt de saudação proativa melhorado** ✅
+- Instruções explícitas: apresentar-se, mencionar habilidades, desambiguar dúvida vs ação financeira
+- Removido prompt genérico "Como posso ajudar?"
 
 ### Bug A (skipInitialMessage) — Monitoramento
 - Funciona para outras conversas (log 98ab6b41 confirmado)
