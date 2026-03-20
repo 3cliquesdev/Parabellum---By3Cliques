@@ -166,9 +166,11 @@ serve(async (req) => {
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <!-- HEADER COM LOGO -->
-        <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 30px; text-align: center;">
-          <img src="https://zaeozfdjhrmblfaxsyuu.supabase.co/storage/v1/object/public/avatars/logo-parabellum-email.png?v=2" 
-               alt="PARABELLUM" 
+        <div style="background: linear-gradient(135deg, ${brand.headerColor} 0%, ${brand.primaryColor} 100%); padding: 30px; text-align: center;">
+          ${brand.logoUrl
+            ? `<img src="${brand.logoUrl}" alt="${brand.brandName}" style="max-width: 200px; height: auto;" />`
+            : `<h2 style="color: white; margin: 0;">${brand.brandName}</h2>`
+          }
                style="max-width: 200px; height: auto;" />
         </div>
         
