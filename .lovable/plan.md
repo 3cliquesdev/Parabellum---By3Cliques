@@ -1,172 +1,95 @@
-## Auditoria #8181F702 — Correções Aplicadas
 
-### 3 Fixes deployados no `ai-autopilot-chat`
 
-**Fix 1 (Bug B): Bypass Strict RAG para dados estruturados** ✅
-- Linha ~4935: Adicionada detecção `looksLikeStructuredData` (≥3 linhas com "campo:valor")
-- Quando detectado, bypassa `callStrictRAG` (que não tem tools) e vai direto ao LLM principal com `create_ticket`
+## Diagnóstico — #672F64F7: Template genérico em vez do configurado
 
-**Fix 2 (Bug C): "valor" removido da regex `commercialTerms`** ✅
-- Linha ~7949: `commercialTerms` agora é `/\b(comprar|contratar|assinar|upgrade|plano|preço)\b/i`
-- "Valor:" nos dados financeiros não dispara mais `FLOW_EXIT:comercial`
+### O que aconteceu
+1. Cliente chegou ao nó financeiro, disse "Quero sacar"
+2. OTP já estava verificado de sessão anterior (recent verification no DB)
+3. O **POST-OTP guard** (L6398) foi **PULADO** porque `isFirstInteraction = true`
+4. A IA foi chamada, retornou `fallback_phrase_detected` (0 artigos)
+5. O **fallback handler** (L10006) tentou smart collection mas usou o template genérico
 
-**Fix 3 (Bug B fallback): Ticket determinístico quando LLM vazia + OTP** ✅
-- Linha ~7945: Se `hasRecentOTPVerification` + dados estruturados + LLM retornou vazio → cria ticket via `generate-ticket-from-conversation` diretamente
-- Fallback de último recurso para quando LLM principal também falha
+### 3 Causas Raiz
 
-### Correções adicionais (rodada 2)
+**1. `isFirstInteraction` lê do lugar errado**
+- Código: `(conversation.customer_metadata).__ai?.interaction_count` → **undefined** → `0` → `isFirstInteraction = true` → guard pulado
+- O `interaction_count` está em `chat_flow_states.collected_data.__ai`, não em `customer_metadata`
+- **Resultado**: O guard que deveria enviar a coleta imediatamente é sempre pulado
 
-**Fix 4: `category: 'financial'` → `'financeiro'`** ✅
-- Corrigido para valor válido do enum, garantindo mapeamento correto ao departamento Financeiro
+**2. Prioridade invertida: smartCollection > description_template**
+- O código verifica smart collection PRIMEIRO, e `description_template` só como fallback
+- Mas o usuário configurou um template explícito no dashboard:
+  ```
+  Para eu criar o seu ticket vou precisa que me enviei essas informações.
+  Nome: {{customer_name}}
+  Chave Pix: {{pix_key}}
+  Banco: {{bank}}
+  ...
+  ```
+- O `description_template` é a mensagem real que o usuário quer — deveria ter prioridade
 
-**Fix 5: Envio WhatsApp no fallback usa canal correto** ✅
-- Substituído query genérica `whatsapp_instances` por `getWhatsAppInstanceForConversation` + `sendWhatsAppMessage`
-- Agora respeita Meta vs Evolution conforme a conversa
+**3. `fieldLabels` com chaves erradas**
+- Campos configurados no nó: `pix_key`, `bank`, `reason`, `amount`, `email`
+- Chaves no mapa de labels: `nome_completo`, `tipo_chave_pix`, `chave_pix`, `valor`, `banco`, `motivo`
+- Nenhum match → cai no fallback genérico `📝 **pix_key:** [preencha]`
+- Mas como o fallback handler no L10020 ainda gera a mensagem bonita genérica, é isso que aparece
 
-**Fix 6: DIRECT mode do `process-buffered-messages` verifica `skipInitialMessage`** ✅
-- Adicionado check antes de `callPipeline` no modo DIRECT
-- Quando `skipInitialMessage=true`, envia mensagem vazia para disparar saudação proativa
-- Paridade com o CRON mode que já tinha essa verificação
+### Correção (3 partes)
 
-### Auditoria #AFDAE1C6 — Correções Aplicadas (rodada 3)
+**Parte A — Inverter prioridade: `description_template` primeiro**
 
-**Fix 7: `stateId` no stayOnNode do `process-chat-flow`** ✅
-- Adicionado `stateId: activeState.id` ao JSON de resposta do stayOnNode
-- Permite que o webhook propague `flow_context.stateId` para o autopilot
-- Resolve BUG E: sync OTP para `collected_data` agora funciona
+Em **todos os 4 blocos** de geração de template (L2207, L6405, L6590, L10006):
+- Verificar `description_template` ANTES de smart collection
+- Se existir, usar direto com prefixo "Identidade confirmada!"
+- Smart collection só entra se NÃO houver description_template
 
-**Fix 8: `category: 'financial'` → `'financeiro'` no guard de saque** ✅
-- Segunda instância (linha 6280) corrigida — era duplicata do Fix 4
-- Ticket de saque agora mapeado corretamente ao departamento Financeiro
+**Parte B — Corrigir `fieldLabels` para corresponder às chaves reais**
 
-**Fix 9: WhatsApp Evolution → helper unificado no guard de saque** ✅
-- Substituído query `whatsapp_instances` por `getWhatsAppInstanceForConversation` + `sendWhatsAppMessage`
-- Segunda instância corrigida — duplicata do Fix 5
+Atualizar o mapa em todos os 4 blocos para incluir as chaves reais usadas no fluxo:
+```typescript
+const fieldLabels: Record<string, string> = {
+  'pix_key': '🔐 **Chave PIX:** [sua chave completa]',
+  'bank': '🏦 **Banco:** [nome do banco]',
+  'reason': '📝 **Motivo:** [motivo da solicitação]',
+  'amount': '💰 **Valor:** [R$ X,XX ou "valor total da carteira"]',
+  'email': '📧 **E-mail:** [seu e-mail]',
+  'name': '📋 **Nome completo:** [seu nome]',
+  'phone': '📱 **Telefone:** [seu telefone]',
+  'cpf': '🪪 **CPF:** [seu CPF]',
+  'address': '📍 **Endereço:** [seu endereço]',
+  // manter keys antigas por compatibilidade
+  'nome_completo': '📋 **Nome completo:** [seu nome]',
+  'chave_pix': '🔐 **Chave PIX:** [sua chave completa]',
+  'valor': '💰 **Valor:** [R$ X,XX]',
+  'banco': '🏦 **Banco:** [nome do banco]',
+  'motivo': '📝 **Motivo:** [motivo da solicitação]',
+};
+```
 
-**Fix 10: Guard pós-OTP para intent de saque** ✅
-- Adicionado guard FORA do bloco `shouldValidateOTP`
-- Quando `hasRecentOTPVerification=true` e histórico contém intent de saque → envia template de coleta PIX
-- Evita resposta genérica "Como posso ajudar?" após OTP verificado
-- Anti-duplicata: verifica se template já foi enviado nos últimos 3 msgs
+**Parte C — Corrigir `isFirstInteraction` para ler do flow_context**
 
-### Auditoria #EEFFF1DD — Correções Aplicadas (rodada 4)
+No POST-OTP guard (L6395), buscar `interaction_count` também de `flow_context.collectedData.__ai`:
+```typescript
+const aiInteractions = 
+  (conversation.customer_metadata as any)?.__ai?.interaction_count || 
+  (flow_context as any)?.collectedData?.__ai?.interaction_count || 0;
+```
 
-**Fix 11: Bypass Strict RAG para ações financeiras** ✅
-- `isFinancialBypass = isFinancialAction || isWithdrawalRequest` adicionado à condição do Strict RAG
-- Mensagens como "Quero sacar" não passam mais pelo Strict RAG (que não tem tools)
+### Arquivo afetado
+`supabase/functions/ai-autopilot-chat/index.ts` — 4 blocos de template (L2207, L6390-6407, L6586-6604, L10006-10020)
 
-**Fix 12: Guard pós-OTP verifica mensagem atual** ✅
-- `hasSaqueIntent` agora testa `customerMessage` além do `messageHistory`
-- Conversas onde "Quero sacar" é a primeira mensagem real agora são detectadas
+### Resultado esperado
+"Quero sacar" com OTP verificado → template do dashboard:
+```
+✅ Identidade confirmada!
 
-**Fix 13: Fallback de saudação no webhook** ✅
-- Se `ai-autopilot-chat` falhar (timeout/erro), webhook envia saudação padrão direto via WhatsApp
-- Fallback em AMBOS os caminhos: `!greetResponse.ok` e `catch` geral
+Para eu criar o seu ticket vou precisa que me enviei essas informações.
+Nome: [nome]
+Chave Pix: [pix]
+Banco: [banco]
+Motivo: [motivo]
+Valor: [valor]
 
-**Fix 14: Proteção pós-LLM (emergency fallback)** ✅
-- Se LLM retorna vazio sem tool_calls após retry, aplica `flowFallbackMessage || flowObjective || greeting`
-- Cliente NUNCA fica sem resposta
+Preencha com atenção...
+```
 
-**Fix 15: Prompt de saudação proativa melhorado** ✅
-- Instruções explícitas: apresentar-se, mencionar habilidades, desambiguar dúvida vs ação financeira
-- Removido prompt genérico "Como posso ajudar?"
-
-### Auditoria #4A8BC4A3 — Correções Aplicadas (rodada 5)
-
-**Fix 16: TDZ `isWithdrawalRequest` no bypass do Strict RAG** ✅
-- Linha 4950: `isWithdrawalRequest` era referenciada mas só declarada na L5999
-- Substituído por `isWithdrawalEarly` com detecção inline via `WITHDRAWAL_ACTION_PATTERNS`
-- Saudação proativa voltou a funcionar
-
-**Fix 17: TDZ `conversationMetadata` no guard pós-OTP** ✅
-- Linha 6340: `conversationMetadata` era referenciada mas só declarada na L6411
-- Substituído por `conversation.customer_metadata` (já disponível)
-- Fluxo "Quero sacar" pós-OTP voltou a funcionar
-
-**Fix 18: `channel: 'whatsapp'` no insert legacy do `send-meta-whatsapp`** ✅
-- Linha 450: INSERT não incluía campo `channel`, causando default `web_chat`
-- Mensagens de menu do fluxo agora aparecem corretamente no inbox
-
-**Blindagem: Comentários de zona de segurança** ✅
-- L6001: `isWithdrawalRequest` marcada com "NÃO MOVER PARA CIMA"
-- L6415: `conversationMetadata` marcada com "NÃO MOVER PARA CIMA"
-- Previne regressões TDZ em futuros refactors
-
-### Deploy
-- `ai-autopilot-chat` — Fix 16, 17 + blindagem
-- `send-meta-whatsapp` — Fix 18
-
-### Bug A (skipInitialMessage) — Monitoramento
-- Funciona para outras conversas (log 98ab6b41 confirmado)
-- Fix 7 (stateId) melhora diagnóstico
-- Aguardando próximo cenário de menu+batching para validar
-
-### Auditoria #3D645F2C — Correções Aplicadas (rodada 6)
-
-**Fix 19: Guard pós-OTP respeita primeira interação (Bug A)** ✅
-- Adicionado check `isFirstInteraction` (interaction_count ≤ 1) no guard pós-OTP
-- Na primeira interação do nó, guard NÃO intercepta — IA se apresenta naturalmente
-- Template PIX só enviado após IA já ter interagido
-
-**Fix 20: Template de coleta usa ticketConfig do fluxo (Bug B)** ✅
-- Guard pós-OTP agora verifica `flow_context.ticketConfig.description_template`
-- Se disponível, usa o template configurado no dashboard em vez do hardcoded
-- Regex de detecção ampliada: `Chave Pix|Banco` para cobrir novos templates
-
-**Fix 21: Ticket determinístico usa ticketConfig (Bug C)** ✅
-- Ticket determinístico (L6288) agora lê `flow_context.ticketConfig`
-- Passa `assigned_to`, `department_id_override`, `subject_template`, `default_priority`, `category`
-- `generate-ticket-from-conversation` aceita `department_id_override` com prioridade sobre mapeamento por categoria
-
-### Deploy rodada 6
-- `ai-autopilot-chat` — Fix 19, 20, 21
-- `generate-ticket-from-conversation` — Fix 21 (department_id_override)
-
-### Auditoria #8F42B1C3 — Correções Aplicadas (rodada 7)
-
-**Fix 22: Auto-close respeita tag do nó do fluxo** ✅
-- Helper `getFlowCloseTagId()` busca `close_tag_id` no nó ativo do fluxo
-- Aplicado em 4 stages: Stage 3, Stage 3a, Stage 3b, Stage 3.5
-- Hierarquia: tag do nó > tag do departamento > "Falta de Interação"
-
-**Fix 23: UI — Campo `close_tag_id` no nó ai_response** ✅
-- Interface `AIResponseNodeData` com `close_tag_id` + `close_tag_name`
-- Badge 🏷️ no nó visual
-- Seletor de tag no `AIResponsePropertiesPanel` (seção "Tag de Encerramento")
-
-**Fix 24: Flow Engine propaga `closeTagId`** ✅
-- Adicionado `closeTagId` em todos os 9 pontos de propagação do `flow_context`
-- Segue o mesmo padrão de `ticketConfig`
-
-### Deploy rodada 7
-- `process-chat-flow` — Fix 24
-- `auto-close-conversations` — Fix 22
-
-### Auditoria #EE1426A1 — Correções Aplicadas (rodada 8)
-
-**Fix 25: Pós-OTP usa smartCollectionFields/ticketConfig** ✅
-- Ambos os blocos de OTP success (prioridade L2197 e direto L6547) agora usam:
-  1. `smartCollectionFields` do nó (prioridade máxima)
-  2. `ticketConfig.description_template` (fallback)
-  3. Template hardcoded padrão (último recurso)
-- Resposta genérica "Como posso te ajudar?" eliminada para contexto financeiro
-
-**Fix 26: aiExitForced bloqueado quando OTP verificado** ✅
-- Quando `forceAIExit=true` mas `otpVerifiedInFlow=true`, o exit é SUPRIMIDO
-- Conversa permanece no nó financeiro para coleta de dados
-- "Quero sacar" pós-OTP não dispara mais `fallback_phrase_detected` → escape
-
-**Fix 27: Canal correto nas mensagens do flow** ✅
-- L1383: `channel: 'web_chat'` → `conversation?.channel || 'web_chat'`
-- L4955: `channel: 'web_chat'` → `conversation?.channel || convForDelivery?.channel || 'web_chat'`
-- Mensagens WhatsApp não são mais salvas como `web_chat`
-
-**Fix 28: Sync departamento do ticketConfig pós-OTP** ✅
-- Quando OTP verificado + intent financeiro suprimido, sincroniza:
-  - `conversation.department` → `ticketConfig.department_id`
-  - `conversation.assigned_to` → `ticketConfig.assigned_to`
-- Ticket e atendimento seguem o departamento configurado no nó
-
-### Deploy rodada 8
-- `ai-autopilot-chat` — Fix 25
-- `process-chat-flow` — Fix 26, 27, 28
