@@ -16,6 +16,7 @@ interface CreateTicketRequest {
   operation_id?: string;
   origin_id?: string;
   tag_ids?: string[];
+  department_id_override?: string; // 🆕 Override do mapeamento automático por categoria
 }
 
 Deno.serve(async (req) => {

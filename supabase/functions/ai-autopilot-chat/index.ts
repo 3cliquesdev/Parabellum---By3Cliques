@@ -6285,9 +6285,20 @@ Posso ajudar em mais alguma coisa?`;
           has_pix: hasPIXKey, has_value: hasValueIndicator, has_name: hasName, bypassing_ai: true
         });
         try {
+          // 🆕 FIX Bug C (#3D645F2C): Usar ticketConfig do fluxo para department_id e assigned_to
+          const tc = (flow_context as any)?.ticketConfig;
           const { data: ticketData, error: ticketError } = await supabaseClient.functions.invoke(
             'generate-ticket-from-conversation',
-            { body: { conversation_id: conversationId, subject: `Solicitação de saque - ${contactName}`, priority: 'high', category: 'financeiro' } }
+            { body: { 
+              conversation_id: conversationId, 
+              subject: tc?.subject_template 
+                ? tc.subject_template.replace(/\{\{customer_name\}\}/gi, contactName || 'Cliente')
+                : `Solicitação de saque - ${contactName}`, 
+              priority: tc?.default_priority || 'high', 
+              category: tc?.category || 'financeiro',
+              assigned_to: tc?.assigned_to || undefined,
+              department_id_override: tc?.department_id || undefined,
+            } }
           );
           if (!ticketError) {
             const ticketId = ticketData?.ticket?.id?.slice(0, 8)?.toUpperCase() || '';
