@@ -1,53 +1,65 @@
 
 
-# Fix: Tag de Saque Não Aplicada na Conversa (Path Determinístico)
+# Fix: Conversas `waiting_human` Nunca São Encerradas Fora do Horário
 
 ## Diagnóstico
 
-A conversa #4C64C0A0 seguiu o **path determinístico** de saque (linha 6348 do `ai-autopilot-chat`), que detecta dados PIX na mensagem e cria o ticket diretamente sem passar pela tool call `create_ticket`. O ticket foi criado com sucesso (log confirma `saque_ticket_created salvo (path determinística)`), mas a **tag "6.05 Saque do saldo"** nunca foi adicionada à conversa.
+**48 conversas** estão presas em `waiting_human` agora (46 no Suporte, 2 no Suporte Sistema). Elas acumulam dia após dia porque:
 
-**Por quê?** A lógica de adicionar a tag à `conversation_tags` só existe no **path da tool call** (linha 9219), não no path determinístico (linha 6348-6386). São dois caminhos distintos para criar tickets de saque, mas só um aplica a tag.
+1. **`human_auto_close_minutes` é NULL em TODOS os departamentos** — Stage 4 do `auto-close-conversations` nunca executa
+2. **`auto-close-conversations` não tem nenhuma etapa para fechar conversas `waiting_human` fora do horário** — ele só fecha conversas `autopilot` (Stages 2, 3, 3b) ou `awaiting_close_confirmation` (Stage 3.5)
+3. **`dispatch-conversations`** tenta aplicar tag after-hours, mas usa `contact_tags` em vez de `conversation_tags` (bug na linha 899)
 
-**Evidência:** Query direta confirma `conversation_tags` vazio para esta conversa.
+```text
+Fluxo atual:
+  Cliente → IA → handoff → waiting_human → ❌ NINGUÉM FECHA
+  
+  auto-close Stage 3: ai_mode='autopilot' only → SKIP
+  auto-close Stage 4: human_auto_close_minutes=NULL → SKIP
+  dispatch escalation: só jobs escalados → nem sempre existe
+```
 
-## Correção
+## Correções
 
-### `supabase/functions/ai-autopilot-chat/index.ts` — Path determinístico (~linha 6386)
+### 1. `auto-close-conversations/index.ts` — Nova Stage 6: After-Hours Cleanup
 
-Após persistir a flag `saque_ticket_created`, adicionar a mesma lógica de tag que já existe no path da tool call (linhas 9220-9241):
+Adicionar uma nova etapa APÓS Stage 5 que:
+- Verifica se está fora do horário comercial (`!businessHoursInfo.within_hours`)
+- Se sim, busca todas as conversas `waiting_human` que estão abertas há mais de 10 minutos
+- Aplica a tag configurada `after_hours_tag_id` ("9.05 Atendimento Fora do Horario") em `conversation_tags`
+- Envia mensagem de encerramento com template `after_hours_handoff`
+- Fecha a conversa com `closed_reason: 'after_hours_no_agent'`
 
 ```typescript
-// Após saque_ticket_created salvo (linha 6386):
-
-// 🏷️ Adicionar tag "Saque do saldo" à conversa (para auto-close usar tag correta)
-try {
-  const { data: saqueTag } = await supabaseClient
-    .from('tags')
-    .select('id')
-    .or('name.ilike.%saque%saldo%,name.ilike.%6.05%')
-    .maybeSingle();
-
-  if (saqueTag?.id) {
-    await supabaseClient
-      .from('conversation_tags')
-      .upsert(
-        { conversation_id: conversationId, tag_id: saqueTag.id },
-        { onConflict: 'conversation_id,tag_id' }
-      );
-    console.log('[ai-autopilot-chat] 🏷️ Tag saque adicionada à conversa (path determinística)');
-  }
-} catch (tagErr) {
-  console.warn('[ai-autopilot-chat] ⚠️ Erro ao adicionar tag saque à conversa:', tagErr);
+// ETAPA 6: After-Hours — fechar waiting_human sem agentes
+if (!businessHoursInfo.within_hours) {
+  // Buscar after_hours_tag_id da config
+  // Buscar conversas open + waiting_human + last_message_at > 10min
+  // Para cada: enviar mensagem, aplicar tag, fechar
 }
 ```
 
-Também adicionar a tag à `protected_conversation_tags` para que não seja removida acidentalmente antes do auto-close.
+### 2. `dispatch-conversations/index.ts` — Fix tag table (linha 899)
 
-### Deploy
+Trocar `contact_tags` → `conversation_tags`:
+```typescript
+// ANTES (ERRADO):
+await supabase.from('contact_tags').upsert(...)
 
-Redeployar `ai-autopilot-chat` com version bump para `BUILD-V5 2026-03-20`.
+// DEPOIS (CORRETO):
+await supabase.from('conversation_tags').upsert(
+  { conversation_id: job.conversation_id, tag_id: msgRow.after_hours_tag_id },
+  { onConflict: 'conversation_id,tag_id' }
+);
+```
+
+### 3. Deploy
+
+Redeployar `auto-close-conversations` e `dispatch-conversations`.
 
 ### Resultado
 
-Quando o ticket de saque é criado pela path determinística, a conversa recebe automaticamente a tag "6.05 Saque do saldo". Se for fechada por inatividade, o auto-close usará essa tag (prioridade 1: `close_tag_id` do nó → ou a tag da conversa) em vez do fallback "Falta de Interação".
+- Conversas `waiting_human` fora do horário serão fechadas automaticamente com a tag "9.05 Atendimento Fora do Horario"
+- As 48 conversas atuais serão fechadas na próxima execução do cron fora do horário
+- `dispatch-conversations` aplicará a tag corretamente em `conversation_tags`
 
