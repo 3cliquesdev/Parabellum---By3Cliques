@@ -6050,7 +6050,7 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
       pattern.test(customerMessage)
     );
     
-    // ❌ CANCELAMENTO DE ASSINATURA - Sem OTP, processo Kiwify
+    // ❌ CANCELAMENTO DE ASSINATURA - Sem OTP, processo via KB
     const isCancellationRequest = CANCELLATION_ACTION_PATTERNS.some(pattern =>
       pattern.test(customerMessage)
     );
