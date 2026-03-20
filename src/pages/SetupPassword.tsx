@@ -9,7 +9,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ShieldCheck, Mail, Lock, LogOut } from "lucide-react";
 import { toast } from "sonner";
-import logoLightFallback from "@/assets/logo-parabellum-light.png";
+import logoLightFallback from "@/assets/logo_3cliques_horizontal.png";
 import { useCRMBranding } from "@/hooks/useCRMBranding";
 import { User, Session } from "@supabase/supabase-js";
 
