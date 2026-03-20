@@ -44,7 +44,7 @@ async function logSaqueStep(
 }
 
 async function logOtpAudit(
-  client: ReturnType<typeof createClient>,
+  client: any,
   opts: {
     conversationId: string;
     contactId?: string | null;
