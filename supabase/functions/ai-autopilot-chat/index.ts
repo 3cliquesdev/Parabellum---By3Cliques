@@ -8543,7 +8543,7 @@ Para liberar operações financeiras como saque, preciso transferir você para u
               // Handoff para humano
               await supabaseClient
                 .from('conversations')
-                .update({ ai_mode: 'copilot', department: conversation.department || '36ce66cd-7414-4fc8-bd4a-268fecc3f01a' })
+                .update({ ai_mode: 'copilot', department: conversation.department || DEPT_SUPORTE_ID })
                 .eq('id', conversationId);
 
               await supabaseClient.functions.invoke('route-conversation', {
