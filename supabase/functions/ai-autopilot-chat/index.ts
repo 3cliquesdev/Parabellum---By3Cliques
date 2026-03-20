@@ -2589,6 +2589,25 @@ serve(async (req) => {
               }
             }
             
+            // 🏷️ GUARD: Verificar se conversa tem tag antes de encerrar
+            {
+              const { data: closeConfirmTags } = await supabaseClient
+                .from('conversation_tags')
+                .select('tag_id')
+                .eq('conversation_id', conversationId);
+              
+              if (!closeConfirmTags || closeConfirmTags.length === 0) {
+                console.warn(`[ai-autopilot-chat] ⚠️ Confirmação de encerramento SEM tag na conversa ${conversationId}`);
+                await supabaseClient.from('ai_events').insert({
+                  entity_id: conversationId,
+                  entity_type: 'conversation',
+                  event_type: 'ai_close_confirm_without_tag',
+                  model: 'system',
+                  output_json: { warning: 'Cliente confirmou encerramento mas conversa não tem tag classificatória' },
+                });
+              }
+            }
+            
             // TUDO OK â†’ Chamar close-conversation
             const closeMsg = 'Foi um prazer ajudar! Seu atendimento será encerrado agora. Até a próxima! 😊';
             await supabaseClient.from('messages').insert({
