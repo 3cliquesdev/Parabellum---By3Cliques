@@ -6272,7 +6272,9 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           );
           if (!ticketError) {
             const ticketId = ticketData?.ticket?.id?.slice(0, 8)?.toUpperCase() || '';
-            const saqueResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação de saque. Nossa equipe financeira vai processar o PIX em até **7 dias úteis**.\n\nPosso te ajudar com mais alguma coisa?`;
+            const slaText = (tc as any)?.sla_text || 'em breve';
+            const teamName = (tc as any)?.team_name || 'Nossa equipe';
+            const saqueResponse = `✅ **Solicitação registrada com sucesso!**\n\nOlá ${contactName}! Recebi todos os seus dados.\n\nCriamos o ticket **#${ticketId}** para sua solicitação. ${teamName} vai processar ${slaText}.\n\nPosso te ajudar com mais alguma coisa?`;
             const { data: savedMsg } = await supabaseClient
               .from('messages')
               .insert({ conversation_id: conversationId, content: saqueResponse, sender_type: 'user', is_ai_generated: true, channel: responseChannel })
