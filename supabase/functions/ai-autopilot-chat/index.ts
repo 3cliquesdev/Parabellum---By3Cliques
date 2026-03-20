@@ -1163,12 +1163,19 @@ async function createTicketSuccessMessage(
   
   // FASE 5: Mensagem específica para SAQUE com dados coletados - buscar template
   if (issueType === 'saque' && withdrawalData?.amount) {
+    // Helper: formata valor numérico ou mantém texto livre ("todo saldo")
+    const formatAmount = (val: any): string => {
+      const num = parseFloat(val);
+      return isNaN(num) ? String(val) : num.toFixed(2);
+    };
+    const formattedAmount = formatAmount(withdrawalData.amount);
+
     const saqueTemplate = await getMessageTemplate(
       supabaseClient,
       'saque_sucesso',
       {
         ticket_id: formattedId,
-        valor: withdrawalData.amount.toFixed(2),
+        valor: formattedAmount,
         cpf_last4: withdrawalData.cpf_last4 || ''
       }
     );
@@ -1179,7 +1186,7 @@ async function createTicketSuccessMessage(
     return `Solicitação de saque registrada!
 
 Protocolo: #${formattedId}
-Valor Solicitado: R$ ${withdrawalData.amount.toFixed(2)}
+Valor Solicitado: R$ ${formattedAmount}
 ${withdrawalData.cpf_last4 ? `CPF (final): ...${withdrawalData.cpf_last4}` : ''}
 Prazo: até 7 dias úteis
 
