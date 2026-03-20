@@ -159,6 +159,9 @@ serve(async (req) => {
       }
     });
 
+    // Resolver branding dinâmico
+    const brand = await resolveBranding(supabaseAdmin, { isEmployee: true });
+
     // Send welcome email with responsibility term
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
