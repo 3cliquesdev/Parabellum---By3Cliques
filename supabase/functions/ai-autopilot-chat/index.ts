@@ -1114,6 +1114,19 @@ const WITHDRAWAL_ACTION_PATTERNS = [
   /\d+\s+dias?\s+(que\s+)?(solicitei|pedi)\s+(o\s+)?saque/i, // "9 dias que solicitei o saque"
 ];
 
+// 🆕 Padrões de PROBLEMA COM SAQUE EXISTENTE (pós-OTP — não coletar dados novos)
+// Detecta quando cliente reporta erro em saque anterior, não nova solicitação
+const EXISTING_SAQUE_PROBLEM_PATTERNS = [
+  /erro.*antigo|erro\s+anterior/i,
+  /mesmo\s+erro|mesmo\s+problema/i,
+  /ainda.*(com|tem|temos).*(erro|problema)/i,
+  /ainda\s+(estamos|temos)\s+(com\s+)?o?\s*(erro|problema)/i,
+  /n[aã]o\s+resolveu|continua\s+(com\s+)?(o\s+)?(erro|problema)/i,
+  /problema.*antigo|antigo.*problema/i,
+  /ainda\s+n[aã]o\s+(foi\s+)?(resolvido|processado|corrigido)/i,
+  /problema\s+de\s+antes|antes.*tinha.*erro/i,
+];
+
 // 🆕 Padrões de REEMBOLSO DE PEDIDO (COM OTP) - Devolução de pedido
 // Reembolso agora exige OTP como ação financeira — mesma segurança do saque
 const REFUND_ACTION_PATTERNS = [
@@ -6971,7 +6984,28 @@ O cliente quer cancelar sua assinatura/curso.
       const otpJustValidated = (conversation as any)._otpJustValidated;
       const nodeObjective = flow_context?.objective;
 
-      if (otpJustValidated && (flow_context?.ticketConfig?.description_template || flow_context?.smartCollectionFields?.length > 0)) {
+      // 🆕 FIX: Detectar problema com saque existente pós-OTP — não entrar em coleta PIX
+      const isExistingSaqueProblem = otpJustValidated &&
+        EXISTING_SAQUE_PROBLEM_PATTERNS.some(p => p.test(customerMessage));
+
+      if (isExistingSaqueProblem) {
+        console.log('[ai-autopilot-chat] ⚠️ POST-OTP: Problema com saque existente detectado — modo reclamação ativo');
+        identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — PROBLEMA COM SAQUE EXISTENTE:**
+Olá ${contactName}! Sua identidade foi verificada com sucesso.
+
+⚠️ O cliente está reportando um **PROBLEMA EXISTENTE** com um saque anterior: "${customerMessage}"
+
+**SUA MISSÃO:**
+1. Reconheça o problema com empatia: "Entendo, ${contactName}. Vou verificar o que aconteceu com o seu saque."
+2. Pergunte detalhes que ainda não tiver: data da solicitação, valor aproximado, se já tem número de ticket
+3. Use \`create_ticket\` com issue_type="financeiro" e title="Problema com saque existente - ${contactName}" incluindo todos os detalhes relatados na descrição
+4. Informe que a equipe financeira irá analisar e retornar em até 2 dias úteis
+
+**PROIBIDO:**
+- Pedir dados de chave PIX nova — o cliente JÁ TEM um saque pendente com erro
+- Tratar como nova solicitação de saque
+- Pedir OTP novamente`;
+      } else if (otpJustValidated && (flow_context?.ticketConfig?.description_template || flow_context?.smartCollectionFields?.length > 0)) {
         const hasDescTemplateWall = !!(flow_context as any)?.ticketConfig?.description_template;
         
         if (hasDescTemplateWall) {
