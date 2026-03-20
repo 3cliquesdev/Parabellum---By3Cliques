@@ -83,7 +83,7 @@ serve(async (req) => {
 
         // Verificar se expirou
         if (new Date(codeInfo.expires_at) < new Date()) {
-          if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'expired', channel: 'whatsapp' }).then(() => {}).catch(() => {});
+          if (conversation_id) supabase.from('otp_verification_audit').insert({ conversation_id, otp_reason: otp_reason ?? null, result: 'expired', channel: 'whatsapp' } as any).then(() => {});
           return new Response(JSON.stringify({
             success: false,
             error: 'Este código expirou. Verifique seu email para o código mais recente que enviamos.'
