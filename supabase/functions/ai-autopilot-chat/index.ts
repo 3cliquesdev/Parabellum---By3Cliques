@@ -6968,13 +6968,9 @@ O cliente quer cancelar a assinatura Kiwify.
     
     if (!identityWallNote) {
       const otpJustValidated = (conversation as any)._otpJustValidated;
-      const collectionTemplate = flow_context?.ticketConfig?.description_template;
 
-      if (otpJustValidated && collectionTemplate) {
-        const resolvedTemplate = collectionTemplate
-          .replace(/\{\{customer_name\}\}/g, contactName || '')
-          .replace(/\{\{customer_email\}\}/g, contact?.email || '')
-          .replace(/\{\{customer_phone\}\}/g, contact?.phone || '');
+      if (otpJustValidated && (flow_context?.ticketConfig?.description_template || flow_context?.smartCollectionFields?.length > 0)) {
+        const resolvedMsg = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
 
         identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — COLETA DE DADOS:**
 Olá ${contactName}! Sua identidade foi verificada com sucesso.
@@ -6982,11 +6978,11 @@ Olá ${contactName}! Sua identidade foi verificada com sucesso.
 Agora envie ao cliente EXATAMENTE esta mensagem de coleta de dados (sem alterar):
 
 ---
-${resolvedTemplate}
+${resolvedMsg}
 ---
 
 Após receber todos os dados, use \`create_ticket\` com issue_type="saque".`;
-        console.log('[ai-autopilot-chat] 📋 identityWallNote: usando description_template do chatflow para coleta pós-OTP');
+        console.log('[ai-autopilot-chat] 📋 identityWallNote: usando buildCollectionMessage centralizado para coleta pós-OTP');
       } else {
         identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.
 
