@@ -6912,11 +6912,33 @@ O cliente quer cancelar sua assinatura/curso.
     
     if (!identityWallNote) {
       const otpJustValidated = (conversation as any)._otpJustValidated;
+      const nodeObjective = flow_context?.objective;
 
       if (otpJustValidated && (flow_context?.ticketConfig?.description_template || flow_context?.smartCollectionFields?.length > 0)) {
-        const resolvedMsg = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
+        
+        if (nodeObjective) {
+          // 🎯 O nó tem objective configurado — respeitar a estratégia do administrador
+          const fieldsReference = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
+          
+          identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — SEGUIR OBJECTIVE DO NÓ:**
+Olá ${contactName}! Sua identidade foi verificada com sucesso.
 
-        identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — COLETA DE DADOS:**
+**SUA MISSÃO (definida pelo administrador):**
+${nodeObjective}
+
+**CAMPOS A COLETAR (referência interna — NÃO envie tudo de uma vez):**
+${fieldsReference}
+
+**REGRAS:**
+- Siga o objective acima como prioridade máxima
+- Após coletar TODOS os dados, use \`create_ticket\` com issue_type="saque"
+- NÃO envie todos os campos de uma vez (a menos que o objective permita)`;
+          console.log('[ai-autopilot-chat] 📋 identityWallNote: respeitando objective do nó para coleta pós-OTP');
+        } else {
+          // Sem objective — usar template literal como antes
+          const resolvedMsg = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone, { format: 'plain' });
+
+          identityWallNote = `\n\n**✅ IDENTIDADE CONFIRMADA — COLETA DE DADOS:**
 Olá ${contactName}! Sua identidade foi verificada com sucesso.
 
 Agora envie ao cliente EXATAMENTE esta mensagem de coleta de dados (sem alterar):
@@ -6926,7 +6948,8 @@ ${resolvedMsg}
 ---
 
 Após receber todos os dados, use \`create_ticket\` com issue_type="saque".`;
-        console.log('[ai-autopilot-chat] 📋 identityWallNote: usando buildCollectionMessage centralizado para coleta pós-OTP');
+          console.log('[ai-autopilot-chat] 📋 identityWallNote: usando buildCollectionMessage literal (sem objective)');
+        }
       } else {
         identityWallNote = `\n\n**IMPORTANTE:** Este é um cliente já verificado. Cumprimente-o pelo nome (${contactName}) de forma calorosa. NÃO peça email ou validação.
 
