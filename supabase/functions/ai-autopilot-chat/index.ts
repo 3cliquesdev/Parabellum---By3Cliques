@@ -6352,14 +6352,17 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           (flow_context as any)?.collectedData?.__ai?.interaction_count || 0;
         const isFirstInteraction = aiInteractions <= 0;
         
-        if (!recentCollectionMsg && !isFirstInteraction) {
-          // NÃO retornar template hardcoded — deixar LLM usar o system prompt da persona
+        // 🆕 FIX #5F0529BA: Se description_template existe, o template É a apresentação proativa
+        // — ignorar isFirstInteraction e ativar _otpJustValidated imediatamente
+        const hasDescTemplateGuard = !!(flow_context as any)?.ticketConfig?.description_template;
+        
+        if (!recentCollectionMsg && (hasDescTemplateGuard || !isFirstInteraction)) {
           console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE — sinalizando para LLM continuar com persona system prompt', {
-            aiInteractions, isFirstInteraction, hasSaqueIntent, otp_reason
+            aiInteractions, isFirstInteraction, hasSaqueIntent, otp_reason, hasDescTemplateGuard
           });
           (conversation as any)._otpJustValidated = true;
-        } else if (isFirstInteraction) {
-          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE — primeira interação, deixando IA se apresentar', {
+        } else if (isFirstInteraction && !hasDescTemplateGuard) {
+          console.log('[ai-autopilot-chat] 🎯 POST-OTP SAQUE — primeira interação sem template, deixando IA se apresentar', {
             aiInteractions, hasSaqueIntent
           });
           // Não interceptar — deixar cair no fluxo normal para IA se apresentar
