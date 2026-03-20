@@ -1,77 +1,102 @@
 
 
-# Auditoria Completa: Hardcoded Remanescente no `ai-autopilot-chat`
+# Auditoria 100% — Tornar ChatFlow Soberano no `ai-autopilot-chat`
 
-## Status Atual
+## Status Atual (o que JÁ funciona)
+- ✅ `persona.system_prompt` injetado (L7174)
+- ✅ `buildCollectionMessage` é fonte única de templates de coleta
+- ✅ "Cérebro financeiro" removido, delegado ao fluxo/KB
+- ✅ Menu A/B hardcoded eliminado
+- ✅ SLA parametrizado via `sla_text`/`team_name` no system prompt
+- ✅ `TRANSFER_LABELS` busca departamento do banco com fallback estático
+- ✅ Cancelamento no `identityWallNote` genérico (sem Kiwify)
 
-A refatoração anterior foi **parcialmente bem-sucedida**:
-- ✅ `persona.system_prompt` é injetado (L7173) 
-- ✅ `buildCollectionMessage` é a fonte única de template (1 mapa `fieldLabels` centralizado)
-- ✅ Bypass hardcoded de cancelamento foi removido (L6082-6084 agora só loga)
-- ✅ SLA parametrizado via `sla_text`/`team_name` (L6275-6277, L7881-7883)
-- ✅ Menu A/B hardcoded pós-OTP foi eliminado
-- ✅ "Cérebro financeiro" de 170 linhas foi substituído por instrução genérica (L7200-7225)
+---
 
-## Problemas AINDA Encontrados
+## Problemas AINDA Encontrados (181 referências "Kiwify" + vendor-specific)
 
-### P1 — Cancelamento Kiwify hardcoded no identityWallNote (L6890-6898)
+### 🔴 P1 — Email subject hardcoded "Seu Armazém Drop" (L10467)
 ```
-identityWallNote += `\n\n**=== CANCELAMENTO DE ASSINATURA (SEM OTP) ===**
-O cliente quer cancelar a assinatura Kiwify.
-**PROCESSO:**
-- Oriente o cliente sobre como cancelar na plataforma Kiwify
+subject: `Re: ${conversation.subject || 'Seu Armazém Drop - Resposta do Suporte'}`
 ```
-**Impacto:** Referência direta a "Kiwify" injetada no prompt. Deve delegar à KB.
+**Impacto:** Todo email enviado sem subject mostra nome de outro cliente. Deve usar `persona.name` ou nome da organização.
 
-### P2 — Triagem silenciosa Kiwify hardcoded (L2929-3101)
-~170 linhas que consultam diretamente `kiwify_events` para validar clientes. Isso é funcionalidade legítima de CRM (validação de compra), mas os **comentários e logs** referenciam "Kiwify" como se fosse o único provedor.
+### 🔴 P2 — Comentários e logs referenciam "Kiwify" como vendor fixo (30+ locais)
+- L1117: `// Devolução de pedido Kiwify`
+- L1131: `// Kiwify`
+- L2929: `// Sempre validar pela base Kiwify`
+- L2932: `validando phone+email+CPF contra base Kiwify`
+- L3036: `Nenhuma compra Kiwify encontrada`
+- L3045: `kiwify_validated=true`
+- L3048: `BUSCAR PRODUTOS KIWIFY DO CONTATO`
+- L6033: `CANCELAMENTO DE ASSINATURA - Sem OTP (processo Kiwify)`
+- L6053: `Cancelamento - Sem OTP, processo Kiwify`
+- L6667: `Cancelamento Kiwify -> Sem OTP`
+**Impacto:** Confusão em debugging. Devem ser neutros ("validação de compra", "provedor de eventos").
 
-**Impacto:** Funcional, mas acoplado a um vendor. Isso é infraestrutura — não é prompt. Marcar como P3 (baixa prioridade).
-
-### P3 — "7 dias úteis" hardcoded em 2 locais residuais
-- **L1191:** Fallback de template de saque: `Prazo: até 7 dias úteis`
-- **L8783:** Nota interna do ticket: `REGRAS (até 7 dias úteis)`
-
-**L1191** é fallback de último recurso (só usado se não houver template). **L8783** é nota interna (não visível ao cliente). Baixa prioridade.
-
-### P4 — `TRANSFER_LABELS` hardcoded (L9846-9851)
-Mapa fixo de labels de equipe para transferências. Deveria vir do departamento no banco.
-
-**Impacto:** Se um cliente renomear departamentos, as mensagens de transferência não refletem.
-
-## Plano de Correção
-
-### Correção 1 — Eliminar referência Kiwify no cancelamento (L6890-6898)
-Substituir o bloco hardcoded por instrução genérica que delega à KB:
+### 🔴 P3 — Internal note do ticket com regras de negócio fixas (L8784-8792)
 ```
-identityWallNote += `\n\n**=== CANCELAMENTO DE ASSINATURA (SEM OTP) ===**
-O cliente quer cancelar sua assinatura/curso.
+**REGRAS (conforme SLA configurado):**
+- Destino: APENAS conta do titular (CPF do cliente)
+- PIX de terceiros: CANCELAR solicitação
+**CHECKLIST FINANCEIRO:**
+- [ ] Verificar saldo disponível
+- [ ] Confirmar titularidade da chave PIX
+```
+**Impacto:** Regras de PIX/titular são específicas do negócio. Devem vir do `ticketConfig.description_template` (já implementado em L8829-8831, mas o fallback L8773-8792 ainda injeta regras fixas).
 
-**PROCESSO:**
-- Consulte a base de conhecimento para instruções de cancelamento
-- NÃO precisa de OTP para cancelamento
-- Se não encontrar instruções na KB, ofereça transferir para humano
-- NÃO invente procedimentos ou links`;
+### 🟡 P4 — `kiwify_events` table queries infraestruturais (L2929-3100)
+~170 linhas que consultam `kiwify_events` para validação de compra. Isso é **infraestrutura de CRM** (a tabela existe no banco), não é prompt. Os dados são legítimos, mas os **comentários** devem ser neutros.
+
+### 🟡 P5 — `allowed_sources` inclui `'kiwify'` como tipo (L291, L301, L1282)
+O tipo literal `'kiwify'` está na interface `FlowContext.allowed_sources`. Funcional (a tabela existe), mas o nome acopla ao vendor.
+
+---
+
+## Plano de Correção (4 correções)
+
+### Correção 1 — Email subject dinâmico (L10467)
+Substituir `'Seu Armazém Drop - Resposta do Suporte'` por:
+```typescript
+subject: `Re: ${conversation.subject || `${persona?.name || 'Suporte'} - Resposta`}`
 ```
 
-### Correção 2 — Parametrizar SLA no fallback de saque (L1191)
-Substituir `até 7 dias úteis` por leitura do flow_context (já disponível na função):
-- Como `buildWithdrawalSuccessMessage` não recebe `flow_context`, manter como fallback genérico mas trocar texto para `"conforme prazo informado"` (neutro).
+### Correção 2 — Neutralizar comentários/logs vendor-specific (~30 locais)
+Substituir todos os comentários que referenciam "Kiwify" por termos genéricos:
+- `// Validar pela base Kiwify` → `// Validar compra via eventos de pagamento`
+- `// processo Kiwify` → `// processo de cancelamento (via KB)`
+- `Nenhuma compra Kiwify encontrada` → `Nenhum evento de compra encontrado`
+- Manter os nomes das tabelas (`kiwify_events`, `kiwify_validated`) intactos — são schema real.
 
-### Correção 3 — Tornar TRANSFER_LABELS dinâmico (L9846-9851)
-Buscar o nome do departamento de destino diretamente do banco quando disponível, com fallback ao mapa estático.
+### Correção 3 — Internal note do ticket: delegar ao template (L8773-8792)
+O bloco de "enriquecimento específico para SAQUE" injeta regras fixas de PIX. Deve respeitar o `description_template` do nó:
+- Se `ticketConfig.description_template` existe → usar apenas ele (já implementado em L8829)
+- Se não existe → manter o fallback genérico MAS sem regras de negócio fixas (remover "APENAS conta do titular", "PIX de terceiros: CANCELAR", checklist)
 
-### Correção 4 — Nota interna "7 dias úteis" (L8783)
-Substituir por texto genérico: `REGRAS (conforme SLA configurado):`
+### Correção 4 — Fallback do saque note simplificado
+Substituir L8784-8792 por:
+```
+**DADOS DO SAQUE:**
+- Valor: R$ ${args.withdrawal_amount}
+- Chave PIX: ${args.pix_key || 'Não informada'} (${args.pix_key_type || 'tipo não especificado'})
+- Confirmação: ${args.customer_confirmation ? 'Sim' : 'Pendente'}
+```
+Sem regras de negócio — essas devem estar no template do dashboard ou na KB.
+
+---
 
 ## Arquivos Afetados
 
 | Arquivo | Linhas | Alteração |
 |---------|--------|-----------|
-| `ai-autopilot-chat/index.ts` | L6890-6898 | Remover "Kiwify" do prompt de cancelamento |
-| | L1191 | Neutralizar SLA hardcoded no fallback |
-| | L8783 | Neutralizar SLA em nota interna |
-| | L9846-9851 | Buscar nome do departamento do banco |
+| `ai-autopilot-chat/index.ts` | L10467 | Email subject dinâmico |
+| | L1117, L1131, L2929-3045, L6033, L6053, L6667 | Neutralizar ~30 comentários/logs |
+| | L8773-8792 | Simplificar internal note (remover regras fixas) |
 
-**Estimativa:** ~30 linhas alteradas, 0 removidas
+**Estimativa:** ~40 linhas alteradas (maioria comentários), 0 funcionalidade removida
+
+## O que NÃO alterar
+- Queries a `kiwify_events` — são infraestrutura real do banco
+- Campos `kiwify_validated` — são colunas reais do schema
+- `allowed_sources: 'kiwify'` — tipo legítimo da interface (renomear quebraria contratos)
 
