@@ -605,7 +605,11 @@ serve(async (req) => {
                   .from("conversations")
                   .update(reopenUpdate)
                   .eq("id", conversation.id);
-                console.log("[meta-whatsapp-webhook] 💬 Conversation updated to Meta provider:", conversation.id);
+                
+                // 🆕 FIX: Atualizar objeto local para refletir mudanças (evitar stale ai_mode)
+                Object.assign(conversation, reopenUpdate);
+                
+                console.log("[meta-whatsapp-webhook] 💬 Conversation updated to Meta provider:", conversation.id, "| ai_mode agora:", conversation.ai_mode);
               }
 
               if (!conversation) {

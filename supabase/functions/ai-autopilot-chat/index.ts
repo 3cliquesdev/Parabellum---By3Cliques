@@ -4407,8 +4407,18 @@ serve(async (req) => {
       } catch (primaryError) {
         const errMsg = primaryError instanceof Error ? primaryError.message : String(primaryError);
         
-        // Se é erro de quota, não tentar fallback
-        if (errMsg.includes('QUOTA_ERROR')) throw primaryError;
+        // Se é erro de quota/429, retry 1x com delay de 3s antes de desistir
+        if (errMsg.includes('QUOTA_ERROR') || errMsg.includes('429')) {
+          console.warn('[callAIWithFallback] ⚠️ QUOTA/429 detectado, aguardando 3s para retry...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          try {
+            return await tryModel(configuredModel, 'Retry pós-429');
+          } catch (retryError) {
+            console.error('[callAIWithFallback] ❌ Retry pós-429 também falhou:', retryError);
+            throw primaryError; // Propagar erro original de quota
+          }
+        }
         
         // Se é erro 400/422 (payload inválido), tentar modelo de contingência seguro
         if (errMsg.includes('400') || errMsg.includes('422')) {
@@ -11132,77 +11142,91 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
       const isQuotaError = errorMessage.includes('QUOTA_ERROR') || errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('rate_limit');
       
       if (isQuotaError) {
-        // QUOTA ERROR: NÃO transferir, apenas avisar o cliente e manter na IA
-        console.warn('[ai-autopilot-chat] âš ï¸ QUOTA_ERROR detectado â€” NÃO transferir, apenas avisar cliente');
+        // QUOTA ERROR: Retry já foi feito em callAIWithFallback — se chegou aqui, falhou 2x
+        // Em vez de enviar msg genérica "alta demanda", transferir para humano
+        console.warn('[ai-autopilot-chat] QUOTA_ERROR após retry — iniciando handoff para humano');
         
-        const quotaMessage = "Estou com alta demanda no momento. Por favor, tente novamente em alguns instantes. ";
+        // Registrar evento específico de falha LLM para monitoramento
+        await supabaseClient.from('ai_events').insert({
+          entity_id: conversationId,
+          entity_type: 'conversation',
+          event_type: 'ai_error_llm_failure',
+          model: 'quota_exhausted',
+          output_json: { error: errorMessage, retry_attempted: true, handoff_triggered: true },
+        }).catch((e: any) => console.error('[ai-autopilot-chat] Erro ao salvar ai_event:', e));
         
-        // Salvar mensagem de aviso
-        await supabaseClient.from('messages').insert({
-          conversation_id: conversationId,
-          content: quotaMessage,
-          sender_type: 'user',
-          sender_id: null,
-          is_ai_generated: true,
-          channel: responseChannel,
-          status: 'sent'
-        });
-        
-        // Se WhatsApp, enviar via Meta
-        if (responseChannel === 'whatsapp' && contact?.phone && conversation) {
-          try {
-            const whatsappResult = await getWhatsAppInstanceWithProvider(
-              supabaseClient,
-              conversationId,
-              conversation.whatsapp_instance_id,
-              conversation.whatsapp_provider,
-              conversation.whatsapp_meta_instance_id
-            );
-            if (whatsappResult && whatsappResult.provider === 'meta') {
-              const targetNumber = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
-              await supabaseClient.functions.invoke('send-meta-whatsapp', {
-                body: {
-                  instance_id: whatsappResult.instance.id,
-                  phone_number: targetNumber,
-                  message: quotaMessage,
-                  conversation_id: conversationId,
-                  skip_db_save: true,
-                  is_bot_message: true
-                }
-              });
-              console.log('[ai-autopilot-chat] âœ… Quota warning sent via Meta WhatsApp');
-            }
-          } catch (waErr) {
-            console.error('[ai-autopilot-chat] ❌ Erro ao enviar aviso de quota via WhatsApp:', waErr);
-          }
-        }
-        
-        // Registrar no failure log mas SEM handoff
+        // Registrar no failure log
         await supabaseClient.from('ai_failure_logs').insert({
           conversation_id: conversationId,
-          error_message: `QUOTA_ERROR: ${errorMessage}`,
+          error_message: 'QUOTA_ERROR_HANDOFF: ' + errorMessage,
           customer_message: customerMessage,
           contact_id: conversation?.contacts?.id,
           notified_admin: true
         });
         
-        // Notificar admin sobre quota
+        // FLOW SOVEREIGNTY: se há fluxo ativo, manter autopilot com msg de retry
+        const hasActiveFlowQuota = !!flow_context;
+        
+        if (hasActiveFlowQuota) {
+          const retryMsg = "Entendi! Poderia me dar mais detalhes sobre o que precisa? Estou aqui para ajudar.";
+          await supabaseClient.from('messages').insert({
+            conversation_id: conversationId, content: retryMsg, sender_type: 'user', sender_id: null,
+            is_ai_generated: true, channel: responseChannel, status: 'sent'
+          });
+          if (responseChannel === 'whatsapp' && contact?.phone && conversation) {
+            try {
+              const wr = await getWhatsAppInstanceWithProvider(supabaseClient, conversationId, conversation.whatsapp_instance_id, conversation.whatsapp_provider, conversation.whatsapp_meta_instance_id);
+              if (wr && wr.provider === 'meta') {
+                const tn = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+                await supabaseClient.functions.invoke('send-meta-whatsapp', { body: { instance_id: wr.instance.id, phone_number: tn, message: retryMsg, conversation_id: conversationId, skip_db_save: true, is_bot_message: true } });
+              }
+            } catch (waErr) { console.error('[ai-autopilot-chat] Erro WhatsApp retry:', waErr); }
+          }
+          console.log('[ai-autopilot-chat] Flow ativo preservado durante quota error');
+        } else {
+          // SEM fluxo ativo: handoff para humano
+          const handoffMsg = "Estou te transferindo para um de nossos atendentes. Um momento, por favor!";
+          await supabaseClient.from('messages').insert({
+            conversation_id: conversationId, content: handoffMsg, sender_type: 'user', sender_id: null,
+            is_ai_generated: true, channel: responseChannel, status: 'sent'
+          });
+          if (responseChannel === 'whatsapp' && contact?.phone && conversation) {
+            try {
+              const wr = await getWhatsAppInstanceWithProvider(supabaseClient, conversationId, conversation.whatsapp_instance_id, conversation.whatsapp_provider, conversation.whatsapp_meta_instance_id);
+              if (wr && wr.provider === 'meta') {
+                const tn = extractWhatsAppNumber(contact.whatsapp_id) || contact.phone?.replace(/\D/g, '');
+                await supabaseClient.functions.invoke('send-meta-whatsapp', { body: { instance_id: wr.instance.id, phone_number: tn, message: handoffMsg, conversation_id: conversationId, skip_db_save: true, is_bot_message: true } });
+              }
+            } catch (waErr) { console.error('[ai-autopilot-chat] Erro WhatsApp handoff:', waErr); }
+          }
+          
+          // Transferir para humano
+          await supabaseClient.from('conversations').update({
+            ai_mode: 'waiting_human',
+            department: conversation.department || DEPT_SUPORTE_ID,
+            last_message_at: new Date().toISOString()
+          }).eq('id', conversationId);
+          
+          await supabaseClient.functions.invoke('route-conversation', { body: { conversationId } });
+          console.log('[ai-autopilot-chat] Quota error -> handoff para humano executado');
+        }
+        
+        // Notificar admin
         await supabaseClient.functions.invoke('send-admin-alert', {
           body: {
             type: 'ai_quota_warning',
-            message: `âš ï¸ IA sem cota/saldo. Verifique o faturamento da API.`,
-            error: errorMessage,
-            conversationId
+            message: 'IA sem cota/saldo. Cliente ' + (hasActiveFlowQuota ? 'mantido em fluxo' : 'transferido para humano') + '. Verifique o faturamento da API.',
+            error: errorMessage, conversationId
           }
         });
         
         return new Response(JSON.stringify({ 
-          status: 'quota_error',
-          message: quotaMessage,
-          handoff_triggered: false,
-          retry_suggested: true
+          status: 'quota_error_handled',
+          handoff_triggered: !hasActiveFlowQuota,
+          flow_context_preserved: hasActiveFlowQuota,
+          retry_attempted: true
         }), {
-          status: 503,
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
