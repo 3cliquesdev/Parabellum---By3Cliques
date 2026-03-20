@@ -1220,20 +1220,27 @@ function buildCollectionMessage(
   flowContext: any,
   contactName: string,
   contactEmail?: string,
-  contactPhone?: string
+  contactPhone?: string,
+  options?: { prefix?: string; intent?: string; format?: 'plain' | 'rich' }
 ): string {
   const tc = flowContext?.ticketConfig;
+  const prefix = options?.prefix ?? '✅ **Identidade confirmada!**';
+  const intent = options?.intent ?? 'sua solicitação';
+  const format = options?.format ?? 'rich';
 
+  // 🥇 Prioridade 1: description_template configurado no dashboard do fluxo
   if (tc?.description_template) {
     const resolved = tc.description_template
       .replace(/\{\{customer_name\}\}/g, contactName || '')
       .replace(/\{\{customer_email\}\}/g, contactEmail || '')
       .replace(/\{\{customer_phone\}\}/g, contactPhone || '');
-    return `✅ **Identidade confirmada!**\n\nOlá ${contactName}! ${resolved}`;
+    if (format === 'plain') return resolved;
+    return `${prefix}\n\nOlá ${contactName}! ${resolved}`;
   }
 
+  // 🥈 Prioridade 2: smartCollectionFields configurados no nó do fluxo
   const fields = flowContext?.smartCollectionFields;
-  if (flowContext?.smartCollectionEnabled && fields && fields.length > 0) {
+  if (fields && fields.length > 0) {
     const fieldLabels: Record<string, string> = {
       'name': '📋 **Nome completo:** [seu nome]',
       'email': '📧 **E-mail:** [seu e-mail]',
@@ -1251,11 +1258,18 @@ function buildCollectionMessage(
       'banco': '🏦 **Banco:** [nome do banco]',
       'motivo': '📝 **Motivo:** [motivo da solicitação]',
     };
+    if (format === 'plain') {
+      return fields.map((f: string) => `${fieldLabels[f] || `📝 **${f}:** [preencha]`}`).join('\n');
+    }
     const fieldsText = fields.map((f: string) => fieldLabels[f] || `📝 **${f}:** [preencha]`).join('\n');
-    return `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n${fieldsText}`;
+    return `${prefix}\n\nOlá ${contactName}! Para dar andamento a ${intent}, me envie os dados abaixo:\n\n${fieldsText}\n\n⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
   }
 
-  return `✅ **Identidade confirmada!**\n\nOlá ${contactName}! Para processar seu saque, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔑 **Tipo da chave PIX:** [CPF / E-mail / Telefone / Chave Aleatória]\n🔐 **Chave PIX:** [sua chave completa]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]`;
+  // 🥉 Prioridade 3: fallback genérico (último recurso)
+  if (format === 'plain') {
+    return `Nome:\nChave PIX:\nBanco:\nMotivo:\nValor:`;
+  }
+  return `${prefix}\n\nOlá ${contactName}! Para dar andamento a ${intent}, me envie os dados abaixo:\n\n📋 **Nome completo:** [seu nome conforme cadastro]\n🔐 **Chave PIX:** [sua chave completa]\n🏦 **Banco:** [nome do banco]\n📝 **Motivo:** [motivo da solicitação]\n💰 **Valor:** [R$ X,XX ou "valor total da carteira"]\n\n⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
 }
 
 // ============================================================
