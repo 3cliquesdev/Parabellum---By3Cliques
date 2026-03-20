@@ -6888,12 +6888,13 @@ Qual é o seu **email de compra**?"
       console.log('[ai-autopilot-chat] ❌ Detectado pedido de CANCELAMENTO - sem OTP necessário');
       
       identityWallNote += `\n\n**=== CANCELAMENTO DE ASSINATURA (SEM OTP) ===**
-O cliente quer cancelar a assinatura Kiwify.
+O cliente quer cancelar sua assinatura/curso.
 
 **PROCESSO:**
-- Oriente o cliente sobre como cancelar na plataforma Kiwify
+- Consulte a base de conhecimento para instruções de cancelamento
 - NÃO precisa de OTP para cancelamento
-- Se precisar de ajuda adicional, ofereça transferir para humano
+- Se não encontrar instruções na KB, ofereça transferir para humano
+- NÃO invente procedimentos ou links
 
 **NÃO PEÇA OTP** para esta situação.`;
     }
