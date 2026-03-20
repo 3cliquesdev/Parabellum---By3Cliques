@@ -11269,7 +11269,7 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           event_type: 'ai_error_llm_failure',
           model: 'quota_exhausted',
           output_json: { error: errorMessage, retry_attempted: true, handoff_triggered: true },
-        }).catch((e: any) => console.error('[ai-autopilot-chat] Erro ao salvar ai_event:', e));
+        }).then(({ error: evtErr }: any) => { if (evtErr) console.error('[ai-autopilot-chat] Erro ao salvar ai_event:', evtErr); });
         
         // Registrar no failure log
         await supabaseClient.from('ai_failure_logs').insert({

@@ -160,7 +160,7 @@ serve(async (req) => {
         otp_reason: otp_reason ?? null,
         result: 'success',
         channel: 'whatsapp',
-      }).then(() => {}).catch(() => {});
+      } as any).then(() => {});
     }
 
     return new Response(JSON.stringify({
