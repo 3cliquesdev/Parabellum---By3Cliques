@@ -39,6 +39,20 @@ export function useClientAssistant() {
     enabled: !!user?.email,
   });
 
+  // Buscar persona do portal por nome (dinâmico, sem UUID hardcoded)
+  const { data: portalPersona } = useQuery({
+    queryKey: ["portal-persona"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("ai_personas")
+        .select("id, system_prompt")
+        .eq("name", "Portal Cliente")
+        .eq("is_active", true)
+        .maybeSingle();
+      return data;
+    },
+  });
+
   const PORTAL_PERSONA_ID = "d4dc2026-bb47-4f2c-b675-b8d301240786";
 
   const invokeAssistant = useCallback(async (conversationId: string, messageText: string, contactName: string) => {
