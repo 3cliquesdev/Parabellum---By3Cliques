@@ -1260,8 +1260,12 @@ serve(async (req) => {
       collectSalesMetrics(supabase, since.toISOString(), until.toISOString()),
     ]);
 
+    // Resolver branding dinâmico para o report
+    const { data: _org } = await supabase.from('organizations').select('name').limit(1).maybeSingle();
+    const brandNameForReport = _org?.name || 'CRM';
+
     const dateStr = formatDate(since);
-    const aiAnalysis = await generateAIAnalysis(metrics, salesMetrics, dateStr, openaiKey);
+    const aiAnalysis = await generateAIAnalysis(metrics, salesMetrics, dateStr, openaiKey, brandNameForReport);
 
     // WhatsApp message
     const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(1)}k` : `R$ ${v.toLocaleString('pt-BR')}`;
