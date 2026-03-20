@@ -2010,6 +2010,7 @@ serve(async (req) => {
       let contactConsultantName: string | null = null;
       let contactSellerName: string | null = null;
       let contactTagsList: string[] = [];
+      let companyBrandName: string | null = null;
 
       try {
         const enrichPromises: PromiseLike<any>[] = [];
