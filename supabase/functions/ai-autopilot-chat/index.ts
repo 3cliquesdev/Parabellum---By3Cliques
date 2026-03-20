@@ -2620,6 +2620,11 @@ serve(async (req) => {
               });
             }
             
+            // 🆕 Fase 1: Marcar resolved_by antes de fechar (garante classificação na telemetria)
+            await supabaseClient.from('conversations')
+              .update({ resolved_by: 'ai' })
+              .eq('id', conversationId);
+
             // Invocar close-conversation (reuso total de CSAT, métricas, timeline)
             const { data: closeResult, error: closeError } = await supabaseClient.functions.invoke('close-conversation', {
               body: {
@@ -4802,10 +4807,10 @@ Responda APENAS: skip ou search`
                   return true;
                 })
                 .map((q: string) => q.trim())
-                .slice(0, 5); // Limitar a 5 queries expandidas
-              
+                .slice(0, 1); // 🆕 Fase 1 otimização: limitar a 1 query expandida (original + 1 = 2 embeddings máx)
+
               expandedQueries = [customerMessage, ...sanitizedQueries];
-              console.log(`[ai-autopilot-chat] âœ… Query expandida em ${expandedQueries.length} variações (sanitizadas)`);
+              console.log(`[ai-autopilot-chat] ✅ Query expandida em ${expandedQueries.length} variações (otimizado: máx 2 embeddings)`);
             } else {
               console.log('[ai-autopilot-chat] âš ï¸ Usando apenas query original (expansion falhou)');
             }
