@@ -329,7 +329,7 @@ export function AppSidebar() {
               <img 
                 src={sidebarLogo} 
                 alt={sidebarAlt} 
-                className="h-12 w-auto object-contain"
+                className="max-h-14 w-full object-contain"
               />
             </div>
             <Badge variant="secondary" className="w-full justify-center text-xs font-medium">
@@ -342,7 +342,7 @@ export function AppSidebar() {
               <img 
                 src={sidebarLogo} 
                 alt={sidebarAlt} 
-                className="h-10 w-auto object-contain"
+                className="max-h-10 w-full object-contain"
               />
             </div>
             <div className={`h-1 w-8 rounded mx-auto ${modeInfo.color}`} />
