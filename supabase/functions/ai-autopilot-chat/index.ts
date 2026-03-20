@@ -7398,11 +7398,8 @@ Apresente-se e dê continuidade de forma natural. Exemplo de referência (NÃO c
 "Olá! Aqui é [seu nome], da [seu setor]. Vou dar continuidade ao seu atendimento! Vi que você precisava de ajuda com [assunto]. [pergunta relevante para seu contexto]"
 Adapte ao seu papel e ao contexto. Seja caloroso e demonstre que você JÁ SABE o assunto — o cliente não precisa repetir.` : '';
 
-    // 🧠 Memória persistente: resumo de conversas anteriores do contato
-    const contactAiSummary = contact?.ai_summary;
-    const contactMemoryBlock = contactAiSummary
-      ? `\n\n**🧠 MEMÓRIA DO CLIENTE (conversas anteriores):**\n${contactAiSummary}\n\nUse este contexto para ser mais assertivo e personalizado. Não pergunte o que já sabe sobre o cliente.\n`
-      : '';
+    // 🧠 Memória persistente: desativado (coluna ai_summary não existe ainda)
+    const contactMemoryBlock = '';
 
     // FIX 2: Injetar agent_context (intent da triagem + contexto acumulado) no system prompt
     const agentContextBlock = flowContextPrompt
