@@ -40,6 +40,7 @@ export function AIResponsePropertiesPanel({
   const { data: departments = [] } = useDepartments({ activeOnly: true });
   const { data: categories = [] } = useTicketCategories();
   const { data: supportAgents = [] } = useSupportAgents();
+  const { data: allTags = [] } = useTags();
 
   const ticketConfig = selectedNode.data.ticket_config || {};
   const updateTicketConfig = (field: string, value: any) => {
