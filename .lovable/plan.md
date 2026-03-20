@@ -1,57 +1,63 @@
 
 
-# Tagging Inteligente: IA aplica tag contextual ao encerrar
+# Auditoria: Tagging da IA — Problemas Encontrados e Correções
 
-## Problema
+## Diagnóstico
 
-1. **"Falta de Interação" em todas as conversas da IA**: Quando a IA encerra via `close_conversation` (2-step confirmation), nenhuma tag é aplicada. Se a conversa cai no `auto-close-conversations` por timeout, recebe "9.98 Falta de Interação" como fallback — mesmo que a IA tenha resolvido o problema do cliente.
+### Problema 1: `auto-close-conversations` SOBRESCREVE tags da IA
+Quando a IA aplica uma tag via `tag_conversation` (ex: "5.01 Informações sobre entrega") e depois o `auto-close-conversations` encerra por inatividade, ele **sempre adiciona** a tag "9.98 Falta de Interação" como fallback — sem verificar se já existe uma tag aplicada pela IA. O resultado: a conversa fica com DUAS tags, e a "Falta de Interação" aparece como a mais recente.
 
-2. **Conversa #1096B783**: IA ajudou com informações sobre entrega, deveria ter a tag "5.01 Informações sobre entrega", mas ficou sem tag ou com "Falta de Interação".
+**Localização:** `auto-close-conversations/index.ts` — linhas 406-416, 698-703, 796-801 (3 stages) fazem `upsert` de `FALTA_INTERACAO_TAG_ID` sem checar tags existentes.
 
-3. **Raiz do problema**: O tool `close_conversation` no `ai-autopilot-chat` NÃO aplica nenhuma tag à conversa. O `classify_and_resolve_ticket` cria/atualiza ticket mas também NÃO aplica tag na conversa.
+### Problema 2: IA pode não chamar `tag_conversation` antes de `close_conversation`
+Apesar do prompt instruir "SEMPRE chame tag_conversation ANTES de close_conversation", a LLM pode ignorar essa instrução (é probabilística). Não há guard no handler de `close_conversation` que force ou verifique a presença de tag.
 
-## Solução
+### Problema 3: Confirmação de encerramento (linha 2592-2628) não verifica tag
+Quando o cliente confirma "sim" no 2-step, o código invoca `close-conversation` diretamente sem verificar se `tag_conversation` foi chamado na iteração anterior.
 
-Adicionar uma nova tool `tag_conversation` que a IA usa para aplicar a tag correta ANTES de encerrar, baseada no atendimento prestado.
+## Correções
 
-### 1. Nova tool `tag_conversation` no `ai-autopilot-chat`
+### 1. `auto-close-conversations` — Respeitar tags existentes (3 locais)
 
-**Definição da tool:**
+Antes de cada `upsert` de "Falta de Interação", verificar se a conversa já tem uma tag aplicada (qualquer tag). Se já tem, **não** adicionar "9.98 Falta de Interação".
+
+```text
+// Pseudo-código para cada stage:
+const { data: existingTags } = await supabase
+  .from('conversation_tags')
+  .select('tag_id')
+  .eq('conversation_id', conv.id);
+
+const flowCloseTag = await getFlowCloseTagId(supabase, conv.id);
+
+if (existingTags && existingTags.length > 0) {
+  // Já tem tag (possivelmente da IA) — NÃO sobrescrever
+  console.log(`[Auto-Close] Conversa ${conv.id} já tem ${existingTags.length} tag(s) — mantendo`);
+} else {
+  // Sem tag — aplicar flowTag ou fallback
+  await supabase.from('conversation_tags').upsert({
+    conversation_id: conv.id,
+    tag_id: flowCloseTag || FALTA_INTERACAO_TAG_ID,
+  }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+}
 ```
-name: 'tag_conversation'
-description: 'Aplica a tag de classificação na conversa baseada no atendimento prestado. 
-Use SEMPRE ANTES de close_conversation. Escolha a tag que melhor representa o motivo do atendimento.'
-parameters:
-  tag_name: string (enum com todas as tags disponíveis: "1.01 Duvidas gerais", "5.01 Informações sobre entrega", etc.)
-```
 
-**Handler:** Busca o `tag_id` pelo nome na tabela `tags`, faz upsert em `conversation_tags` e `protected_conversation_tags`.
+Aplicar em **4 locais**: Stage 3 (linha ~406), Stage 3a (linha ~570), Stage 3b (linha ~698), Stage 3.5 (linha ~796).
 
-### 2. Atualizar system prompt
+### 2. `ai-autopilot-chat` — Guard no close_conversation handler
 
-Adicionar instrução:
-```
-- tag_conversation: SEMPRE use ANTES de close_conversation para classificar o atendimento. 
-  Escolha a tag que melhor descreve o assunto tratado. Exemplos:
-  - Cliente perguntou sobre entrega → "5.01 Informações sobre entrega"
-  - Cliente com dúvidas gerais → "1.01 Duvidas gerais"
-  - Cliente pediu saque → "6.05 Saque do saldo"
-  - Cliente pediu cancelamento → "7.01 Cancelamento de assinatura"
-```
+No handler de `close_conversation` (linha ~10000), quando `customer_confirmed=false` (etapa 1), verificar se já existe tag na conversa. Se não, logar warning mas continuar (a IA deveria ter chamado `tag_conversation` antes, mas não bloquear o encerramento).
 
-### 3. Guard no `close_conversation`
+### 3. `ai-autopilot-chat` — Guard na confirmação (linha ~2562)
 
-Antes de chamar `close-conversation`, verificar se já existe pelo menos uma tag na conversa. Se não, a IA continua sem tag (fallback para o humano aplicar), mas loga um warning.
+Na seção de confirmação de encerramento (quando cliente diz "sim"), antes de chamar `close-conversation`, verificar se existe tag. Se não existir, logar `ai_event` de warning para monitoramento.
 
-### Mapeamento de tags disponíveis (carregado dinamicamente)
-
-Em vez de hardcodar as tags, buscar da tabela `tags` no momento da construção do prompt — listar apenas as tags relevantes (categorias 1.x a 7.x) para a IA escolher.
-
-### Arquivos a modificar
+## Arquivos a modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/ai-autopilot-chat/index.ts` | Nova tool `tag_conversation` + handler + prompt atualizado |
+| `supabase/functions/auto-close-conversations/index.ts` | Checar tags existentes antes de aplicar "Falta de Interação" em 4 locais |
+| `supabase/functions/ai-autopilot-chat/index.ts` | Warning log se close_conversation chamado sem tag prévia |
 
-Deploy: `ai-autopilot-chat`
+Deploy: `auto-close-conversations` e `ai-autopilot-chat`
 
