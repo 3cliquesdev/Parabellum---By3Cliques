@@ -6516,7 +6516,12 @@ Se foram pagos recentemente, pode ser que ainda não tenham entrado em preparaç
           const hasSaqueContextDirect = !!recentWithdrawal || saqueRegexDirect.test(customerMessage);
 
           // Usar helper centralizado — fluxo como fonte única de verdade
-          if (hasSaqueContextDirect) {
+          const nodeObjectiveDirect = flow_context?.objective;
+          if (hasSaqueContextDirect && nodeObjectiveDirect) {
+            // 🎯 Fluxo soberano: não enviar template literal, LLM segue o objective
+            directOTPSuccessResponse = `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`;
+            console.log('[ai-autopilot-chat] 🎯 directOTPSuccessResponse: respeitando objective do nó (não envia template literal)');
+          } else if (hasSaqueContextDirect) {
             directOTPSuccessResponse = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone);
           } else {
             directOTPSuccessResponse = `✅ **Código validado com sucesso!**\n\nOlá ${contactName}! Sua identidade foi confirmada. Como posso te ajudar?`;
@@ -7064,7 +7069,28 @@ Se for apenas dúvida → responda normalmente usando a Base de Conhecimento.
       }
     }
 
-    const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? `
+    const nodeObjectiveForOTP = flow_context?.objective;
+    const otpVerifiedInstruction = (flow_context?.otpVerified || hasRecentOTPVerification) ? (nodeObjectiveForOTP ? `
+
+✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
+${originalIntentLabel ? `
+🎯 INTENÇÃO ORIGINAL DO CLIENTE: O cliente JÁ informou que deseja realizar um **${originalIntentLabel}**.
+NÃO pergunte novamente o que ele quer fazer. NÃO ofereça menu A/B. Prossiga DIRETAMENTE com a coleta de dados para ${originalIntentLabel}.
+` : ''}
+🎯 SIGA O OBJECTIVE DO NÓ (PRIORIDADE MÁXIMA):
+${nodeObjectiveForOTP}
+
+CAMPOS A COLETAR (referência interna — NÃO envie tudo de uma vez, a menos que o objective permita):
+${structuredCollectionMessage}
+
+REGRAS PÓS-OTP:
+- Siga o objective acima como prioridade máxima (ex: se diz "pergunte um campo por vez", faça isso)
+- NÃO busque na base de conhecimento para pedidos de saque/reembolso — sua ação é COLETAR dados.
+- NÃO emita [[FLOW_EXIT]]. Permaneça no nó até coletar TODOS os campos necessários.
+- Após o cliente responder com todos os dados, confirme e crie o ticket com create_ticket.
+- NÃO peça verificação adicional — o OTP já foi validado.
+- Se o cliente já informou algum dado na conversa anterior, NÃO peça novamente.
+` : `
 
 ✅ CLIENTE VERIFICADO POR OTP: O cliente confirmou sua identidade com sucesso via código de verificação.
 ${originalIntentLabel ? `
@@ -7086,7 +7112,7 @@ REGRAS PÓS-OTP:
 - Após o cliente responder com todos os dados, confirme e crie o ticket com create_ticket.
 - NÃO peça verificação adicional — o OTP já foi validado.
 - Se o cliente já informou algum dado na conversa anterior, NÃO peça novamente.
-` : '';
+`) : '';
 
     // 🚫 TRAVA CANCELAMENTO: Injetar instruções diretamente no prompt da LLM
     const cancellationGuardInstruction = flowForbidCancellation ? `
@@ -8005,8 +8031,14 @@ Seja inteligente. Converse. O ticket é o ÚLTIMO recurso.`;
       }
     } else if (isFinancialActionRequest && hasRecentOTPVerification) {
       // 🆕 FIX: OTP JÁ verificado — iniciar coleta de dados financeiros (PIX/banco)
-      console.log('[ai-autopilot-chat] ✅ OTP já verificado, fallback inicia coleta de dados financeiros');
-      assistantMessage = `Sua identidade já foi verificada com sucesso! ✅\n\n${structuredCollectionMessage}`;
+      const nodeObjectiveFallback = flow_context?.objective;
+      if (nodeObjectiveFallback) {
+        console.log('[ai-autopilot-chat] ✅ OTP já verificado, fallback respeitando objective do nó');
+        assistantMessage = `Sua identidade já foi verificada com sucesso! ✅ Vou dar continuidade ao seu atendimento.`;
+      } else {
+        console.log('[ai-autopilot-chat] ✅ OTP já verificado, fallback inicia coleta de dados financeiros');
+        assistantMessage = `Sua identidade já foi verificada com sucesso! ✅\n\n${structuredCollectionMessage}`;
+      }
     } else if (isFinancialRequest) {
       // 🆕 FIX Resíduo 4: Resposta contextualizada em vez de genérica
       assistantMessage = 'Entendi sua situação financeira. Vou verificar o que está acontecendo. Pode me informar o e-mail utilizado na compra para que eu localize seus dados?';
@@ -8649,13 +8681,18 @@ Para liberar operações financeiras como saque, preciso transferir você para u
 
               // Build smart collection fields
               // 🆕 REFATORADO: Usa buildCollectionMessage como fonte única de verdade
+              const nodeObjectiveOTPHandler = flow_context?.objective;
               const otpCollectionMsg = buildCollectionMessage(flow_context, verifiedContact.first_name, contact?.email, contact?.phone, {
                 prefix: '',
                 intent: detectedIntent ? `seu ${detectedIntent}` : 'sua solicitação',
                 format: 'plain'
               });
 
-              if (detectedIntent) {
+              if (detectedIntent && nodeObjectiveOTPHandler) {
+                // 🎯 Fluxo soberano: intent detectada + objective configurado → confirmação curta, LLM segue objective
+                assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅\n\nEntendi que você quer realizar um **${detectedIntent}**. Vou dar continuidade ao seu atendimento.`;
+                console.log('[ai-autopilot-chat] 🎯 OTP handler: respeitando objective do nó (não envia template literal)');
+              } else if (detectedIntent) {
                 // Intent detected — skip A/B question, go straight to data collection
                 assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅
 
@@ -9829,9 +9866,11 @@ Conversa: ${conversationId}`;
           messageHistory?.filter((m: any) => m.role === 'user').slice().reverse().slice(0, 6).some((m: any) => saqueRegexFallback.test(m.content));
         
         if (hasRecentOTPVerification && hasSaqueInFallback) {
-          console.log('[ai-autopilot-chat] 🛡️ FIX#57AA2190: FALLBACK BLOQUEADO — OTP verificado + saque detectado → enviando coleta PIX em vez de flowExit');
-          // Usar helper centralizado — fluxo como fonte única de verdade
-          const pixResponseFb = buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone);
+          console.log('[ai-autopilot-chat] 🛡️ FIX#57AA2190: FALLBACK BLOQUEADO — OTP verificado + saque detectado');
+          const nodeObjectiveFbBlocker = flow_context?.objective;
+          const pixResponseFb = nodeObjectiveFbBlocker
+            ? `✅ Identidade verificada com sucesso, ${contactName}! Vou dar continuidade ao seu atendimento.`
+            : buildCollectionMessage(flow_context, contactName, contact?.email, contact?.phone);
           const { data: savedMsgFb } = await supabaseClient.from('messages').insert({
             conversation_id: conversationId, content: pixResponseFb,
             sender_type: 'user', is_ai_generated: true, channel: responseChannel
