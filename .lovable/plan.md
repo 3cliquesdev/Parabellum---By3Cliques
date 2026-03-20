@@ -1,42 +1,22 @@
 
 
-# Correção de Roteamento + Expansão da Telemetria
+# Resolver nomes de departamentos na tabela de Transições
 
-## 1. Fix: `transition-conversation-state` — Departamento explícito sempre prevalece
+## Problema
+A tabela de "Transições Recentes" mostra UUIDs brutos (ex: `36ce66cd...`) nas colunas "Dept Origem" e "Dept Destino" em vez dos nomes legíveis dos departamentos.
 
-**Problema**: Linhas 86, 94, 112 — `if (!conv.department && effectiveDept)` ignora `departmentId` quando a conversa já tem departamento.
+## Solução
+Buscar a lista de departamentos do banco e mapear os UUIDs para nomes na tabela.
 
-**Correção** (3 locais):
-```typescript
-// De:
-if (!conv.department && effectiveDept) updateData.department = effectiveDept;
+### Alterações
 
-// Para:
-if (departmentId) updateData.department = departmentId;
-else if (!conv.department && effectiveDept) updateData.department = effectiveDept;
-```
+**`src/pages/AITelemetry.tsx`**:
+1. Adicionar uma query para carregar departamentos: `supabase.from("departments").select("id, name")`
+2. Criar um mapa `Record<string, string>` de `id → name`
+3. Nas linhas 592-593, resolver os nomes:
+   - `fromDept` → `deptMap[json?.from_dept] || json?.from_dept || "—"`
+   - `toDept` → `deptMap[json?.to_dept] || json?.to_dept || "—"`
+4. Exibir UUID truncado como tooltip para referência, nome legível como texto principal
 
-Isso garante que transferências explícitas (Financeiro, CS, etc.) sempre atualizem o departamento.
-
-## 2. Telemetria expandida — Novo painel "Transferências & Roteamento"
-
-### Hook `useAIDecisionTelemetry.ts`
-- Adicionar query para eventos `state_transition_*` da tabela `ai_events`
-- Extrair de `output_json`: `from_dept`, `to_dept`, `reason`, `agent_id`
-- Calcular KPIs: total transferências, mismatches (from_dept == to_dept quando não deveria), tags sem classificação (`ai_close_without_tag`)
-
-### Página `AITelemetry.tsx`
-- Novo bloco de KPIs: Transferências totais, Mismatches, Closures proativas, Closures sem tag
-- Tabela de transferências recentes: conversa, dept origem → dept destino, tipo transição, tempo
-- Filtro por tipo de transição
-
-## Arquivos
-
-| Arquivo | Alteração |
-|---|---|
-| `supabase/functions/transition-conversation-state/index.ts` | Fix departmentId explícito em 3 cases |
-| `src/hooks/useAIDecisionTelemetry.ts` | Buscar eventos `state_transition_*` e `ai_close_*` |
-| `src/pages/AITelemetry.tsx` | Painel de transferências com KPIs e tabela |
-
-Deploy: `transition-conversation-state`
+Isso usa o mesmo padrão já existente em `InboxTimeReport.tsx` e `FormAutomationsPanel.tsx`.
 
