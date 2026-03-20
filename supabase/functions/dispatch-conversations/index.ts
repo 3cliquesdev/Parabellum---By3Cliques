@@ -894,11 +894,16 @@ async function processEscalations(supabase: any) {
           channel: convData?.channel || 'web_chat',
         });
 
-        // Aplicar tag
-        if (msgRow?.after_hours_tag_id && convData?.contact_id) {
-          await supabase.from('contact_tags').upsert(
-            { contact_id: convData.contact_id, tag_id: msgRow.after_hours_tag_id },
-            { onConflict: 'contact_id,tag_id' }
+        // Aplicar tag na conversa (não no contato)
+        if (msgRow?.after_hours_tag_id) {
+          await supabase.from('conversation_tags').upsert(
+            { conversation_id: job.conversation_id, tag_id: msgRow.after_hours_tag_id },
+            { onConflict: 'conversation_id,tag_id' }
+          );
+          // Proteger tag para não ser removida manualmente
+          await supabase.from('protected_conversation_tags').upsert(
+            { conversation_id: job.conversation_id, tag_id: msgRow.after_hours_tag_id },
+            { onConflict: 'conversation_id,tag_id' }
           );
         }
 

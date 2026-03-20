@@ -1006,22 +1006,134 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[Auto-Close] ✅ Stage 5 complete - processed ${flowInactivityCount} flow inactivity timeouts`);
-    console.log(`[Auto-Close] ✅ All stages complete - total: ${totalClosedCount + aiClosedCount + noDeptClosedCount + humanClosedCount + awaitingCloseCount} inactivity + ${windowExpiredCount} expired + ${slaAlertCount} SLA alerts + ${flowInactivityCount} flow timeouts`);
+
+    // ============================
+    // ETAPA 6: After-Hours Cleanup — fechar waiting_human fora do horário
+    // ============================
+    let afterHoursClosedCount = 0;
+
+    if (!businessHoursInfo.within_hours) {
+      console.log('[Auto-Close] 🌙 FORA DO HORÁRIO — Starting after-hours waiting_human cleanup (Stage 6)...');
+
+      try {
+        // Buscar after_hours_tag_id e template da config
+        const { data: afterHoursConfig } = await supabase
+          .from('business_messages_config')
+          .select('message_template, after_hours_tag_id')
+          .eq('message_key', 'after_hours_handoff')
+          .maybeSingle();
+
+        const afterHoursTagId = afterHoursConfig?.after_hours_tag_id;
+        const template = afterHoursConfig?.message_template || 'Nosso atendimento humano funciona {schedule}. Retornaremos {next_open}.';
+        const afterHoursMsg = template
+          .replace(/\{schedule\}/g, businessHoursInfo.schedule_summary)
+          .replace(/\{next_open\}/g, businessHoursInfo.next_open_text);
+
+        // Buscar conversas waiting_human abertas inativas há mais de 10 min
+        const afterHoursThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+        const { data: waitingConvos, error: waitingErr } = await supabase
+          .from('conversations')
+          .select('id, contact_id, last_message_at, ai_mode, channel, department, whatsapp_instance_id, whatsapp_meta_instance_id, whatsapp_provider')
+          .eq('status', 'open')
+          .eq('ai_mode', 'waiting_human')
+          .lt('last_message_at', afterHoursThreshold);
+
+        if (waitingErr) {
+          console.error('[Auto-Close] Error fetching after-hours waiting_human convos:', waitingErr);
+        } else if (waitingConvos && waitingConvos.length > 0) {
+          console.log(`[Auto-Close] 🌙 Found ${waitingConvos.length} waiting_human conversations to close after-hours`);
+
+          for (const conv of waitingConvos as ConversationToClose[]) {
+            if (closedIds.includes(conv.id)) continue;
+
+            try {
+              // Enviar mensagem de encerramento after-hours
+              await supabase.from('messages').insert({
+                conversation_id: conv.id,
+                content: afterHoursMsg,
+                sender_type: 'user',
+                is_ai_generated: true,
+                is_bot_message: true,
+              });
+
+              // Enviar via WhatsApp se aplicável
+              if (conv.channel === 'whatsapp') {
+                await sendWhatsAppMessages(supabase, conv, afterHoursMsg, null);
+              }
+
+              // Aplicar tag after-hours na conversa
+              if (afterHoursTagId) {
+                await supabase.from('conversation_tags').upsert({
+                  conversation_id: conv.id,
+                  tag_id: afterHoursTagId,
+                }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+
+                // Proteger tag
+                await supabase.from('protected_conversation_tags').upsert({
+                  conversation_id: conv.id,
+                  tag_id: afterHoursTagId,
+                }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+              } else {
+                // Fallback: usar tag "Falta de Interação"
+                await supabase.from('conversation_tags').upsert({
+                  conversation_id: conv.id,
+                  tag_id: FALTA_INTERACAO_TAG_ID,
+                }, { onConflict: 'conversation_id,tag_id', ignoreDuplicates: true });
+              }
+
+              // Fechar conversa
+              await supabase.from('conversations').update({
+                status: 'closed',
+                auto_closed: true,
+                closed_at: new Date().toISOString(),
+                closed_reason: 'after_hours_no_agent',
+                ai_mode: 'disabled',
+                assigned_to: null,
+              }).eq('id', conv.id);
+
+              // Completar dispatch jobs pendentes desta conversa
+              await supabase.from('conversation_dispatch_jobs').update({
+                status: 'completed',
+                last_error: 'closed_after_hours_cleanup',
+                updated_at: new Date().toISOString(),
+              }).eq('conversation_id', conv.id).eq('status', 'pending');
+
+              afterHoursClosedCount++;
+              closedIds.push(conv.id);
+              console.log(`[Auto-Close] 🌙 ✅ Closed after-hours waiting_human conversation ${conv.id}`);
+            } catch (err) {
+              console.error(`[Auto-Close] Error closing after-hours conversation ${conv.id}:`, err);
+            }
+          }
+        } else {
+          console.log('[Auto-Close] 🌙 No waiting_human conversations to close after-hours');
+        }
+      } catch (err) {
+        console.error('[Auto-Close] Error in after-hours cleanup:', err);
+      }
+    } else {
+      console.log('[Auto-Close] ☀️ Dentro do horário comercial — Stage 6 skipped');
+    }
+
+    console.log(`[Auto-Close] ✅ Stage 6 complete - closed ${afterHoursClosedCount} after-hours waiting_human conversations`);
+    console.log(`[Auto-Close] ✅ All stages complete - total: ${totalClosedCount + aiClosedCount + noDeptClosedCount + humanClosedCount + awaitingCloseCount + afterHoursClosedCount} inactivity + ${windowExpiredCount} expired + ${slaAlertCount} SLA alerts + ${flowInactivityCount} flow timeouts`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        closed_count: totalClosedCount + aiClosedCount + noDeptClosedCount + humanClosedCount + awaitingCloseCount,
+        closed_count: totalClosedCount + aiClosedCount + noDeptClosedCount + humanClosedCount + awaitingCloseCount + afterHoursClosedCount,
         whatsapp_window_expired_count: windowExpiredCount,
         ai_inactivity_closed_count: aiClosedCount,
         human_inactivity_closed_count: humanClosedCount,
         no_dept_closed_count: noDeptClosedCount,
         awaiting_confirmation_closed_count: awaitingCloseCount,
+        after_hours_closed_count: afterHoursClosedCount,
         sla_alert_count: slaAlertCount,
         flow_inactivity_timeout_count: flowInactivityCount,
         closed_ids: closedIds,
         by_department: results,
-        message: `Closed ${totalClosedCount} by inactivity + ${aiClosedCount} AI + ${humanClosedCount} human + ${noDeptClosedCount} no-dept + ${awaitingCloseCount} awaiting-confirm + ${windowExpiredCount} expired + ${slaAlertCount} SLA alerts + ${flowInactivityCount} flow timeouts` 
+        message: `Closed ${totalClosedCount} by inactivity + ${aiClosedCount} AI + ${humanClosedCount} human + ${noDeptClosedCount} no-dept + ${awaitingCloseCount} awaiting-confirm + ${afterHoursClosedCount} after-hours + ${windowExpiredCount} expired + ${slaAlertCount} SLA alerts + ${flowInactivityCount} flow timeouts` 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
