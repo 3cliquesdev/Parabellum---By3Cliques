@@ -1,123 +1,148 @@
 
 
-# Auditoria 100% — ChatFlow Soberano para TODO o Inbox
+# Auditoria 100% — ChatFlow Soberano para TODO o Inbox (Fase Final)
 
-## Resumo do Estado Atual
+## Estado Atual (Já Resolvido)
+- ✅ Department UUIDs centralizados via `department-resolver.ts` em 7 functions
+- ✅ Pipeline/Stage dinâmicos no `ai-autopilot-chat` e `ai-governor`
+- ✅ Tags dinâmicas no `auto-close-conversations`
+- ✅ Persona dinâmica, templates via fluxo, TRANSFER_LABELS dinâmico
 
-As correções anteriores já eliminaram UUIDs de departamento de 7 edge functions (centralizados no `department-resolver.ts`). O `ai-autopilot-chat` tem resolução dinâmica no início do handler.
+## Problemas Residuais Encontrados
 
-**Problemas residuais encontrados:**
+### 🔴 P1 — Branding "3Cliques" / "contato@mail.3cliques.net" hardcoded em 14 edge functions
 
-## Problemas Encontrados
+O banco já tem tabelas `email_branding` e `email_senders` com os valores configuráveis, mas **14 functions ignoram essas tabelas** e usam fallbacks estáticos:
 
-### 🔴 P1 — Tag IDs hardcoded no `auto-close-conversations` (2 UUIDs, usados em 7 locais)
+| Função | Ocorrências |
+|--------|-------------|
+| `send-verification-code` | Nome, email, subject, logo — tudo hardcoded |
+| `send-ticket-email-reply` | `fromName`, `fromEmail`, `brandName` |
+| `notify-ticket-event` | `brandName`, `fromName`, `fromEmail`, `footerText` |
+| `send-ticket-notification` | `senderEmail`, `senderName` |
+| `send-email` | `senderEmail` |
+| `send-triggered-email` | `fromName`, `fromEmail`, `brandName` |
+| `send-scheduled-reports` | from hardcoded |
+| `send-quote-email` | from hardcoded |
+| `create-user` | from hardcoded, HTML de email fixo |
+| `resend-welcome-email` | from hardcoded, HTML com "PARABELLUM | 3Cliques" |
+| `test-email-send` | fallback hardcoded |
+| `get-email-template` | `fromName`, `fromEmail` fallbacks |
+| `ai-governor` | `brandName`, `fromEmail` fallbacks |
+| `meta-whatsapp-webhook` | Fallback greeting "Sou a assistente virtual da 3Cliques" (L1211, L1233) |
+
+**Impacto:** Se a organização mudar de nome ou email, 14 functions continuam enviando com a marca antiga.
+
+### 🔴 P2 — Fallback greeting hardcoded no webhook (L1211, L1233)
 
 ```
-const DESISTENCIA_TAG_ID = 'aa44b48d-...';   // "9.04 Desistência da conversa"
-const FALTA_INTERACAO_TAG_ID = '3eb75d67-...'; // "9.98 Falta de Interação"
+"Olá! Sou a assistente virtual da 3Cliques. Posso te ajudar com informações financeiras, saques, reembolsos e dúvidas gerais."
 ```
 
-Usados como fallback em 7 pontos do auto-close. Se alguém renomear/excluir essas tags no dashboard, o código aplica uma tag fantasma.
+Essa mensagem deveria vir da persona configurada no fluxo ativo ou ser genérica.
 
-**Solução:** Resolver por nome no início do handler com fallback ao UUID atual. Adicionar ao `department-resolver.ts` ou criar um `tag-resolver.ts` dedicado.
+### 🟡 P3 — `PORTAL_PERSONA_ID` hardcoded no frontend (`useClientAssistant.ts`)
 
-### 🔴 P2 — Pipeline/Stage IDs hardcoded no `ai-autopilot-chat` (L8328-8329)
+UUID fixo `d4dc2026-...` para a persona do portal do cliente. Se trocar a persona, o portal quebra.
 
-```
-const PIPELINE_VENDAS_ID = '00000000-0000-0000-0000-000000000001';  // "Recuperação - Nacional"
-const STAGE_LEAD_ID = '11111111-1111-1111-1111-111111111111';      // "Oportunidade"
-```
+### 🟡 P4 — `contextPrompt` hardcoded no frontend (`useClientAssistant.ts`)
 
-Usados para criar deals de lead. Se o pipeline mudar, deals vão para lugar errado.
+Texto fixo: "Você é a assistente virtual do portal do cliente da 3Cliques". Deveria vir da persona configurada.
 
-**Solução:** Resolver por nome no momento da criação do deal, com fallback ao UUID atual.
+### 🟡 P5 — `DEFAULT_MESSAGE` no `BroadcastAIQueueDialog.tsx`
 
-### 🔴 P3 — Pipeline ID hardcoded no `ai-governor` (L367)
+Mensagem de broadcast fixa: "Sou a assistente virtual da 3Cliques". Deveria usar o nome da organização ou persona.
 
-```
-if (deal.pipeline_id === '00000000-0000-0000-0000-000000000001') return 'recuperacao';
-```
+### 🟢 P6 — Frontend placeholders/alt text ("Seu Armazém Drop")
 
-Comparação direta com UUID. Se o pipeline mudar, a categorização quebra.
+`SetupPassword.tsx`, `PublicOnboarding.tsx`, `EmailSendersCard.tsx`, `EmailBrandingCard.tsx` — são placeholders de formulário e alt text de logo. **Baixa prioridade** mas quebram a neutralidade.
 
-**Solução:** Resolver pipeline "Recuperação" por nome, com fallback.
+### 🟢 P7 — `CS_NOVOS_PIPELINE_ID` e `ONBOARDING_PLAYBOOK_ID` no frontend
 
-### 🟡 P4 — "Seu Armazém Drop" hardcoded em emails (2 functions)
-
-- `kiwify-webhook/index.ts` L1197: footer de email de boas-vindas
-- `send-quote-email/index.ts` L93, L172: header/footer de email de proposta
-
-Estes são fora do inbox, mas comprometem a soberania da marca. Devem buscar o nome da organização do banco.
-
-### 🟡 P5 — Workspace ID default `00000000-...` nas integrações (4 functions)
-
-`integrations-set`, `integrations-get`, `integrations-test`, `integration-encrypt`, `instagram-start-oauth` usam `"00000000-0000-0000-0000-000000000001"` como workspace default. Isso é infraestrutura single-tenant (o sistema só tem 1 workspace), não é um problema de soberania de fluxo. **Não alterar**.
+UUIDs fixos em hooks de métricas. São dashboards analíticos específicos, não roteamento. **Não alterar** nesta fase.
 
 ---
 
-## Plano de Correção (foco inbox)
+## Plano de Correção (foco inbox + emails)
 
-### Correção 1 — Tag resolver dinâmico no `auto-close-conversations`
+### Correção 1 — Criar helper `_shared/branding-resolver.ts`
 
-Adicionar resolução por nome no início do handler:
-
-```typescript
-const { data: tagRows } = await supabase
-  .from('tags')
-  .select('id, name')
-  .in('name', ['9.04 Desistência da conversa', '9.98 Falta de Interação']);
-
-const tagMap = new Map((tagRows || []).map((t: any) => [t.name.trim(), t.id]));
-const DESISTENCIA_TAG_ID = tagMap.get('9.04 Desistência da conversa') || 'aa44b48d-...';
-const FALTA_INTERACAO_TAG_ID = tagMap.get('9.98 Falta de Interação') || '3eb75d67-...';
-```
-
-### Correção 2 — Pipeline/Stage dinâmico no `ai-autopilot-chat` (L8328-8329)
-
-Resolver por nome antes de criar o deal:
+Módulo compartilhado que busca branding e sender do banco UMA vez:
 
 ```typescript
-const { data: pipeline } = await supabaseClient
-  .from('pipelines').select('id').eq('name', 'Recuperação - Nacional').maybeSingle();
-const { data: stage } = await supabaseClient
-  .from('stages').select('id').eq('name', 'Oportunidade')
-  .eq('pipeline_id', pipeline?.id || '00000000-...').maybeSingle();
-const PIPELINE_VENDAS_ID = pipeline?.id || '00000000-0000-0000-0000-000000000001';
-const STAGE_LEAD_ID = stage?.id || '11111111-1111-1111-1111-111111111111';
+export async function resolveBranding(supabase: any) {
+  const [{ data: branding }, { data: sender }, { data: org }] = await Promise.all([
+    supabase.from('email_branding').select('*').limit(1).maybeSingle(),
+    supabase.from('email_senders').select('*').eq('is_default', true).maybeSingle(),
+    supabase.from('organizations').select('name').limit(1).maybeSingle(),
+  ]);
+  return {
+    brandName: branding?.name || org?.name || 'Sua Empresa',
+    fromName: sender?.from_name || branding?.name || 'Suporte',
+    fromEmail: sender?.from_email || 'contato@example.com',
+    headerColor: branding?.header_color || '#0f172a',
+    footerText: branding?.footer_text || '',
+    logoUrl: branding?.logo_url || '',
+  };
+}
 ```
 
-### Correção 3 — Pipeline dinâmico no `ai-governor` (L367)
+### Correção 2 — Atualizar 12 edge functions de email
 
-Resolver nome do pipeline para comparação:
+Substituir todos os fallbacks "3Cliques" / "contato@mail.3cliques.net" pelo `resolveBranding()`. Functions afetadas:
+- `send-verification-code`, `send-ticket-email-reply`, `notify-ticket-event`, `send-ticket-notification`, `send-email`, `send-triggered-email`, `send-scheduled-reports`, `send-quote-email`, `create-user`, `resend-welcome-email`, `test-email-send`, `get-email-template`
+
+Cada function ganha uma chamada `const brand = await resolveBranding(supabase)` e substitui os literais por `brand.fromName`, `brand.fromEmail`, etc.
+
+### Correção 3 — Fallback greeting dinâmico no `meta-whatsapp-webhook`
+
+Substituir a string fixa "Sou a assistente virtual da 3Cliques" por uma busca à persona do fluxo ativo ou ao nome da organização:
 
 ```typescript
-const { data: recPipeline } = await supabase
-  .from('pipelines').select('id').eq('name', 'Recuperação - Nacional').maybeSingle();
-const RECUPERACAO_PIPELINE_ID = recPipeline?.id || '00000000-0000-0000-0000-000000000001';
-// Depois: if (deal.pipeline_id === RECUPERACAO_PIPELINE_ID) return 'recuperacao';
+const orgName = org?.name || 'nossa equipe';
+const fallbackGreeting = `Olá! Sou a assistente virtual da ${orgName}. Como posso te ajudar? 😊`;
 ```
 
-### Correção 4 — Branding dinâmico nos emails (P4)
+### Correção 4 — `useClientAssistant.ts` — buscar persona por slug
 
-Substituir "Seu Armazém Drop" por busca ao nome da organização em `kiwify-webhook` e `send-quote-email`. Fallback: "Sua Empresa".
+Substituir `PORTAL_PERSONA_ID` hardcoded por uma query que busca a persona "portal" por nome/slug:
+
+```typescript
+const { data: portalPersona } = await supabase
+  .from('ai_personas').select('id, system_prompt')
+  .eq('name', 'Portal Cliente').maybeSingle();
+```
+
+E remover o `contextPrompt` hardcoded, delegando ao `system_prompt` da persona.
+
+### Correção 5 — `BroadcastAIQueueDialog.tsx` — mensagem dinâmica
+
+Buscar nome da organização para montar `DEFAULT_MESSAGE` dinâmica.
+
+### Correção 6 — Frontend alt text / placeholders
+
+Substituir "Seu Armazém Drop" por texto genérico ou busca à organização em `SetupPassword.tsx` e `PublicOnboarding.tsx`.
 
 ---
 
 ## Arquivos Afetados
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `auto-close-conversations/index.ts` | +1 query tags por nome, substituir 2 constantes |
-| `ai-autopilot-chat/index.ts` | +2 queries pipeline/stage por nome (L8328) |
-| `ai-governor/index.ts` | +1 query pipeline por nome (L367) |
-| `kiwify-webhook/index.ts` | +1 query org name, substituir "Seu Armazém Drop" |
-| `send-quote-email/index.ts` | +1 query org name, substituir "Seu Armazém Drop" |
+| Arquivo | Tipo |
+|---------|------|
+| `_shared/branding-resolver.ts` | **NOVO** |
+| 12 edge functions de email | Substituir fallbacks por `resolveBranding()` |
+| `meta-whatsapp-webhook/index.ts` | Fallback greeting dinâmico |
+| `src/hooks/useClientAssistant.ts` | Persona por slug |
+| `src/components/inbox/BroadcastAIQueueDialog.tsx` | Mensagem dinâmica |
+| `src/pages/SetupPassword.tsx` | Alt text genérico |
+| `src/pages/PublicOnboarding.tsx` | Alt text genérico |
 
 ## O que NÃO alterar
-- Workspace IDs nas integrações — infraestrutura single-tenant legítima
+- Workspace IDs `00000000-...` — infraestrutura single-tenant
+- `CS_NOVOS_PIPELINE_ID`, `ONBOARDING_PLAYBOOK_ID` — dashboards analíticos
 - `kiwify_events`, `kiwify_validated` — schema real
-- `allowed_sources: 'kiwify'` — tipo de interface
-- `department-resolver.ts` — já está correto
+- `kiwifyProductMapping.ts` — mapeamento de produto funcional
+- `GlobalFilters.tsx` "3cliques" — é um valor de filtro analítico, não branding
 
-**Estimativa:** ~40 linhas alteradas, 5 functions editadas, 5 deploys
+**Estimativa:** 1 novo arquivo, ~14 edge functions editadas, 3 frontend editados, ~15 deploys
 
