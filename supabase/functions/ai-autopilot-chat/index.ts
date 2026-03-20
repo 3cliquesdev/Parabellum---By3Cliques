@@ -9956,8 +9956,7 @@ Conversa: ${conversationId}`;
       
       // 🆕 VERIFICAÇÃO DE LEAD: Se não tem email E não é cliente â†’ Comercial
       const isLeadWithoutEmail = !contactHasEmail && !isCustomerInDatabase && !isKiwifyValidated;
-      const DEPT_COMERCIAL_ID = 'f446e202-bdc3-4bb3-aeda-8c0aa04ee53c';
-      const DEPT_SUPORTE_ID = '36ce66cd-7414-4fc8-bd4a-268fecc3f01a';
+      // Usa DEPT_COMERCIAL_ID / DEPT_SUPORTE_ID centralizados
       
       // âœ… Respeitar departamento definido pelo fluxo (nunca sobrescrever)
       const handoffDepartment = conversation.department || 
