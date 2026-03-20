@@ -1,0 +1,1 @@
+ALTER TYPE public.ticket_category ADD VALUE IF NOT EXISTS 'cancelamento';
