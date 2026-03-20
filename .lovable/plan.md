@@ -1,55 +1,36 @@
 
 
-# Fix: Opções do nó de escape não são enviadas junto com a mensagem de fallback
+## Diagnóstico Confirmado
 
-## Problema
-Quando a IA no nó financeiro não consegue resolver, ela responde "Não consegui resolver por aqui. O que prefere fazer?" — mas **sem as opções** (↩ Voltar ao menu / 👤 Falar com atendente). O cliente fica sem saber o que fazer.
+O código **ainda não foi alterado**. `withdrawal_amount` continua como `type: 'number'` (linha 7351) e não há instruções no prompt para aceitar texto livre como "todo saldo da carteira".
 
-**Causa raiz**: No `ai-autopilot-chat`, quando uma "restriction violation" é detectada (linha ~10128), a resposta é substituída pelo `fallbackMessage` do nó e a IA **permanece no nó atual** em vez de avançar para o `node_escape_financeiro` (que tem as opções). As opções só são incluídas quando `process-chat-flow` avança para o nó `ask_options`, mas isso nunca acontece nesse cenário.
+## Plano de Correção — 3 edições no `ai-autopilot-chat/index.ts` + deploy
 
-## Solução
-
-### 1. `ai-autopilot-chat`: Sinalizar `flowExit` quando fallback é acionado dentro de fluxo
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
-
-Na seção de "restriction violation" (linha ~10128), em vez de substituir a mensagem e ficar no nó, retornar `flowExit: true` para que o webhook re-invoque `process-chat-flow` com `forceAIExit: true`. Isso faz o motor de fluxos avançar para o `node_escape_financeiro` e devolver fallback + opções combinados.
-
-Alteração (~linha 10127-10131):
-```typescript
-// ANTES: substituía e ficava no nó
-assistantMessage = fallbackMessage;
-isFallbackResponse = true;
-
-// DEPOIS: sinalizar flow exit para que process-chat-flow avance ao escape node
-console.log('[ai-autopilot-chat] 🔄 VIOLAÇÃO DE RESTRIÇÃO + flow_context → flowExit para avançar ao escape node');
-return new Response(JSON.stringify({
-  flowExit: true,
-  reason: 'restriction_violation_exit',
-  hasFlowContext: true,
-  response: null, // process-chat-flow vai montar a mensagem com opções
-  conversationId,
-}), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json; charset=utf-8' } });
-```
-
-### 2. Adicionar pattern de fallback no `ESCAPE_PATTERNS`
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
-
-Adicionar um novo pattern para detectar quando a IA ecoa o fallback_message do nó (caso ela gere o texto por conta própria em vez de emitir `[[FLOW_EXIT]]`):
+### 1. Mudar `withdrawal_amount` de `number` para `string` (linha 7350-7353)
 
 ```typescript
-// Na lista ESCAPE_PATTERNS (~linha 1458):
-/n[aã]o\s+consegu[ií]\s+resolver/i,
+withdrawal_amount: {
+  type: 'string',
+  description: '[APENAS PARA SAQUE] Valor solicitado pelo cliente. Pode ser numérico ("150.00") ou texto livre ("todo saldo", "tudo", "valor total da carteira"). Aceite QUALQUER formato que o cliente usar.'
+},
 ```
 
-### 3. Garantir que o `isFallbackResponse` também trigge flowExit no final
-**Arquivo:** `supabase/functions/ai-autopilot-chat/index.ts`
+### 2. Atualizar referências que usam `.toFixed(2)` (linhas 8732, 8774, 8800)
 
-Na seção onde `isFallbackResponse` é verificado contra o anti-loop counter (~linha 9570+), se o fallback for detectado E estiver dentro de um fluxo com `flow_context`, retornar `flowExit: true` ao invés de enviar a mensagem truncada. Isso garante que o `process-chat-flow` sempre monte a resposta com as opções do nó de escape.
+Como agora é string, substituir `args.withdrawal_amount.toFixed(2)` por `args.withdrawal_amount` diretamente (sem `.toFixed()`), pois pode ser "todo saldo da carteira".
 
-### 4. Deploy
-- `ai-autopilot-chat`
+### 3. Adicionar instrução anti-desistência no prompt pós-OTP
 
-## Resultado esperado
-- Quando a IA não consegue resolver, a mensagem enviada será: "Não consegui resolver por aqui.\n\nO que prefere fazer?\n\n1️⃣ ↩ Voltar ao menu\n2️⃣ 👤 Falar com atendente"
-- O fluxo avança corretamente para o nó de escape com as opções visíveis
+Na seção de regras pós-OTP, adicionar:
+
+- Se o cliente usar labels diferentes ("Pix email" → interpretar como chave PIX), extrair pelo contexto
+- Se "Valor" for texto livre ("todo saldo", "tudo", "valor total"), usar como `withdrawal_amount` diretamente — NÃO exigir número
+- NUNCA responder "Não consegui resolver" após coleta de dados — SEMPRE criar o ticket com o que tem
+
+### 4. Deploy da Edge Function
+
+Após as edições, deploy do `ai-autopilot-chat`.
+
+### Arquivos modificados
+- `supabase/functions/ai-autopilot-chat/index.ts` — 3 edições pontuais
 
