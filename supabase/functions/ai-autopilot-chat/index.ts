@@ -8621,12 +8621,8 @@ ${otpCollectionMsg}
 
 ⚠️ Preencha tudo certinho! Dados incorretos podem atrasar a resolução.`;
               } else {
-                // No clear intent — fallback to A/B question
-                assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}!
-
-Agora posso te ajudar com operações financeiras. Você quer:
-**A)** Cancelar sua assinatura/curso (comprado na Kiwify)?
-**B)** Sacar o saldo da sua carteira (Seu Armazém Drop)?`;
+                // No clear intent — generic prompt (delegating to flow/KB)
+                assistantMessage = `Identidade verificada com sucesso, ${verifiedContact.first_name}! ✅\n\nComo posso te ajudar?`;
               }
               
               // Log interaction
