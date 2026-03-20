@@ -24,6 +24,9 @@ export default function DepartmentDialog({ open, onOpenChange, department }: Dep
   const [color, setColor] = useState("#3B82F6");
   const [whatsappNumber, setWhatsappNumber] = useState("");
   
+  // After-hours behavior
+  const [afterHoursKeepOpen, setAfterHoursKeepOpen] = useState(false);
+
   // Slow response alert settings
   const [slowResponseAlertEnabled, setSlowResponseAlertEnabled] = useState(false);
   const [slowResponseAlertMinutes, setSlowResponseAlertMinutes] = useState<number | "">("");
