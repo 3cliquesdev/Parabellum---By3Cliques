@@ -1193,7 +1193,7 @@ Prazo: conforme prazo informado
 Você receberá um email confirmando a abertura do chamado.
 Quando o saque for processado, você será notificado por email também.
 
-IMPORTANTE: O saque será creditado via PIX na chave informada, vinculada ao seu CPF. Não é possível transferir para conta de terceiros.`;
+Acompanhe o status pelo protocolo acima.`;
   }
   
   const ticketMessages: Record<string, string> = {
