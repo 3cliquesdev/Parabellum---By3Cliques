@@ -1,5 +1,6 @@
 
 
+
 ## Auditoria #8181F702 — Correções Aplicadas
 
 ### 3 Fixes deployados no `ai-autopilot-chat`
@@ -16,6 +17,21 @@
 - Linha ~7945: Se `hasRecentOTPVerification` + dados estruturados + LLM retornou vazio → cria ticket via `generate-ticket-from-conversation` diretamente
 - Fallback de último recurso para quando LLM principal também falha
 
+### Correções adicionais (rodada 2)
+
+**Fix 4: `category: 'financial'` → `'financeiro'`** ✅
+- Corrigido para valor válido do enum, garantindo mapeamento correto ao departamento Financeiro
+
+**Fix 5: Envio WhatsApp no fallback usa canal correto** ✅
+- Substituído query genérica `whatsapp_instances` por `getWhatsAppInstanceForConversation` + `sendWhatsAppMessage`
+- Agora respeita Meta vs Evolution conforme a conversa
+
+**Fix 6: DIRECT mode do `process-buffered-messages` verifica `skipInitialMessage`** ✅
+- Adicionado check antes de `callPipeline` no modo DIRECT
+- Quando `skipInitialMessage=true`, envia mensagem vazia para disparar saudação proativa
+- Paridade com o CRON mode que já tinha essa verificação
+
 ### Bug A (skipInitialMessage) — Pendente de verificação
 - Os fixes no `meta-whatsapp-webhook` e `process-buffered-messages` já estavam no código
-- Redeploy forçado foi feito — aguardando próximo cenário de menu+batching para validar nos logs
+- Fix 6 garante cobertura DIRECT mode
+- Aguardando próximo cenário de menu+batching para validar nos logs
