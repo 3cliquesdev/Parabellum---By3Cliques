@@ -1,43 +1,56 @@
 
 
-# Branding Dinâmico do CRM — Logo via Upload PNG/JPEG
+# Fix: Template do IA Response não enviado após verificação de identidade
 
-## Contexto
+## Diagnóstico
 
-A tela de Branding de Email (`EmailBrandingCard.tsx`) **já usa `ImageUploader`** para upload de PNG/JPEG — o arquivo vai para o Supabase Storage e a URL pública é salva no banco. Isso não muda. O plano é apenas **consumir** esse branding em toda a interface do CRM.
+Na conversa `#5F0529BA`, o fluxo foi:
+1. Cliente escolheu "Financeiro" → `node_ia_financeiro`
+2. OTP já verificado anteriormente (06:00)
+3. Cliente disse "Quero sacar" → guard pós-OTP detectou `hasSaqueIntent: true`
+4. `interaction_count = 0` → caiu no branch `isFirstInteraction` (L6361) que **NÃO FAZ NADA**
+5. Nenhum `_otpJustValidated` foi setado → `identityWallNote` ficou vazio → template nunca foi enviado
+6. IA enviou mensagem genérica `"✅ Identidade verificada com sucesso..."`
+7. Cliente respondeu "Muito obrigado" → `fallback_phrase_detected` → bloqueador repetiu a mensagem genérica
 
-## O que será feito
+**Causa raiz:** A governança de `interaction_count` bloqueia o envio do template na primeira interação, mesmo quando `description_template` está configurado no nó. O template deveria ser soberano e enviado imediatamente.
 
-### 1. Novo hook `useCRMBranding.ts`
-Busca o registro `is_default_employee=true` da tabela `email_branding`. Retorna `name`, `logo_url` (que já é a URL do PNG/JPEG enviado via ImageUploader), cores, etc. Fallback: "CRM" se não existir registro.
+## Correção
 
-### 2. Componentes que passam a usar branding dinâmico
+### `supabase/functions/ai-autopilot-chat/index.ts`
 
-| Componente | Hoje (hardcoded) | Depois (dinâmico) |
-|---|---|---|
-| `AppSidebar.tsx` | Import estático de `logo-parabellum-light.png` + texto "PARABELLUM" | `branding.logo_url` (PNG/JPEG do upload) + `branding.name` |
-| `Auth.tsx` | Logo estática + "PARABELLUM" | `branding.logo_url` + `branding.name` |
-| `SetupPassword.tsx` | Logo estática | `branding.logo_url` |
-| `OnboardingHeader.tsx` | "Parabellum CRM" hardcoded | `branding.name` |
+**Local 1 — Guard pós-OTP (L6341-6367):**
+Quando `description_template` existe no nó atual, **ignorar a checagem de `isFirstInteraction`** e setar `_otpJustValidated = true` imediatamente. O template É a apresentação proativa — não faz sentido esperar a IA se apresentar antes.
 
-### 3. Acesso público (Auth page)
-Verificar/criar policy de SELECT para `anon` na tabela `email_branding` — necessário para a tela de login carregar o logo antes de ter sessão.
+```
+Antes (L6355-6366):
+if (!recentCollectionMsg && !isFirstInteraction) {
+  // seta _otpJustValidated → identityWallNote ativa
+} else if (isFirstInteraction) {
+  // NÃO FAZ NADA — bug
+}
 
-### 4. Aceitar apenas PNG/JPEG no ImageUploader de branding
-O `ImageUploader` no `EmailBrandingCard.tsx` já aceita `image/jpeg,image/png,image/webp,image/gif`. Vou restringir para **apenas `image/png,image/jpeg`** conforme solicitado, e adicionar validação visual ("Apenas PNG ou JPEG").
+Depois:
+const hasDescTemplateGuard = !!(flow_context as any)?.ticketConfig?.description_template;
 
-## Onde o admin configura
-**Configurações > Email > Branding** → registro "Default Funcionário". Faz upload do PNG/JPEG da logo e edita o nome. Toda a interface do CRM reflete automaticamente.
+if (!recentCollectionMsg && (hasDescTemplateGuard || !isFirstInteraction)) {
+  // Se tem template, SEMPRE ativa (template é proativo)
+  // Se não tem template, respeita interaction_count
+  (conversation as any)._otpJustValidated = true;
+} else if (isFirstInteraction && !hasDescTemplateGuard) {
+  // Só deixa IA se apresentar se NÃO tem template
+}
+```
 
-## Arquivos
+**Local 2 — Fallback blocker (L9933-9940):**
+Quando o fallback blocker é ativado e `hasDescTemplateFbBlocker` é true, ele já usa `buildCollectionMessage` (correto). Mas a mensagem genérica "Vou dar continuidade" pode ter sido enviada antes — verificar se o template já foi enviado para evitar duplicata.
 
-| Arquivo | Ação |
-|---|---|
-| `src/hooks/useCRMBranding.ts` | **Novo** |
-| `src/components/AppSidebar.tsx` | Logo + nome dinâmicos |
-| `src/pages/Auth.tsx` | Logo + nome dinâmicos |
-| `src/pages/SetupPassword.tsx` | Logo dinâmica |
-| `src/components/admin-onboarding/OnboardingHeader.tsx` | Nome dinâmico |
-| `src/components/settings/EmailBrandingCard.tsx` | Restringir accept para PNG/JPEG |
-| Migration SQL | Policy SELECT anon em `email_branding` |
+**Local 3 — identityWallNote (L6924-6946):**
+Já funciona corretamente quando `_otpJustValidated` é true. O fix no Local 1 resolve o problema.
+
+### Deploy
+- `ai-autopilot-chat`
+
+## Resumo
+Uma única mudança no guard pós-OTP (L6355): quando `description_template` existe, sempre setar `_otpJustValidated` independente do `interaction_count`. Isso faz o template ser enviado proativamente na primeira interação, como esperado.
 
