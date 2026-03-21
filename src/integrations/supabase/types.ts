@@ -1915,6 +1915,8 @@ export type Database = {
           address: string | null
           address_complement: string | null
           address_number: string | null
+          ai_summary: string | null
+          ai_summary_updated_at: string | null
           assigned_to: string | null
           avatar_url: string | null
           birth_date: string | null
@@ -1967,6 +1969,8 @@ export type Database = {
           address?: string | null
           address_complement?: string | null
           address_number?: string | null
+          ai_summary?: string | null
+          ai_summary_updated_at?: string | null
           assigned_to?: string | null
           avatar_url?: string | null
           birth_date?: string | null
@@ -2019,6 +2023,8 @@ export type Database = {
           address?: string | null
           address_complement?: string | null
           address_number?: string | null
+          ai_summary?: string | null
+          ai_summary_updated_at?: string | null
           assigned_to?: string | null
           avatar_url?: string | null
           birth_date?: string | null
