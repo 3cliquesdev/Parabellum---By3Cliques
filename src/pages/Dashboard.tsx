@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, TrendingUp, LayoutGrid, Headphones, DollarSign, Settings, UserMinus, Target, Sparkles, Activity } from "lucide-react";
+import { Loader2, TrendingUp, LayoutGrid, Headphones, DollarSign, Settings, UserMinus, Target, Sparkles, Bot } from "lucide-react";
 import { OnboardingWidget } from "@/components/widgets/OnboardingWidget";
 import { usePipelineValue } from "@/hooks/usePipelineValue";
 import { PageContainer, PageHeader, PageContent } from "@/components/ui/page-container";
@@ -24,13 +24,14 @@ import { HotDealsWidget } from "@/components/widgets/HotDealsWidget";
 import { SalesFunnelWidget } from "@/components/widgets/SalesFunnelWidget";
 import RottenDealsWidget from "@/components/widgets/RottenDealsWidget";
 
-// Dashboard Tabs (existing)
+// Dashboard Tabs
 import {
   OverviewDashboardTab,
   SalesDashboardTab,
   SupportDashboardTab,
   FinancialDashboardTab,
   OperationalDashboardTab,
+  AIUnifiedTab,
 } from "@/components/dashboard";
 
 // Premium Tabs (absorbed from AnalyticsPremium)
@@ -38,24 +39,25 @@ import { ChurnAnalysisTab } from "@/components/analytics/ChurnAnalysisTab";
 import { PerformanceTab } from "@/components/analytics/PerformanceTab";
 import { AdvancedTab } from "@/components/analytics/AdvancedTab";
 
-// AI Telemetry (absorbed into dashboard)
-import { AITelemetryContent } from "@/pages/AITelemetry";
-import { SaqueTelemetryContent } from "@/pages/SaqueTelemetry";
-import { AIResolutionContent } from "@/pages/AIResolution";
-
 export default function Dashboard() {
   const [searchParams] = useSearchParams();
-  const view = searchParams.get("view") || "overview";
-  
+
   // Deep-link: /?tab=sales ou /?tab=vendas
   const tabParam = searchParams.get("tab");
-  const TAB_ALIAS: Record<string, string> = { vendas: "sales" };
-  const VALID_TABS = ["overview", "sales", "support", "financial", "operations", "churn", "performance", "advanced", "ai-telemetry", "saque-telemetry", "ai-resolution"];
+  const TAB_ALIAS: Record<string, string> = {
+    vendas: "sales",
+    // Redirecionar tabs antigas de IA para o unificado
+    "ai-telemetry": "ia",
+    "saque-telemetry": "ia",
+    "ai-resolution": "ia",
+  };
+  const VALID_TABS = ["overview", "sales", "support", "financial", "operations", "churn", "performance", "advanced", "ia"];
   const resolvedTab = TAB_ALIAS[tabParam || ""] || tabParam || "";
   const initialTab = VALID_TABS.includes(resolvedTab) ? resolvedTab : "overview";
+
   const { role, loading } = useUserRole();
   const { user } = useAuth();
-  
+
   // Date range state for filtering
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => ({
     from: startOfMonth(new Date()),
@@ -72,7 +74,7 @@ export default function Dashboard() {
     start.setMonth(start.getMonth() - 1);
     return { startDate: start, endDate: end };
   }, [dateRange]);
-  
+
   const { weightedValue } = usePipelineValue();
 
   // Helper function
@@ -97,9 +99,9 @@ export default function Dashboard() {
   if (role && (role as string) === "sales_rep" && user?.id) {
     return (
       <PageContainer>
-        <PageHeader 
-          title="Meu Dashboard" 
-          description="Suas métricas e atividades pessoais" 
+        <PageHeader
+          title="Meu Dashboard"
+          description="Suas métricas e atividades pessoais"
         />
         <PageContent>
           <BentoGrid cols={4}>
@@ -111,9 +113,9 @@ export default function Dashboard() {
               <MyLeadsWidget userId={user?.id} />
             </BentoCard>
             <BentoCard>
-              <KPICard 
-                title="Pipeline" 
-                value={formatCurrency(weightedValue)} 
+              <KPICard
+                title="Pipeline"
+                value={formatCurrency(weightedValue)}
                 icon={TrendingUp}
                 description="ponderado"
               />
@@ -121,7 +123,7 @@ export default function Dashboard() {
             <BentoCard>
               <MyPerformanceWidget userId={user?.id} />
             </BentoCard>
-            
+
             {/* ROW 2: Activities + Hot Deals */}
             <BentoCard span="2">
               <MyActivitiesWidget />
@@ -129,12 +131,12 @@ export default function Dashboard() {
             <BentoCard span="2">
               <HotDealsWidget />
             </BentoCard>
-            
+
             {/* ROW 3: Funil */}
             <BentoCard span="full">
               <SalesFunnelWidget />
             </BentoCard>
-            
+
             {/* ROW 4: Rotten Deals */}
             <BentoCard span="full">
               <RottenDealsWidget />
@@ -148,8 +150,8 @@ export default function Dashboard() {
   // ADMIN/MANAGER: Dashboard Unificado com Tabs por Área
   return (
     <PageContainer>
-      <PageHeader 
-        title="Dashboard" 
+      <PageHeader
+        title="Dashboard"
         description="Visão geral do sistema"
       >
         <DateRangePicker value={dateRange} onChange={setDateRange} />
@@ -189,65 +191,49 @@ export default function Dashboard() {
               <Sparkles className="h-4 w-4" />
               Avançado
             </TabsTrigger>
-            <TabsTrigger value="ai-telemetry" className="gap-2">
-              <Activity className="h-4 w-4" />
-              AI Telemetria
-            </TabsTrigger>
-            <TabsTrigger value="saque-telemetry" className="gap-2">
-              <Activity className="h-4 w-4" />
-              Saque & OTP
-            </TabsTrigger>
-            <TabsTrigger value="ai-resolution" className="gap-2">
-              <Activity className="h-4 w-4" />
-              Resolução IA
+            <TabsTrigger value="ia" className="gap-2">
+              <Bot className="h-4 w-4" />
+              IA
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="overview">
             <OverviewDashboardTab dateRange={dateRange} />
           </TabsContent>
-          
+
           <TabsContent value="sales">
             <SalesDashboardTab dateRange={dateRange} />
           </TabsContent>
-          
+
           <TabsContent value="support">
             <SupportDashboardTab dateRange={dateRange} />
           </TabsContent>
-          
+
           <TabsContent value="financial">
             <FinancialDashboardTab dateRange={dateRange} />
           </TabsContent>
-          
+
           <TabsContent value="operations">
             <OperationalDashboardTab dateRange={dateRange} />
           </TabsContent>
-          
+
           <TabsContent value="churn">
             <ChurnAnalysisTab startDate={startDate} endDate={endDate} />
           </TabsContent>
-          
+
           <TabsContent value="performance">
             <PerformanceTab startDate={startDate} endDate={endDate} />
           </TabsContent>
-          
+
           <TabsContent value="advanced">
             <AdvancedTab startDate={startDate} endDate={endDate} />
           </TabsContent>
-          
-          <TabsContent value="ai-telemetry">
-            <AITelemetryContent />
-          </TabsContent>
 
-          <TabsContent value="saque-telemetry">
-            <SaqueTelemetryContent />
-          </TabsContent>
-
-          <TabsContent value="ai-resolution">
-            <AIResolutionContent />
+          <TabsContent value="ia">
+            <AIUnifiedTab />
           </TabsContent>
         </Tabs>
-        
+
         {/* Onboarding Widget - aparece em todas as tabs se não completou */}
         <div className="mt-6">
           <OnboardingWidget />
