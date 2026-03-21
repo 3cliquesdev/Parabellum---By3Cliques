@@ -14,6 +14,16 @@ const corsHeaders = {
  * B) DIRECT mode (with conversationId): processes a specific conversation (legacy compat)
  */
 
+// Helper: formata opções como lista numerada para WhatsApp
+function formatOptionsAsText(options: any[] | undefined | null): string {
+  if (!options || !Array.isArray(options) || options.length === 0) return '';
+  const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+  const formatted = options
+    .map((opt, i) => `${numberEmojis[i] || `${i + 1}.`} ${opt.label || opt.value || opt}`)
+    .join('\n');
+  return '\n\n' + formatted;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -606,7 +616,7 @@ async function callPipeline(
           body: {
             instance_id: instanceId,
             phone_number: fromNumber,
-            message: flowResult.response as string,
+            message: (flowResult.response as string) + formatOptionsAsText(flowResult.options),
             conversation_id: conversationId,
             skip_db_save: false,
             is_bot_message: true,
@@ -654,7 +664,10 @@ async function handleFlowReInvoke(
     const flowResult = await flowResponse.json();
     console.log(`[process-buffered-messages] ✅ Flow re-invoked (${flagName}):`, JSON.stringify(flowResult));
 
-    const flowMessage = flowResult.response || flowResult.message;
+    const flowMessageRaw = flowResult.response || flowResult.message;
+    const flowMessage = flowMessageRaw
+      ? flowMessageRaw + formatOptionsAsText(flowResult.options)
+      : null;
     const trimmedFlowMessage = flowMessage ? String(flowMessage).trim() : '';
     if (trimmedFlowMessage.length > 0 && instanceId && fromNumber) {
       await supabase.functions.invoke("send-meta-whatsapp", {
