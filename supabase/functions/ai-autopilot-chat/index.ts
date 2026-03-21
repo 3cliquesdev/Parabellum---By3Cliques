@@ -2625,6 +2625,29 @@ serve(async (req) => {
               .update({ resolved_by: 'ai' })
               .eq('id', conversationId);
 
+            // 🆕 Fase 2 Fix 2: Registro de qualidade heurístico ao encerrar
+            try {
+              const totalFallbacks = Number((cleanMeta as any).ai_total_fallback_count || 0);
+              const frustrationSignals = Number((cleanMeta as any).ai_frustration_count || 0);
+              // Score 0-10: começa em 10, perde pontos por falhas e sinais de frustração
+              const rawScore = 10 - Math.min(4, totalFallbacks) - Math.min(4, frustrationSignals * 2);
+              const qualityScore = Math.max(0, rawScore) / 10; // normalizar 0-1
+
+              await supabaseClient.from('ai_quality_logs').insert({
+                conversation_id: conversationId,
+                contact_id: contact?.id || null,
+                customer_message: customerMessage?.slice(0, 500) || '',
+                ai_response: closeMsg,
+                action_taken: 'conversation_resolved_by_ai',
+                handoff_reason: null,
+                confidence_score: qualityScore,
+                articles_count: 0,
+              });
+              console.log(`[ai-autopilot-chat] ✅ Qualidade registrada: ${(qualityScore * 10).toFixed(1)}/10 (fallbacks=${totalFallbacks}, frustração=${frustrationSignals})`);
+            } catch (qErr) {
+              console.warn('[ai-autopilot-chat] ⚠️ Erro ao salvar quality log:', qErr);
+            }
+
             // Invocar close-conversation (reuso total de CSAT, métricas, timeline)
             const { data: closeResult, error: closeError } = await supabaseClient.functions.invoke('close-conversation', {
               body: {
@@ -11050,6 +11073,50 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
           message: globalHandoffMsg,
           flow_context: { flow_id: flow_context.flow_id, node_id: flow_context.node_id },
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
+    // 🆕 Fase 2 Fix 1: Detecção de sentimento negativo → escalação automática após 3 mensagens
+    if (!flow_context) {
+      const NEG_KEYWORDS = /\b(frustrad[ao]|irritad[ao]|nervos[ao]|absurdo|ridícul[ao]|rid[ií]cul[ao]|péssim[ao]|p[eé]ssim[ao]|horrível|horr[ií]vel|lixo|idiota|burt[ao]|incompetente|escândalo|vergonha|vergonhos[ao]|inaceit[aá]vel|inadmiss[ií]vel|indignado|revoltan|ex[ií]jo|procon|processar|processo)\b/i;
+      const POS_KEYWORDS = /\b(obrigad[ao]|valeu|ótim[ao]|excelente|perfeito|maravilhos[ao]|satisfeit[ao]|feliz|agradeç[ao]|resolveu|ajudou|resolvido)\b/i;
+      const isNegMsg = NEG_KEYWORDS.test(customerMessage);
+      const isPosMsg = POS_KEYWORDS.test(customerMessage);
+
+      if (isNegMsg || isPosMsg) {
+        try {
+          const { data: sentConv } = await supabaseClient
+            .from('conversations').select('customer_metadata').eq('id', conversationId).maybeSingle();
+          const sMeta = (sentConv?.customer_metadata || {}) as Record<string, any>;
+          let negCount = Number(sMeta.ai_frustration_count || 0);
+
+          if (isNegMsg && !isPosMsg) {
+            negCount++;
+          } else if (isPosMsg) {
+            negCount = 0;
+          }
+
+          if (negCount >= 3) {
+            // Escalação automática: 3 mensagens negativas consecutivas
+            console.log('[ai-autopilot-chat] 🚨 Auto-escalação por sentimento: 3 negativas consecutivas');
+            await supabaseClient.from('conversations')
+              .update({ ai_mode: 'copilot', resolved_by: 'human_handoff', customer_metadata: { ...sMeta, ai_frustration_count: 0, ai_escalated_by_sentiment: true } })
+              .eq('id', conversationId);
+            await supabaseClient.functions.invoke('route-conversation', { body: { conversationId } }).catch(() => {});
+            await supabaseClient.from('ai_events').insert({
+              entity_id: conversationId, entity_type: 'conversation', event_type: 'ai_sentiment_escalation',
+              model: 'system', output_json: { neg_count: negCount, trigger_message: customerMessage.slice(0, 100) }
+            }).catch(() => {});
+            assistantMessage = 'Entendo que essa situação está sendo difícil para você. Vou conectar você agora com um de nossos atendentes para que possamos resolver isso da melhor forma possível. Um momento! 🙏';
+          } else {
+            await supabaseClient.from('conversations')
+              .update({ customer_metadata: { ...sMeta, ai_frustration_count: negCount } })
+              .eq('id', conversationId);
+            if (isNegMsg) console.log(`[ai-autopilot-chat] 😠 Sentimento negativo (${negCount}/3)`);
+          }
+        } catch (sentErr) {
+          console.warn('[ai-autopilot-chat] ⚠️ Erro na detecção de sentimento:', sentErr);
+        }
       }
     }
 
