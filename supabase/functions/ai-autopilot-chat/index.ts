@@ -11103,10 +11103,10 @@ Nossa equipe está ocupada no momento, mas você está na fila e será atendido 
               .update({ ai_mode: 'copilot', resolved_by: 'human_handoff', customer_metadata: { ...sMeta, ai_frustration_count: 0, ai_escalated_by_sentiment: true } })
               .eq('id', conversationId);
             await supabaseClient.functions.invoke('route-conversation', { body: { conversationId } }).catch(() => {});
-            await supabaseClient.from('ai_events').insert({
+            const { error: _evtErr } = await supabaseClient.from('ai_events').insert({
               entity_id: conversationId, entity_type: 'conversation', event_type: 'ai_sentiment_escalation',
               model: 'system', output_json: { neg_count: negCount, trigger_message: customerMessage.slice(0, 100) }
-            }).catch(() => {});
+            });
             assistantMessage = 'Entendo que essa situação está sendo difícil para você. Vou conectar você agora com um de nossos atendentes para que possamos resolver isso da melhor forma possível. Um momento! 🙏';
           } else {
             await supabaseClient.from('conversations')

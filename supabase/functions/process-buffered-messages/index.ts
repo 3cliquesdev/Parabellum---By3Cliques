@@ -616,7 +616,7 @@ async function callPipeline(
           body: {
             instance_id: instanceId,
             phone_number: fromNumber,
-            message: (flowResult.response as string) + formatOptionsAsText(flowResult.options),
+            message: (flowResult.response as string) + formatOptionsAsText(flowResult.options as any[]),
             conversation_id: conversationId,
             skip_db_save: false,
             is_bot_message: true,
@@ -666,7 +666,7 @@ async function handleFlowReInvoke(
 
     const flowMessageRaw = flowResult.response || flowResult.message;
     const flowMessage = flowMessageRaw
-      ? flowMessageRaw + formatOptionsAsText(flowResult.options)
+      ? flowMessageRaw + formatOptionsAsText(flowResult.options as any[])
       : null;
     const trimmedFlowMessage = flowMessage ? String(flowMessage).trim() : '';
     if (trimmedFlowMessage.length > 0 && instanceId && fromNumber) {
