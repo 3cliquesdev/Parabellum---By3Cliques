@@ -666,7 +666,7 @@ async function handleFlowReInvoke(
 
     const flowMessageRaw = flowResult.response || flowResult.message;
     const flowMessage = flowMessageRaw
-      ? flowMessageRaw + formatOptionsAsText(flowResult.options)
+      ? flowMessageRaw + formatOptionsAsText(flowResult.options as any[])
       : null;
     const trimmedFlowMessage = flowMessage ? String(flowMessage).trim() : '';
     if (trimmedFlowMessage.length > 0 && instanceId && fromNumber) {
