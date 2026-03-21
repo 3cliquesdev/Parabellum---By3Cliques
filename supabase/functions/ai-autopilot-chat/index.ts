@@ -2017,7 +2017,7 @@ serve(async (req) => {
         .select(`
           *,
           contacts!inner(
-            id, first_name, last_name, email, phone, whatsapp_id, company, status, document, kiwify_validated, kiwify_validated_at, organization_id, consultant_id, assigned_to
+            id, first_name, last_name, email, phone, whatsapp_id, company, status, document, kiwify_validated, kiwify_validated_at, organization_id, consultant_id, assigned_to, ai_summary, ai_summary_updated_at
           )
         `)
         .eq('id', conversationId)
@@ -2660,9 +2660,73 @@ serve(async (req) => {
             if (closeError) {
               console.error('[ai-autopilot-chat] ❌ Erro ao encerrar conversa:', closeError);
             } else {
-              console.log('[ai-autopilot-chat] âœ… Conversa encerrada com sucesso via close-conversation');
+              console.log('[ai-autopilot-chat] ✅ Conversa encerrada com sucesso via close-conversation');
             }
-            
+
+            // 🆕 Fase 3: Gerar/atualizar memória de longo prazo do cliente (fire-and-forget)
+            const OPENAI_KEY_FOR_MEMORY = Deno.env.get('OPENAI_API_KEY');
+            if (contact?.id && OPENAI_KEY_FOR_MEMORY) {
+              (async () => {
+                try {
+                  // Buscar últimas mensagens diretamente do banco (messageHistory ainda não disponível aqui)
+                  const { data: recentMsgs } = await supabaseClient
+                    .from('messages')
+                    .select('content, sender_type')
+                    .eq('conversation_id', conversationId)
+                    .order('created_at', { ascending: false })
+                    .limit(15);
+                  const recentHistory = (recentMsgs || []).reverse()
+                    .map((m: any) => `${m.sender_type === 'user' ? 'Cliente' : 'IA'}: ${(m.content || '').slice(0, 200)}`)
+                    .join('\n');
+
+                  const existingMemory = contact.ai_summary || '';
+                  const memoryPrompt = `Você é um assistente que gera resumos concisos de clientes para uso futuro.
+
+MEMÓRIA ANTERIOR DO CLIENTE (se houver):
+${existingMemory || '(nenhuma)'}
+
+CONVERSA QUE ACABOU DE ENCERRAR:
+${recentHistory}
+
+Gere um resumo atualizado deste cliente em até 5 linhas, incluindo:
+- Nome e produto/serviço que usa
+- Principais assuntos que costuma tratar
+- Problemas recorrentes ou pendências importantes
+- Tom de comunicação preferido
+- Qualquer dado relevante para próximas interações
+
+Escreva em português, de forma direta e concisa. Não repita informações óbvias.`;
+
+                  const memRes = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${OPENAI_KEY_FOR_MEMORY}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      model: 'gpt-4.1-nano',
+                      messages: [{ role: 'user', content: memoryPrompt }],
+                      max_tokens: 300,
+                      temperature: 0.3,
+                    }),
+                  });
+
+                  if (memRes.ok) {
+                    const memData = await memRes.json();
+                    const newSummary = memData.choices?.[0]?.message?.content?.trim();
+                    if (newSummary) {
+                      await supabaseClient.from('contacts')
+                        .update({ ai_summary: newSummary, ai_summary_updated_at: new Date().toISOString() })
+                        .eq('id', contact.id);
+                      console.log('[ai-autopilot-chat] ✅ Memória do cliente atualizada');
+                    }
+                  }
+                } catch (memErr) {
+                  console.warn('[ai-autopilot-chat] ⚠️ Erro ao gerar memória do cliente:', memErr);
+                }
+              })();
+            }
+
             await supabaseClient.from('conversations')
               .update({ customer_metadata: {
                 ...cleanMeta,
@@ -7638,7 +7702,12 @@ Exemplo de abertura (adapte, NÃO copie):
 "Olá [nome do cliente]! Aqui é [seu nome], especialista em [sua área]. Vi que você [contexto do assunto]. Pode deixar comigo, vou resolver isso agora! [próxima pergunta relevante que ainda falta]"` : '';
 
     // 🧠 Memória persistente: desativado (coluna ai_summary não existe ainda)
-    const contactMemoryBlock = '';
+    // 🆕 Fase 3: Memória de longo prazo — injetar resumo persistente do cliente no system prompt
+    const contactMemoryBlock = contact?.ai_summary
+      ? `\n📝 MEMÓRIA DO CLIENTE (conversas anteriores — use para personalizar o atendimento):
+${contact.ai_summary}
+INSTRUÇÃO: Use estas informações para personalizar sua resposta. NÃO repita estas informações verbalmente. Apenas as use para contextualizar e evitar perguntas que já foram respondidas antes.\n`
+      : '';
 
     // FIX 2: Injetar agent_context (intent da triagem + contexto acumulado) no system prompt
     const agentContextBlock = flowContextPrompt
