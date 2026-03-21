@@ -1,26 +1,49 @@
 
 
-# Migration: Adicionar colunas de memória de longo prazo na tabela `contacts`
+# Plano: Interceptar transferências fora do horário + enviar mensagem ao cliente
 
-## O que será feito
+## Problema confirmado
 
-Executar uma migration SQL para adicionar as colunas `ai_summary` e `ai_summary_updated_at` na tabela `contacts`. Todo o código que usa essas colunas já está deployado — esta é a única pendência.
+No `meta-whatsapp-webhook` (linha 945), quando o fluxo retorna `transfer: true`, a transferência é executada **sem verificar horário comercial**:
+- Seta `ai_mode: 'waiting_human'` imediatamente
+- Chama `route-conversation` (que não encontra agentes)
+- O Stage 6 do `auto-close-conversations` (linha 1051) deveria enviar a mensagem after-hours e aplicar a tag "9.05", mas só roda a cada X minutos e com 10 min de threshold — **resultando em mensagem que nunca chega ao cliente**
 
-## SQL da Migration
+## Solução
 
-```sql
-ALTER TABLE public.contacts
-  ADD COLUMN IF NOT EXISTS ai_summary TEXT,
-  ADD COLUMN IF NOT EXISTS ai_summary_updated_at TIMESTAMPTZ;
+Interceptar no `meta-whatsapp-webhook` **antes** de executar a transferência. Se fora do horário:
 
-COMMENT ON COLUMN public.contacts.ai_summary IS 'Resumo gerado por IA das conversas anteriores do cliente';
-COMMENT ON COLUMN public.contacts.ai_summary_updated_at IS 'Última atualização do ai_summary';
+1. **Enviar mensagem de fora do horário ao cliente via WhatsApp** (template de `business_messages_config` key `after_hours_handoff`)
+2. **Aplicar tag configurada** (`after_hours_tag_id`) na conversa + proteger
+3. **NÃO** setar `waiting_human` — manter `ai_mode` atual (autopilot)
+4. **NÃO** chamar `route-conversation`
+5. Logar `after_hours_transfer_blocked` para auditoria
+
+## Arquivo alterado
+
+**`supabase/functions/meta-whatsapp-webhook/index.ts`**
+
+- Importar `getBusinessHoursInfo` de `../_shared/business-hours.ts`
+- No bloco `if (flowData.transfer)` (linha 945), antes de qualquer update:
+
+```text
+if (flowData.transfer) {
+  const bhInfo = await getBusinessHoursInfo(supabase);
+
+  if (!bhInfo.within_hours) {
+    // 1. Buscar template + tag de after_hours
+    // 2. Enviar mensagem via send-meta-whatsapp
+    // 3. Aplicar tag + protected_tag
+    // 4. Log de auditoria
+    // 5. NÃO setar waiting_human, NÃO chamar route-conversation
+    continue;
+  }
+
+  // ... código existente de transferência (inalterado)
+}
 ```
 
-## Resultado
+## Deploy
 
-Após a migration, automaticamente:
-1. `close-conversation` passa a gerar e salvar resumo ao encerrar conversas
-2. `ai-autopilot-chat` injeta o histórico do cliente no prompt
-3. Nenhum deploy adicional necessário
+Apenas `meta-whatsapp-webhook` precisa ser redeployado.
 
