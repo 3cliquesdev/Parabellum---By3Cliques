@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { getAIConfig } from "../_shared/ai-config-cache.ts";
 import { resolveDepartments } from "../_shared/department-resolver.ts";
+import { getBusinessHoursInfo } from "../_shared/business-hours.ts";
 
 // ============================================
 // 📦 MESSAGE BATCHING HELPERS
@@ -943,7 +944,90 @@ serve(async (req) => {
                 
                 // 🆕 EXECUTAR TRANSFERÊNCIA SE NECESSÁRIO
                 if (flowData.transfer) {
-                  console.log("[meta-whatsapp-webhook] 🔄 Executing transfer to department:", flowData.departmentId, "type:", flowData.transferType);
+                  console.log("[meta-whatsapp-webhook] 🔄 Transfer requested → department:", flowData.departmentId, "type:", flowData.transferType);
+                  
+                  // ═══════════════════════════════════════════════════════════════
+                  // 🕐 INTERCEPÇÃO FORA DO HORÁRIO COMERCIAL v1.0 — 2026-03-21
+                  // Se fora do horário: enviar mensagem, aplicar tag, NÃO transferir
+                  // ═══════════════════════════════════════════════════════════════
+                  const bhInfo = await getBusinessHoursInfo(supabase);
+                  console.log("[meta-whatsapp-webhook] 🕐 Business hours check:", { within_hours: bhInfo.within_hours, is_holiday: bhInfo.is_holiday, current_time: bhInfo.current_time, current_day: bhInfo.current_day });
+                  
+                  if (!bhInfo.within_hours) {
+                    console.log("[meta-whatsapp-webhook] 🚫 FORA DO HORÁRIO — bloqueando transferência para conversa:", conversation.id);
+                    
+                    // 1. Buscar mensagem e tag de after_hours
+                    const { data: afterHoursMsg } = await supabase
+                      .from('business_messages_config')
+                      .select('message_template, after_hours_tag_id')
+                      .eq('message_key', 'after_hours_handoff')
+                      .maybeSingle();
+                    
+                    const afterHoursTemplate = afterHoursMsg?.message_template || 
+                      'Nosso horário de atendimento humano encerrou. Retornaremos no próximo dia útil. 🕐';
+                    const afterHoursTagId = afterHoursMsg?.after_hours_tag_id || null;
+                    
+                    // Substituir variáveis no template
+                    const finalMessage = afterHoursTemplate
+                      .replace(/\{schedule\}/g, bhInfo.schedule_summary)
+                      .replace(/\{next_open\}/g, bhInfo.next_open_text);
+                    
+                    // 2. Enviar mensagem ao cliente via WhatsApp
+                    try {
+                      const sendAfterHoursResp = await supabase.functions.invoke("send-meta-whatsapp", {
+                        body: {
+                          instance_id: instance.id,
+                          phone_number: fromNumber,
+                          message: finalMessage,
+                          conversation_id: conversation.id,
+                          skip_db_save: false,
+                          is_bot_message: true,
+                          metadata: { after_hours_transfer_blocked: true, business_hours: bhInfo },
+                        },
+                      });
+                      
+                      if (sendAfterHoursResp.error) {
+                        console.error("[meta-whatsapp-webhook] ❌ Erro ao enviar mensagem after-hours:", sendAfterHoursResp.error);
+                      } else {
+                        console.log("[meta-whatsapp-webhook] ✅ Mensagem after-hours enviada ao cliente");
+                      }
+                    } catch (sendErr) {
+                      console.error("[meta-whatsapp-webhook] ❌ Exception ao enviar mensagem after-hours:", sendErr);
+                    }
+                    
+                    // 3. Aplicar tag de fora do horário
+                    if (afterHoursTagId) {
+                      try {
+                        await supabase.from('conversation_tags').upsert(
+                          { conversation_id: conversation.id, tag_id: afterHoursTagId },
+                          { onConflict: 'conversation_id,tag_id' }
+                        );
+                        await supabase.from('protected_conversation_tags').upsert(
+                          { conversation_id: conversation.id, tag_id: afterHoursTagId, reason: 'after_hours_transfer_blocked' },
+                          { onConflict: 'conversation_id,tag_id' }
+                        );
+                        console.log("[meta-whatsapp-webhook] 🏷️ Tag after-hours aplicada:", afterHoursTagId);
+                      } catch (tagErr) {
+                        console.error("[meta-whatsapp-webhook] ⚠️ Erro ao aplicar tag after-hours:", tagErr);
+                      }
+                    }
+                    
+                    // 4. Log de auditoria
+                    await supabase.from('ai_decision_logs').insert({
+                      conversation_id: conversation.id,
+                      correlation_id: `after-hours-block-${Date.now()}`,
+                      decision: 'after_hours_transfer_blocked',
+                      decision_reason: `Transferência bloqueada fora do horário comercial (${bhInfo.current_time}, dia ${bhInfo.current_day}). ${bhInfo.is_holiday ? 'Feriado: ' + bhInfo.holiday_name : ''}`,
+                      channel: 'whatsapp',
+                    }).then(r => {
+                      if (r.error) console.error("[meta-whatsapp-webhook] ⚠️ Erro ao logar decisão:", r.error);
+                    });
+                    
+                    console.log("[meta-whatsapp-webhook] ✅ Transferência bloqueada fora do horário. ai_mode mantido, cliente notificado.");
+                    continue;
+                  }
+                  
+                  console.log("[meta-whatsapp-webhook] ✅ Dentro do horário — executando transferência normalmente");
                   
                   const updateData: Record<string, unknown> = {
                     ai_mode: 'waiting_human',
