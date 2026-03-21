@@ -2663,69 +2663,7 @@ serve(async (req) => {
               console.log('[ai-autopilot-chat] ✅ Conversa encerrada com sucesso via close-conversation');
             }
 
-            // 🆕 Fase 3: Gerar/atualizar memória de longo prazo do cliente (fire-and-forget)
-            const OPENAI_KEY_FOR_MEMORY = Deno.env.get('OPENAI_API_KEY');
-            if (contact?.id && OPENAI_KEY_FOR_MEMORY) {
-              (async () => {
-                try {
-                  // Buscar últimas mensagens diretamente do banco (messageHistory ainda não disponível aqui)
-                  const { data: recentMsgs } = await supabaseClient
-                    .from('messages')
-                    .select('content, sender_type')
-                    .eq('conversation_id', conversationId)
-                    .order('created_at', { ascending: false })
-                    .limit(15);
-                  const recentHistory = (recentMsgs || []).reverse()
-                    .map((m: any) => `${m.sender_type === 'user' ? 'Cliente' : 'IA'}: ${(m.content || '').slice(0, 200)}`)
-                    .join('\n');
-
-                  const existingMemory = contact.ai_summary || '';
-                  const memoryPrompt = `Você é um assistente que gera resumos concisos de clientes para uso futuro.
-
-MEMÓRIA ANTERIOR DO CLIENTE (se houver):
-${existingMemory || '(nenhuma)'}
-
-CONVERSA QUE ACABOU DE ENCERRAR:
-${recentHistory}
-
-Gere um resumo atualizado deste cliente em até 5 linhas, incluindo:
-- Nome e produto/serviço que usa
-- Principais assuntos que costuma tratar
-- Problemas recorrentes ou pendências importantes
-- Tom de comunicação preferido
-- Qualquer dado relevante para próximas interações
-
-Escreva em português, de forma direta e concisa. Não repita informações óbvias.`;
-
-                  const memRes = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${OPENAI_KEY_FOR_MEMORY}`,
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      model: 'gpt-4.1-nano',
-                      messages: [{ role: 'user', content: memoryPrompt }],
-                      max_tokens: 300,
-                      temperature: 0.3,
-                    }),
-                  });
-
-                  if (memRes.ok) {
-                    const memData = await memRes.json();
-                    const newSummary = memData.choices?.[0]?.message?.content?.trim();
-                    if (newSummary) {
-                      await supabaseClient.from('contacts')
-                        .update({ ai_summary: newSummary, ai_summary_updated_at: new Date().toISOString() })
-                        .eq('id', contact.id);
-                      console.log('[ai-autopilot-chat] ✅ Memória do cliente atualizada');
-                    }
-                  }
-                } catch (memErr) {
-                  console.warn('[ai-autopilot-chat] ⚠️ Erro ao gerar memória do cliente:', memErr);
-                }
-              })();
-            }
+            // Nota: geração de ai_summary delegada ao close-conversation (gpt-4o-mini, lógica correta)
 
             await supabaseClient.from('conversations')
               .update({ customer_metadata: {
