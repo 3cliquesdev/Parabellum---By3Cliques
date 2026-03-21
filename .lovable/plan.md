@@ -1,56 +1,42 @@
 
 
-# Auto-criação de ticket para cancelamento
+# Fix: Opções do ask_options não sendo enviadas no WhatsApp
 
 ## Problema
-Quando a IA detecta intenção de cancelamento e faz o handoff, **nenhum ticket é criado automaticamente**. Hoje, apenas o fluxo financeiro em anti-loop cria ticket automático (linhas 10329-10357 de `ai-autopilot-chat`).
+Quando a IA não consegue resolver e dispara `forceAIExit`, o `process-chat-flow` avança para o nó "Escape Pedidos" (ask_options) e retorna `response` + `options` corretamente. Porém, o `process-buffered-messages` ignora o campo `options` em dois caminhos:
+
+1. **`handleFlowReInvoke`** (linha ~657): só extrai `flowResult.response`, sem concatenar as opções
+2. **Caminho "global static response"** (linha ~603): envia `flowResult.response` sem opções
+
+O webhook Meta já usa `formatOptionsAsText()` em todos os locais equivalentes — falta apenas no `process-buffered-messages`.
 
 ## Solução
-Estender a lógica de auto-ticket para cobrir cancelamentos em dois pontos:
 
-### 1. `ai-autopilot-chat/index.ts` — Anti-loop (paridade com financeiro)
-Na seção de anti-loop (linha ~10333), adicionar detecção de nó de cancelamento:
-```typescript
-const isCancellationNode = (flow_context.node_id || '').toLowerCase().includes('cancel') ||
-  (collectedData.assunto || '').toLowerCase().includes('cancel') ||
-  (collectedData.ai_exit_intent === 'cancelamento');
+### Arquivo: `supabase/functions/process-buffered-messages/index.ts`
 
-if (isFinancialNode || isCancellationNode) {
-  const category = isCancellationNode ? 'cancelamento' : 'financeiro';
-  const ticketSubject = isCancellationNode
-    ? `[Auto] Solicitação de cancelamento - ${contact.first_name} ${contact.last_name}`
-    : `[Auto] Solicitação financeira - ${contact.first_name} ${contact.last_name}`;
-  // ... resto igual, com category dinâmico
-}
-```
+1. **Adicionar a função `formatOptionsAsText`** (copiar da `meta-whatsapp-webhook`): formata array de opções como lista numerada com emojis (1️⃣, 2️⃣, etc.)
 
-### 2. `process-chat-flow/index.ts` — Exit por intenção de cancelamento
-Na seção onde `cancellationIntentMatch` dispara o exit (linha ~3626), adicionar criação automática de ticket:
-```typescript
-if (cancellationIntentMatch) {
-  // ... log ai_blocked_cancellation existente ...
-  
-  // Auto-criar ticket de cancelamento
-  try {
-    await createFlowTicket({
-      subject: `[Auto] Cancelamento - conversa ${conversationId.substring(0,8)}`,
-      description: `Intenção de cancelamento detectada.\nMensagem: ${(userMessage || '').substring(0, 200)}`,
-      priority: 'high',
-      category: 'cancelamento',
-      conversationId,
-      nodeId: currentNode.id,
-      departmentId: depts.INTENT_MAP?.cancelamento || null,
-    });
-  } catch (e) { console.error('Auto-ticket cancelamento failed:', e); }
-}
-```
+2. **`handleFlowReInvoke`** (~linha 657): mudar de:
+   ```typescript
+   const flowMessage = flowResult.response || flowResult.message;
+   ```
+   para:
+   ```typescript
+   const flowMessageRaw = flowResult.response || flowResult.message;
+   const flowMessage = flowMessageRaw
+     ? flowMessageRaw + formatOptionsAsText(flowResult.options)
+     : null;
+   ```
 
-### Arquivos alterados
+3. **Caminho "global static response"** (~linha 609): mudar de:
+   ```typescript
+   message: flowResult.response as string,
+   ```
+   para:
+   ```typescript
+   message: (flowResult.response as string) + formatOptionsAsText(flowResult.options),
+   ```
 
-| Arquivo | Alteração |
-|---|---|
-| `supabase/functions/ai-autopilot-chat/index.ts` | Auto-ticket cancelamento no anti-loop |
-| `supabase/functions/process-chat-flow/index.ts` | Auto-ticket no exit por `cancellationIntentMatch` |
-
-Deploy: `ai-autopilot-chat`, `process-chat-flow`
+### Deploy
+- `process-buffered-messages`
 
