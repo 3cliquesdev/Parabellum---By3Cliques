@@ -1,45 +1,26 @@
 
 
-# Fix: Build errors + confirmação da seleção de opções
+# Migration: Adicionar colunas de memória de longo prazo na tabela `contacts`
 
-## Build Errors
+## O que será feito
 
-### 1. `ai-autopilot-chat/index.ts` linha 11109 — `.catch()` em insert do Supabase
-O método `.insert()` do Supabase retorna `PostgrestFilterBuilder`, não uma Promise com `.catch()`. 
+Executar uma migration SQL para adicionar as colunas `ai_summary` e `ai_summary_updated_at` na tabela `contacts`. Todo o código que usa essas colunas já está deployado — esta é a única pendência.
 
-**Fix**: Envolver em bloco try/catch ou usar `.then()`:
-```typescript
-// De:
-await supabaseClient.from('ai_events').insert({...}).catch(() => {});
-// Para:
-const { error: _evtErr } = await supabaseClient.from('ai_events').insert({...});
+## SQL da Migration
+
+```sql
+ALTER TABLE public.contacts
+  ADD COLUMN IF NOT EXISTS ai_summary TEXT,
+  ADD COLUMN IF NOT EXISTS ai_summary_updated_at TIMESTAMPTZ;
+
+COMMENT ON COLUMN public.contacts.ai_summary IS 'Resumo gerado por IA das conversas anteriores do cliente';
+COMMENT ON COLUMN public.contacts.ai_summary_updated_at IS 'Última atualização do ai_summary';
 ```
 
-### 2. `process-buffered-messages/index.ts` linha 619 — tipo `unknown`
-`flowResult.options` vem de `json()` que retorna `any`, mas o TS infere `unknown`.
+## Resultado
 
-**Fix**: Cast explícito:
-```typescript
-// De:
-formatOptionsAsText(flowResult.options)
-// Para:
-formatOptionsAsText(flowResult.options as any[])
-```
-Aplicar nos dois locais (linha 619 e linha 669).
-
-## Sobre a seleção de opções pelo cliente
-
-O matcher `matchAskOption` já suporta:
-- Número ("1", "2", "3"...)
-- Texto exato do label ("Atendente")
-- Texto parcial unambíguo (palavra "atendente" dentro da frase)
-
-O problema original era que as **opções não estavam sendo enviadas** no WhatsApp — o fix do `formatOptionsAsText` resolve isso. Com as opções visíveis, o cliente poderá responder com número ou texto normalmente.
-
-## Arquivos alterados
-
-| Arquivo | Alteração |
-|---|---|
-| `supabase/functions/ai-autopilot-chat/index.ts` | Remover `.catch()` inválido do insert |
-| `supabase/functions/process-buffered-messages/index.ts` | Cast `as any[]` nos 2 usos de `flowResult.options` |
+Após a migration, automaticamente:
+1. `close-conversation` passa a gerar e salvar resumo ao encerrar conversas
+2. `ai-autopilot-chat` injeta o histórico do cliente no prompt
+3. Nenhum deploy adicional necessário
 
