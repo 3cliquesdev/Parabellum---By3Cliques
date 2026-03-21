@@ -616,7 +616,7 @@ async function callPipeline(
           body: {
             instance_id: instanceId,
             phone_number: fromNumber,
-            message: flowResult.response as string,
+            message: (flowResult.response as string) + formatOptionsAsText(flowResult.options),
             conversation_id: conversationId,
             skip_db_save: false,
             is_bot_message: true,
