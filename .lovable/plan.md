@@ -1,42 +1,45 @@
 
 
-# Fix: Opções do ask_options não sendo enviadas no WhatsApp
+# Fix: Build errors + confirmação da seleção de opções
 
-## Problema
-Quando a IA não consegue resolver e dispara `forceAIExit`, o `process-chat-flow` avança para o nó "Escape Pedidos" (ask_options) e retorna `response` + `options` corretamente. Porém, o `process-buffered-messages` ignora o campo `options` em dois caminhos:
+## Build Errors
 
-1. **`handleFlowReInvoke`** (linha ~657): só extrai `flowResult.response`, sem concatenar as opções
-2. **Caminho "global static response"** (linha ~603): envia `flowResult.response` sem opções
+### 1. `ai-autopilot-chat/index.ts` linha 11109 — `.catch()` em insert do Supabase
+O método `.insert()` do Supabase retorna `PostgrestFilterBuilder`, não uma Promise com `.catch()`. 
 
-O webhook Meta já usa `formatOptionsAsText()` em todos os locais equivalentes — falta apenas no `process-buffered-messages`.
+**Fix**: Envolver em bloco try/catch ou usar `.then()`:
+```typescript
+// De:
+await supabaseClient.from('ai_events').insert({...}).catch(() => {});
+// Para:
+const { error: _evtErr } = await supabaseClient.from('ai_events').insert({...});
+```
 
-## Solução
+### 2. `process-buffered-messages/index.ts` linha 619 — tipo `unknown`
+`flowResult.options` vem de `json()` que retorna `any`, mas o TS infere `unknown`.
 
-### Arquivo: `supabase/functions/process-buffered-messages/index.ts`
+**Fix**: Cast explícito:
+```typescript
+// De:
+formatOptionsAsText(flowResult.options)
+// Para:
+formatOptionsAsText(flowResult.options as any[])
+```
+Aplicar nos dois locais (linha 619 e linha 669).
 
-1. **Adicionar a função `formatOptionsAsText`** (copiar da `meta-whatsapp-webhook`): formata array de opções como lista numerada com emojis (1️⃣, 2️⃣, etc.)
+## Sobre a seleção de opções pelo cliente
 
-2. **`handleFlowReInvoke`** (~linha 657): mudar de:
-   ```typescript
-   const flowMessage = flowResult.response || flowResult.message;
-   ```
-   para:
-   ```typescript
-   const flowMessageRaw = flowResult.response || flowResult.message;
-   const flowMessage = flowMessageRaw
-     ? flowMessageRaw + formatOptionsAsText(flowResult.options)
-     : null;
-   ```
+O matcher `matchAskOption` já suporta:
+- Número ("1", "2", "3"...)
+- Texto exato do label ("Atendente")
+- Texto parcial unambíguo (palavra "atendente" dentro da frase)
 
-3. **Caminho "global static response"** (~linha 609): mudar de:
-   ```typescript
-   message: flowResult.response as string,
-   ```
-   para:
-   ```typescript
-   message: (flowResult.response as string) + formatOptionsAsText(flowResult.options),
-   ```
+O problema original era que as **opções não estavam sendo enviadas** no WhatsApp — o fix do `formatOptionsAsText` resolve isso. Com as opções visíveis, o cliente poderá responder com número ou texto normalmente.
 
-### Deploy
-- `process-buffered-messages`
+## Arquivos alterados
+
+| Arquivo | Alteração |
+|---|---|
+| `supabase/functions/ai-autopilot-chat/index.ts` | Remover `.catch()` inválido do insert |
+| `supabase/functions/process-buffered-messages/index.ts` | Cast `as any[]` nos 2 usos de `flowResult.options` |
 
